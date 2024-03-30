@@ -12,7 +12,7 @@ const genAI = new GoogleGenerativeAI(apiKey);
 
 router.post("/prompt",async(req:Prompt,res:any)=>{
     try {
-        let prompt= req.body.prompt;
+        let { prompt }= req.body;
         // For text-only input, use the gemini-pro model
         const model = genAI.getGenerativeModel({ model: "gemini-pro"});
         const result = await model.generateContent(prompt);
@@ -22,7 +22,7 @@ router.post("/prompt",async(req:Prompt,res:any)=>{
         }
         res.status(200).send(promptResponse)
     } catch (error:any) {
-        res.status(501).send({error:error.message})
+        res.status(500).send({error:error.message})
         console.log(error.message)
     }
 })
