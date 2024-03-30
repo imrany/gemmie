@@ -20,8 +20,9 @@ router.post("/prompt",async(req:Prompt,res:any)=>{
         let promptResponse:PromptResponse={
             text: response.text()
         }
-        res.send(promptResponse)
+        res.status(200).send(promptResponse)
     } catch (error:any) {
+        res.status(501).send({error:error.message})
         console.log(error.message)
     }
 })
