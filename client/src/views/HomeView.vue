@@ -12,7 +12,7 @@
         try {
             e.preventDefault()
             isLoading.value=true
-            // let url=`http://127.0.0.1:8000/api/prompt`
+            //let url=`http://127.0.0.1:8000/api/prompt`
             let url=`https://gemmie.onrender.com/api/prompt`
             let response=await fetch(url,{
                 method:"POST",
@@ -25,7 +25,7 @@
             })
             let parseRes=await response.json()
             let resp:Res={
-                prompt:parseRes.prompt,
+                prompt:parseRes.error?`An error has occurred`:parseRes.prompt,
                 text:parseRes.error?parseRes.error:parseRes.text
             }
             res.push(resp)
@@ -57,8 +57,7 @@
                         <p class="font-semibold">You:</p>
                         <p class="capitalize">{{ item.prompt }}</p>
                     </div>
-                    <div class="flex gap-2 items-center p-2 rounded-md bg-gray-50">
-                        <p>{{ item.text }}</p>
+                    <div v-html="item.text" class="py-2 px-4 flex flex-col gap-1 rounded-md bg-gray-50">
                     </div>
                 </div>
 
