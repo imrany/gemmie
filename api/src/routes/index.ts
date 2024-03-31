@@ -18,6 +18,7 @@ router.post("/prompt",async(req:Prompt,res:any)=>{
         const result = await model.generateContent(prompt);
         const response = result.response;
         let promptResponse:PromptResponse={
+            prompt,
             text: response.text()
         }
         res.status(200).send(promptResponse)
