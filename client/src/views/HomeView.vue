@@ -12,7 +12,8 @@
         try {
             e.preventDefault()
             isLoading.value=true
-            let url=`http://127.0.0.1:8000/api/prompt`
+            // let url=`http://127.0.0.1:8000/api/prompt`
+            let url=`https://gemmie.onrender.com/api/prompt`
             let response=await fetch(url,{
                 method:"POST",
                 body:JSON.stringify({
