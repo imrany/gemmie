@@ -1,0 +1,9 @@
+{
+    "name":"Team Ruiru",
+    "short_name":"Team Ruiru",
+    "description":"Team ruiru portal.",
+    "display":"fullscreen",
+    "orientation":"portrait",
+    "start_url":"/",
+    "icons":[]
+} 
