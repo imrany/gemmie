@@ -18,5 +18,5 @@ app.use('/api',router)
 
 let port=8000||process.env.PORT
 app.listen(port,()=>{
-  console.log(`Server running on http://127.0.0.1:8000`)
+  console.log(`Server running on port 8000`)
 })
