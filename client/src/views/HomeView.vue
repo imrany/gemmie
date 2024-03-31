@@ -32,6 +32,11 @@
             isLoading.value=false
             e.target.reset()
         } catch (error:any) {
+            let resp:Res={
+                prompt:`An error has occurred`,
+                text:error.message
+            }
+            res.push(resp)
             isLoading.value=false
             console.log(error.message)
         }
