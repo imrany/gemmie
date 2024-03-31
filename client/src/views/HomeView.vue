@@ -25,8 +25,8 @@
             })
             let parseRes=await response.json()
             let resp:Res={
-                prompt:`${e.target.prompt.value}`,
-                text:parseRes.text
+                prompt:parseRes.prompt,
+                text:parseRes.error?parseRes.error:parseRes.text
             }
             res.push(resp)
             isLoading.value=false
