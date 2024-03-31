@@ -1,9 +1,11 @@
 {
-    "name":"Team Ruiru",
-    "short_name":"Team Ruiru",
-    "description":"Team ruiru portal.",
-    "display":"fullscreen",
-    "orientation":"portrait",
+    "short_name":"Gemmie",
+    "name":"Gemmie",
+    "description":"A program that use gemini api to solve health issue as first aid assistant  ( hackathon )",
     "start_url":"/",
-    "icons":[]
-} 
+    "id":"/",
+    "background_color":"#FFFF",
+    "theme_color":"#FFFF",
+    "orientation":"portrait-primary",
+    "display":"standalone"
+  }
