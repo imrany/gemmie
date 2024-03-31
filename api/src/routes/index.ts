@@ -1,4 +1,5 @@
 import { Router } from "express";
+import * as marked from "marked";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { config } from "dotenv";
 import { Prompt, PromptResponse } from "../types";
@@ -19,7 +20,7 @@ router.post("/prompt",async(req:Prompt,res:any)=>{
         const response = result.response;
         let promptResponse:PromptResponse={
             prompt,
-            text: response.text()
+            text: marked.parse(response.text())
         }
         res.status(200).send(promptResponse)
     } catch (error:any) {

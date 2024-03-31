@@ -6,5 +6,5 @@ export type Prompt={
 
 export type PromptResponse={
     prompt:string,
-    text:string
+    text:any
 }
