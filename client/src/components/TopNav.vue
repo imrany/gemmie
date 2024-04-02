@@ -5,12 +5,13 @@ let props=defineProps<{
         note: string,
         parsedUserDetails:{
             username:string
-        }
+        },
+        screenWidth:number,
     }
 }>()
 </script>
 <template>
-    <div class="h-[44px] bg-white z-5 left-[300px] fixed top-0 right-0 border-b-[1px]">
+    <div class="h-[44px] bg-white z-5 fixed top-0 right-0 border-b-[1px]" :style="props.data.screenWidth>720?'left:300px':'left:0;'">
         <div class="flex px-5 py-3 items-center justify-between w-full">
             <p v-if="props.data.parsedUserDetails.username!==undefined" class="text-black text-sm font-semibold">{{props.data.parsedUserDetails.username}}</p>
             <p v-else class="text-black text-sm font-semibold">Gemmie</p>
