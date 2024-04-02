@@ -3,4 +3,7 @@
 
     /*border color*/
     --gray:#808080; 
-} 
+}
+.none{
+    display:none;
+}

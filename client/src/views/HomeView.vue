@@ -11,6 +11,7 @@
     let showInput=ref(false)
     let readMore=ref(false)
     let note=ref("You are using Gemmie Demo, Gemini API Hackathon")
+    let screenWidth=ref(screen.width)
 
     let userDetails:any=localStorage.getItem("userdetails")
     let parsedUserDetails:any=JSON.parse(userDetails)===null?[]:JSON.parse(userDetails)
@@ -66,6 +67,14 @@
         document.getElementById("scrollableElem")?.scrollIntoView({behavior:"smooth", block:"end"})
     }
 
+    function toggleSideNav(){
+        let sideNav:any=document.getElementById("side_nav")
+        sideNav.classList.contains("none")?sideNav.classList.remove("none"):sideNav.classList.add("none")
+    }
+
+    window.onresize=(e:any)=>{
+        screenWidth.value=screen.width
+    }
     onMounted(()=>{
         scrollToBottom()
     })
@@ -73,9 +82,9 @@
 
 <template>
     <div class="flex h-[100vh]">
-        <SideNav :data="{res,parsedUserDetails}" :functions="{setShowInput}"/>
-        <div class="flex-grow flex-col ml-[300px]">
-            <TopNav :data="{note,res,parsedUserDetails}"/>
+        <SideNav :data="{res,parsedUserDetails,screenWidth}" :functions="{setShowInput, toggleSideNav}"/>
+        <div :class="screenWidth>720?'flex-grow flex flex-col ml-[300px]':'flex-grow flex flex-col'">
+            <TopNav :data="{note,res,parsedUserDetails,screenWidth}"/>
             <div class="h-screen">
                 <div class="mt-2 gap-2 flex flex-col items-center justify-center" :style="res.length!==0?'height:250px;':'height:600px;'">
                     <div v-if="res.length!==0" class="rounded-[50px] bg-gray-200 w-[50px] h-[50px] flex justify-center items-center">
@@ -89,8 +98,8 @@
                         <p v-if="parsedUserDetails.username!==undefined" class="text-xl font-semibold">{{parsedUserDetails.username}}</p>
                         <p v-else class="text-xl font-semibold">Gemmie</p>
                         <div v-if="res.length===0&&showInput===false" class="text-sm flex flex-col items-center gap-2 justify-center text-gray-500">
-                            <p>Gemmie uses Gemini API to solve medical issues as a first aid assistant.</p>
-                            <button v-if="parsedUserDetails.username!==undefined" @click="setShowInput" class="flex justify-center items-center mt-2 bg-gray-200 h-[35px] text-black px-3 w-fit rounded-md">Try it now</button>                    
+                            <p class="text-center">Gemmie uses Gemini API to solve medical issues as a first aid assistant.</p>
+                            <button v-if="parsedUserDetails.username!==undefined" @click="setShowInput" class="flex justify-center items-center mt-2 bg-gray-200 h-[35px] text-black px-3 w-fit rounded-md">Write a prompt</button>                    <button v-if="parsedUserDetails.username===undefined&&screenWidth<720" @click="toggleSideNav" class="flex justify-center items-center mt-2 bg-gray-200 h-[35px] text-black px-3 w-fit rounded-md">Get Started now</button>                     
                         </div>
                         <p v-else class="text-sm text-gray-500">Use Gemmie for medical inquiries only.</p>
                     </div>
@@ -98,7 +107,7 @@
                 <div class="pb-[50px]" id="scrollableElem">
                     <div v-for="item in res" :key="item.text" class="flex flex-col">
                         <div class="p-3 flex items-center gap-2 hover:bg-slate-200">
-                            <div class="w-[35px] h-[35px] flex justify-center items-center bg-gray-100 rounded-[50px]">
+                            <div class="min-w-[35px] h-[35px] flex justify-center items-center bg-gray-100 rounded-[50px]">
                                 <span class="pi pi-user text-sm"></span>
                             </div>
                             <div class="flex text-sm justify-center flex-col">
@@ -107,7 +116,7 @@
                             </div>
                         </div>
                         <div class="p-3 flex gap-2 hover:bg-gray-200">
-                            <div class="w-[35px] h-[35px] flex justify-center items-center bg-gray-100 rounded-[50px]">
+                            <div class="min-w-[35px] h-[35px] flex justify-center items-center bg-gray-100 rounded-[50px]">
                                 <span class="pi pi-comment text-sm"></span>
                             </div>
                             <div class="text-sm justify-center flex flex-col">
@@ -122,7 +131,7 @@
                     </div>
                 </div>
 
-                <div v-if="res.length!==0||showInput===true" class="left-[300px] bg-white bottom-0 right-0 fixed z-5 h-[50px] p-2 border-t-[1px]">
+                <div v-if="res.length!==0||showInput===true" :style="screenWidth>720?'left:300px;':'left:0;'" class="bg-white bottom-0 right-0 fixed z-5 h-[50px] p-2 border-t-[1px]">
                     <form v-on:submit="handleSubmit" class="flex h-full w-full gap-2">
                         <input required id="prompt" name="prompt" type="text" class="focus:outline-none active:outline-none outline-none border-none focus:border-none px-3 bg-gray-200 placeholder:text-gray-500 text-sm h-[35px] flex-grow py-1 rounded-[50px]" placeholder="How to stop a nose bleed?"/>
                         <button :disabled="isLoading" :class="isLoading===false?'ml-auto px-3 hover:bg-green-100 cursor-pointer rounded-md flex items-center justify-center':'ml-auto px-3 cursor-progress rounded-md flex items-center justify-center'">
