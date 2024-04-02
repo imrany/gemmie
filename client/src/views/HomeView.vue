@@ -63,7 +63,7 @@
         readMore.value=true
     }
     function scrollToBottom(){
-        document.getElementById("bottom")?.scrollIntoView()
+        document.getElementById("scrollableElem")?.scrollIntoView({behavior:"smooth", block:"end"})
     }
 
     onMounted(()=>{
@@ -95,7 +95,7 @@
                         <p v-else class="text-sm text-gray-500">Use Gemmie for medical inquiries only.</p>
                     </div>
                 </div>
-                <div class="pb-[50px]">
+                <div class="pb-[50px]" id="scrollableElem">
                     <div v-for="item in res" :key="item.text" class="flex flex-col">
                         <div class="p-3 flex items-center gap-2 hover:bg-slate-200">
                             <div class="w-[35px] h-[35px] flex justify-center items-center bg-gray-100 rounded-[50px]">
@@ -131,7 +131,6 @@
                         </button>
                     </form>
                 </div>
-                <div id="bottom"></div>
             </div>
         </div>
     </div>
