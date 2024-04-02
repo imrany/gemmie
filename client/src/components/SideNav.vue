@@ -8,7 +8,7 @@
             parsedUserDetails:{
                 username:string
             },
-            screenwidth:number,
+            screenWidth:any,
         },
         functions:{
             setShowInput:any,

@@ -6,7 +6,7 @@ let props=defineProps<{
         parsedUserDetails:{
             username:string
         },
-        screenWidth:number,
+        screenWidth:any,
     }
 }>()
 </script>
