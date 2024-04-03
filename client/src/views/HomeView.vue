@@ -37,7 +37,7 @@
             })
             let parseRes=await response.json()
             let resp:Res={
-                prompt:parseRes.error?`An error has occurred`:parseRes.prompt,
+                prompt:parseRes.prompt,
                 text:parseRes.error?parseRes.error:parseRes.text
             }
             res.push(resp)
@@ -47,7 +47,7 @@
             scrollToBottom()
         } catch (error:any) {
             let resp:Res={
-                prompt:`An error has occurred`,
+                prompt:e.target.prompt.value,
                 text:error.message
             }
             res.push(resp)
@@ -125,7 +125,7 @@
                                     <div v-html="item.text.slice(0,800)" class="flex flex-col gap-1"></div>
                                     <button @click="setReadMore" class="text-blue-500 mt-2 cursor-pointer">Read more</button>
                                 </p>
-                                <div v-html="item.text" class="flex flex-col gap-1" v-else></div>
+                                <div v-html="item.text" class="flex flex-col gap-1 max-sm:w-[60wv]" v-else></div>
                             </div>
                         </div>
                     </div>
