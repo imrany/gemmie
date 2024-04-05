@@ -74,7 +74,7 @@
         <div v-else-if="props.data.parsedUserDetails.username.length!==0" class="flex flex-col mt-7 px-3 text-sm justify-center">
             <div class="flex justify-center flex-col">
                 <p class="text-lg font-semibold">Hello {{ props.data.parsedUserDetails.username }},</p>
-                <p class="text-sm">Welcome to Gemmie, you are using Gemmie Demo, Gemini API Hackathon.</p>
+                <p class="text-sm">Welcome to Gemmie, you are using Gemmie Demo, Google AI Hackathon.</p>
                 <button @click="props.functions.setShowInput()" class="rounded-md flex justify-center items-center bg-gray-200 h-[40px]  mt-2 px-3">Write a prompt</button>
             </div>
         </div>

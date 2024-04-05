@@ -10,7 +10,7 @@
 
     let showInput=ref(false)
     let readMore=ref(false)
-    let note=ref("You are using Gemmie Demo, Gemini API Hackathon")
+    let note=ref("You are using Gemmie Demo, Google AI Hackathon")
     let screenWidth=ref(screen.width)
 
     let userDetails:any=localStorage.getItem("userdetails")
