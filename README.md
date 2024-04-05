@@ -1,5 +1,5 @@
 # Gemmie
-A health program using Google Gemini model (hackathon).
+A health program using Gemini API (Google AI hackathon).
 
 For text-only input, use the gemini-pro model
 
