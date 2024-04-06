@@ -35,7 +35,7 @@
 <template>
     <div id="side_nav" :class="props.data.screenWidth>720?'':'none'" class="bg-white z-5 fixed top-0 left-0 bottom-0 border-r-[1px]" :style="props.data.screenWidth>720?'width:300px;':'right:0; z-index:10;'">
         <div class="flex items-center justify-between p-3">
-            <p class="font-semibold text-xl text-black">Gemini</p>
+            <p class="font-semibold text-xl text-black">Gemmie</p>
             <div v-if="props.data.screenWidth>720" class="flex gap-2 items-center">
                 <button @click="reload" title="Refresh Page" class="w-[30px] h-[30px] flex items-center justify-center hover:bg-gray-100 rounded-[50px] cursor-pointer">
                     <span class="pi pi-refresh text-sm"></span>
