@@ -19,6 +19,8 @@
   box-sizing: border-box;
   list-style: none;
   text-decoration: none;
+  border: none;
+  outline: none;
 }
 
 html {
@@ -26,10 +28,12 @@ html {
 }
 
 body {
-  display: grid;
-  grid-template-columns: 30% 70%;
-  font-family: system-ui, Arial, sans-serif;
+  font-family: sans-serif;
   line-height: 1.7;
+}
+
+#root {
+  display: flex;
 }
 
 h1 {
@@ -38,13 +42,14 @@ h1 {
 }
 
 button {
-  padding-block: 1.3rem;
+  padding-block: 1rem;
   inline-size: 100%;
   background: var(--color-bg-button);
   cursor: pointer;
   transition: var(--transition);
   color: var(--color-text-button);
-  border-radius: .3rem;
+  border-radius: .5rem;
+  margin-block-start: .5rem;
 }
 
 button:hover {
@@ -52,16 +57,16 @@ button:hover {
 }
 
 input {
-  padding-block: 1.3rem;
+  padding-block: 1rem;
   inline-size: 100%;
   background: var(--color-bg-input);
   color: var(--color-text-input);
-  border-radius: .3rem;
+  border-radius: .5rem;
+  padding-inline-start: 1rem;
 }
 
 input::placeholder {
-  padding-inline-start: 1rem;
-  color: #777;
+  color: #555;
 }
 
 /* **************************** MEDIA QUERIES**************************** */
