@@ -1,10 +1,8 @@
-import { useState } from "react";
+import React from "react";
 import Sidebar from "./Components/Sidebar/Sidebar";
 import Chat from "./Components/Chat/Chat";
 
 function App() {
-  const [count, setCount] = useState(0);
-
   return (
     <>
       <Sidebar />
