@@ -11,7 +11,9 @@
 
 .chat_username h3 {
     font-size: .9rem;
+    margin-inline-start: 20rem;
 }
+
 
 .chat_header {
     display: flex;
@@ -28,14 +30,16 @@
 .chat_body {
     display: flex;
     flex-direction: column;
-    margin-inline-start: 5%;
-    margin-block-start: 20%;
+    margin-inline-start: 25%;
+    margin-block-start: 18%;
     align-items: center;
-    block-size: 60vh;
+    block-size: 100vh;
 }
 
 .chat_body h1 {
     font-size: 1.4rem;
+    margin-block-end: -.5rem;
+    margin-block-start: .5rem;
 }
 
 .chat_body ion-icon {
