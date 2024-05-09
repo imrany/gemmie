@@ -1,0 +1,14 @@
+.chat_container {
+    background: var(--color-bg-primary);
+    inline-size: 100%;
+    color: var(--color-text);
+    padding-block-start: .8rem;
+}
+
+.chat_username {
+    margin-inline-start: 1rem;
+}
+
+.chat_username h3 {
+    font-size: .9rem;
+}

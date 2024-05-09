@@ -1,7 +1,7 @@
 /* ********** GENERAL STYLING ********** */
 :root {
   /* ************** DARK MODE EFFECT **************** */
-  --color-bg-primary: #00000;
+  --color-bg-primary: #000;
   --color-bg: rgb(14, 14, 14);
   --color-bg-button: rgb(58, 47, 78);
   --color-bg-input: rgb(255, 96, 21);
