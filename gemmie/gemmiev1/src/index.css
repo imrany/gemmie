@@ -75,6 +75,10 @@ input::placeholder {
   .sidebar_container {
     inline-size: 30%;
   }
+
+  .chat_username {
+    margin-inline-start: -4rem;
+  }
 }
 
 /* ************** SMALLER SCREENS SCREENS ************** */

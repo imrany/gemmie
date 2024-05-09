@@ -6,7 +6,9 @@ const Sidebar = () => {
     <div className="sidebar_container">
       <div className="sidebar_title">
         <h3>Gemmie</h3>
-        <ion-icon name="refresh-outline"></ion-icon>
+        <a href="#">
+          <ion-icon name="refresh-outline"></ion-icon>
+        </a>
       </div>
 
       <div className="sidebar_input">
