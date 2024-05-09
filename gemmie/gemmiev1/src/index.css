@@ -1,68 +1,80 @@
+/* ********** GENERAL STYLING ********** */
 :root {
-  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
+  /* ************** DARK MODE EFFECT **************** */
+  --color-bg-primary: #00000;
+  --color-bg: rgb(14, 14, 14);
+  --color-bg-button: rgb(58, 47, 78);
+  --color-bg-input: rgb(255, 96, 21);
 
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
+  --color-text: rgb(241, 241, 241);
+  --color-text-input: rgb(255, 255, 255);
+  --color-text-button: rgb(255, 255, 255);
 
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  --transition: all 450ms ease;
 }
 
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  list-style: none;
+  text-decoration: none;
 }
-a:hover {
-  color: #535bf2;
+
+html {
+  scroll-behavior: smooth;
 }
 
 body {
-  margin: 0;
-  display: flex;
-  place-items: center;
-  min-width: 320px;
-  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 30% 70%;
+  font-family: system-ui, Arial, sans-serif;
+  line-height: 1.7;
 }
 
 h1 {
-  font-size: 3.2em;
-  line-height: 1.1;
+  font-size: 1.8rem;
+  color: var(--color-text);
 }
 
 button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  background-color: #1a1a1a;
+  padding-block: 1.3rem;
+  inline-size: 100%;
+  background: var(--color-bg-button);
   cursor: pointer;
-  transition: border-color 0.25s;
-}
-button:hover {
-  border-color: #646cff;
-}
-button:focus,
-button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
+  transition: var(--transition);
+  color: var(--color-text-button);
+  border-radius: .3rem;
 }
 
-@media (prefers-color-scheme: light) {
-  :root {
-    color: #213547;
-    background-color: #ffffff;
+button:hover {
+  background: var(--color-bg-input);
+}
+
+input {
+  padding-block: 1.3rem;
+  inline-size: 100%;
+  background: var(--color-bg-input);
+  color: var(--color-text-input);
+  border-radius: .3rem;
+}
+
+input::placeholder {
+  padding-inline-start: 1rem;
+  color: #777;
+}
+
+/* **************************** MEDIA QUERIES**************************** */
+/* ************** LARGER SCREENS ************** */
+@media screen and (max-width: 1023px) {
+  body {
+    background: yellow;
   }
-  a:hover {
-    color: #747bff;
-  }
-  button {
-    background-color: #f9f9f9;
+}
+
+/* ************** SMALLER SCREENS SCREENS ************** */
+@media screen and (max-width: 763px) {
+  body {
+    background: red;
   }
 }
