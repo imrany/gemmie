@@ -12,3 +12,35 @@
 .chat_username h3 {
     font-size: .9rem;
 }
+
+.chat_header {
+    display: flex;
+    justify-content: center;
+    background: var(--color-bg-input);
+    margin-block-start: .5rem;
+}
+
+.chat_header p,
+.chat_body p {
+    font-size: .8rem;
+}
+
+.chat_body {
+    display: flex;
+    flex-direction: column;
+    margin-inline-start: 5%;
+    margin-block-start: 20%;
+    align-items: center;
+    block-size: 60vh;
+}
+
+.chat_body h1 {
+    font-size: 1.4rem;
+}
+
+.chat_body ion-icon {
+    font-size: 1rem;
+    background: var(--color-bg-button);
+    padding: 1rem;
+    border-radius: 50%;
+}
