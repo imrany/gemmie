@@ -48,3 +48,21 @@
     padding: 1rem;
     border-radius: 50%;
 }
+
+.cta {
+    padding-block: 1rem;
+    inline-size: 50%;
+    background: var(--color-bg-button);
+    cursor: pointer;
+    transition: var(--transition);
+    color: var(--color-text-button);
+    border-radius: .5rem;
+    margin-block-start: .5rem;
+    display: flex;
+    justify-content: center;
+    margin-block-start: 2rem;
+}
+
+.cta:hover {
+    background: var(--color-bg-input);
+}

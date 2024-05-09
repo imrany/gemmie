@@ -72,14 +72,32 @@ input::placeholder {
 /* **************************** MEDIA QUERIES**************************** */
 /* ************** LARGER SCREENS ************** */
 @media screen and (max-width: 1023px) {
-  body {
-    background: yellow;
+  .sidebar_container {
+    inline-size: 30%;
   }
 }
 
 /* ************** SMALLER SCREENS SCREENS ************** */
-@media screen and (max-width: 763px) {
-  body {
-    background: red;
+@media screen and (max-width: 768px) {
+  .sidebar_container {
+    display: none;
+  }
+
+  .chat_username {
+    margin-inline-start: 0;
+  }
+
+  .chat_username h3 {
+    margin-inline-start: 1rem;
+  }
+
+  .chat_body {
+    margin-inline-start: 5%;
+    margin-inline-end: 1rem;
+  }
+
+  .chat_body p {
+    font-size: 1rem;
+    text-align: center;
   }
 }

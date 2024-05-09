@@ -20,6 +20,9 @@ const Chat = () => {
           Gemmie uses Gemini API to solve medical issues as a first aid
           assistant.
         </p>
+        <a href="#" className="cta">
+          Get started
+        </a>
       </div>
     </div>
   );
