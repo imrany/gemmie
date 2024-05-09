@@ -5,6 +5,7 @@
     color: var(--color-text);
     padding-block-start: 1rem;
     padding-inline: 1rem;
+    position: fixed;
 }
 
 .sidebar_title {
