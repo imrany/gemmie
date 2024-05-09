@@ -1,7 +1,7 @@
 .sidebar_container {
     background: var(--color-bg);
     block-size: 100vh;
-    inline-size: 23%;
+    inline-size: 29%;
     color: var(--color-text);
     padding-block-start: 1rem;
     padding-inline: 1rem;
