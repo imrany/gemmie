@@ -6,7 +6,8 @@ config();
 
 const app=express();
 const cors_option = {
-    origin:["http://localhost:3000","https://gemmie-hackathon-demo.web.app"],
+    //origin:["http://localhost:3000","https://gemmie-hackathon-demo.web.app"],
+    origin:"*",
     methods: ["GET", "POST", "DELETE", "UPDATE", "PATCH", "PUT"]
 }
 
@@ -16,7 +17,7 @@ app.use(cors(cors_option))
 app.use(express.urlencoded({extended:false}))
 app.use('/api',router)
 
-let port=8000||process.env.PORT
+let port=process.env.PORT||8000
 app.listen(port,()=>{
   console.log(`Server running on port 8000`)
 })

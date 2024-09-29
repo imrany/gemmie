@@ -33,8 +33,4 @@ runPrompt();
 Or
 
 ```bash 
-curl \
-  -H 'Content-Type: application/json' \
-  -d '{"prompt":"How can i stop nose bleeding?"}' \
-  -X POST 'http://127.0.0.1:8000/api/prompt'
-```
+curl --header "Content-Type: application/json" --request POST --data "{\"prompt\":\"How to stop a nose bleed?\"}" http://127.0.0.1:8000/api/prompt```
