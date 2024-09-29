@@ -6,8 +6,9 @@ config();
 
 const app=express();
 const cors_option = {
-  origin:["http://localhost:3000","https://gemmie-hackathon-demo.web.app"],
-  methods: ["GET", "POST", "DELETE", "UPDATE", "PATCH", "PUT"]
+    //origin:["http://localhost:3000","https://gemmie-hackathon-demo.web.app"],
+    origin:*,
+    methods: ["GET", "POST", "DELETE", "UPDATE", "PATCH", "PUT"]
 }
 
 //middleware
