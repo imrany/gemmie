@@ -11,11 +11,11 @@ let router=Router()
 // Access your API key as an environment variable (see "Set up your API key" above)
 let apiKey:any=process.env.API_KEY;
 const genAI = new GoogleGenerativeAI(apiKey);
-const { generateContent } = genAI.getGenerativeModel({ model: "gemini-pro"});
 
 router.post("/",async(req:Prompt,res:any)=>{
     try {
         let { prompt }= req.body;
+        const { generateContent } = genAI.getGenerativeModel({ model: "gemini-pro"});
         const { response } = await generateContent(prompt);
         let text=removeMd(response.text())
         res.status(200).send(text)
@@ -28,6 +28,7 @@ router.post("/",async(req:Prompt,res:any)=>{
 router.post("/md",async(req:Prompt,res:any)=>{
     try {
         let { prompt }= req.body;
+        const { generateContent } = genAI.getGenerativeModel({ model: "gemini-pro"});
         const { response } = await generateContent(prompt);
         let markdown=response.text()
         res.status(200).send(markdown)
@@ -41,6 +42,7 @@ router.post("/prompt",async(req:Prompt,res:any)=>{
     try {
         let { prompt }= req.body;
         // For text-only input, use the gemini-pro model
+        const { generateContent } = genAI.getGenerativeModel({ model: "gemini-pro"});
         const { response } = await generateContent(prompt);
         let promptResponse:PromptResponse={
             prompt,
