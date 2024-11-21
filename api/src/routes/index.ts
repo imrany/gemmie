@@ -15,8 +15,9 @@ const genAI = new GoogleGenerativeAI(apiKey);
 router.post("/",async(req:Prompt,res:any)=>{
     try {
         let { prompt }= req.body;
-        const { generateContent } = genAI.getGenerativeModel({ model: "gemini-pro"});
-        const { response } = await generateContent(prompt);
+        const model = genAI.getGenerativeModel({ model: "gemini-pro"});
+        const result = await model.generateContent(prompt);
+        const response = result.response;
         let text=removeMd(response.text())
         res.status(200).send(text)
     } catch (error:any) {
@@ -28,8 +29,9 @@ router.post("/",async(req:Prompt,res:any)=>{
 router.post("/md",async(req:Prompt,res:any)=>{
     try {
         let { prompt }= req.body;
-        const { generateContent } = genAI.getGenerativeModel({ model: "gemini-pro"});
-        const { response } = await generateContent(prompt);
+        const model = genAI.getGenerativeModel({ model: "gemini-pro"});
+        const result = await model.generateContent(prompt);
+        const response = result.response;
         let markdown=response.text()
         res.status(200).send(markdown)
     } catch (error:any) {
@@ -42,8 +44,9 @@ router.post("/prompt",async(req:Prompt,res:any)=>{
     try {
         let { prompt }= req.body;
         // For text-only input, use the gemini-pro model
-        const { generateContent } = genAI.getGenerativeModel({ model: "gemini-pro"});
-        const { response } = await generateContent(prompt);
+        const model = genAI.getGenerativeModel({ model: "gemini-pro"});
+        const result = await model.generateContent(prompt);
+        const response = result.response;
         let promptResponse:PromptResponse={
             prompt,
             text: marked.parse(response.text())
