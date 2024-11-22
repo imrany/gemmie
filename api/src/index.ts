@@ -1,6 +1,5 @@
 import express from "express";
 import cors from "cors";
-import axios from "axios";
 import router from "./routes";
 import { config } from "dotenv";
 config();
@@ -22,8 +21,3 @@ let port=process.env.PORT||8000
 app.listen(port,()=>{
   console.log(`Server running on port ${port}`)
 })
-
-// sends an HTTP GET request to your server to prevent it from idling after 30 minutes of inactivity (optional)
-setInterval(async()=> { 
-    await axios.get(`${process.env.BASE_URL}`);
-}, 3 * 60 * 1000);
