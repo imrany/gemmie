@@ -2,7 +2,7 @@
     let props=defineProps<{
         data:{
             res:{
-                text:string,
+                prompt:string,
                 response?:string,
                 status?: number
             }[],
@@ -59,7 +59,7 @@
                 </div>
                 <div class="flex flex-col text-xs gap-1">
                     <p>{{props.data.parsedUserDetails.username}}</p>
-                    <p>You: {{ props.data.res[0].prompt }}</p>
+                    <p>You: {{ props.data.res[0].response }}</p>
                 </div>
             </div>
             <div class="ml-auto text-xs">

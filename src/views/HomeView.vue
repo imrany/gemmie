@@ -20,7 +20,7 @@ let parsedUserDetails: any = JSON.parse(userDetails) === null ? [] : JSON.parse(
 
 let chats: any = localStorage.getItem("chats")
 let parsedChats: any = JSON.parse(chats) === null ? [] : JSON.parse(chats)
-let res: Res[] = parsedChats.length === 0 ? [] : parsedChats
+let res: any = parsedChats.length === 0 ? [] : parsedChats
 let isLoading = ref(false)
 
 async function handleSubmit(e: any) {
