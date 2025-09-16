@@ -20,9 +20,9 @@ function clearChats(){
         <div class="flex px-5 py-3 items-center justify-between w-full">
             <p v-if="props.data.parsedUserDetails.username!==undefined" class="text-black text-sm font-semibold">{{props.data.parsedUserDetails.username}}</p>
             <p v-else class="text-black text-sm font-semibold">Gemmie</p>
-            <button  v-if="props.data.screenWidth<720&&props.data.res.length>0" class="text-sm text-blue-500 active:underline" @click="clearChats">Clear chats</button>
+            <button  v-if="props.data.screenWidth<720&&props.data.res.length>0" class="text-sm text-blue-600 active:underline" @click="clearChats">Clear chats</button>
         </div>
-        <div class="bg-blue-200 flex items-center justify-center text-xs h-[20px]">
+        <div class="bg-blue-600 text-white font-semibold flex items-center justify-center text-xs h-[20px]">
             <p>{{ props.data.note }}</p>
         </div>
     </div>

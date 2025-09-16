@@ -11,7 +11,7 @@ type Res = {
 }
 
 let showInput = ref(false)
-let note = ref("You are using Gemmie Demo, Google AI Hackathon")
+let note = ref("You are using Gemmie, your personal AI assistant")
 let screenWidth = ref(screen.width)
 
 let userDetails: any = localStorage.getItem("userdetails")
@@ -110,7 +110,7 @@ function renderMarkdown(text: string) {
             </div>
             <p class="text-xl font-semibold">{{ parsedUserDetails.username || 'Gemmie' }}</p>
             <p class="text-center text-sm max-w-[300px]">
-              Gemmie uses Gemini API to solve medical issues as a first aid assistant.
+              Here's Gemmie your AI assistant. Ask me a question
             </p>
             <button v-if="parsedUserDetails.username!==undefined"
                     @click="setShowInput"
@@ -166,7 +166,7 @@ function renderMarkdown(text: string) {
           <form @submit="handleSubmit" class="flex gap-2 w-full">
             <input required id="prompt" name="prompt" type="text"
                    class="flex-grow px-3 py-2 rounded-full bg-gray-200 text-sm focus:ring-2 focus:ring-blue-400 outline-none"
-                   placeholder="How to stop a nose bleed?" />
+                   placeholder="Ask me a question..." />
             <button :disabled="isLoading"
                     :class="isLoading ? 'cursor-progress' : 'hover:bg-blue-100'"
                     class="rounded-full p-2 flex items-center justify-center">
