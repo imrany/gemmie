@@ -59,7 +59,7 @@
                 </div>
                 <div class="flex flex-col text-xs gap-1">
                     <p>{{props.data.parsedUserDetails.username}}</p>
-                    <p>You: {{ props.data.res[0].response }}</p>
+                    <p>{{ props.data.res[0].response.slice(0,40) }}...</p>
                 </div>
             </div>
             <div class="ml-auto text-xs">
@@ -75,7 +75,7 @@
         <div v-else-if="props.data.parsedUserDetails.username.length!==0" class="flex flex-col mt-7 px-3 text-sm justify-center">
             <div class="flex justify-center flex-col">
                 <p class="text-lg font-semibold">Hello {{ props.data.parsedUserDetails.username }},</p>
-                <p class="text-sm">Welcome to Gemmie, you are using Gemmie Demo, Google AI Hackathon.</p>
+                <p class="text-sm">Welcome to Gemmie, your personal private AI Assistant.</p>
                 <button @click="props.functions.setShowInput()" class="rounded-md flex justify-center items-center bg-gray-200 h-[40px]  mt-2 px-3">Write a prompt</button>
             </div>
         </div>
