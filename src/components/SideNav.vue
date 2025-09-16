@@ -3,7 +3,8 @@
         data:{
             res:{
                 text:string,
-                prompt?:string
+                response?:string,
+                status?: number
             }[],
             parsedUserDetails:{
                 username:string
@@ -58,7 +59,7 @@
                 </div>
                 <div class="flex flex-col text-xs gap-1">
                     <p>{{props.data.parsedUserDetails.username}}</p>
-                    <p>You: {{ props.data.res.slice(props.data.res.length-1,props.data.res.length)[0].prompt }}</p>
+                    <p>You: {{ props.data.res[0].prompt }}</p>
                 </div>
             </div>
             <div class="ml-auto text-xs">
