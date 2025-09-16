@@ -1,7 +1,7 @@
 {
     "short_name":"Gemmie",
     "name":"Gemmie",
-    "description":"A program that use gemini api to solve health issue as first aid assistant  ( hackathon )",
+    "description":"Gemmie, your personal AI assistant.",
     "start_url":"/",
     "id":"/",
     "background_color":"#FFFF",
