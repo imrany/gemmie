@@ -11,7 +11,6 @@ type Res = {
 }
 
 let showInput = ref(false)
-let showMore = ref(false)
 let note = ref("You are using Gemmie Demo, Google AI Hackathon")
 let screenWidth = ref(screen.width)
 
@@ -22,6 +21,9 @@ let chats: any = localStorage.getItem("chats")
 let parsedChats: any = JSON.parse(chats) === null ? [] : JSON.parse(chats)
 let res: any = parsedChats.length === 0 ? [] : parsedChats
 let isLoading = ref(false)
+
+// track expanded state per index
+let expanded = ref<boolean[]>(res.map(() => false))
 
 async function handleSubmit(e: any) {
   try {
@@ -45,6 +47,8 @@ async function handleSubmit(e: any) {
     }
 
     res.push(resp)
+    expanded.value.push(false) // add expanded tracker for new item
+
     localStorage.setItem("chats", JSON.stringify(res))
     isLoading.value = false
     e.target.reset()
@@ -56,6 +60,7 @@ async function handleSubmit(e: any) {
       response: error.message
     }
     res.push(resp)
+    expanded.value.push(false)
     localStorage.setItem("chats", JSON.stringify(res))
     isLoading.value = false
     console.log(error.message)
@@ -65,8 +70,8 @@ async function handleSubmit(e: any) {
 function setShowInput() {
   showInput.value = true
 }
-function setShowMore(isShow: boolean) {
-  showMore.value = isShow
+function toggleExpand(index: number) {
+  expanded.value[index] = !expanded.value[index]
 }
 function scrollToBottom() {
   let elem = document.getElementById("scrollableElem")
@@ -89,18 +94,15 @@ function renderMarkdown(text: string) {
   return marked.parse(text)
 }
 </script>
-
 <template>
   <div class="flex h-[100vh]">
-    <!-- Sidebar -->
     <SideNav :data="{ res, parsedUserDetails, screenWidth }" :functions="{ setShowInput, toggleSideNav }" />
 
-    <!-- Main Chat Window -->
     <div :class="screenWidth>720 ? 'flex-grow flex flex-col ml-[300px]' : 'flex-grow flex flex-col'">
       <TopNav :data="{ note, res, parsedUserDetails, screenWidth }" />
 
       <div class="h-screen flex flex-col">
-        <!-- Intro / Empty State -->
+        <!-- Empty State -->
         <div v-if="res.length===0" class="flex flex-col items-center justify-center h-full">
           <div class="flex flex-col items-center gap-3 text-gray-600">
             <div class="rounded-full bg-gray-200 w-[60px] h-[60px] flex justify-center items-center">
@@ -126,24 +128,32 @@ function renderMarkdown(text: string) {
         <!-- Chat Messages -->
         <div v-else class="flex-grow overflow-y-auto px-4 space-y-3 pt-[90px] py-[70px]">
           <div v-for="(item, i) in res" :key="i" class="flex flex-col gap-2">
-            <!-- User -->
+            <!-- User Bubble -->
             <div class="flex justify-end">
-              <div class="bg-blue-500 text-white p-3 rounded-2xl max-w-[70%] shadow">
+              <div :class="screenWidth>720 ? 'max-w-[70%]' : 'max-w-[95%]'"
+                   class="bg-blue-500 text-white p-3 rounded-2xl shadow">
                 <p class="text-xs opacity-80">{{ parsedUserDetails.username || "You" }}</p>
                 <p>{{ item.prompt }}</p>
               </div>
             </div>
 
-            <!-- Bot -->
+            <!-- Bot Bubble -->
             <div class="flex justify-start">
-              <div class="bg-gray-100 text-black p-3 rounded-2xl max-w-[70%] shadow">
+              <div :class="screenWidth>720 ? 'max-w-[70%]' : 'max-w-[95%]'"
+                   class="bg-gray-100 text-black p-3 rounded-2xl shadow">
                 <p class="text-xs font-semibold text-gray-500 mb-1">Gemmie</p>
-                <div v-if="item.response.length>300 && !showMore">
+
+                <div v-if="item.response.length>300 && !expanded[i]">
                   <div v-html="renderMarkdown(item.response.slice(0,300))"></div>
-                  <button @click="()=>setShowMore(true)" class="text-blue-500 mt-2 text-sm">Show more</button>
+                  <button @click="toggleExpand(i)" class="text-blue-500 mt-2 text-sm">Show more</button>
                 </div>
-                <div v-else v-html="renderMarkdown(item.response)" class="prose prose-sm max-w-none"></div>
-                <button @click="()=>setShowMore(false)" v-if="item.response.length>300 && showMore" class="text-blue-500 mt-2 text-sm">Show less</button>
+
+                <div v-else>
+                  <div v-html="renderMarkdown(item.response)" class="prose prose-sm max-w-none"></div>
+                  <button v-if="item.response.length>300"
+                          @click="toggleExpand(i)"
+                          class="text-blue-500 mt-2 text-sm">Show less</button>
+                </div>
               </div>
             </div>
           </div>
