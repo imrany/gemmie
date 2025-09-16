@@ -69,14 +69,14 @@
         <div v-else-if="props.data.parsedUserDetails.username===undefined||props.data.parsedUserDetails.username.length===0" class="flex flex-col items-center text-sm mt-7 w-full px-4 cursor-pointer justify-center">
             <form @submit="handleSubmit" class="flex gap-2 justify-center flex-col">
                 <input required id="username" name="username" type="text" class="w-[250px] focus:outline-none active:outline-none outline-none border-none focus:border-none px-3 bg-gray-100 placeholder:text-gray-500 text-sm h-[35px] flex-grow py-1 rounded-md" placeholder="Enter your username"/>
-                <button class="rounded-md flex justify-center items-center bg-gray-800 text-white h-[37px] px-5">Submit</button>
+                <button class="rounded-md flex justify-center items-center bg-blue-600 text-white h-[37px] px-5">Submit</button>
             </form>
         </div>
         <div v-else-if="props.data.parsedUserDetails.username.length!==0" class="flex flex-col mt-7 px-3 text-sm justify-center">
             <div class="flex justify-center flex-col">
                 <p class="text-lg font-semibold">Hello {{ props.data.parsedUserDetails.username }},</p>
                 <p class="text-sm">Welcome to Gemmie, your personal private AI Assistant.</p>
-                <button @click="props.functions.setShowInput()" class="rounded-md flex justify-center items-center bg-gray-200 h-[40px]  mt-2 px-3">Write a prompt</button>
+                <button @click="props.functions.setShowInput()" class="rounded-md flex justify-center items-center bg-blue-600 text-white h-[40px]  mt-2 px-3">Write a prompt</button>
             </div>
         </div>
     </div>
