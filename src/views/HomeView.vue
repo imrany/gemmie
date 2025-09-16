@@ -152,8 +152,8 @@ function renderMarkdown(text: string) {
         <!-- Input -->
         <div v-if="res.length!==0 || showInput===true"
              :style="screenWidth>720?'left:300px;':'left:0;'"
-             class="bg-white bottom-0 right-0 fixed w-full border-t p-2">
-          <form @submit="handleSubmit" class="flex gap-2">
+             class="bg-white bottom-0 right-0 fixed border-t p-2">
+          <form @submit="handleSubmit" class="flex gap-2 w-full">
             <input required id="prompt" name="prompt" type="text"
                    class="flex-grow px-3 py-2 rounded-full bg-gray-200 text-sm focus:ring-2 focus:ring-blue-400 outline-none"
                    placeholder="How to stop a nose bleed?" />
