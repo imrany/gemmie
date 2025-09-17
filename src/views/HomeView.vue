@@ -1,6 +1,8 @@
 <script lang="ts" setup>
 import { ref, onMounted, nextTick } from "vue"
 import { marked } from "marked"
+import hljs from "highlight.js"
+import "highlight.js/styles/github-dark.css" // pick any highlight.js theme
 import SideNav from "../components/SideNav.vue"
 import TopNav from "../components/TopNav.vue"
 
@@ -25,6 +27,19 @@ let isLoading = ref(false)
 // track expanded state per index
 let expanded = ref<boolean[]>(res.map(() => false))
 
+// ✅ Configure marked with highlight.js
+marked.use({
+  renderer: {
+    code({ text, lang }) {
+      if (lang && hljs.getLanguage(lang)) {
+        return `<pre><code class="hljs language-${lang}">${hljs.highlight(text, { language: lang }).value}</code></pre>`
+      }
+      return `<pre><code class="hljs">${hljs.highlightAuto(text).value}</code></pre>`
+    }
+  }
+})
+
+
 async function handleSubmit(e: any) {
   try {
     e.preventDefault()
@@ -47,7 +62,7 @@ async function handleSubmit(e: any) {
     }
 
     res.push(resp)
-    expanded.value.push(false) // add expanded tracker for new item
+    expanded.value.push(false)
 
     localStorage.setItem("chats", JSON.stringify(res))
     isLoading.value = false
@@ -82,6 +97,7 @@ function scrollToBottom() {
   let elem = document.getElementById("scrollableElem")
   if (elem) elem.scrollIntoView({ behavior: "smooth", block: "end" })
 }
+
 function toggleSideNav() {
   let sideNav: any = document.getElementById("side_nav")
   sideNav.classList.contains("none") ? sideNav.classList.remove("none") : sideNav.classList.add("none")
@@ -99,10 +115,13 @@ function renderMarkdown(text: string) {
   return marked.parse(text)
 }
 </script>
+
 <template>
   <div class="flex h-[100vh]">
+    <!-- Sidebar -->
     <SideNav :data="{ res, parsedUserDetails, screenWidth }" :functions="{ setShowInput, toggleSideNav }" />
 
+    <!-- Main Chat Window -->
     <div :class="screenWidth>720 ? 'flex-grow flex flex-col ml-[300px]' : 'flex-grow flex flex-col'">
       <TopNav :data="{ note, res, parsedUserDetails, screenWidth }" />
 
@@ -145,17 +164,17 @@ function renderMarkdown(text: string) {
             <!-- Bot Bubble -->
             <div class="flex justify-start">
               <div :class="screenWidth>720 ? 'max-w-[70%]' : 'max-w-[95%]'"
-                   class="bg-gray-100 text-black p-3 rounded-2xl shadow">
+                   class="bg-gray-100 text-black p-3 rounded-2xl shadow prose prose-sm max-w-none">
                 <p class="text-xs font-semibold text-gray-500 mb-1">Gemmie</p>
 
-                <div v-if="item.response.length>300 && !expanded[i]">
-                  <div v-html="renderMarkdown(item.response.slice(0,300))"></div>
+                <div v-if="item.response.length>200 && !expanded[i]">
+                  <div class="less" v-html="renderMarkdown(item.response.slice(0,200))"></div>
                   <button @click="toggleExpand(i)" class="text-blue-500 mt-2 text-sm">Show more</button>
                 </div>
 
                 <div v-else>
-                  <div v-html="renderMarkdown(item.response)" class="prose prose-sm max-w-none"></div>
-                  <button v-if="item.response.length>300"
+                  <div v-html="renderMarkdown(item.response)"></div>
+                  <button v-if="item.response.length>200"
                           @click="toggleExpand(i)"
                           class="text-blue-500 mt-2 text-sm">Show less</button>
                 </div>
