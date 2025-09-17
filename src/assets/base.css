@@ -8,16 +8,26 @@
     display:none;
 }
 
+/* Prevent code blocks from stretching bubbles */
 /* Optional: style markdown output */
 .prose pre {
   background: #1e293b;
   color: #f8fafc;
   padding: 10px;
   border-radius: 6px;
-  overflow-x: auto;
+ 
+  white-space: pre-wrap;   /* allow wrapping */
+  word-break: break-word;  /* break long words/lines */
+  overflow-x: auto;        /* add horizontal scroll if really needed */
+  max-width: 100%;         /* respect bubble width */
+  box-sizing: border-box;  /* keep padding inside */
 }
 .prose code {
-  background: #f3f4f6;
   padding: 2px 4px;
+  background: transparent !important;
+  color: inherit !important;
+
   border-radius: 4px;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
