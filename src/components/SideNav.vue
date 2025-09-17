@@ -59,7 +59,7 @@
                 </div>
                 <div class="flex flex-col text-xs gap-1">
                     <p>{{props.data.parsedUserDetails.username}}</p>
-                    <p>{{ props.data.res[0]?.response.slice(0,40) }}...</p>
+                    <p>{{ props.data.res[0]?.response ? props.data.res[0].response.slice(0,40) + '...' : '' }}</p>
                 </div>
             </div>
             <div class="ml-auto text-xs">
