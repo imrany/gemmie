@@ -70,9 +70,14 @@ async function handleSubmit(e: any) {
 function setShowInput() {
   showInput.value = true
 }
+
 function toggleExpand(index: number) {
   expanded.value[index] = !expanded.value[index]
+  nextTick(() => {
+    scrollToBottom()
+  })
 }
+
 function scrollToBottom() {
   let elem = document.getElementById("scrollableElem")
   if (elem) elem.scrollIntoView({ behavior: "smooth", block: "end" })
