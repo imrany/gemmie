@@ -261,10 +261,10 @@ function toggleSidebar() {
   localStorage.setItem("isCollapsed", String(isCollapsed.value))
 }
 
-function shareResponse(text: string) {
+function shareResponse(text: string, prompt?: string) {
   if (navigator.share) {
     navigator.share({
-      title: `Gemmie Chat`,
+      title: prompt && prompt.length > 200 ? `${prompt.slice(0,200)}...\n\n` : `${prompt || "Gemmie Chat"}\n\n`,
       text
     }).catch(err => console.log("Share canceled", err))
   } else {
@@ -519,7 +519,7 @@ onMounted(() => {
                           class="flex items-center gap-1 hover:text-blue-600 transition-colors">
                     <i class="pi pi-copy"></i> Copy
                   </button>
-                  <button @click="shareResponse(item.response)" 
+                  <button @click="shareResponse(item.response, item.prompt)" 
                           class="flex items-center gap-1 hover:text-green-600 transition-colors">
                     <i class="pi pi-share-alt"></i> Share
                   </button>
