@@ -482,7 +482,7 @@ onMounted(() => {
             </div>
           </div>
           <div>
-            <p class="text-sm text-gray-400">Gemmie can make mistakes. Check important info.</p>
+            <p class="text-sm mt-2 text-gray-400">Gemmie can make mistakes. Check important info.</p>
           </div>
         </div>
 
