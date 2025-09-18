@@ -1,82 +1,121 @@
 <script lang="ts" setup>
-    let props=defineProps<{
-        data:{
-            res:{
-                prompt:string,
-                response?:string,
-                status?: number
-            }[],
-            parsedUserDetails:{
-                username:string
-            },
-            screenWidth:any,
-        },
-        functions:{
-            setShowInput:any,
-            toggleSideNav:any,
+let props = defineProps<{
+    data: {
+        res: {
+            response: string
+            prompt?: string
+            status?: number,
+        }[]
+        isCollapsed?: boolean
+        parsedUserDetails: {
+            username: string
         }
-    }>()
-    function reload(){
-        window.location.reload()
+        screenWidth: any
     }
-    function clear(){
-        localStorage.removeItem("chats");
-        reload()
+    functions: {
+        setShowInput: any
+        hideSidebar: any
+        clearAllChats: any,
+        toggleSidebar: any,
+        logout: any,
     }
-    function handleSubmit(e:any){
-        e.preventDefault()
-        let userDetails={
-            username:e.target.username.value
-        }
-        localStorage.setItem("userdetails",JSON.stringify(userDetails))
-        e.target.reset()
-        reload()
-    }
+}>()
+
+function reload() {
+    window.location.reload()
+}
+
+function openUpgrade() {
+    window.open('https://github.com/sponsors/imrany', '_blank')
+}
 </script>
+
 <template>
-    <div id="side_nav" :class="props.data.screenWidth>720?'':'none'" class="bg-white z-5 fixed top-0 left-0 bottom-0 border-r-[1px]" :style="props.data.screenWidth>720?'width:300px;':'right:0; z-index:10;'">
-        <div class="flex items-center justify-between p-3">
-            <p class="font-semibold text-xl text-black">Gemmie</p>
-            <div v-if="props.data.screenWidth>720" class="flex gap-2 items-center">
-                <button @click="reload" title="Refresh Page" class="w-[30px] h-[30px] flex items-center justify-center hover:bg-gray-100 rounded-[50px] cursor-pointer">
-                    <span class="pi pi-refresh text-sm"></span>
-                </button>
-                <button v-if="props.data.res.length!==0" @click="clear" title="Clear Chats" class="w-[30px] h-[30px] flex items-center justify-center hover:bg-gray-100 rounded-[50px] cursor-pointer">
-                    <span class="pi pi-trash text-sm"></span>
-                </button>
+    <div id="side_nav" :class="props.data.screenWidth > 720
+        ? (props.data.isCollapsed
+            ? 'w-[60px] bg-white z-20 fixed top-0 left-0 bottom-0 border-r flex flex-col transition-all duration-300 ease-in-out'
+            : 'w-[270px] bg-white z-20 fixed top-0 left-0 bottom-0 border-r flex flex-col transition-all duration-300 ease-in-out')
+        : 'none'">
+        <!-- Scrollable area -->
+        <div class="flex-1 overflow-y-auto">
+            <!-- Top Header -->
+            <div class="flex items-center justify-between p-3">
+                <p v-if="!props.data.isCollapsed" class="font-light text-xl text-black">Gemmie</p>
+                <div class="flex gap-2 items-center ml-auto">
+                    <button @click="props.functions.toggleSidebar" title="Toggle Sidebar"
+                        class="w-[30px] h-[30px] flex items-center justify-center hover:bg-gray-100 rounded-full cursor-pointer">
+                        <span class="pi pi-bars text-base"></span>
+                    </button>
+                </div>
             </div>
-            <div v-else>
-                <button @click="props.functions.toggleSideNav" title="Close" class="w-[30px] h-[30px] flex items-center justify-center hover:bg-gray-100 rounded-[50px] cursor-pointer">
-                    <span class="pi pi-times text-xl"></span>
+
+            <!-- New Chat & Refresh -->
+            <div v-if="props.data.parsedUserDetails.username && props.data.parsedUserDetails.username.length > 0"
+                class="px-3 my-4 flex flex-col gap-1 font-light text-sm">
+                <button @click="() => {
+                    props.functions.setShowInput()
+                    if( props.data.screenWidth < 720) props.functions.hideSidebar()
+                }" title="New Chat" class="w-full flex items-center gap-2 h-[40px] hover:bg-gray-100 rounded-lg px-2">
+                    <i class="pi pi-pencil text-gray-500 mb-[2px]"></i>
+                    <p v-if="!props.data.isCollapsed || props.data.screenWidth < 720">New Chat</p>
                 </button>
 
+                <button @click="reload" v-if="props.data.res.length !== 0" title="Refresh Page"
+                    class="w-full flex items-center gap-2 h-[40px] hover:bg-gray-100 rounded-lg px-2">
+                    <i class="pi pi-refresh text-gray-500 mb-[2px]"></i>
+                    <p v-if="!props.data.isCollapsed || props.data.screenWidth < 720">Refresh Page</p>
+                </button>
+
+                <button @click="props.functions.logout" title="Log out"
+                    class="w-full flex items-center gap-2 h-[40px] hover:bg-gray-100 rounded-lg px-2">
+                    <i class="pi pi-sign-out text-gray-500 mb-[2px]"></i>
+                    <p v-if="!props.data.isCollapsed || props.data.screenWidth < 720">Logout</p>
+                </button>
+
+                <button @click="() => {
+                    props.functions.clearAllChats()
+                    props.functions.hideSidebar()
+                }" title="Clear Chats" v-if="props.data.screenWidth < 720 && props.data.res.length !== 0"
+                    class="w-full flex items-center gap-2 h-[40px] hover:bg-gray-100 rounded-lg px-2">
+                    <i class="pi pi-trash text-gray-500 mb-[2px]"></i>
+                    <p>Clear Chats</p>
+                </button>
             </div>
-        </div>
-        <div v-if="props.data.res.length!==0&&props.data.parsedUserDetails.username.length!==0" class="flex items-center px-4 cursor-pointer bg-slate-200 h-[70px]">
-            <div class="flex gap-2 items-center flex-grow">
-                <div class="w-[40px] h-[40px] flex justify-center items-center bg-gray-100 rounded-[50px]">
-                    <span class="pi pi-user text-sm"></span>
+
+            <!-- Recent Chat Preview -->
+            <div v-if="props.data.res.length !== 0 && props.data.parsedUserDetails.username.length !== 0"
+                class="flex flex-col px-2 mb-2 py-4 font-light">
+                <p v-if="!props.data.isCollapsed || props.data.screenWidth < 720" class="text-base text-gray-600 mb-2">
+                    Chats
+                </p>
+                <div class="flex flex-col gap-2">
+                    <button v-for="(chat, index) in props.data.isCollapsed ? props.data.res.slice(0, 1) : props.data.res"
+                        :key="index" @click="() => { if (props.data.screenWidth < 720) props.functions.hideSidebar() }"
+                        title="Open Chat"
+                        class="w-full flex h-[32px] text-sm items-center bg-gray-100 hover:bg-gray-200 rounded-lg px-2">
+                        <i class="pi pi-comments mr-2 text-gray-500 mb-[2px]"></i>
+                        <p v-if="!props.data.isCollapsed || props.data.screenWidth < 720" class="truncate">
+                            {{ chat?.response ? chat?.response.slice(0, 30) + '...' : '' }}
+                        </p>
+                    </button>
                 </div>
-                <div class="flex flex-col text-xs gap-1">
-                    <p>{{props.data.parsedUserDetails.username}}</p>
-                    <p>{{ props.data.res[0]?.response ? props.data.res[0].response.slice(0,40) + '...' : '' }}</p>
+            </div>
+        </div>
+
+        <!-- Fixed Bottom User Profile -->
+        <div class="border-t border-gray-200 p-3 bg-gray-100 sticky bottom-0">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <div class="w-[35px] h-[35px] flex justify-center items-center bg-gray-300 rounded-full">
+                        <span class="pi pi-user text-sm"></span>
+                    </div>
+                    <p class="text-base font-light">{{ props.data.parsedUserDetails.username }}</p>
                 </div>
-            </div>
-            <div class="ml-auto text-xs">
-                <p class="text-xs capitalize">Today</p>
-            </div>
-        </div>
-        <div v-else-if="props.data.parsedUserDetails.username===undefined||props.data.parsedUserDetails.username.length===0" class="flex flex-col items-center text-sm mt-7 w-full px-4 cursor-pointer justify-center">
-            <form @submit="handleSubmit" class="flex gap-2 justify-center flex-col">
-                <input required id="username" name="username" type="text" class="w-[250px] focus:outline-none active:outline-none outline-none border-none focus:border-none px-3 bg-gray-100 placeholder:text-gray-500 text-sm h-[35px] flex-grow py-1 rounded-md" placeholder="Enter your username"/>
-                <button class="rounded-md flex justify-center items-center bg-blue-600 text-white h-[37px] px-5">Submit</button>
-            </form>
-        </div>
-        <div v-else-if="props.data.parsedUserDetails.username.length!==0" class="flex flex-col mt-7 px-3 text-sm justify-center">
-            <div class="flex justify-center flex-col">
-                <p class="text-lg font-semibold">Hello {{ props.data.parsedUserDetails.username }},</p>
-                <p class="text-sm">Welcome to Gemmie, your personal private AI Assistant.</p>
-                <button @click="props.functions.setShowInput()" class="rounded-md flex justify-center items-center bg-blue-600 text-white h-[40px]  mt-2 px-3">Write a prompt</button>
+                <button @click="openUpgrade" title="Upgrade to Pro"
+                    v-if="(!props.data.isCollapsed || props.data.screenWidth < 720) && props.data.res.length !== 0"
+                    class="rounded-full bg-white border text-black text-sm px-4 py-1">
+                    Upgrade
+                </button>
             </div>
         </div>
     </div>
