@@ -9,15 +9,6 @@
 
 /* Prevent code blocks from stretching bubbles */
 /* Optional: style markdown output */
-.less {
-  white-space: pre-wrap;
-  word-break: break-word;
-  overflow-x: auto;
-  max-width: 100%;
-  box-sizing: border-box;
-  font-size: 14px;
-  line-height: 1.5;
-}
 
 .prose pre {
   background: #1e293b;
@@ -37,6 +28,7 @@
   background: transparent !important;
   color: inherit !important;
   font-size: 14px;
+  line-height: 1.5;
   border-radius: 4px;
   white-space: pre-wrap;
   word-break: break-word;
@@ -48,4 +40,45 @@
   overflow-x: auto;
   padding: 0.5em;
   border-radius: 6px;
+}
+
+.code-container {
+  position: relative; /* Required for absolute positioning of the button */
+}
+
+.copy-button {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  background-color: rgba(255, 255, 255, 0.8);
+  border: 1px solid #ccc;
+  border-radius: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.copy-button:hover {
+  background-color: rgba(255, 255, 255, 1);
+  color: #131313;
+}
+
+.scrollbar-hidden, .no-scrollbar {
+  -ms-overflow-style: none; /* Internet Explorer 10+ */
+  scrollbar-width: none; /* Firefox */
+}
+.scrollbar-hidden::-webkit-scrollbar, .no-scrollbar::-webkit-scrollbar {
+  display: none; /* WebKit */
+}
+
+/* smooth slide animation */
+.slide-enter-active,
+.slide-leave-active {
+  transition: transform 0.3s ease, opacity 0.3s ease;
+}
+.slide-enter-from,
+.slide-leave-to {
+  transform: translateX(-100%);
+  opacity: 0;
 }
