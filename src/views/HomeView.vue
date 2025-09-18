@@ -12,6 +12,16 @@ type Res = {
   status?: number,
 }
 
+type LinkPreview = {
+  url: string,
+  title?: string,
+  description?: string,
+  image?: string,
+  domain?: string,
+  loading?: boolean,
+  error?: boolean
+}
+
 // ---------- State ----------
 let showInput = ref(false)
 let screenWidth = ref(screen.width)
@@ -33,6 +43,166 @@ let res = ref<Res[]>(parsedChats.length === 0 ? [] : parsedChats.map((item: any)
 let isLoading = ref(false)
 let expanded = ref<boolean[]>(res.value.map(() => false))
 
+// Link preview cache - now with persistence
+const linkPreviewCache = ref<Map<string, LinkPreview>>(new Map())
+
+// Load cached link previews from localStorage
+function loadLinkPreviewCache() {
+  try {
+    const cached = localStorage.getItem('linkPreviews')
+    if (cached) {
+      const parsedCache = JSON.parse(cached)
+      linkPreviewCache.value = new Map(Object.entries(parsedCache))
+    }
+  } catch (error) {
+    console.error('Failed to load link preview cache:', error)
+  }
+}
+
+// Save link preview cache to localStorage
+function saveLinkPreviewCache() {
+  try {
+    const cacheObject = Object.fromEntries(linkPreviewCache.value)
+    localStorage.setItem('linkPreviews', JSON.stringify(cacheObject))
+  } catch (error) {
+    console.error('Failed to save link preview cache:', error)
+  }
+}
+
+// ---------- Link Preview Functions ----------
+
+// Extract URLs from text using regex
+function extractUrls(text: string): string[] {
+  const urlRegex = /https?:\/\/[^\s<>"{}|\\^`[\]]+/gi
+  return text.match(urlRegex) || []
+}
+
+// Fetch link preview data with persistence
+async function fetchLinkPreview(url: string): Promise<LinkPreview> {
+  if (linkPreviewCache.value.has(url)) {
+    return linkPreviewCache.value.get(url)!
+  }
+
+  const preview: LinkPreview = { url, loading: true }
+  linkPreviewCache.value.set(url, preview)
+
+  try {
+    // Using a CORS proxy service for demonstration
+    // In production, you'd want your own backend endpoint
+    const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`
+    
+    const response = await fetch(proxyUrl)
+    const data = await response.json()
+    
+    if (data.contents) {
+      const parser = new DOMParser()
+      const doc = parser.parseFromString(data.contents, 'text/html')
+      
+      // Extract meta tags
+      const title = doc.querySelector('meta[property="og:title"]')?.getAttribute('content') ||
+                   doc.querySelector('title')?.textContent ||
+                   'No title'
+      
+      const description = doc.querySelector('meta[property="og:description"]')?.getAttribute('content') ||
+                         doc.querySelector('meta[name="description"]')?.getAttribute('content') ||
+                         ''
+      
+      const image = doc.querySelector('meta[property="og:image"]')?.getAttribute('content') ||
+                   doc.querySelector('meta[name="twitter:image"]')?.getAttribute('content') ||
+                   ''
+      
+      const domain = new URL(url).hostname
+      
+      const updatedPreview: LinkPreview = {
+        url,
+        title: title.slice(0, 100), // Limit title length
+        description: description.slice(0, 200), // Limit description length
+        image,
+        domain,
+        loading: false,
+        error: false
+      }
+      
+      linkPreviewCache.value.set(url, updatedPreview)
+      // Save to localStorage after successful fetch
+      saveLinkPreviewCache()
+      return updatedPreview
+    }
+  } catch (error) {
+    console.error('Failed to fetch link preview:', error)
+  }
+
+  // Fallback preview
+  const fallbackPreview: LinkPreview = {
+    url,
+    title: new URL(url).hostname,
+    domain: new URL(url).hostname,
+    loading: false,
+    error: true
+  }
+  
+  linkPreviewCache.value.set(url, fallbackPreview)
+  // Save even error states to avoid repeated failures
+  saveLinkPreviewCache()
+  return fallbackPreview
+}
+
+// Component for rendering link previews
+function LinkPreviewComponent({ preview }: { preview: LinkPreview }) {
+  if (preview.loading) {
+    return `
+      <div class="link-preview loading border border-gray-200 rounded-lg p-3 my-2 bg-gray-50">
+        <div class="flex items-center gap-2">
+          <i class="pi pi-spin pi-spinner text-gray-400"></i>
+          <span class="text-sm text-gray-500">Loading preview...</span>
+        </div>
+      </div>
+    `
+  }
+
+  if (preview.error) {
+    return `
+      <div class="link-preview error border border-gray-200 rounded-lg p-3 my-2 bg-gray-50">
+        <div class="flex items-center gap-2">
+          <i class="pi pi-external-link text-gray-400"></i>
+          <a href="${preview.url}" target="_blank" rel="noopener noreferrer" 
+             class="text-blue-600 hover:text-blue-800 text-sm font-medium">
+            ${preview.domain}
+          </a>
+        </div>
+      </div>
+    `
+  }
+
+  return `
+    <div class="link-preview border border-gray-200 rounded-lg overflow-hidden my-2 bg-white hover:shadow-md transition-shadow">
+      <a href="${preview.url}" target="_blank" rel="noopener noreferrer" class="block">
+        ${preview.image ? `
+          <div class="aspect-video w-full overflow-hidden bg-gray-100">
+            <img src="${preview.image}" alt="${preview.title}" 
+                 class="w-full h-full object-cover"
+                 onerror="this.parentElement.style.display='none'">
+          </div>
+        ` : ''}
+        <div class="p-3">
+          <div class="flex items-start justify-between gap-2">
+            <div class="flex-1 min-w-0">
+              <h4 class="font-medium text-gray-900 text-sm line-clamp-2 mb-1">${preview.title}</h4>
+              ${preview.description ? `
+                <p class="text-gray-600 text-xs line-clamp-2 mb-2">${preview.description}</p>
+              ` : ''}
+              <div class="flex items-center gap-1 text-xs text-gray-500">
+                <i class="pi pi-external-link"></i>
+                <span>${preview.domain}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </a>
+    </div>
+  `
+}
+
 // ---------- Authentication Functions ----------
 function handleAuth(e: Event) {
   e.preventDefault()
@@ -48,11 +218,8 @@ function handleAuth(e: Event) {
     return
   }
   
-  // Extract username from email (part before @)
-  // const username = email.split('@')[0]
   const username = formData.get('username') as string
   
-  // Create user session data
   const userData = {
     email,
     username,
@@ -61,12 +228,9 @@ function handleAuth(e: Event) {
   }
   
   try {
-    // Save user details to localStorage
     localStorage.setItem('userdetails', JSON.stringify(userData))
-    // Update reactive state
     parsedUserDetails = userData
     
-    // Initialize chats for new user or use existing chats
     if (chats && JSON.parse(chats).length > 0) {
       res.value = JSON.parse(chats)
     } else {
@@ -74,10 +238,8 @@ function handleAuth(e: Event) {
       res.value = []
     }
     
-    // Show success message
     alert(`Welcome ${username}! Your session has been created.`)
     
-    // Auto-focus on input after successful auth
     nextTick(() => {
       const textarea = document.getElementById("prompt") as HTMLTextAreaElement
       if (textarea) textarea.focus()
@@ -92,10 +254,10 @@ function logout() {
   if (confirm('Are you sure you want to logout? This will clear your session on this device.')) {
     try {
       localStorage.removeItem('userdetails')
-      // localStorage.removeItem('chats')
       localStorage.removeItem('isCollapsed')
+      // Keep link previews cached even after logout
+      // localStorage.removeItem('linkPreviews') // Commented out to persist previews
       
-      // Reset all reactive state
       parsedUserDetails = null
       res.value = []
       expanded.value = []
@@ -129,8 +291,18 @@ function copyCode(text: string, button?: HTMLElement) {
     })
 }
 
+// Enhanced marked configuration with link handling
 marked.use({
   renderer: {
+    link({ href, title, text }) {
+      return `<a 
+        href="${href}" 
+        target="_blank" 
+        rel="noopener noreferrer" 
+        class="text-blue-600 underline hover:text-blue-800 link-with-preview"
+        data-url="${href}"
+      >${text}</a>`
+    },
     code({ text, lang }) {
       let highlighted = lang && hljs.getLanguage(lang)
         ? hljs.highlight(text, { language: lang }).value
@@ -149,6 +321,41 @@ marked.use({
   }
 })
 
+// Enhanced markdown renderer with link previews
+async function renderMarkdownWithPreviews(text?: string) {
+  if (!text || typeof text !== "string") return ""
+  
+  try {
+    // First, render the markdown
+    let html = marked.parse(text)
+    
+    // Extract URLs from the original text for preview generation
+    const urls = extractUrls(text)
+    
+    // Generate previews for found URLs
+    if (urls.length > 0) {
+      const previews = await Promise.all(
+        urls.slice(0, 3).map(url => fetchLinkPreview(url)) // Limit to 3 previews max
+      )
+      
+      // Append previews to the HTML
+      const previewsHtml = previews
+        .filter(preview => !preview.loading)
+        .map(preview => LinkPreviewComponent({ preview }))
+        .join('')
+      
+      if (previewsHtml) {
+        html += `<div class="link-previews mt-3">${previewsHtml}</div>`
+      }
+    }
+    
+    return html
+  } catch (err) {
+    console.error("Markdown parse error:", err)
+    return text
+  }
+}
+
 function renderMarkdown(text?: string) {
   if (!text || typeof text !== "string") return ""
   try {
@@ -166,23 +373,18 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
   let promptValue = retryPrompt || e?.target?.prompt?.value?.trim()
   if (!promptValue || isLoading.value) return
 
-  // Check authentication before submitting
   if (!isAuthenticated()) {
     alert('Please create a session first')
     return
   }
 
-  // Set loading state
   isLoading.value = true
 
-  // Clear textarea instantly for snappy UX
   if (!retryPrompt && e?.target?.prompt) {
     e.target.prompt.value = ""
-    // Reset textarea height
     e.target.prompt.style.height = "auto"
   }
 
-  // Optimistically push user prompt + loading bubble
   const tempResp: Res = { prompt: promptValue, response: "..." }
   res.value.push(tempResp)
   expanded.value.push(false)
@@ -204,14 +406,16 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
 
     let parseRes = await response.json()
     
-    // Replace last "loading" bubble with real response
     res.value[res.value.length - 1] = {
       prompt: promptValue,
       response: parseRes.error ? parseRes.error : parseRes.response,
       status: response.status
     }
+
+    // Trigger link preview generation for the new response
+    await processLinksInResponse(res.value.length - 1)
+    
   } catch (err: any) {
-    // Replace loading bubble with error message
     res.value[res.value.length - 1] = {
       prompt: promptValue,
       response: `⚠️ Error: ${err.message || 'Failed to get response. Please try again.'}`
@@ -221,6 +425,37 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
     debounceSave()
     await nextTick()
     scrollToBottom()
+  }
+}
+
+// Process links in a response and generate previews
+async function processLinksInResponse(index: number) {
+  const response = res.value[index]
+  if (!response.response || response.response === "...") return
+
+  const urls = extractUrls(response.response)
+  if (urls.length > 0) {
+    // Start loading previews
+    urls.slice(0, 3).forEach(url => {
+      fetchLinkPreview(url).then(() => {
+        // Trigger reactivity update
+        linkPreviewCache.value = new Map(linkPreviewCache.value)
+      })
+    })
+  }
+}
+
+// Process links in user prompts
+async function processLinksInUserPrompt(prompt: string) {
+  const urls = extractUrls(prompt)
+  if (urls.length > 0) {
+    // Start loading previews for user prompt links
+    urls.slice(0, 3).forEach(url => {
+      fetchLinkPreview(url).then(() => {
+        // Trigger reactivity update
+        linkPreviewCache.value = new Map(linkPreviewCache.value)
+      })
+    })
   }
 }
 
@@ -237,10 +472,9 @@ function debounceSave() {
   }, 300)
 }
 
-// --- Smarter textarea auto-grow with max height ---
 function autoGrow(e: Event) {
   const el = e.target as HTMLTextAreaElement
-  const maxHeight = 200 // px - adjust as needed
+  const maxHeight = 200
   el.style.height = "auto"
   if (el.scrollHeight <= maxHeight) {
     el.style.height = el.scrollHeight + "px"
@@ -280,7 +514,7 @@ function refreshResponse(prompt?: string) {
 }
 
 function deleteChat(index: number) {
-  if (isLoading.value) return // Prevent deletion while loading
+  if (isLoading.value) return
   
   res.value.splice(index, 1)
   expanded.value.splice(index, 1)
@@ -302,7 +536,6 @@ function setShowInput() {
     return
   }
   showInput.value = true
-  // Focus the textarea after it's shown
   nextTick(() => {
     const textarea = document.getElementById("prompt") as HTMLTextAreaElement
     if (textarea) textarea.focus()
@@ -329,7 +562,6 @@ function hideSidebar() {
   }
 }
 
-// Debounced resize handler
 let resizeTimeout: any
 window.onresize = () => {
   clearTimeout(resizeTimeout)
@@ -340,12 +572,11 @@ window.onresize = () => {
 
 function onEnter(e: KeyboardEvent) {
   if (e.key !== 'Enter' || e.shiftKey || isLoading.value) {
-    return // let Shift+Enter create a newline or ignore if not Enter key
+    return
   }
   
   e.preventDefault()
   
-  // Create a fake form event for handleSubmit
   const textarea = e.target as HTMLTextAreaElement
   if (textarea && textarea.value.trim()) {
     const formEvent = { 
@@ -364,13 +595,31 @@ function clearAllChats() {
     expanded.value = []
     try {
       localStorage.setItem("chats", JSON.stringify([]))
+      // Option to clear link previews as well (uncomment if desired)
+      // localStorage.removeItem('linkPreviews')
+      // linkPreviewCache.value.clear()
     } catch (err) {
       console.error("Failed to clear chats:", err)
     }
   }
 }
 
+// Add function to manually clear link preview cache
+function clearLinkPreviewCache() {
+  if (confirm("Clear all link preview cache? This will require refetching previews for existing links.")) {
+    try {
+      localStorage.removeItem('linkPreviews')
+      linkPreviewCache.value.clear()
+      alert('Link preview cache cleared successfully!')
+    } catch (err) {
+      console.error('Failed to clear link preview cache:', err)
+      alert('Failed to clear link preview cache.')
+    }
+  }
+}
+
 onMounted(() => {
+  // Load existing state
   const saved = localStorage.getItem("isCollapsed")
   if (saved && saved !== 'null') {
     try {
@@ -380,9 +629,40 @@ onMounted(() => {
     }
   }
 
+  // Load cached link previews
+  loadLinkPreviewCache()
+
+  // Pre-process existing chat links on page load
+  if (res.value.length > 0) {
+    res.value.forEach((item, index) => {
+      // Process links in prompts
+      if (item.prompt) {
+        const promptUrls = extractUrls(item.prompt)
+        promptUrls.slice(0, 3).forEach(url => {
+          if (!linkPreviewCache.value.has(url)) {
+            fetchLinkPreview(url).then(() => {
+              linkPreviewCache.value = new Map(linkPreviewCache.value)
+            })
+          }
+        })
+      }
+      
+      // Process links in responses
+      if (item.response && item.response !== "...") {
+        const responseUrls = extractUrls(item.response)
+        responseUrls.slice(0, 3).forEach(url => {
+          if (!linkPreviewCache.value.has(url)) {
+            fetchLinkPreview(url).then(() => {
+              linkPreviewCache.value = new Map(linkPreviewCache.value)
+            })
+          }
+        })
+      }
+    })
+  }
+
   scrollToBottom()
   
-  // Handle copy button clicks
   document.addEventListener("click", (e: any) => {
     if (e.target && e.target.classList.contains("copy-button")) {
       const code = decodeURIComponent(e.target.getAttribute("data-code"))
@@ -390,7 +670,6 @@ onMounted(() => {
     }
   })
 
-  // Focus input if it's visible
   if (showInput.value || res.value.length > 0) {
     nextTick(() => {
       const textarea = document.getElementById("prompt") as HTMLTextAreaElement
@@ -427,9 +706,7 @@ onMounted(() => {
               </div>
               <p class="text-3xl font-semibold">{{ parsedUserDetails?.username || 'Gemmie' }}</p>
               <div class="text-center text-base md:max-w-[400px]">
-                <p>
-                  Your private AI assistant. 
-                </p>
+                <p>Your private AI assistant.</p>
                 <p class="text-sm text-gray-400">
                   We focus on privacy and security. Your data never leaves your device.
                   All your chats are stored locally in your browser.
@@ -438,8 +715,8 @@ onMounted(() => {
               </div>
               <button
                 v-if="isAuthenticated()"
-                      @click="setShowInput"
-                      class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors">
+                @click="setShowInput"
+                class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors">
                 Write a prompt
               </button>
             </div>
@@ -493,9 +770,16 @@ onMounted(() => {
             <!-- User Bubble -->
             <div class="flex justify-end">
               <div :class="screenWidth>720 ? 'max-w-[70%]' : 'max-w-[95%]'"
-                   class="bg-gray-50 text-black p-3 rounded-2xl prose prose-sm max-w-none">
+                   class="bg-gray-50 text-black p-3 rounded-2xl prose prose-sm max-w-none chat-bubble">
                 <p class="text-xs opacity-80 text-right mb-1">{{ parsedUserDetails?.username || "You" }}</p>
-                <p class="text-wrap whitespace-pre-wrap">{{ item.prompt }}</p>
+                <div v-html="renderMarkdown(item.prompt || '')"></div>
+                
+                <!-- Link Previews Section for User Messages -->
+                <div v-if="extractUrls(item.prompt || '').length > 0" class="mt-3">
+                  <div v-for="url in extractUrls(item.prompt || '').slice(0, 3)" :key="`user-${i}-${url}`">
+                    <div v-if="linkPreviewCache.get(url)" v-html="LinkPreviewComponent({ preview: linkPreviewCache.get(url)! })"></div>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -510,8 +794,17 @@ onMounted(() => {
                   <span>Thinking...</span>
                 </div>
                 
-                <!-- Regular response -->
-                <div v-else v-html="renderMarkdown(item.response || '')"></div>
+                <!-- Regular response with enhanced link handling -->
+                <div v-else>
+                  <div v-html="renderMarkdown(item.response || '')"></div>
+                  
+                  <!-- Link Previews Section -->
+                  <div v-if="extractUrls(item.response || '').length > 0" class="mt-3">
+                    <div v-for="url in extractUrls(item.response || '').slice(0, 3)" :key="url">
+                      <div v-if="linkPreviewCache.get(url)" v-html="LinkPreviewComponent({ preview: linkPreviewCache.get(url)! })"></div>
+                    </div>
+                  </div>
+                </div>
 
                 <!-- Actions (hidden during loading) -->
                 <div v-if="item.response !== '...'" class="flex gap-3 mt-2 text-gray-500 text-sm">
