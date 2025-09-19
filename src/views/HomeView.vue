@@ -27,6 +27,7 @@ const authData = ref({
   password: ''
 })
 let showInput = ref(false)
+let showCreateSession = ref(false)
 // Track copied state for each response by index
 const copiedIndex = ref<number | null>(null)
 let screenWidth = ref(screen.width)
@@ -1053,14 +1054,14 @@ onMounted(() => {
         <div v-if="currentMessages.length === 0 || !isAuthenticated()"
           class="flex flex-col items-center justify-center h-[90vh]">
             <div class="max-md:flex-col flex gap-10 items-center justify-center h-full w-full max-md:px-5">
-              <div class="flex flex-col md:flex-grow items-center gap-3 text-gray-600">
+              <div v-if="(showCreateSession===false&&screenWidth < 720)||screenWidth > 720" class="flex flex-col md:flex-grow items-center gap-3 text-gray-600">
                 <div class="rounded-full bg-gray-200 w-[60px] h-[60px] flex justify-center items-center">
                   <span class="pi pi-comment text-lg"></span>
                 </div>
                 <p class="text-3xl font-semibold">{{ parsedUserDetails?.username || 'Gemmie' }}</p>
                 <div class="text-center text-base md:max-w-[400px]">
                   <p>Your private AI assistant.</p>
-                  <p class="text-sm text-gray-400">
+                  <p class="text-sm text-gray-500">
                     We focus on privacy and security. Your data never leaves your device.
                     All your chats are stored locally in your browser.
                     Therefore, please make sure to back up your chats if you clear your browser data or switch devices.
@@ -1070,9 +1071,17 @@ onMounted(() => {
                   class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors">
                   Write a prompt
                 </button>
+                <button v-else-if="screenWidth < 720" @click="()=> showCreateSession=true"
+                  class="px-4 py-2 w-full bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors">
+                  Get Started
+                </button>
               </div>
 
-              <div v-if="!isAuthenticated()" class="flex-grow text-sm  md:px-4 px-1 relative overflow-hidden">
+              <div v-if="(!isAuthenticated()&&showCreateSession===true&&screenWidth < 720)||(!isAuthenticated()&&screenWidth > 720)" 
+                class="flex-grow text-sm  md:px-4 px-1 relative overflow-hidden"
+                :class="screenWidth > 720 ? 'max-w-md w-full' : (!isAuthenticated()&&showCreateSession===true)?
+                'flex flex-col justify-center w-full h-fulltranslate-x-0 opacity-100':'translate-x-full opacity-0'"
+              >
                 <!-- Progress indicator -->
                 <div class="flex justify-center mb-6">
                   <div class="flex items-center space-x-2">
@@ -1099,13 +1108,13 @@ onMounted(() => {
                           Choose a username
                         </label>
                         <input v-model="authData.username" required type="text" placeholder="johndoe"
-                          class="border border-gray-300 rounded-lg px-4 py-3 w-full text-base focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                          class="border border-gray-300 rounded-lg px-4 py-2 w-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
                           :class="authData.username && !validateCurrentStep() ? 'border-red-300' : ''" />
                         <p class="text-xs text-gray-500 mt-1">This will be your display name</p>
                       </div>
 
                       <button type="submit" :disabled="!validateCurrentStep()"
-                        class="w-full bg-blue-600 text-white rounded-lg px-4 py-3 font-medium hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors duration-200">
+                        class="w-full bg-blue-600 text-white rounded-lg px-4 py-2 font-medium hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors duration-200">
                         Continue
                       </button>
                     </form>
@@ -1126,18 +1135,18 @@ onMounted(() => {
                           Email address
                         </label>
                         <input v-model="authData.email" required type="email" placeholder="johndoe@example.com"
-                          class="border border-gray-300 rounded-lg px-4 py-3 w-full text-base focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                          class="border border-gray-300 rounded-lg px-4 py-2 w-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
                           :class="authData.email && !validateCurrentStep() ? 'border-red-300' : ''" />
                         <p class="text-xs text-gray-500 mt-1">Used for session identification only</p>
                       </div>
 
                       <div class="flex gap-3">
                         <button type="button" @click="prevAuthStep"
-                          class="flex-1 bg-gray-100 text-gray-700 rounded-lg px-4 py-3 font-medium hover:bg-gray-200 transition-colors duration-200">
+                          class="flex-1 bg-gray-100 text-gray-700 rounded-lg px-4 py-2 font-medium hover:bg-gray-200 transition-colors duration-200">
                           Back
                         </button>
                         <button type="submit" :disabled="!validateCurrentStep()"
-                          class="flex-1 bg-blue-600 text-white rounded-lg px-4 py-3 font-medium hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors duration-200">
+                          class="flex-1 bg-blue-600 text-white rounded-lg px-4 py-2 font-medium hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors duration-200">
                           Continue
                         </button>
                       </div>
@@ -1159,7 +1168,7 @@ onMounted(() => {
                         </label>
                         <input v-model="authData.password" required type="password" placeholder="Enter a secure password"
                           minlength="6"
-                          class="border border-gray-300 rounded-lg px-4 py-3 w-full text-base focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                          class="border border-gray-300 rounded-lg px-4 py-2 w-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
                           :class="authData.password && !validateCurrentStep() ? 'border-red-300' : ''" />
                         <div class="mt-2">
                           <div class="flex items-center gap-2 text-xs">
@@ -1175,11 +1184,11 @@ onMounted(() => {
 
                       <div class="flex gap-3">
                         <button type="button" @click="prevAuthStep"
-                          class="flex-1 bg-gray-100 text-gray-700 rounded-lg px-4 py-3 font-medium hover:bg-gray-200 transition-colors duration-200">
+                          class="flex-1 bg-gray-100 text-gray-700 rounded-lg px-4 py-2 font-medium hover:bg-gray-200 transition-colors duration-200">
                           Back
                         </button>
                         <button type="submit" :disabled="!validateCurrentStep()"
-                          class="flex-1 bg-blue-600 text-white rounded-lg px-4 py-3 font-medium hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors duration-200">
+                          class="flex-1 bg-blue-600 text-white rounded-lg px-4 py-2 font-medium hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors duration-200">
                           <i class="pi pi-check mr-2"></i>
                           Create Session
                         </button>
@@ -1189,8 +1198,8 @@ onMounted(() => {
                 </div>
 
                 <!-- Footer note -->
-                <div class="mt-6 text-center">
-                  <p class="text-xs text-gray-400 leading-relaxed">
+                <div class="text-center">
+                  <p class="text-xs text-gray-500 leading-relaxed">
                     Your credentials are only stored locally on your device for session management.
                     <br>All data stays private and secure.
                   </p>
@@ -1198,9 +1207,7 @@ onMounted(() => {
               </div>
             </div>
 
-            <div>
-              <p class="text-sm mt-2 text-gray-400">Gemmie can make mistakes. Check important info.</p>
-            </div>
+            <p v-if="isAuthenticated()" class="text-sm mt-2 text-gray-400">Gemmie can make mistakes. Check important info.</p>
         </div>
 
         <!-- Chat Messages -->
