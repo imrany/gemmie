@@ -21,9 +21,8 @@
 /* ==================== CODE BLOCKS ==================== */
 /* Prevent code blocks from stretching bubbles */
 .prose pre {
-  background: #1e293b;
+  background: #0f172a !important;
   color: #f8fafc;
-  padding: 12px;
   border-radius: 8px;
   white-space: pre-wrap;
   word-break: break-word;
@@ -32,7 +31,6 @@
   box-sizing: border-box;
   font-size: 14px;
   line-height: 1.6;
-  margin: 1rem 0;
   position: relative;
 }
 
@@ -220,32 +218,10 @@
 /* ==================== SCROLLBARS ==================== */
 .scrollbar-hidden, .no-scrollbar {
   -ms-overflow-style: none; /* Internet Explorer 10+ */
-  scrollbar-width: thin; /* Firefox */
-  scrollbar-color: rgba(156, 163, 175, 0.3) transparent;
+  scrollbar-width: none; /* Firefox */
 }
-
 .scrollbar-hidden::-webkit-scrollbar, .no-scrollbar::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-.scrollbar-hidden::-webkit-scrollbar-track, .no-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.scrollbar-hidden::-webkit-scrollbar-thumb, .no-scrollbar::-webkit-scrollbar-thumb {
-  background-color: rgba(156, 163, 175, 0.3);
-  border-radius: 4px;
-  border: 2px solid transparent;
-  background-clip: content-box;
-}
-
-.scrollbar-hidden::-webkit-scrollbar-thumb:hover, .no-scrollbar::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(156, 163, 175, 0.5);
-}
-
-.scrollbar-hidden::-webkit-scrollbar-corner, .no-scrollbar::-webkit-scrollbar-corner {
-  background: transparent;
+  display: none; /* WebKit */
 }
 
 /* ==================== ANIMATIONS ==================== */
@@ -489,82 +465,6 @@
   }
 }
 
-/* ==================== ERROR STATES ==================== */
-.error-message {
-  color: var(--error-color);
-  background-color: #fef2f2;
-  border: 1px solid #fecaca;
-  border-radius: 8px;
-  padding: 12px 16px;
-  margin: 8px 0;
-  font-size: 14px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.success-message {
-  color: var(--success-color);
-  background-color: #f0fdf4;
-  border: 1px solid #bbf7d0;
-  border-radius: 8px;
-  padding: 12px 16px;
-  margin: 8px 0;
-  font-size: 14px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.loading-message {
-  color: var(--loading-color);
-  background-color: #f9fafb;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  padding: 12px 16px;
-  margin: 8px 0;
-  font-size: 14px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-/* Enhanced animations */
-.success-bounce {
-  animation: bounce 0.5s ease-in-out;
-}
-
-@keyframes bounce {
-  0%, 20%, 60%, 100% {
-    transform: translateY(0);
-  }
-  40% {
-    transform: translateY(-10px);
-  }
-  80% {
-    transform: translateY(-5px);
-  }
-}
-
-.fade-in-out {
-  animation: fadeInOut 3s ease-in-out forwards;
-}
-
-@keyframes fadeInOut {
-  0% {
-    opacity: 0;
-    transform: translateY(-20px);
-  }
-  15%, 85% {
-    opacity: 1;
-    transform: translateY(0);
-  }
-  100% {
-    opacity: 0;
-    transform: translateY(-20px);
-  }
-}
-
 /* Dialog backdrop blur */
 .dialog-backdrop {
   backdrop-filter: blur(4px);
@@ -580,20 +480,8 @@
   transform: scale(0.9);
 }
 
-/* Custom scrollbar for better UX */
-.no-scrollbar::-webkit-scrollbar {
-  width: 6px;
-}
-
-.no-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.no-scrollbar::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 3px;
-}
-
-.no-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+/* Add smooth transitions for better mobile experience */
+.transition-all {
+  transition-property: all;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
 }

@@ -3,7 +3,7 @@ import type { ComputedRef } from "vue"
 import { ref, onMounted, nextTick, computed } from "vue"
 import { marked } from "marked"
 import hljs from "highlight.js"
-import "highlight.js/styles/github-dark.css"
+import "highlight.js/styles/night-owl.css"
 import SideNav from "../components/SideNav.vue"
 import TopNav from "../components/TopNav.vue"
 import type { Chat, ConfirmDialogOptions, CurrentChat, LinkPreview, Res } from "@/types"
@@ -18,7 +18,13 @@ const confirmDialog = ref<ConfirmDialogOptions>({
   type: 'info' as 'danger' | 'warning' | 'info',
   confirmText: 'Confirm',
   cancelText: 'Cancel',
-  onConfirm: () => {}
+  onConfirm: () => { }
+})
+const authStep = ref(1)
+const authData = ref({
+  username: '',
+  email: '',
+  password: ''
 })
 let showInput = ref(false)
 // Track copied state for each response by index
@@ -126,7 +132,7 @@ function updateExpandedArray() {
 function createNewChat(firstMessage?: string): string {
   const newChatId = generateChatId()
   const now = new Date().toISOString()
-  
+
   const newChat: Chat = {
     id: newChatId,
     title: firstMessage ? generateChatTitle(firstMessage) : 'New Chat',
@@ -134,13 +140,13 @@ function createNewChat(firstMessage?: string): string {
     createdAt: now,
     updatedAt: now
   }
-  
+
   // Add to beginning of chats array (most recent first)
   chats.value.unshift(newChat)
   currentChatId.value = newChatId
   updateExpandedArray()
   saveChats()
-  
+
   return newChatId
 }
 
@@ -160,10 +166,10 @@ function switchToChat(chatId: string) {
 // Delete specific chat
 function deleteChat(chatId: string) {
   if (isLoading.value) return
-  
+
   const chatIndex = chats.value.findIndex(chat => chat.id === chatId)
   if (chatIndex === -1) return
-  
+
   const chatTitle = chats.value[chatIndex].title
   const messageCount = chats.value[chatIndex].messages.length
 
@@ -175,7 +181,7 @@ function deleteChat(chatId: string) {
     confirmText: 'Delete',
     onConfirm: () => {
       chats.value.splice(chatIndex, 1)
-      
+
       // If we deleted the current chat, switch to another one
       if (currentChatId.value === chatId) {
         if (chats.value.length > 0) {
@@ -185,11 +191,11 @@ function deleteChat(chatId: string) {
         }
         updateExpandedArray()
       }
-      
+
       confirmDialog.value.visible = false
-      toast.success('Chat deleted',{ 
+      toast.success('Chat deleted', {
         duration: 3000,
-        description:'Chat has been removed successfully.' 
+        description: 'Chat has been removed successfully.'
       })
       saveChats()
     }
@@ -199,11 +205,11 @@ function deleteChat(chatId: string) {
 // Enhanced delete specific message with custom dialog
 function deleteMessage(messageIndex: number) {
   if (isLoading.value || !currentChat.value) return
-  
+
   const message = currentChat.value.messages[messageIndex]
   const messageContent = message?.prompt || message?.response || 'this message'
   const preview = messageContent.slice(0, 50) + (messageContent.length > 50 ? '...' : '')
-  
+
   showConfirmDialog({
     visible: true,
     title: 'Delete Message',
@@ -213,10 +219,10 @@ function deleteMessage(messageIndex: number) {
     onConfirm: () => {
       currentChat.value!.messages.splice(messageIndex, 1)
       expanded.value.splice(messageIndex, 1)
-      
+
       // Update chat's updatedAt timestamp
       currentChat.value!.updatedAt = new Date().toISOString()
-      
+
       // Update title if we deleted the first message
       if (messageIndex === 0 && currentChat.value!.messages.length > 0) {
         const firstMessage = currentChat.value!.messages[0].prompt || currentChat.value!.messages[0].response
@@ -224,11 +230,11 @@ function deleteMessage(messageIndex: number) {
       } else if (currentChat.value!.messages.length === 0) {
         currentChat.value!.title = 'New Chat'
       }
-      
+
       confirmDialog.value.visible = false
-      toast.success('Message deleted',{ 
+      toast.success('Message deleted', {
         duration: 3000,
-        description:'Message has been removed successfully.' 
+        description: 'Message has been removed successfully.'
       })
       saveChats()
     }
@@ -240,18 +246,18 @@ function deleteMessage(messageIndex: number) {
 // Enhanced clear all chats with custom dialog
 function clearAllChats() {
   if (isLoading.value) return
-  
+
   const totalChats = chats.value.length
   const totalMessages = chats.value.reduce((sum, chat) => sum + chat.messages.length, 0)
-  
+
   if (totalChats === 0) {
-    toast.info('There are no chats to clear',{ 
+    toast.info('There are no chats to clear', {
       duration: 3000,
       description: 'Your chat list is already empty.'
     })
     return
   }
-  
+
   showConfirmDialog({
     visible: true,
     title: 'Clear All Chats',
@@ -263,10 +269,10 @@ function clearAllChats() {
       currentChatId.value = ''
       expanded.value = []
       saveChats()
-      
-      toast.error(`${totalChats} chats with ${totalMessages} messages deleted`,{ 
+
+      toast.error(`${totalChats} chats with ${totalMessages} messages deleted`, {
         duration: 5000,
-        description:'' 
+        description: ''
       })
     }
   })
@@ -304,29 +310,29 @@ async function fetchLinkPreview(url: string): Promise<LinkPreview> {
     // Using a CORS proxy service for demonstration
     // In production, you'd want your own backend endpoint
     const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`
-    
+
     const response = await fetch(proxyUrl)
     const data = await response.json()
-    
+
     if (data.contents) {
       const parser = new DOMParser()
       const doc = parser.parseFromString(data.contents, 'text/html')
-      
+
       // Extract meta tags
       const title = doc.querySelector('meta[property="og:title"]')?.getAttribute('content') ||
-                   doc.querySelector('title')?.textContent ||
-                   'No title'
-      
+        doc.querySelector('title')?.textContent ||
+        'No title'
+
       const description = doc.querySelector('meta[property="og:description"]')?.getAttribute('content') ||
-                         doc.querySelector('meta[name="description"]')?.getAttribute('content') ||
-                         ''
-      
+        doc.querySelector('meta[name="description"]')?.getAttribute('content') ||
+        ''
+
       const image = doc.querySelector('meta[property="og:image"]')?.getAttribute('content') ||
-                   doc.querySelector('meta[name="twitter:image"]')?.getAttribute('content') ||
-                   ''
-      
+        doc.querySelector('meta[name="twitter:image"]')?.getAttribute('content') ||
+        ''
+
       const domain = new URL(url).hostname
-      
+
       const updatedPreview: LinkPreview = {
         url,
         title: title.slice(0, 100), // Limit title length
@@ -336,7 +342,7 @@ async function fetchLinkPreview(url: string): Promise<LinkPreview> {
         loading: false,
         error: false
       }
-      
+
       linkPreviewCache.value.set(url, updatedPreview)
       // Save to localStorage after successful fetch
       saveLinkPreviewCache()
@@ -354,7 +360,7 @@ async function fetchLinkPreview(url: string): Promise<LinkPreview> {
     loading: false,
     error: true
   }
-  
+
   linkPreviewCache.value.set(url, fallbackPreview)
   // Save even error states to avoid repeated failures
   saveLinkPreviewCache()
@@ -418,39 +424,75 @@ function LinkPreviewComponent({ preview }: { preview: LinkPreview }) {
 }
 
 // ---------- Authentication Functions ----------
+function nextAuthStep() {
+  if (authStep.value < 3) {
+    authStep.value++
+  }
+}
+
+function prevAuthStep() {
+  if (authStep.value > 1) {
+    authStep.value--
+  }
+}
+
+function validateCurrentStep(): boolean {
+  switch (authStep.value) {
+    case 1:
+      return authData.value.username.trim().length > 0
+    case 2:
+      return authData.value.email.trim().length > 0 &&
+        /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(authData.value.email)
+    case 3:
+      return authData.value.password.length >= 6
+    default:
+      return false
+  }
+}
+
+function handleStepSubmit(e: Event) {
+  e.preventDefault()
+
+  if (!validateCurrentStep()) {
+    return
+  }
+
+  if (authStep.value < 3) {
+    nextAuthStep()
+  } else {
+    // Final step - create session
+    handleAuth(e)
+  }
+}
+
+// Update the existing handleAuth function to work with the new data structure
 function handleAuth(e: Event) {
   e.preventDefault()
-  const form = e.target as HTMLFormElement
-  const formData = new FormData(form)
-  
-  const email = formData.get('email') as string
-  const password = formData.get('password') as string
+
+  const { username, email, password } = authData.value
   const createdAt = new Date().toISOString()
-  
-  if (!email || !password) {
-    toast.error('Please fill in all required fields',{ 
+
+  if (!email || !password || !username) {
+    toast.error('Please fill in all required fields', {
       duration: 4000,
-      description:'' 
+      description: ''
     })
     return
   }
-  
-  const username = formData.get('username') as string
-  
+
   const userData = {
     email,
     username,
     createdAt,
     sessionId: btoa(email + ':' + password + ':' + username)
   }
-  
+
   try {
     localStorage.setItem('userdetails', JSON.stringify(userData))
     parsedUserDetails = userData
-    
+
     // Load existing chats after authentication
     loadChats()
-  
     window.location.reload()
 
     nextTick(() => {
@@ -459,9 +501,9 @@ function handleAuth(e: Event) {
     })
   } catch (err) {
     console.error('Failed to save user data:', err)
-    toast.error('Failed to create session. Please try again.',{ 
+    toast.error('Failed to create session. Please try again.', {
       duration: 4000,
-      description:'' 
+      description: ''
     })
   }
 }
@@ -479,20 +521,19 @@ function logout() {
         localStorage.removeItem('isCollapsed')
         localStorage.removeItem('currentChatId')
         // Keep chats and link previews cached even after logout
-        
+
         parsedUserDetails = null
         chats.value = []
         currentChatId.value = ''
         expanded.value = []
         showInput.value = false
         isCollapsed.value = false
-        
-        window.location.reload()
+
       } catch (err) {
         console.error('Error during logout:', err)
-        toast.error('Error during logout. Please try again.', { 
+        toast.error('Error during logout. Please try again.', {
           duration: 4000,
-          description:'' 
+          description: ''
         })
       }
     }
@@ -506,7 +547,7 @@ function isAuthenticated(): boolean {
 
 // ---------- Helpers ----------
 // Helper function to show confirmation dialog
-function showConfirmDialog(options:ConfirmDialogOptions) {
+function showConfirmDialog(options: ConfirmDialogOptions) {
   confirmDialog.value = {
     visible: true,
     title: options.title,
@@ -528,9 +569,9 @@ function copyCode(text: string, button?: HTMLElement) {
     })
     .catch(err => {
       console.error('Failed to copy text: ', err)
-      toast.error('Failed to copy code to clipboard', { 
+      toast.error('Failed to copy code to clipboard', {
         duration: 3000,
-        description:'' 
+        description: ''
       })
     })
 }
@@ -583,9 +624,9 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
   if (!promptValue || isLoading.value) return
 
   if (!isAuthenticated()) {
-    toast.warning('Please create a session first',{ 
+    toast.warning('Please create a session first', {
       duration: 4000,
-      description:'You need to be logged in.' 
+      description: 'You need to be logged in.'
     })
     return
   }
@@ -603,23 +644,23 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
   }
 
   const tempResp: Res = { prompt: promptValue, response: "..." }
-  
+
   // Add message to current chat
   if (currentChat.value) {
     currentChat.value.messages.push(tempResp)
     currentChat.value.updatedAt = new Date().toISOString()
-    
+
     // Update chat title if this is the first message
     if (currentChat.value.messages.length === 1) {
       currentChat.value.title = generateChatTitle(promptValue)
     }
   }
-  
+
   expanded.value.push(false)
-  
+
   // Process links in user prompt
   processLinksInUserPrompt(promptValue)
-  
+
   await nextTick()
   scrollToBottom()
 
@@ -636,7 +677,7 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
     }
 
     let parseRes = await response.json()
-    
+
     if (currentChat.value) {
       const lastMessageIndex = currentChat.value.messages.length - 1
       currentChat.value.messages[lastMessageIndex] = {
@@ -649,13 +690,13 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
 
     // Trigger link preview generation for the new response
     await processLinksInResponse(currentMessages.value.length - 1)
-    
+
   } catch (err: any) {
-    toast.error(`Failed to get AI response: ${err.message}`, { 
+    toast.error(`Failed to get AI response: ${err.message}`, {
       duration: 5000,
-      description:'' 
+      description: ''
     })
-    
+
     if (currentChat.value) {
       const lastMessageIndex = currentChat.value.messages.length - 1
       currentChat.value.messages[lastMessageIndex] = {
@@ -722,16 +763,16 @@ function copyResponse(text: string, index?: number) {
   navigator.clipboard.writeText(text)
     .then(() => {
       copiedIndex.value = index ?? null
-      
+
       setTimeout(() => {
         copiedIndex.value = null
       }, 2000)
     })
     .catch(err => {
       console.error('Failed to copy text: ', err)
-      toast.error('Copy Failed', { 
+      toast.error('Copy Failed', {
         duration: 3000,
-        description:'' 
+        description: ''
       })
     })
 }
@@ -745,20 +786,20 @@ function toggleSidebar() {
 function shareResponse(text: string, prompt?: string) {
   if (navigator.share) {
     navigator.share({
-      title: prompt && prompt.length > 200 ? `${prompt.slice(0,200)}...\n\n` : `${prompt || "Gemmie Chat"}\n\n`,
+      title: prompt && prompt.length > 200 ? `${prompt.slice(0, 200)}...\n\n` : `${prompt || "Gemmie Chat"}\n\n`,
       text
     }).then(() => {
       console.log("Share successful")
     }).catch(err => {
       console.log("Share canceled", err)
-      toast.warning('Share Cancelled', { 
+      toast.warning('Share Cancelled', {
         duration: 2000,
-        description:"Cannot Share at the moment, copying instead."
+        description: "Cannot Share at the moment, copying instead."
       })
     })
   } else {
     copyCode(text)
-    toast.info('Copied Instead', { 
+    toast.info('Copied Instead', {
       duration: 3000,
     })
   }
@@ -773,13 +814,13 @@ function refreshResponse(prompt?: string) {
 // Add function to manually clear link preview cache
 function clearLinkPreviewCache() {
   const cacheSize = linkPreviewCache.value.size
-  
+
   if (cacheSize === 0) {
-    toast.info('Link preview cache is already empty',{ 
+    toast.info('Link preview cache is already empty', {
       duration: 3000,
-      description:'' 
+      description: ''
     })
-     return
+    return
   }
 
   showConfirmDialog({
@@ -794,9 +835,9 @@ function clearLinkPreviewCache() {
         linkPreviewCache.value.clear()
       } catch (err) {
         console.error('Failed to clear link preview cache:', err)
-        toast.error('Failed to clear link preview cache.',{ 
+        toast.error('Failed to clear link preview cache.', {
           duration: 3000,
-          description:'' 
+          description: ''
         })
       }
     }
@@ -809,9 +850,9 @@ function setShowInput() {
     return
   }
   if (!isAuthenticated()) {
-    toast.warning('Please create a session first',{ 
+    toast.warning('Please create a session first', {
       duration: 3000,
-      description:'You need to be logged in.' 
+      description: 'You need to be logged in.'
     })
     return
   }
@@ -832,9 +873,9 @@ function scrollToBottom() {
 function hideSidebar() {
   const sideNav = document.getElementById("side_nav")
   if (sideNav) {
-    if(sideNav.classList.contains("none")){
+    if (sideNav.classList.contains("none")) {
       sideNav.classList.add("w-full", "bg-white", "z-20", "fixed", "top-0", "left-0", "bottom-0", "border-r-[1px]", "flex", "flex-col", "transition-all", "duration-300", "ease-in-out")
-    }else{
+    } else {
       sideNav.classList.remove("w-full", "bg-white", "z-20", "fixed", "top-0", "left-0", "bottom-0", "border-r-[1px]", "flex", "flex-col", "transition-all", "duration-300", "ease-in-out")
     }
     sideNav.classList.toggle("none")
@@ -854,13 +895,13 @@ function onEnter(e: KeyboardEvent) {
   if (e.key !== 'Enter' || e.shiftKey || isLoading.value) {
     return
   }
-  
+
   e.preventDefault()
-  
+
   const textarea = e.target as HTMLTextAreaElement
   if (textarea && textarea.value.trim()) {
-    const formEvent = { 
-      preventDefault: () => {}, 
+    const formEvent = {
+      preventDefault: () => { },
       target: { prompt: textarea }
     }
     handleSubmit(formEvent)
@@ -890,7 +931,7 @@ onMounted(() => {
   // Load chats if authenticated
   if (isAuthenticated()) {
     loadChats()
-    
+
     // Pre-process existing chat links on page load
     if (currentMessages.value.length > 0) {
       currentMessages.value.forEach((item, index) => {
@@ -905,7 +946,7 @@ onMounted(() => {
             }
           })
         }
-        
+
         // Process links in responses
         if (item.response && item.response !== "...") {
           const responseUrls = extractUrls(item.response)
@@ -922,7 +963,7 @@ onMounted(() => {
   }
 
   scrollToBottom()
-  
+
   document.addEventListener("click", (e: any) => {
     if (e.target && e.target.classList.contains("copy-button")) {
       const code = decodeURIComponent(e.target.getAttribute("data-code"))
@@ -942,49 +983,43 @@ onMounted(() => {
 <template>
   <div class="flex h-[100vh]">
     <!-- Custom Confirmation Dialog -->
-    <div v-if="confirmDialog.visible" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div v-if="confirmDialog.visible"
+      class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-2xl">
         <div class="flex items-center gap-3 mb-4">
-          <i :class="confirmDialog.type === 'danger' ? 'pi pi-exclamation-triangle text-red-500' : 
-                    confirmDialog.type === 'warning' ? 'pi pi-exclamation-circle text-orange-500' : 
-                    'pi pi-info-circle text-blue-500'" class="text-2xl"></i>
+          <i :class="confirmDialog.type === 'danger' ? 'pi pi-exclamation-triangle text-red-500' :
+            confirmDialog.type === 'warning' ? 'pi pi-exclamation-circle text-orange-500' :
+              'pi pi-info-circle text-blue-500'" class="text-2xl"></i>
           <h3 class="text-lg font-semibold text-gray-900">{{ confirmDialog.title }}</h3>
         </div>
-        
+
         <p class="text-gray-700 mb-6 leading-relaxed whitespace-pre-line">{{ confirmDialog.message }}</p>
-        
+
         <div class="flex gap-3 justify-end">
-          <button
-            @click="confirmDialog.visible = false"
-            class="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-          >
+          <button @click="confirmDialog.visible = false"
+            class="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
             {{ confirmDialog.cancelText }}
           </button>
-          <button
-            @click="() => { confirmDialog.onConfirm(); confirmDialog.visible = false }"
-            :class="confirmDialog.type === 'danger' ? 'bg-red-600 hover:bg-red-700' : 
-                    confirmDialog.type === 'warning' ? 'bg-orange-600 hover:bg-orange-700' : 
-                    'bg-blue-600 hover:bg-blue-700'"
-            class="px-4 py-2 text-white rounded-lg transition-colors"
-          >
+          <button @click="() => { confirmDialog.onConfirm(); confirmDialog.visible = false }" :class="confirmDialog.type === 'danger' ? 'bg-red-600 hover:bg-red-700' :
+            confirmDialog.type === 'warning' ? 'bg-orange-600 hover:bg-orange-700' :
+              'bg-blue-600 hover:bg-blue-700'" class="px-4 py-2 text-white rounded-lg transition-colors">
             {{ confirmDialog.confirmText }}
           </button>
         </div>
       </div>
     </div>
     <!-- Sidebar -->
-    <SideNav v-if="isAuthenticated()" :data="{ 
-      chats, 
-      currentChatId, 
-      parsedUserDetails, 
-      screenWidth, 
-      isCollapsed 
-    }" 
-    :functions="{ 
-      setShowInput, 
-      hideSidebar, 
-      clearAllChats, 
-      toggleSidebar, 
+    <SideNav v-if="isAuthenticated()" :data="{
+      chats,
+      currentChatId,
+      parsedUserDetails,
+      screenWidth,
+      isCollapsed
+    }" :functions="{
+      setShowInput,
+      hideSidebar,
+      clearAllChats,
+      toggleSidebar,
       logout,
       createNewChat,
       switchToChat,
@@ -993,108 +1028,197 @@ onMounted(() => {
     }" />
 
     <!-- Main Chat Window -->
-    <div :class="screenWidth>720&&isAuthenticated() ? (!isCollapsed?
-      'flex-grow flex flex-col items-center justify-center ml-[270px] font-light text-sm transition-all duration-300 ease-in-out' 
-      :
-      'flex-grow flex flex-col items-center justify-center ml-[60px] font-light text-sm transition-all duration-300 ease-in-out' 
-    )
-    : 'text-sm font-light flex-grow items-center justify-center flex flex-col transition-all duration-300 ease-in-out'">
-      <TopNav v-if="isAuthenticated()" :data="{ 
-        currentChat, 
-        parsedUserDetails, 
-        screenWidth, 
-        isCollapsed, 
-        isSidebarHidden 
-      }" 
-      :functions="{ 
-        hideSidebar, 
+    <div
+      :class="screenWidth > 720 && isAuthenticated() ? (!isCollapsed ?
+        'flex-grow flex flex-col items-center justify-center ml-[270px] font-light text-sm transition-all duration-300 ease-in-out'
+        :
+        'flex-grow flex flex-col items-center justify-center ml-[60px] font-light text-sm transition-all duration-300 ease-in-out'
+      )
+        : 'text-sm font-light flex-grow items-center justify-center flex flex-col transition-all duration-300 ease-in-out'">
+      <TopNav v-if="isAuthenticated()" :data="{
+        currentChat,
+        parsedUserDetails,
+        screenWidth,
+        isCollapsed,
+        isSidebarHidden
+      }" :functions="{
+        hideSidebar,
         deleteChat,
         createNewChat,
         renameChat
-      }"
-      />
+      }" />
 
-      <div :class="(screenWidth>720&&isAuthenticated()) ? 'h-screen flex flex-col items-center justify-center w-[85%]':'h-screen flex flex-col items-center justify-center'">
+      <div :class="(screenWidth > 720 && isAuthenticated()) ? 'h-screen flex flex-col items-center justify-center w-[85%]' : 'h-screen flex flex-col items-center justify-center'">
         <!-- Empty State -->
-        <div v-if="currentMessages.length===0||!isAuthenticated()" class="flex flex-col items-center justify-center h-[90vh]">
-          <div class="max-md:flex-col flex gap-10 items-center justify-center h-full w-full max-md:px-5">
-            <div class="flex flex-col md:flex-grow items-center gap-3 text-gray-600">
-              <div class="rounded-full bg-gray-200 w-[60px] h-[60px] flex justify-center items-center">
-                <span class="pi pi-comment text-lg"></span>
+        <div v-if="currentMessages.length === 0 || !isAuthenticated()"
+          class="flex flex-col items-center justify-center h-[90vh]">
+            <div class="max-md:flex-col flex gap-10 items-center justify-center h-full w-full max-md:px-5">
+              <div class="flex flex-col md:flex-grow items-center gap-3 text-gray-600">
+                <div class="rounded-full bg-gray-200 w-[60px] h-[60px] flex justify-center items-center">
+                  <span class="pi pi-comment text-lg"></span>
+                </div>
+                <p class="text-3xl font-semibold">{{ parsedUserDetails?.username || 'Gemmie' }}</p>
+                <div class="text-center text-base md:max-w-[400px]">
+                  <p>Your private AI assistant.</p>
+                  <p class="text-sm text-gray-400">
+                    We focus on privacy and security. Your data never leaves your device.
+                    All your chats are stored locally in your browser.
+                    Therefore, please make sure to back up your chats if you clear your browser data or switch devices.
+                  </p>
+                </div>
+                <button v-if="isAuthenticated()" @click="setShowInput"
+                  class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors">
+                  Write a prompt
+                </button>
               </div>
-              <p class="text-3xl font-semibold">{{ parsedUserDetails?.username || 'Gemmie' }}</p>
-              <div class="text-center text-base md:max-w-[400px]">
-                <p>Your private AI assistant.</p>
-                <p class="text-sm text-gray-400">
-                  We focus on privacy and security. Your data never leaves your device.
-                  All your chats are stored locally in your browser.
-                  Therefore, please make sure to back up your chats if you clear your browser data or switch devices.
-                </p>
+
+              <div v-if="!isAuthenticated()" class="flex-grow text-sm  md:px-4 px-1 relative overflow-hidden">
+                <!-- Progress indicator -->
+                <div class="flex justify-center mb-6">
+                  <div class="flex items-center space-x-2">
+                    <div v-for="step in 3" :key="step" :class="step <= authStep ? 'bg-blue-600' : 'bg-gray-300'"
+                      class="w-3 h-3 rounded-full transition-colors duration-300">
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Multi-step form container -->
+                <div class="relative h-80">
+                  <!-- Step 1: Username -->
+                  <div :class="authStep === 1 ? 'translate-x-0 opacity-100' :
+                    authStep > 1 ? '-translate-x-full opacity-0' : 'translate-x-full opacity-0'"
+                    class="absolute inset-0 transition-all duration-500 ease-in-out transform">
+                    <div class="text-center mb-6">
+                      <h2 class="text-xl font-semibold text-gray-900 mb-2">Welcome!</h2>
+                      <p class="text-gray-600">Let's start by creating your username</p>
+                    </div>
+
+                    <form @submit="handleStepSubmit" class="space-y-4">
+                      <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                          Choose a username
+                        </label>
+                        <input v-model="authData.username" required type="text" placeholder="johndoe"
+                          class="border border-gray-300 rounded-lg px-4 py-3 w-full text-base focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                          :class="authData.username && !validateCurrentStep() ? 'border-red-300' : ''" />
+                        <p class="text-xs text-gray-500 mt-1">This will be your display name</p>
+                      </div>
+
+                      <button type="submit" :disabled="!validateCurrentStep()"
+                        class="w-full bg-blue-600 text-white rounded-lg px-4 py-3 font-medium hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors duration-200">
+                        Continue
+                      </button>
+                    </form>
+                  </div>
+
+                  <!-- Step 2: Email -->
+                  <div :class="authStep === 2 ? 'translate-x-0 opacity-100' :
+                    authStep > 2 ? '-translate-x-full opacity-0' : 'translate-x-full opacity-0'"
+                    class="absolute inset-0 transition-all duration-500 ease-in-out transform">
+                    <div class="text-center mb-6">
+                      <h2 class="text-xl font-semibold text-gray-900 mb-2">Hi {{ authData.username }}!</h2>
+                      <p class="text-gray-600">What's your email address?</p>
+                    </div>
+
+                    <form @submit="handleStepSubmit" class="space-y-4">
+                      <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                          Email address
+                        </label>
+                        <input v-model="authData.email" required type="email" placeholder="johndoe@example.com"
+                          class="border border-gray-300 rounded-lg px-4 py-3 w-full text-base focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                          :class="authData.email && !validateCurrentStep() ? 'border-red-300' : ''" />
+                        <p class="text-xs text-gray-500 mt-1">Used for session identification only</p>
+                      </div>
+
+                      <div class="flex gap-3">
+                        <button type="button" @click="prevAuthStep"
+                          class="flex-1 bg-gray-100 text-gray-700 rounded-lg px-4 py-3 font-medium hover:bg-gray-200 transition-colors duration-200">
+                          Back
+                        </button>
+                        <button type="submit" :disabled="!validateCurrentStep()"
+                          class="flex-1 bg-blue-600 text-white rounded-lg px-4 py-3 font-medium hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors duration-200">
+                          Continue
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+
+                  <!-- Step 3: Password -->
+                  <div :class="authStep === 3 ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0'"
+                    class="absolute inset-0 transition-all duration-500 ease-in-out transform">
+                    <div class="text-center mb-6">
+                      <h2 class="text-xl font-semibold text-gray-900 mb-2">Almost there!</h2>
+                      <p class="text-gray-600">Create a secure password</p>
+                    </div>
+
+                    <form @submit="handleStepSubmit" class="space-y-4">
+                      <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                          Password
+                        </label>
+                        <input v-model="authData.password" required type="password" placeholder="Enter a secure password"
+                          minlength="6"
+                          class="border border-gray-300 rounded-lg px-4 py-3 w-full text-base focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                          :class="authData.password && !validateCurrentStep() ? 'border-red-300' : ''" />
+                        <div class="mt-2">
+                          <div class="flex items-center gap-2 text-xs">
+                            <div :class="authData.password.length >= 6 ? 'text-green-600' : 'text-gray-400'"
+                              class="flex items-center gap-1">
+                              <i :class="authData.password.length >= 6 ? 'pi pi-check' : 'pi pi-circle'"
+                                class="text-xs"></i>
+                              <span>At least 6 characters</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div class="flex gap-3">
+                        <button type="button" @click="prevAuthStep"
+                          class="flex-1 bg-gray-100 text-gray-700 rounded-lg px-4 py-3 font-medium hover:bg-gray-200 transition-colors duration-200">
+                          Back
+                        </button>
+                        <button type="submit" :disabled="!validateCurrentStep()"
+                          class="flex-1 bg-blue-600 text-white rounded-lg px-4 py-3 font-medium hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors duration-200">
+                          <i class="pi pi-check mr-2"></i>
+                          Create Session
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+
+                <!-- Footer note -->
+                <div class="mt-6 text-center">
+                  <p class="text-xs text-gray-400 leading-relaxed">
+                    Your credentials are only stored locally on your device for session management.
+                    <br>All data stays private and secure.
+                  </p>
+                </div>
               </div>
-              <button
-                v-if="isAuthenticated()"
-                @click="setShowInput"
-                class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors">
-                Write a prompt
-              </button>
             </div>
 
-            <div v-if="!isAuthenticated()" class="flex-grow text-sm max-w-md">
-              <p class="text-lg text-gray-500 mb-4">Create a session on this device to get started</p>
-              <form @submit="handleAuth" class="mt-3 flex-col flex gap-2">
-                <input
-                  required
-                  type="text"
-                  name="username"
-                  placeholder="johndoe"
-                  class="border border-gray-300 rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <input
-                  required
-                  type="email"
-                  name="email"
-                  placeholder="johndoe@example.com"
-                  class="border border-gray-300 rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <input
-                  required
-                  type="password"
-                  name="password"
-                  placeholder="Password"
-                  minlength="6"
-                  class="border border-gray-300 rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <button
-                  type="submit"
-                  class="mt-3 w-full bg-blue-600 text-white rounded-lg px-4 py-2 hover:bg-blue-500 transition-colors"
-                >
-                  Create Session
-                </button>
-              </form>
-              <p class="text-sm text-gray-400 mt-2">
-                Your credentials are only stored locally on your device for session management.
-              </p>
+            <div>
+              <p class="text-sm mt-2 text-gray-400">Gemmie can make mistakes. Check important info.</p>
             </div>
-          </div>
-          <div>
-            <p class="text-sm mt-2 text-gray-400">Gemmie can make mistakes. Check important info.</p>
-          </div>
         </div>
 
         <!-- Chat Messages -->
-         <div v-else-if="currentMessages.length !== 0 && isAuthenticated()" class="flex-grow no-scrollbar overflow-y-auto px-4 space-y-4 pt-[90px] pb-[120px]">
+        <div v-else-if="currentMessages.length !== 0 && isAuthenticated()"
+          class="flex-grow no-scrollbar overflow-y-auto px-4 space-y-4 pt-[90px] pb-[120px]">
           <div v-for="(item, i) in currentMessages" :key="`chat-${i}`" class="flex flex-col gap-2">
             <!-- User Bubble -->
-            <div class="flex justify-end">
-              <div :class="screenWidth>720 ? 'max-w-[70%]' : 'max-w-[95%]'"
-                   class="bg-gray-50 text-black p-3 rounded-2xl prose prose-sm max-w-none chat-bubble">
+            <div class="flex justify-end chat-message ">
+              <div :class="screenWidth > 720 ? 'max-w-[70%]' : 'max-w-[95%]'"
+                class="bg-gray-50 text-black p-3 rounded-2xl prose prose-sm max-w-none chat-bubble">
                 <p class="text-xs opacity-80 text-right mb-1">{{ parsedUserDetails?.username || "You" }}</p>
                 <div v-html="renderMarkdown(item.prompt || '')"></div>
-                
+
                 <!-- Link Previews Section for User Messages -->
                 <div v-if="extractUrls(item.prompt || '').length > 0" class="mt-3">
                   <div v-for="url in extractUrls(item.prompt || '').slice(0, 3)" :key="`user-${i}-${url}`">
-                    <div v-if="linkPreviewCache.get(url)" v-html="LinkPreviewComponent({ preview: linkPreviewCache.get(url)! })"></div>
+                    <div v-if="linkPreviewCache.get(url)"
+                      v-html="LinkPreviewComponent({ preview: linkPreviewCache.get(url)! })"></div>
                   </div>
                 </div>
               </div>
@@ -1102,49 +1226,46 @@ onMounted(() => {
 
             <!-- Bot Bubble -->
             <div class="flex justify-start relative">
-              <div :class="screenWidth>720 ? 'max-w-[70%]' : 'max-w-[95%]'"
-                   class="bg-none leading-relaxed text-black p-3 rounded-2xl prose prose-sm max-w-none">
-                
+              <div :class="screenWidth > 720 ? 'max-w-[70%]' : 'max-w-[95%]'"
+                class="bg-none chat-message leading-relaxed text-black p-3 rounded-2xl prose prose-sm max-w-none">
+
                 <!-- Loading state -->
                 <div v-if="item.response === '...'" class="flex items-center gap-2 text-gray-500">
                   <i class="pi pi-spin pi-spinner"></i>
                   <span>Thinking...</span>
                 </div>
-                
+
                 <!-- Regular response with enhanced link handling -->
                 <div v-else>
                   <div v-html="renderMarkdown(item.response || '')"></div>
-                  
+
                   <!-- Link Previews Section -->
                   <div v-if="extractUrls(item.response || '').length > 0" class="mt-3">
                     <div v-for="url in extractUrls(item.response || '').slice(0, 3)" :key="url">
-                      <div v-if="linkPreviewCache.get(url)" v-html="LinkPreviewComponent({ preview: linkPreviewCache.get(url)! })"></div>
+                      <div v-if="linkPreviewCache.get(url)"
+                        v-html="LinkPreviewComponent({ preview: linkPreviewCache.get(url)! })"></div>
                     </div>
                   </div>
                 </div>
 
                 <!-- Actions (hidden during loading) -->
                 <div v-if="item.response !== '...'" class="flex gap-3 mt-2 text-gray-500 text-sm">
-                  <button 
-                    @click="copyResponse(item.response, i)" 
-                    class="flex items-center gap-1 hover:text-blue-600 transition-colors"
-                  >
-                    <i class="pi pi-copy"></i> 
+                  <button @click="copyResponse(item.response, i)"
+                    class="flex items-center gap-1 hover:text-blue-600 transition-colors">
+                    <i class="pi pi-copy"></i>
                     {{ copiedIndex === i ? 'Copied!' : 'Copy' }}
                   </button>
 
-                  <button @click="shareResponse(item.response, item.prompt)" 
-                          class="flex items-center gap-1 hover:text-green-600 transition-colors">
+                  <button @click="shareResponse(item.response, item.prompt)"
+                    class="flex items-center gap-1 hover:text-green-600 transition-colors">
                     <i class="pi pi-share-alt"></i> Share
                   </button>
-                  <button @click="refreshResponse(item.prompt)" 
-                          :disabled="isLoading"
-                          class="flex items-center gap-1 hover:text-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                  <button @click="refreshResponse(item.prompt)" :disabled="isLoading"
+                    class="flex items-center gap-1 hover:text-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                     <i class="pi pi-refresh"></i> Refresh
                   </button>
-                  <button @click="deleteMessage(i)" 
-                          :disabled="isLoading"
-                          class="flex items-center gap-1 hover:text-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                  <button @click="deleteMessage(i)" :disabled="isLoading"
+                    class="flex items-center gap-1 hover:text-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                     <i class="pi pi-trash"></i> Delete
                   </button>
                 </div>
@@ -1156,35 +1277,20 @@ onMounted(() => {
         </div>
 
         <!-- Input -->
-        <div
-          v-if="(currentMessages.length !== 0 || showInput === true) && isAuthenticated()"
-          :style="screenWidth>720&&!isCollapsed ? 'left:270px;' :
-            screenWidth>720&&isCollapsed? 'left:60px;': 'left:0px;'"
-          class="bg-white bottom-0 right-0 fixed pb-5 px-5"
-        >
+        <div v-if="(currentMessages.length !== 0 || showInput === true) && isAuthenticated()" :style="screenWidth > 720 && !isCollapsed ? 'left:270px;' :
+          screenWidth > 720 && isCollapsed ? 'left:60px;' : 'left:0px;'" class="bg-white z-20 bottom-0 right-0 fixed pb-5 px-5">
           <div class="flex items-center justify-center w-full">
-            <form @submit="handleSubmit" :class="screenWidth > 720 ?'relative flex px-3 py-2 border-2 shadow rounded-2xl items-center gap-2 w-[85%]':'relative flex px-3 py-2 border-2 shadow rounded-2xl w-full items-center gap-2'">
-              <textarea
-                required
-                id="prompt"
-                name="prompt"
-                @keydown="onEnter"
-                @input="autoGrow"
-                :disabled="isLoading"
-                rows="1"
-                class="flex-grow py-2 bg-white text-sm 
+            <form @submit="handleSubmit"
+              :class="screenWidth > 720 ? 'relative flex px-3 py-2 border-2 shadow rounded-2xl items-center gap-2 w-[85%]' : 'relative flex px-3 py-2 border-2 shadow rounded-2xl w-full items-center gap-2'">
+              <textarea required id="prompt" name="prompt" @keydown="onEnter" @input="autoGrow" :disabled="isLoading"
+                rows="1" class="flex-grow py-2 bg-white text-sm 
                       outline-none resize-none border-none
                       max-h-[200px] overflow-auto leading-relaxed
                       disabled:opacity-50 disabled:cursor-not-allowed"
-                :placeholder="isLoading ? 'Please wait...' : 'Ask me a question...'"
-              ></textarea>
-              <button
-                type="submit"
-                :disabled="isLoading"
-                class="rounded-lg w-[26px] h-[26px] flex items-center justify-center transition-colors
+                :placeholder="isLoading ? 'Please wait...' : 'Ask me a question...'"></textarea>
+              <button type="submit" :disabled="isLoading" class="rounded-lg w-[26px] h-[26px] flex items-center justify-center transition-colors
                       text-white bg-blue-600 hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50
-                      disabled:bg-gray-400 flex-shrink-0"
-              >
+                      disabled:bg-gray-400 flex-shrink-0">
                 <i v-if="!isLoading" class="pi pi-arrow-up text-sm"></i>
                 <i v-else class="pi pi-spin pi-spinner text-sm"></i>
               </button>
