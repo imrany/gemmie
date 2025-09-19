@@ -1,29 +1,28 @@
 <script lang="ts" setup>
-import { ref, onMounted, nextTick } from "vue"
+import type { ComputedRef } from "vue"
+import { ref, onMounted, nextTick, computed } from "vue"
 import { marked } from "marked"
 import hljs from "highlight.js"
 import "highlight.js/styles/github-dark.css"
 import SideNav from "../components/SideNav.vue"
 import TopNav from "../components/TopNav.vue"
-
-type Res = {
-  response: string,
-  prompt?: string,
-  status?: number,
-}
-
-type LinkPreview = {
-  url: string,
-  title?: string,
-  description?: string,
-  image?: string,
-  domain?: string,
-  loading?: boolean,
-  error?: boolean
-}
+import type { Chat, ConfirmDialogOptions, CurrentChat, LinkPreview, Res } from "@/types"
+import { toast } from 'vue-sonner'
 
 // ---------- State ----------
+// Confirmation dialog state
+const confirmDialog = ref<ConfirmDialogOptions>({
+  visible: false,
+  title: '',
+  message: '',
+  type: 'info' as 'danger' | 'warning' | 'info',
+  confirmText: 'Confirm',
+  cancelText: 'Cancel',
+  onConfirm: () => {}
+})
 let showInput = ref(false)
+// Track copied state for each response by index
+const copiedIndex = ref<number | null>(null)
 let screenWidth = ref(screen.width)
 // local state for collapse toggle
 const isCollapsed = ref(false)
@@ -32,16 +31,21 @@ const isSidebarHidden = ref(true)
 let userDetails: any = localStorage.getItem("userdetails")
 let parsedUserDetails: any = userDetails ? JSON.parse(userDetails) : null
 
-let chats: any = localStorage.getItem("chats")
-let parsedChats: any = JSON.parse(chats) === null ? [] : JSON.parse(chats)
-let res = ref<Res[]>(parsedChats.length === 0 ? [] : parsedChats.map((item: any) => ({
-  prompt: item.prompt ?? "",
-  response: item.response,
-  status: item.status
-})))
-
+// Chat management state
+const currentChatId = ref<string>('')
+const chats = ref<Chat[]>([])
 let isLoading = ref(false)
-let expanded = ref<boolean[]>(res.value.map(() => false))
+let expanded = ref<boolean[]>([])
+
+// Current chat computed property
+const currentChat: ComputedRef<CurrentChat | undefined> = computed(() => {
+  return chats.value.find(chat => chat.id === currentChatId.value)
+})
+
+// Current messages computed property
+const currentMessages = computed(() => {
+  return currentChat.value?.messages || []
+})
 
 // Link preview cache - now with persistence
 const linkPreviewCache = ref<Map<string, LinkPreview>>(new Map())
@@ -66,6 +70,216 @@ function saveLinkPreviewCache() {
     localStorage.setItem('linkPreviews', JSON.stringify(cacheObject))
   } catch (error) {
     console.error('Failed to save link preview cache:', error)
+  }
+}
+
+// ---------- Chat Management Functions ----------
+
+// Generate unique chat ID
+function generateChatId(): string {
+  return 'chat_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9)
+}
+
+// Generate chat title from first message
+function generateChatTitle(firstMessage: string): string {
+  const title = firstMessage.slice(0, 50).trim()
+  return title.length < firstMessage.length ? title + '...' : title
+}
+
+// Load chats from localStorage
+function loadChats() {
+  try {
+    const stored = localStorage.getItem('chats')
+    if (stored) {
+      const parsedChats = JSON.parse(stored)
+      if (Array.isArray(parsedChats)) {
+        chats.value = parsedChats
+        // Set current chat to the most recent one if none is set
+        if (chats.value.length > 0 && !currentChatId.value) {
+          currentChatId.value = chats.value[0].id
+        }
+      }
+    }
+    updateExpandedArray()
+  } catch (error) {
+    console.error('Failed to load chats:', error)
+    chats.value = []
+  }
+}
+
+// Save chats to localStorage
+function saveChats() {
+  try {
+    localStorage.setItem('chats', JSON.stringify(chats.value))
+    localStorage.setItem('currentChatId', currentChatId.value)
+  } catch (error) {
+    console.error('Failed to save chats:', error)
+  }
+}
+
+// Update expanded array to match current messages
+function updateExpandedArray() {
+  expanded.value = currentMessages.value.map(() => false)
+}
+
+// Create new chat
+function createNewChat(firstMessage?: string): string {
+  const newChatId = generateChatId()
+  const now = new Date().toISOString()
+  
+  const newChat: Chat = {
+    id: newChatId,
+    title: firstMessage ? generateChatTitle(firstMessage) : 'New Chat',
+    messages: [],
+    createdAt: now,
+    updatedAt: now
+  }
+  
+  // Add to beginning of chats array (most recent first)
+  chats.value.unshift(newChat)
+  currentChatId.value = newChatId
+  updateExpandedArray()
+  saveChats()
+  
+  return newChatId
+}
+
+// Switch to specific chat
+function switchToChat(chatId: string) {
+  if (chats.value.find(chat => chat.id === chatId)) {
+    currentChatId.value = chatId
+    updateExpandedArray()
+    localStorage.setItem('currentChatId', currentChatId.value)
+
+    nextTick(() => {
+      scrollToBottom()
+    })
+  }
+}
+
+// Delete specific chat
+function deleteChat(chatId: string) {
+  if (isLoading.value) return
+  
+  const chatIndex = chats.value.findIndex(chat => chat.id === chatId)
+  if (chatIndex === -1) return
+  
+  const chatTitle = chats.value[chatIndex].title
+  const messageCount = chats.value[chatIndex].messages.length
+
+  showConfirmDialog({
+    visible: true,
+    title: 'Delete Chat',
+    message: `Are you sure you want to delete "${chatTitle}"?\n\nThis will permanently remove ${messageCount} message(s). This action cannot be undone.`,
+    type: 'danger',
+    confirmText: 'Delete',
+    onConfirm: () => {
+      chats.value.splice(chatIndex, 1)
+      
+      // If we deleted the current chat, switch to another one
+      if (currentChatId.value === chatId) {
+        if (chats.value.length > 0) {
+          currentChatId.value = chats.value[0].id
+        } else {
+          currentChatId.value = ''
+        }
+        updateExpandedArray()
+      }
+      
+      confirmDialog.value.visible = false
+      toast.success('Chat deleted',{ 
+        duration: 3000,
+        description:'Chat has been removed successfully.' 
+      })
+      saveChats()
+    }
+  })
+}
+
+// Enhanced delete specific message with custom dialog
+function deleteMessage(messageIndex: number) {
+  if (isLoading.value || !currentChat.value) return
+  
+  const message = currentChat.value.messages[messageIndex]
+  const messageContent = message?.prompt || message?.response || 'this message'
+  const preview = messageContent.slice(0, 50) + (messageContent.length > 50 ? '...' : '')
+  
+  showConfirmDialog({
+    visible: true,
+    title: 'Delete Message',
+    message: `Are you sure you want to delete this message?\n\n"${preview}"\n\nThis action cannot be undone.`,
+    type: 'danger',
+    confirmText: 'Delete',
+    onConfirm: () => {
+      currentChat.value!.messages.splice(messageIndex, 1)
+      expanded.value.splice(messageIndex, 1)
+      
+      // Update chat's updatedAt timestamp
+      currentChat.value!.updatedAt = new Date().toISOString()
+      
+      // Update title if we deleted the first message
+      if (messageIndex === 0 && currentChat.value!.messages.length > 0) {
+        const firstMessage = currentChat.value!.messages[0].prompt || currentChat.value!.messages[0].response
+        currentChat.value!.title = generateChatTitle(firstMessage)
+      } else if (currentChat.value!.messages.length === 0) {
+        currentChat.value!.title = 'New Chat'
+      }
+      
+      confirmDialog.value.visible = false
+      toast.success('Message deleted',{ 
+        duration: 3000,
+        description:'Message has been removed successfully.' 
+      })
+      saveChats()
+    }
+  })
+}
+
+
+// Clear all chats
+// Enhanced clear all chats with custom dialog
+function clearAllChats() {
+  if (isLoading.value) return
+  
+  const totalChats = chats.value.length
+  const totalMessages = chats.value.reduce((sum, chat) => sum + chat.messages.length, 0)
+  
+  if (totalChats === 0) {
+    toast.info('There are no chats to clear',{ 
+      duration: 3000,
+      description: 'Your chat list is already empty.'
+    })
+    return
+  }
+  
+  showConfirmDialog({
+    visible: true,
+    title: 'Clear All Chats',
+    message: `⚠️ DELETE ALL CHATS?\n\nThis will permanently delete:\n• ${totalChats} chat(s)\n• ${totalMessages} total message(s)\n\nThis action cannot be undone!`,
+    type: 'danger',
+    confirmText: 'Delete All',
+    onConfirm: () => {
+      chats.value = []
+      currentChatId.value = ''
+      expanded.value = []
+      saveChats()
+      
+      toast.error(`${totalChats} chats with ${totalMessages} messages deleted`,{ 
+        duration: 5000,
+        description:'' 
+      })
+    }
+  })
+}
+
+// Enhanced rename chat with success notification
+function renameChat(chatId: string, newTitle: string) {
+  const chat = chats.value.find(c => c.id === chatId)
+  if (chat && newTitle.trim()) {
+    const oldTitle = chat.title
+    chat.title = newTitle.trim()
+    chat.updatedAt = new Date().toISOString()
+    saveChats()
   }
 }
 
@@ -214,7 +428,10 @@ function handleAuth(e: Event) {
   const createdAt = new Date().toISOString()
   
   if (!email || !password) {
-    alert('Please fill in all fields')
+    toast.error('Please fill in all required fields',{ 
+      duration: 4000,
+      description:'' 
+    })
     return
   }
   
@@ -224,59 +441,83 @@ function handleAuth(e: Event) {
     email,
     username,
     createdAt,
-    sessionId: btoa(email + ':' + password + ':' + createdAt)
+    sessionId: btoa(email + ':' + password + ':' + username)
   }
   
   try {
     localStorage.setItem('userdetails', JSON.stringify(userData))
     parsedUserDetails = userData
     
-    if (chats && JSON.parse(chats).length > 0) {
-      res.value = JSON.parse(chats)
-    } else {
-      localStorage.setItem('chats', JSON.stringify([]))
-      res.value = []
-    }
-    
-    alert(`Welcome ${username}! Your session has been created.`)
-    
+    // Load existing chats after authentication
+    loadChats()
+  
+    window.location.reload()
+
     nextTick(() => {
       const textarea = document.getElementById("prompt") as HTMLTextAreaElement
       if (textarea) textarea.focus()
     })
   } catch (err) {
     console.error('Failed to save user data:', err)
-    alert('Failed to create session. Please try again.')
+    toast.error('Failed to create session. Please try again.',{ 
+      duration: 4000,
+      description:'' 
+    })
   }
 }
 
 function logout() {
-  if (confirm('Are you sure you want to logout? This will clear your session on this device.')) {
-    try {
-      localStorage.removeItem('userdetails')
-      localStorage.removeItem('isCollapsed')
-      // Keep link previews cached even after logout
-      // localStorage.removeItem('linkPreviews') // Commented out to persist previews
-      
-      parsedUserDetails = null
-      res.value = []
-      expanded.value = []
-      showInput.value = false
-      isCollapsed.value = false
-      
-      alert('Logged out successfully!')
-    } catch (err) {
-      console.error('Error during logout:', err)
-      alert('Error during logout. Please try again.')
+  showConfirmDialog({
+    visible: true,
+    title: 'Logout Confirmation',
+    message: 'Are you sure you want to logout? This will clear your session on this device.',
+    type: 'warning',
+    confirmText: 'Logout',
+    onConfirm: () => {
+      try {
+        localStorage.removeItem('userdetails')
+        localStorage.removeItem('isCollapsed')
+        localStorage.removeItem('currentChatId')
+        // Keep chats and link previews cached even after logout
+        
+        parsedUserDetails = null
+        chats.value = []
+        currentChatId.value = ''
+        expanded.value = []
+        showInput.value = false
+        isCollapsed.value = false
+        
+        window.location.reload()
+      } catch (err) {
+        console.error('Error during logout:', err)
+        toast.error('Error during logout. Please try again.', { 
+          duration: 4000,
+          description:'' 
+        })
+      }
     }
-  }
+  })
 }
+
 
 function isAuthenticated(): boolean {
   return parsedUserDetails && parsedUserDetails.email && parsedUserDetails.username && parsedUserDetails.sessionId
 }
 
 // ---------- Helpers ----------
+// Helper function to show confirmation dialog
+function showConfirmDialog(options:ConfirmDialogOptions) {
+  confirmDialog.value = {
+    visible: true,
+    title: options.title,
+    message: options.message,
+    type: options.type || 'info',
+    confirmText: options.confirmText || 'Confirm',
+    cancelText: options.cancelText || 'Cancel',
+    onConfirm: options.onConfirm
+  }
+}
+
 function copyCode(text: string, button?: HTMLElement) {
   navigator.clipboard.writeText(text)
     .then(() => {
@@ -287,7 +528,10 @@ function copyCode(text: string, button?: HTMLElement) {
     })
     .catch(err => {
       console.error('Failed to copy text: ', err)
-      alert('Failed to copy text. Please try again.')
+      toast.error('Failed to copy code to clipboard', { 
+        duration: 3000,
+        description:'' 
+      })
     })
 }
 
@@ -321,41 +565,6 @@ marked.use({
   }
 })
 
-// Enhanced markdown renderer with link previews
-async function renderMarkdownWithPreviews(text?: string) {
-  if (!text || typeof text !== "string") return ""
-  
-  try {
-    // First, render the markdown
-    let html = marked.parse(text)
-    
-    // Extract URLs from the original text for preview generation
-    const urls = extractUrls(text)
-    
-    // Generate previews for found URLs
-    if (urls.length > 0) {
-      const previews = await Promise.all(
-        urls.slice(0, 3).map(url => fetchLinkPreview(url)) // Limit to 3 previews max
-      )
-      
-      // Append previews to the HTML
-      const previewsHtml = previews
-        .filter(preview => !preview.loading)
-        .map(preview => LinkPreviewComponent({ preview }))
-        .join('')
-      
-      if (previewsHtml) {
-        html += `<div class="link-previews mt-3">${previewsHtml}</div>`
-      }
-    }
-    
-    return html
-  } catch (err) {
-    console.error("Markdown parse error:", err)
-    return text
-  }
-}
-
 function renderMarkdown(text?: string) {
   if (!text || typeof text !== "string") return ""
   try {
@@ -366,7 +575,7 @@ function renderMarkdown(text?: string) {
   }
 }
 
-// --- Handle submit with optimistic update ---
+// Enhanced submit with better notifications
 async function handleSubmit(e?: any, retryPrompt?: string) {
   e?.preventDefault?.()
 
@@ -374,8 +583,16 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
   if (!promptValue || isLoading.value) return
 
   if (!isAuthenticated()) {
-    alert('Please create a session first')
+    toast.warning('Please create a session first',{ 
+      duration: 4000,
+      description:'You need to be logged in.' 
+    })
     return
+  }
+
+  // Create new chat if none exists
+  if (!currentChatId.value || !currentChat.value) {
+    createNewChat(promptValue)
   }
 
   isLoading.value = true
@@ -386,8 +603,22 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
   }
 
   const tempResp: Res = { prompt: promptValue, response: "..." }
-  res.value.push(tempResp)
+  
+  // Add message to current chat
+  if (currentChat.value) {
+    currentChat.value.messages.push(tempResp)
+    currentChat.value.updatedAt = new Date().toISOString()
+    
+    // Update chat title if this is the first message
+    if (currentChat.value.messages.length === 1) {
+      currentChat.value.title = generateChatTitle(promptValue)
+    }
+  }
+  
   expanded.value.push(false)
+  
+  // Process links in user prompt
+  processLinksInUserPrompt(promptValue)
   
   await nextTick()
   scrollToBottom()
@@ -406,34 +637,48 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
 
     let parseRes = await response.json()
     
-    res.value[res.value.length - 1] = {
-      prompt: promptValue,
-      response: parseRes.error ? parseRes.error : parseRes.response,
-      status: response.status
+    if (currentChat.value) {
+      const lastMessageIndex = currentChat.value.messages.length - 1
+      currentChat.value.messages[lastMessageIndex] = {
+        prompt: promptValue,
+        response: parseRes.error ? parseRes.error : parseRes.response,
+        status: response.status
+      }
+      currentChat.value.updatedAt = new Date().toISOString()
     }
 
     // Trigger link preview generation for the new response
-    await processLinksInResponse(res.value.length - 1)
+    await processLinksInResponse(currentMessages.value.length - 1)
     
   } catch (err: any) {
-    res.value[res.value.length - 1] = {
-      prompt: promptValue,
-      response: `⚠️ Error: ${err.message || 'Failed to get response. Please try again.'}`
+    toast.error(`Failed to get AI response: ${err.message}`, { 
+      duration: 5000,
+      description:'' 
+    })
+    
+    if (currentChat.value) {
+      const lastMessageIndex = currentChat.value.messages.length - 1
+      currentChat.value.messages[lastMessageIndex] = {
+        prompt: promptValue,
+        response: `⚠️ Error: ${err.message || 'Failed to get response. Please try again.'}`
+      }
+      currentChat.value.updatedAt = new Date().toISOString()
     }
   } finally {
     isLoading.value = false
-    debounceSave()
+    saveChats()
     await nextTick()
     scrollToBottom()
   }
 }
 
+
 // Process links in a response and generate previews
 async function processLinksInResponse(index: number) {
-  const response = res.value[index]
-  if (!response.response || response.response === "...") return
+  const messages = currentMessages.value
+  if (!messages[index] || !messages[index].response || messages[index].response === "...") return
 
-  const urls = extractUrls(response.response)
+  const urls = extractUrls(messages[index].response)
   if (urls.length > 0) {
     // Start loading previews
     urls.slice(0, 3).forEach(url => {
@@ -459,19 +704,6 @@ async function processLinksInUserPrompt(prompt: string) {
   }
 }
 
-// --- Debounced localStorage save ---
-let saveTimeout: any
-function debounceSave() {
-  clearTimeout(saveTimeout)
-  saveTimeout = setTimeout(() => {
-    try {
-      localStorage.setItem("chats", JSON.stringify(res.value))
-    } catch (err) {
-      console.error("Failed to save to localStorage:", err)
-    }
-  }, 300)
-}
-
 function autoGrow(e: Event) {
   const el = e.target as HTMLTextAreaElement
   const maxHeight = 200
@@ -486,9 +718,24 @@ function autoGrow(e: Event) {
 }
 
 // ---------- Extra actions ----------
-function copyResponse(text: string) {
-  copyCode(text)
+function copyResponse(text: string, index?: number) {
+  navigator.clipboard.writeText(text)
+    .then(() => {
+      copiedIndex.value = index ?? null
+      
+      setTimeout(() => {
+        copiedIndex.value = null
+      }, 2000)
+    })
+    .catch(err => {
+      console.error('Failed to copy text: ', err)
+      toast.error('Copy Failed', { 
+        duration: 3000,
+        description:'' 
+      })
+    })
 }
+
 
 function toggleSidebar() {
   isCollapsed.value = !isCollapsed.value
@@ -500,10 +747,20 @@ function shareResponse(text: string, prompt?: string) {
     navigator.share({
       title: prompt && prompt.length > 200 ? `${prompt.slice(0,200)}...\n\n` : `${prompt || "Gemmie Chat"}\n\n`,
       text
-    }).catch(err => console.log("Share canceled", err))
+    }).then(() => {
+      console.log("Share successful")
+    }).catch(err => {
+      console.log("Share canceled", err)
+      toast.warning('Share Cancelled', { 
+        duration: 2000,
+        description:"Cannot Share at the moment, copying instead."
+      })
+    })
   } else {
     copyCode(text)
-    alert("Sharing not supported, copied to clipboard instead!")
+    toast.info('Copied Instead', { 
+      duration: 3000,
+    })
   }
 }
 
@@ -513,26 +770,49 @@ function refreshResponse(prompt?: string) {
   }
 }
 
-function deleteChat(index: number) {
-  if (isLoading.value) return
+// Add function to manually clear link preview cache
+function clearLinkPreviewCache() {
+  const cacheSize = linkPreviewCache.value.size
   
-  res.value.splice(index, 1)
-  expanded.value.splice(index, 1)
-  
-  try {
-    localStorage.setItem("chats", JSON.stringify(res.value))
-  } catch (err) {
-    console.error("Failed to save after deletion:", err)
+  if (cacheSize === 0) {
+    toast.info('Link preview cache is already empty',{ 
+      duration: 3000,
+      description:'' 
+    })
+     return
   }
+
+  showConfirmDialog({
+    visible: true,
+    title: 'Clear Link Preview Cache',
+    message: `Clear all link preview cache? This will remove ${cacheSize} cached preview(s) and require refetching previews for existing links.`,
+    type: 'warning',
+    confirmText: 'Clear Cache',
+    onConfirm: () => {
+      try {
+        localStorage.removeItem('linkPreviews')
+        linkPreviewCache.value.clear()
+      } catch (err) {
+        console.error('Failed to clear link preview cache:', err)
+        toast.error('Failed to clear link preview cache.',{ 
+          duration: 3000,
+          description:'' 
+        })
+      }
+    }
+  })
 }
 
 // ---------- UI Helpers ----------
 function setShowInput() {
-  if (res.value.length !== 0) {
+  if (currentMessages.value.length !== 0) {
     return
   }
   if (!isAuthenticated()) {
-    alert('Please create a session first')
+    toast.warning('Please create a session first',{ 
+      duration: 3000,
+      description:'You need to be logged in.' 
+    })
     return
   }
   showInput.value = true
@@ -587,37 +867,6 @@ function onEnter(e: KeyboardEvent) {
   }
 }
 
-function clearAllChats() {
-  if (isLoading.value) return
-  
-  if (confirm("Are you sure you want to clear all chats? This action cannot be undone.")) {
-    res.value = []
-    expanded.value = []
-    try {
-      localStorage.setItem("chats", JSON.stringify([]))
-      // Option to clear link previews as well (uncomment if desired)
-      // localStorage.removeItem('linkPreviews')
-      // linkPreviewCache.value.clear()
-    } catch (err) {
-      console.error("Failed to clear chats:", err)
-    }
-  }
-}
-
-// Add function to manually clear link preview cache
-function clearLinkPreviewCache() {
-  if (confirm("Clear all link preview cache? This will require refetching previews for existing links.")) {
-    try {
-      localStorage.removeItem('linkPreviews')
-      linkPreviewCache.value.clear()
-      alert('Link preview cache cleared successfully!')
-    } catch (err) {
-      console.error('Failed to clear link preview cache:', err)
-      alert('Failed to clear link preview cache.')
-    }
-  }
-}
-
 onMounted(() => {
   // Load existing state
   const saved = localStorage.getItem("isCollapsed")
@@ -629,36 +878,47 @@ onMounted(() => {
     }
   }
 
+  // Load current chat ID
+  const savedChatId = localStorage.getItem('currentChatId')
+  if (savedChatId) {
+    currentChatId.value = savedChatId
+  }
+
   // Load cached link previews
   loadLinkPreviewCache()
 
-  // Pre-process existing chat links on page load
-  if (res.value.length > 0) {
-    res.value.forEach((item, index) => {
-      // Process links in prompts
-      if (item.prompt) {
-        const promptUrls = extractUrls(item.prompt)
-        promptUrls.slice(0, 3).forEach(url => {
-          if (!linkPreviewCache.value.has(url)) {
-            fetchLinkPreview(url).then(() => {
-              linkPreviewCache.value = new Map(linkPreviewCache.value)
-            })
-          }
-        })
-      }
-      
-      // Process links in responses
-      if (item.response && item.response !== "...") {
-        const responseUrls = extractUrls(item.response)
-        responseUrls.slice(0, 3).forEach(url => {
-          if (!linkPreviewCache.value.has(url)) {
-            fetchLinkPreview(url).then(() => {
-              linkPreviewCache.value = new Map(linkPreviewCache.value)
-            })
-          }
-        })
-      }
-    })
+  // Load chats if authenticated
+  if (isAuthenticated()) {
+    loadChats()
+    
+    // Pre-process existing chat links on page load
+    if (currentMessages.value.length > 0) {
+      currentMessages.value.forEach((item, index) => {
+        // Process links in prompts
+        if (item.prompt) {
+          const promptUrls = extractUrls(item.prompt)
+          promptUrls.slice(0, 3).forEach(url => {
+            if (!linkPreviewCache.value.has(url)) {
+              fetchLinkPreview(url).then(() => {
+                linkPreviewCache.value = new Map(linkPreviewCache.value)
+              })
+            }
+          })
+        }
+        
+        // Process links in responses
+        if (item.response && item.response !== "...") {
+          const responseUrls = extractUrls(item.response)
+          responseUrls.slice(0, 3).forEach(url => {
+            if (!linkPreviewCache.value.has(url)) {
+              fetchLinkPreview(url).then(() => {
+                linkPreviewCache.value = new Map(linkPreviewCache.value)
+              })
+            }
+          })
+        }
+      })
+    }
   }
 
   scrollToBottom()
@@ -670,7 +930,7 @@ onMounted(() => {
     }
   })
 
-  if (showInput.value || res.value.length > 0) {
+  if (showInput.value || currentMessages.value.length > 0) {
     nextTick(() => {
       const textarea = document.getElementById("prompt") as HTMLTextAreaElement
       if (textarea) textarea.focus()
@@ -681,9 +941,56 @@ onMounted(() => {
 
 <template>
   <div class="flex h-[100vh]">
+    <!-- Custom Confirmation Dialog -->
+    <div v-if="confirmDialog.visible" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-2xl">
+        <div class="flex items-center gap-3 mb-4">
+          <i :class="confirmDialog.type === 'danger' ? 'pi pi-exclamation-triangle text-red-500' : 
+                    confirmDialog.type === 'warning' ? 'pi pi-exclamation-circle text-orange-500' : 
+                    'pi pi-info-circle text-blue-500'" class="text-2xl"></i>
+          <h3 class="text-lg font-semibold text-gray-900">{{ confirmDialog.title }}</h3>
+        </div>
+        
+        <p class="text-gray-700 mb-6 leading-relaxed whitespace-pre-line">{{ confirmDialog.message }}</p>
+        
+        <div class="flex gap-3 justify-end">
+          <button
+            @click="confirmDialog.visible = false"
+            class="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            {{ confirmDialog.cancelText }}
+          </button>
+          <button
+            @click="() => { confirmDialog.onConfirm(); confirmDialog.visible = false }"
+            :class="confirmDialog.type === 'danger' ? 'bg-red-600 hover:bg-red-700' : 
+                    confirmDialog.type === 'warning' ? 'bg-orange-600 hover:bg-orange-700' : 
+                    'bg-blue-600 hover:bg-blue-700'"
+            class="px-4 py-2 text-white rounded-lg transition-colors"
+          >
+            {{ confirmDialog.confirmText }}
+          </button>
+        </div>
+      </div>
+    </div>
     <!-- Sidebar -->
-    <SideNav v-if="isAuthenticated()" :data="{ res, parsedUserDetails, screenWidth, isCollapsed }" 
-             :functions="{ setShowInput, hideSidebar, clearAllChats, toggleSidebar, logout }" />
+    <SideNav v-if="isAuthenticated()" :data="{ 
+      chats, 
+      currentChatId, 
+      parsedUserDetails, 
+      screenWidth, 
+      isCollapsed 
+    }" 
+    :functions="{ 
+      setShowInput, 
+      hideSidebar, 
+      clearAllChats, 
+      toggleSidebar, 
+      logout,
+      createNewChat,
+      switchToChat,
+      deleteChat,
+      renameChat
+    }" />
 
     <!-- Main Chat Window -->
     <div :class="screenWidth>720&&isAuthenticated() ? (!isCollapsed?
@@ -692,13 +999,24 @@ onMounted(() => {
       'flex-grow flex flex-col items-center justify-center ml-[60px] font-light text-sm transition-all duration-300 ease-in-out' 
     )
     : 'text-sm font-light flex-grow items-center justify-center flex flex-col transition-all duration-300 ease-in-out'">
-      <TopNav v-if="isAuthenticated()" :data="{ res, parsedUserDetails, screenWidth, isCollapsed, isSidebarHidden }" 
-        :functions="{ hideSidebar, clearAllChats }"
+      <TopNav v-if="isAuthenticated()" :data="{ 
+        currentChat, 
+        parsedUserDetails, 
+        screenWidth, 
+        isCollapsed, 
+        isSidebarHidden 
+      }" 
+      :functions="{ 
+        hideSidebar, 
+        deleteChat,
+        createNewChat,
+        renameChat
+      }"
       />
 
       <div :class="(screenWidth>720&&isAuthenticated()) ? 'h-screen flex flex-col items-center justify-center w-[85%]':'h-screen flex flex-col items-center justify-center'">
         <!-- Empty State -->
-        <div v-if="res.length===0||!isAuthenticated()" class="flex flex-col items-center justify-center h-[90vh]">
+        <div v-if="currentMessages.length===0||!isAuthenticated()" class="flex flex-col items-center justify-center h-[90vh]">
           <div class="max-md:flex-col flex gap-10 items-center justify-center h-full w-full max-md:px-5">
             <div class="flex flex-col md:flex-grow items-center gap-3 text-gray-600">
               <div class="rounded-full bg-gray-200 w-[60px] h-[60px] flex justify-center items-center">
@@ -764,9 +1082,8 @@ onMounted(() => {
         </div>
 
         <!-- Chat Messages -->
-        <div v-else-if="res.length!==0&&isAuthenticated()" class="flex-grow no-scrollbar overflow-y-auto px-4 space-y-4 pt-[90px] pb-[120px]">
-          <div v-for="(item, i) in res" :key="`chat-${i}`" class="flex flex-col gap-2">
-            
+         <div v-else-if="currentMessages.length !== 0 && isAuthenticated()" class="flex-grow no-scrollbar overflow-y-auto px-4 space-y-4 pt-[90px] pb-[120px]">
+          <div v-for="(item, i) in currentMessages" :key="`chat-${i}`" class="flex flex-col gap-2">
             <!-- User Bubble -->
             <div class="flex justify-end">
               <div :class="screenWidth>720 ? 'max-w-[70%]' : 'max-w-[95%]'"
@@ -808,10 +1125,14 @@ onMounted(() => {
 
                 <!-- Actions (hidden during loading) -->
                 <div v-if="item.response !== '...'" class="flex gap-3 mt-2 text-gray-500 text-sm">
-                  <button @click="copyResponse(item.response)" 
-                          class="flex items-center gap-1 hover:text-blue-600 transition-colors">
-                    <i class="pi pi-copy"></i> Copy
+                  <button 
+                    @click="copyResponse(item.response, i)" 
+                    class="flex items-center gap-1 hover:text-blue-600 transition-colors"
+                  >
+                    <i class="pi pi-copy"></i> 
+                    {{ copiedIndex === i ? 'Copied!' : 'Copy' }}
                   </button>
+
                   <button @click="shareResponse(item.response, item.prompt)" 
                           class="flex items-center gap-1 hover:text-green-600 transition-colors">
                     <i class="pi pi-share-alt"></i> Share
@@ -821,7 +1142,7 @@ onMounted(() => {
                           class="flex items-center gap-1 hover:text-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                     <i class="pi pi-refresh"></i> Refresh
                   </button>
-                  <button @click="deleteChat(i)" 
+                  <button @click="deleteMessage(i)" 
                           :disabled="isLoading"
                           class="flex items-center gap-1 hover:text-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                     <i class="pi pi-trash"></i> Delete
@@ -836,7 +1157,7 @@ onMounted(() => {
 
         <!-- Input -->
         <div
-          v-if="(res.length !== 0 || showInput === true)&&isAuthenticated()"
+          v-if="(currentMessages.length !== 0 || showInput === true) && isAuthenticated()"
           :style="screenWidth>720&&!isCollapsed ? 'left:270px;' :
             screenWidth>720&&isCollapsed? 'left:60px;': 'left:0px;'"
           class="bg-white bottom-0 right-0 fixed pb-5 px-5"

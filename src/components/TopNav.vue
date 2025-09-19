@@ -1,29 +1,28 @@
 <script lang="ts" setup>
+import type { CurrentChat } from '@/types';
+
 let props=defineProps<{
     data:{
-        res:{
-            response: string,
-            prompt?: string,
-            status?: number,
-        }[],
         isCollapsed?:boolean,
         parsedUserDetails:{
             username:string
         },
-        screenWidth:any,
+        currentChat:CurrentChat | undefined, 
+        screenWidth:number,
         isSidebarHidden?:boolean,
     },
     functions:{
-        hideSidebar:any,
-        clearAllChats:any,
+        hideSidebar: ()=> void, 
+        deleteChat: (chatId: string) => void 
+        createNewChat: ()=> void, 
+        renameChat: (chatId:string, newTitle:string)=> void
     }
 }>()
 </script>
 <template>
     <div class="h-[44px] bg-white z-20 fixed top-0 right-0 border-b-[1px] transition-all duration-300 ease-in-out" :style="props.data.screenWidth>720&&!props.data.isCollapsed?'left:270px':props.data.screenWidth>720&&props.data.isCollapsed?'left:60px;':'left:0;'">
         <div class="flex h-full px-5 items-center justify-between w-full">
-            <p v-if="props.data.parsedUserDetails.username!==undefined" class="my-3 text-black text-lg font-light">{{props.data.parsedUserDetails.username}}</p>
-            <p v-else class="my-3 text-black text-lg font-light">Gemmie</p>
+            <p class="my-3 text-black text-lg font-light">Gemmie</p>
             <div v-if="props.data.screenWidth < 720" class="my-3 flex gap-2 items-center ml-auto">
                 <!-- Sidebar Toggle Icon -->
                 <button
@@ -37,13 +36,13 @@ let props=defineProps<{
             </div>
             <div v-else class="flex gap-2 items-center ml-auto">
                 <button
-                    @click="props.functions.clearAllChats"
+                    @click="()=>props.functions.deleteChat(props.data.currentChat?.id || '')"
                     title="Delete Chat"
-                    v-if="props.data.res.length!==0"
-                    class="w-full flex items-center bg-none text-gray-500 hover:text-red-500 gap-2 border hover:border-red-500 rounded-full py-1 px-3"
+                    v-if="props.data.currentChat?.id.length!==0"
+                    class="w-full flex items-center bg-none text-gray-500 hover:text-red-500 gap-2 border-none hover:bg-red-100 hover:border-red-500 rounded-full py-1 px-3"
                 >
                     <i class="pi pi-trash mb-[2px]"></i>
-                    <p>Delete Chat</p>
+                    <p>Delete</p>
                 </button>
             </div>
         </div>
