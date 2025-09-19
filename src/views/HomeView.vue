@@ -617,11 +617,17 @@ function renderMarkdown(text?: string) {
   }
 }
 
+function isPromptTooShort(prompt: string): boolean {
+  // Example heuristic: less than 30 words
+  return prompt.trim().split(/\s+/).length < 30
+}
+
 // Enhanced submit with better notifications
 async function handleSubmit(e?: any, retryPrompt?: string) {
   e?.preventDefault?.()
 
   let promptValue = retryPrompt || e?.target?.prompt?.value?.trim()
+  let fabricatedPrompt = promptValue
   if (!promptValue || isLoading.value) return
 
   if (!isAuthenticated()) {
@@ -630,6 +636,12 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
       description: 'You need to be logged in.'
     })
     return
+  }
+
+  // ✅ Merge with only the latest message if prompt is short
+  if (isPromptTooShort(promptValue) && currentMessages.value.length > 0) {
+    const lastMessage = currentMessages.value[currentMessages.value.length - 1]
+    fabricatedPrompt = `${lastMessage.prompt || ''} ${lastMessage.response || ''}\nUser: ${promptValue}`
   }
 
   // Create new chat if none exists
@@ -669,7 +681,7 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
     let url = `https://wrapper.villebiz.com/v1/genai`
     let response = await fetch(url, {
       method: "POST",
-      body: JSON.stringify(promptValue),
+      body: JSON.stringify(fabricatedPrompt),
       headers: { "content-type": "application/json" }
     })
 
@@ -869,6 +881,7 @@ function scrollToBottom() {
   if (elem) {
     elem.scrollIntoView({ behavior: "smooth", block: "end" })
   }
+  console.log(elem)
 }
 
 function hideSidebar() {
@@ -1280,6 +1293,7 @@ onMounted(() => {
             </div>
 
           </div>
+          
           <div id="scrollableElem"></div>
         </div>
 
