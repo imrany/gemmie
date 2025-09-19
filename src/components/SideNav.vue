@@ -176,7 +176,7 @@ function openUpgrade() {
           >
             <span class="pi pi-user text-sm"></span>
           </div>
-          <p class="text-base font-light">
+          <p v-if="!props.data.isCollapsed || props.data.screenWidth < 720" class="text-base font-light">
             {{ props.data.parsedUserDetails.username }}
           </p>
         </div>
