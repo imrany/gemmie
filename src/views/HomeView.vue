@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import type { ComputedRef } from "vue"
-import { ref, onMounted, nextTick, computed } from "vue"
+import { ref, onMounted, nextTick, computed, onBeforeUnmount } from "vue"
 import { marked } from "marked"
 import hljs from "highlight.js"
 import "highlight.js/styles/night-owl.css"
@@ -27,6 +27,7 @@ const authData = ref({
   password: ''
 })
 let showInput = ref(false)
+const scrollableElem = ref<HTMLElement | null>(null);
 let showCreateSession = ref(false)
 // Track copied state for each response by index
 const copiedIndex = ref<number | null>(null)
@@ -34,6 +35,7 @@ let screenWidth = ref(screen.width)
 // local state for collapse toggle
 const isCollapsed = ref(false)
 const isSidebarHidden = ref(true)
+const showScrollDownButton = ref(false) 
 
 let userDetails: any = localStorage.getItem("userdetails")
 let parsedUserDetails: any = userDetails ? JSON.parse(userDetails) : null
@@ -151,16 +153,19 @@ function createNewChat(firstMessage?: string): string {
   return newChatId
 }
 
-// Switch to specific chat
+// Fixed switchToChat function
 function switchToChat(chatId: string) {
   if (chats.value.find(chat => chat.id === chatId)) {
-    currentChatId.value = chatId
-    updateExpandedArray()
-    localStorage.setItem('currentChatId', currentChatId.value)
+    currentChatId.value = chatId;
+    updateExpandedArray();
+    localStorage.setItem('currentChatId', currentChatId.value);
 
+    // Scroll to bottom after chat switch with proper timing
     nextTick(() => {
-      scrollToBottom()
-    })
+      setTimeout(() => {
+        scrollToBottom();
+      }, 100);
+    });
   }
 }
 
@@ -622,110 +627,124 @@ function isPromptTooShort(prompt: string): boolean {
   return prompt.trim().split(/\s+/).length < 30
 }
 
-// Enhanced submit with better notifications
-async function handleSubmit(e?: any, retryPrompt?: string) {
-  e?.preventDefault?.()
+// Debounced scroll handler to improve performance
+let scrollTimeout: any = null;
+function debouncedHandleScroll() {
+  if (scrollTimeout) {
+    clearTimeout(scrollTimeout);
+  }
+  
+  scrollTimeout = setTimeout(() => {
+    handleScroll();
+  }, 16); // ~60fps
+}
 
-  let promptValue = retryPrompt || e?.target?.prompt?.value?.trim()
-  let fabricatedPrompt = promptValue
-  if (!promptValue || isLoading.value) return
+// Enhanced submit function with better scroll handling
+async function handleSubmit(e?: any, retryPrompt?: string) {
+  e?.preventDefault?.();
+
+  let promptValue = retryPrompt || e?.target?.prompt?.value?.trim();
+  let fabricatedPrompt = promptValue;
+  if (!promptValue || isLoading.value) return;
 
   if (!isAuthenticated()) {
     toast.warning('Please create a session first', {
       duration: 4000,
       description: 'You need to be logged in.'
-    })
-    return
+    });
+    return;
   }
 
-  // ✅ Merge with only the latest message if prompt is short
+  // Merge with only the latest message if prompt is short
   if (isPromptTooShort(promptValue) && currentMessages.value.length > 0) {
-    const lastMessage = currentMessages.value[currentMessages.value.length - 1]
-    fabricatedPrompt = `${lastMessage.prompt || ''} ${lastMessage.response || ''}\nUser: ${promptValue}`
+    const lastMessage = currentMessages.value[currentMessages.value.length - 1];
+    fabricatedPrompt = `${lastMessage.prompt || ''} ${lastMessage.response || ''}\nUser: ${promptValue}`;
   }
 
   // Create new chat if none exists
   if (!currentChatId.value || !currentChat.value) {
-    createNewChat(promptValue)
+    createNewChat(promptValue);
   }
 
-  isLoading.value = true
+  isLoading.value = true;
 
   if (!retryPrompt && e?.target?.prompt) {
-    e.target.prompt.value = ""
-    e.target.prompt.style.height = "auto"
+    e.target.prompt.value = "";
+    e.target.prompt.style.height = "auto";
   }
 
-  const tempResp: Res = { prompt: promptValue, response: "..." }
+  const tempResp: Res = { prompt: promptValue, response: "..." };
 
   // Add message to current chat
   if (currentChat.value) {
-    currentChat.value.messages.push(tempResp)
-    currentChat.value.updatedAt = new Date().toISOString()
+    currentChat.value.messages.push(tempResp);
+    currentChat.value.updatedAt = new Date().toISOString();
 
     // Update chat title if this is the first message
     if (currentChat.value.messages.length === 1) {
-      currentChat.value.title = generateChatTitle(promptValue)
+      currentChat.value.title = generateChatTitle(promptValue);
     }
   }
 
-  expanded.value.push(false)
+  expanded.value.push(false);
 
   // Process links in user prompt
-  processLinksInUserPrompt(promptValue)
+  processLinksInUserPrompt(promptValue);
 
-  await nextTick()
-  scrollToBottom()
+  // Scroll to bottom after adding user message
+  await nextTick();
+  scrollToBottom();
 
   try {
-    let url = `https://wrapper.villebiz.com/v1/genai`
+    let url = `https://wrapper.villebiz.com/v1/genai`;
     let response = await fetch(url, {
       method: "POST",
       body: JSON.stringify(fabricatedPrompt),
       headers: { "content-type": "application/json" }
-    })
+    });
 
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
 
-    let parseRes = await response.json()
+    let parseRes = await response.json();
 
     if (currentChat.value) {
-      const lastMessageIndex = currentChat.value.messages.length - 1
+      const lastMessageIndex = currentChat.value.messages.length - 1;
       currentChat.value.messages[lastMessageIndex] = {
         prompt: promptValue,
         response: parseRes.error ? parseRes.error : parseRes.response,
         status: response.status
-      }
-      currentChat.value.updatedAt = new Date().toISOString()
+      };
+      currentChat.value.updatedAt = new Date().toISOString();
     }
 
     // Trigger link preview generation for the new response
-    await processLinksInResponse(currentMessages.value.length - 1)
+    await processLinksInResponse(currentMessages.value.length - 1);
 
   } catch (err: any) {
     toast.error(`Failed to get AI response: ${err.message}`, {
       duration: 5000,
       description: ''
-    })
+    });
 
     if (currentChat.value) {
-      const lastMessageIndex = currentChat.value.messages.length - 1
+      const lastMessageIndex = currentChat.value.messages.length - 1;
       currentChat.value.messages[lastMessageIndex] = {
         prompt: promptValue,
         response: `⚠️ Error: ${err.message || 'Failed to get response. Please try again.'}`
-      }
-      currentChat.value.updatedAt = new Date().toISOString()
+      };
+      currentChat.value.updatedAt = new Date().toISOString();
     }
   } finally {
-    isLoading.value = false
-    saveChats()
-    await nextTick()
-    scrollToBottom()
+    isLoading.value = false;
+    saveChats();
+    
+    // Scroll to bottom after response is complete
+    await nextTick();
+    scrollToBottom();
   }
 }
-
 
 // Process links in a response and generate previews
 async function processLinksInResponse(index: number) {
@@ -876,21 +895,46 @@ function setShowInput() {
   })
 }
 
+
 function scrollToBottom() {
-  const elem = document.getElementById("scrollableElem")
-  if (elem) {
-    elem.scrollIntoView({ behavior: "smooth", block: "end" })
-  }
-  console.log(elem)
+  if (!scrollableElem.value) return;
+  
+  // Use requestAnimationFrame for smooth scrolling
+  requestAnimationFrame(() => {
+    if (scrollableElem.value) {
+      scrollableElem.value.scrollTo({
+        top: scrollableElem.value.scrollHeight,
+        behavior: 'smooth'
+      });
+    }
+  });
+  
+  // Update button visibility after scrolling
+  setTimeout(() => {
+    handleScroll();
+  }, 100);
+}
+
+function handleScroll() {
+  const elem = scrollableElem.value;
+  if (!elem) return;
+
+  // More lenient threshold - consider "at bottom" if within 50px
+  const threshold = 50;
+  const isAtBottom = elem.scrollTop + elem.clientHeight >= elem.scrollHeight - threshold;
+  
+  // Only show button when user has scrolled up significantly AND there's content to scroll to
+  const hasScrollableContent = elem.scrollHeight > elem.clientHeight + threshold;
+  showScrollDownButton.value = !isAtBottom && hasScrollableContent;
 }
 
 function hideSidebar() {
   const sideNav = document.getElementById("side_nav")
   if (sideNav) {
     if (sideNav.classList.contains("none")) {
-      sideNav.classList.add("w-full", "bg-white", "z-20", "fixed", "top-0", "left-0", "bottom-0", "border-r-[1px]", "flex", "flex-col", "transition-all", "duration-300", "ease-in-out")
+      sideNav.classList.add("w-full", "bg-white", "z-30", "fixed", "top-0", "left-0", "bottom-0", "border-r-[1px]", "flex", "flex-col", "transition-all", "duration-300", "ease-in-out")
     } else {
-      sideNav.classList.remove("w-full", "bg-white", "z-20", "fixed", "top-0", "left-0", "bottom-0", "border-r-[1px]", "flex", "flex-col", "transition-all", "duration-300", "ease-in-out")
+      sideNav.classList.remove("w-full", "bg-white", "z-30", "fixed", "top-0", "left-0", "bottom-0", "border-r-[1px]", "flex", "flex-col", "transition-all", "duration-300", "ease-in-out")
     }
     sideNav.classList.toggle("none")
     isSidebarHidden.value = !isSidebarHidden.value
@@ -923,75 +967,96 @@ function onEnter(e: KeyboardEvent) {
 }
 
 onMounted(() => {
-  // Load existing state
-  const saved = localStorage.getItem("isCollapsed")
-  if (saved && saved !== 'null') {
+  // Load collapsed state
+  const saved = localStorage.getItem("isCollapsed");
+  if (saved && saved !== "null") {
     try {
-      isCollapsed.value = JSON.parse(saved)
+      isCollapsed.value = JSON.parse(saved);
     } catch (err) {
-      console.error('Error parsing isCollapsed:', err)
+      console.error("Error parsing isCollapsed:", err);
     }
   }
 
-  // Load current chat ID
-  const savedChatId = localStorage.getItem('currentChatId')
-  if (savedChatId) {
-    currentChatId.value = savedChatId
-  }
+  // Load chat ID
+  const savedChatId = localStorage.getItem("currentChatId");
+  if (savedChatId) currentChatId.value = savedChatId;
 
-  // Load cached link previews
-  loadLinkPreviewCache()
+  // Load cached previews
+  loadLinkPreviewCache();
 
-  // Load chats if authenticated
+  // Load chats if logged in
   if (isAuthenticated()) {
-    loadChats()
+    loadChats();
 
-    // Pre-process existing chat links on page load
-    if (currentMessages.value.length > 0) {
-      currentMessages.value.forEach((item, index) => {
-        // Process links in prompts
-        if (item.prompt) {
-          const promptUrls = extractUrls(item.prompt)
-          promptUrls.slice(0, 3).forEach(url => {
-            if (!linkPreviewCache.value.has(url)) {
-              fetchLinkPreview(url).then(() => {
-                linkPreviewCache.value = new Map(linkPreviewCache.value)
-              })
-            }
-          })
+    // Pre-process links in existing messages
+    currentMessages.value.forEach((item, index) => {
+      [item.prompt, item.response].forEach((text) => {
+        if (text && text !== "...") {
+          extractUrls(text)
+            .slice(0, 3)
+            .forEach((url) => {
+              if (!linkPreviewCache.value.has(url)) {
+                fetchLinkPreview(url).then(() => {
+                  // trigger reactivity
+                  linkPreviewCache.value = new Map(linkPreviewCache.value);
+                });
+              }
+            });
         }
-
-        // Process links in responses
-        if (item.response && item.response !== "...") {
-          const responseUrls = extractUrls(item.response)
-          responseUrls.slice(0, 3).forEach(url => {
-            if (!linkPreviewCache.value.has(url)) {
-              fetchLinkPreview(url).then(() => {
-                linkPreviewCache.value = new Map(linkPreviewCache.value)
-              })
-            }
-          })
-        }
-      })
-    }
+      });
+    });
   }
 
-  scrollToBottom()
-
-  document.addEventListener("click", (e: any) => {
-    if (e.target && e.target.classList.contains("copy-button")) {
-      const code = decodeURIComponent(e.target.getAttribute("data-code"))
-      copyCode(code, e.target)
+  // Global copy button handler
+  const copyListener = (e: any) => {
+    if (e.target?.classList.contains("copy-button")) {
+      const code = decodeURIComponent(e.target.getAttribute("data-code"));
+      copyCode(code, e.target);
     }
-  })
+  };
+  document.addEventListener("click", copyListener);
 
-  if (showInput.value || currentMessages.value.length > 0) {
-    nextTick(() => {
-      const textarea = document.getElementById("prompt") as HTMLTextAreaElement
-      if (textarea) textarea.focus()
-    })
+  // Set up scroll listener with proper cleanup
+  if (scrollableElem.value) {
+    scrollableElem.value.addEventListener("scroll", debouncedHandleScroll, { passive: true });
   }
-})
+
+  nextTick(() => {
+    // Auto-focus input
+    if (showInput.value || currentMessages.value.length > 0) {
+      const textarea = document.getElementById("prompt") as HTMLTextAreaElement;
+      textarea?.focus();
+    }
+
+    // Process link previews in responses
+    currentMessages.value.forEach((msg: Res, index) => {
+      if (msg.response && msg.response !== "...") {
+        processLinksInResponse(index);
+      }
+    });
+
+    // Initial scroll to bottom with delay to ensure content is rendered
+    setTimeout(() => {
+      scrollToBottom();
+    }, 100);
+  });
+
+  // Cleanup function
+  onBeforeUnmount(() => {
+    document.removeEventListener("click", copyListener);
+    
+    // Clean up scroll listener
+    if (scrollableElem.value) {
+      scrollableElem.value.removeEventListener("scroll", debouncedHandleScroll);
+    }
+    
+    // Clear timeouts
+    if (scrollTimeout) {
+      clearTimeout(scrollTimeout);
+    }
+  });
+});
+
 </script>
 
 <template>
@@ -1224,7 +1289,7 @@ onMounted(() => {
         </div>
 
         <!-- Chat Messages -->
-        <div v-else-if="currentMessages.length !== 0 && isAuthenticated()"
+        <div ref="scrollableElem" v-else-if="currentMessages.length !== 0 && isAuthenticated()"
           class="flex-grow no-scrollbar overflow-y-auto px-4 space-y-4 pt-[90px] pb-[120px]">
           <div v-for="(item, i) in currentMessages" :key="`chat-${i}`" class="flex flex-col gap-2">
             <!-- User Bubble -->
@@ -1293,9 +1358,14 @@ onMounted(() => {
             </div>
 
           </div>
-          
-          <div id="scrollableElem"></div>
         </div>
+
+        <button v-if="showScrollDownButton&&currentMessages.length !== 0 && isAuthenticated()"  @click="scrollToBottom"
+          class="fixed bottom-24 bg-gray-50 text-gray-500 border px-3 h-[34px] rounded-full shadow-lg hover:bg-gray-100 transition-colors z-20">
+          <div class="flex gap-2 items-center justify-center w-full font-semibold h-full">
+            <i class="pi pi-arrow-down text-center"></i> <p>Scroll To Bottom</p>
+          </div>
+        </button>
 
         <!-- Input -->
         <div v-if="(currentMessages.length !== 0 || showInput === true) && isAuthenticated()" :style="screenWidth > 720 && !isCollapsed ? 'left:270px;' :

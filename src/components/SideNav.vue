@@ -39,8 +39,8 @@ function openUpgrade() {
     :class="
       props.data.screenWidth > 720
         ? props.data.isCollapsed
-          ? 'w-[60px] bg-white z-20 fixed top-0 left-0 bottom-0 border-r flex flex-col transition-all duration-300 ease-in-out'
-          : 'w-[270px] bg-white z-20 fixed top-0 left-0 bottom-0 border-r flex flex-col transition-all duration-300 ease-in-out'
+          ? 'w-[60px] bg-white z-30 fixed top-0 left-0 bottom-0 border-r flex flex-col transition-all duration-300 ease-in-out'
+          : 'w-[270px] bg-white z-30 fixed top-0 left-0 bottom-0 border-r flex flex-col transition-all duration-300 ease-in-out'
         : 'none'
     "
   >

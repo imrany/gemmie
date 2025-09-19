@@ -20,7 +20,7 @@ let props=defineProps<{
 }>()
 </script>
 <template>
-    <div class="h-[44px] bg-white z-20 fixed top-0 right-0 border-b-[1px] transition-all duration-300 ease-in-out" :style="props.data.screenWidth>720&&!props.data.isCollapsed?'left:270px':props.data.screenWidth>720&&props.data.isCollapsed?'left:60px;':'left:0;'">
+    <div class="h-[44px] bg-white z-30 fixed top-0 right-0 border-b-[1px] transition-all duration-300 ease-in-out" :style="props.data.screenWidth>720&&!props.data.isCollapsed?'left:270px':props.data.screenWidth>720&&props.data.isCollapsed?'left:60px;':'left:0;'">
         <div class="flex h-full px-5 items-center justify-between w-full">
             <p class="my-3 text-black text-lg font-light">Gemmie</p>
             <div v-if="props.data.screenWidth < 720" class="my-3 flex gap-2 items-center ml-auto">
