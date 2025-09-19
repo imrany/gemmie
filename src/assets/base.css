@@ -528,3 +528,72 @@
   align-items: center;
   gap: 8px;
 }
+
+/* Enhanced animations */
+.success-bounce {
+  animation: bounce 0.5s ease-in-out;
+}
+
+@keyframes bounce {
+  0%, 20%, 60%, 100% {
+    transform: translateY(0);
+  }
+  40% {
+    transform: translateY(-10px);
+  }
+  80% {
+    transform: translateY(-5px);
+  }
+}
+
+.fade-in-out {
+  animation: fadeInOut 3s ease-in-out forwards;
+}
+
+@keyframes fadeInOut {
+  0% {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  15%, 85% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+}
+
+/* Dialog backdrop blur */
+.dialog-backdrop {
+  backdrop-filter: blur(4px);
+}
+
+/* Enhanced dialog animations */
+.dialog-enter-active, .dialog-leave-active {
+  transition: all 0.3s ease;
+}
+
+.dialog-enter-from, .dialog-leave-to {
+  opacity: 0;
+  transform: scale(0.9);
+}
+
+/* Custom scrollbar for better UX */
+.no-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.no-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.no-scrollbar::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+
+.no-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
