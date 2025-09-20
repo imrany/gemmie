@@ -490,6 +490,6 @@
 @media (max-width: 480px) {
   .video-embed-container iframe {
     height: 100%; 
-    width: 300px;
+    width: 100%;
   }
 }
