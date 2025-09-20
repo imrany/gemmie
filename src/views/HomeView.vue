@@ -437,8 +437,8 @@ function LinkPreviewComponent({ preview }: { preview: LinkPreview }) {
     // For embeddable videos (YouTube, Vimeo)
     if (preview.embedHtml && (preview.videoType === 'youtube' || preview.videoType === 'vimeo')) {
       return `
-        <div class="aspect-video w-fit bg-black relative group overflow-hidden" id="${videoId}">
-          <div class="video-embed-container object-contain md:w-full w-fit h-full" 
+        <div class="aspect-video w-full bg-black relative group overflow-hidden" id="${videoId}">
+          <div class="video-embed-container object-cover w-full h-full" 
                data-embed='${preview.embedHtml.replace(/'/g, '&apos;')}'
                data-video-type="${preview.videoType}"
                data-video-id="${videoId}">
@@ -497,12 +497,12 @@ function LinkPreviewComponent({ preview }: { preview: LinkPreview }) {
     // For direct video files
     if (preview.videoType === 'direct' && preview.video) {
       return `
-        <div class="aspect-video w-fit bg-black overflow-hidden relative group" id="${videoId}">
+        <div class="aspect-video w-full bg-black overflow-hidden relative group" id="${videoId}">
           <video 
             id="${videoId}-video"
             controls 
             preload="metadata" 
-            class="w-fit h-full object-contain" 
+            class="w-full h-full object-contain" 
             poster="${preview.previewImage || ''}"
             onplay="showVideoControls('${videoId}')"
             onpause="updateVideoControls('${videoId}', 'paused')"
@@ -540,7 +540,7 @@ function LinkPreviewComponent({ preview }: { preview: LinkPreview }) {
     // For social media videos (no stop/continue - just external link)
     if ((preview.videoType === 'twitter' || preview.videoType === 'tiktok') && preview.previewImage) {
       return `
-        <div class="aspect-video w-fit bg-gray-100 relative group overflow-hidden cursor-pointer"
+        <div class="aspect-video w-full bg-gray-100 relative group overflow-hidden cursor-pointer"
              onclick="playSocialVideo('${preview.url}', '${preview.videoType}')">
           <img src="${preview.previewImage}" alt="${preview.title}" 
                class="w-full h-full object-cover">
@@ -837,21 +837,21 @@ function debouncedHandleScroll() {
   }, 16) // ~60fps
 }
 
-// Add this function to detect if prompt is just a URL
-function isJustALink(prompt: string): boolean {
+// Detect if prompt is just URLs (1 or more) with little/no extra text
+function isJustLinks(prompt: string): boolean {
   const trimmed = prompt.trim()
   const urls = extractUrls(trimmed)
-  
-  // Check if the entire prompt is essentially just one URL
-  // Allow for minor additional text like "check this out: [url]"
-  if (urls.length === 1) {
-    const url = urls[0]
-    const promptWithoutUrl = trimmed.replace(url, '').trim()
-    // If remaining text is very short (just intro words), consider it "just a link"
-    return promptWithoutUrl.split(/\s+/).length <= 3
+
+  if (urls.length === 0) return false
+
+  // Remove all URLs from prompt
+  let promptWithoutUrls = trimmed
+  for (const url of urls) {
+    promptWithoutUrls = promptWithoutUrls.replace(url, "").trim()
   }
-  
-  return false
+
+  // If only short filler words remain, treat as "just links"
+  return promptWithoutUrls.split(/\s+/).filter(Boolean).length <= 3
 }
 
 // Modified handleSubmit function (around line 420)
@@ -871,11 +871,10 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
   }
 
   // handling for link-only prompts
-  if (isJustALink(promptValue)) {
+  if (isJustLinks(promptValue)) {
     const urls = extractUrls(promptValue)
-    const url = urls[0]
-    
-    // Create new chat if none exists
+
+    // Create chat if needed
     if (!currentChatId.value || !currentChat.value) {
       createNewChat(promptValue)
     }
@@ -887,84 +886,51 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
       e.target.prompt.style.height = "auto"
     }
 
-    // Add user message
     const tempResp: Res = { prompt: promptValue, response: "..." }
-    if (currentChat.value) {
-      currentChat.value.messages.push(tempResp)
-      currentChat.value.updatedAt = new Date().toISOString()
-
-      if (currentChat.value.messages.length === 1) {
-        currentChat.value.title = generateChatTitle(promptValue)
-      }
-    }
+    currentChat.value?.messages.push(tempResp)
     expanded.value.push(false)
-
-    // Scroll and process links
     await nextTick()
     scrollToBottom()
 
     try {
-      // Fetch link preview data
-      const linkPreview = await fetchLinkPreview(url)
-      
-      // Generate response based on link data
-      let linkDataResponse = `I've analyzed the link you shared:\n\n**${linkPreview.title || 'Untitled'}**\n\n`
-      
-      if (linkPreview.description) {
-        linkDataResponse += `**Description:** ${linkPreview.description}\n\n`
-      }
-      
-      if (linkPreview.domain) {
-        linkDataResponse += `**Domain:** ${linkPreview.domain}\n\n`
-      }
-      
-      if (linkPreview.videoType && linkPreview.videoDuration) {
-        linkDataResponse += `**Content Type:** ${linkPreview.videoType} video (${linkPreview.videoDuration})\n\n`
-      }
-      
-      linkDataResponse += `**URL:** ${url}`
-      
-      if (linkPreview.error) {
-        linkDataResponse = `I was unable to fully analyze this link, but here's what I can tell you:\n\n**URL:** ${url}\n**Domain:** ${linkPreview.domain || new URL(url).hostname}\n\nThe link appears to be inaccessible or the content couldn't be retrieved.`
-      }
+      let combinedResponse = `I've analyzed the link${urls.length > 1 ? "s" : ""} you shared:\n\n`
 
-      // Update the response
-      if (currentChat.value) {
-        const lastMessageIndex = currentChat.value.messages.length - 1
-        currentChat.value.messages[lastMessageIndex] = {
-          prompt: promptValue,
-          response: linkDataResponse,
-          status: 200
+      for (const url of urls) {
+        try {
+          const linkPreview = await fetchLinkPreview(url)
+
+          combinedResponse += `**${linkPreview.title || 'Untitled'}**\n`
+          if (linkPreview.description) {
+            combinedResponse += `Description: ${linkPreview.description}\n`
+          }
+          combinedResponse += `Domain: ${linkPreview.domain || new URL(url).hostname}\n`
+          combinedResponse += `URL: ${url}\n\n`
+        } catch (err: any) {
+          combinedResponse += `⚠️ Failed to analyze: ${url} (${err.message || "Unknown error"})\n\n`
         }
-        currentChat.value.updatedAt = new Date().toISOString()
       }
 
-    } catch (err: any) {
-      // Fallback response for link analysis
-      const fallbackResponse = `I received your link: ${url}\n\nHowever, I encountered an error while trying to analyze it: ${err.message || 'Unknown error'}\n\nThe link appears to point to: ${new URL(url).hostname}`
-      
+      // Update the response in chat
       if (currentChat.value) {
         const lastMessageIndex = currentChat.value.messages.length - 1
         currentChat.value.messages[lastMessageIndex] = {
           prompt: promptValue,
-          response: fallbackResponse
+          response: combinedResponse.trim(),
+          status: 200
         }
         currentChat.value.updatedAt = new Date().toISOString()
       }
     } finally {
       isLoading.value = false
       saveChats()
-      
-      // Observe any new video containers
       observeNewVideoContainers()
-
-      // Scroll to bottom after response is complete
       await nextTick()
       scrollToBottom()
     }
-    
-    return // Exit early for link-only prompts
+
+    return // ✅ Exit early for link-only prompts
   }
+
 
   // Merge with only the latest message if prompt is short
   if (isPromptTooShort(promptValue) && currentMessages.value.length > 0) {
