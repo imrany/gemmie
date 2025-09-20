@@ -8,6 +8,8 @@ import SideNav from "../components/SideNav.vue"
 import TopNav from "../components/TopNav.vue"
 import type { Chat, ConfirmDialogOptions, CurrentChat, LinkPreview, Res } from "@/types"
 import { toast } from 'vue-sonner'
+import { destroyVideoLazyLoading, detectAndProcessVideo, initializeVideoLazyLoading, observeNewVideoContainers, pauseVideo, playEmbeddedVideo, playSocialVideo, resumeVideo, showVideoControls, stopDirectVideo, stopVideo, toggleDirectVideo, updateVideoControls } from "@/utils/videoProcessing"
+import { onUpdated } from "vue"
 
 // ---------- State ----------
 // Confirmation dialog state
@@ -20,22 +22,22 @@ const confirmDialog = ref<ConfirmDialogOptions>({
   cancelText: 'Cancel',
   onConfirm: () => { }
 })
+
 const authStep = ref(1)
 const authData = ref({
   username: '',
   email: '',
   password: ''
 })
-let showInput = ref(false)
-const scrollableElem = ref<HTMLElement | null>(null);
-let showCreateSession = ref(false)
-// Track copied state for each response by index
-const copiedIndex = ref<number | null>(null)
-let screenWidth = ref(screen.width)
-// local state for collapse toggle
-const isCollapsed = ref(false)
+
+const showInput = ref(false) //  removed 'let' declaration
+const scrollableElem = ref<HTMLElement | null>(null)
+const showCreateSession = ref(false) //  removed 'let' declaration
+const copiedIndex = ref<number | null>(null) //  Track copied state
+const screenWidth = ref(screen.width) //  removed 'let' declaration
+const isCollapsed = ref(false) //  local state for collapse toggle
 const isSidebarHidden = ref(true)
-const showScrollDownButton = ref(false) 
+const showScrollDownButton = ref(false)
 
 let userDetails: any = localStorage.getItem("userdetails")
 let parsedUserDetails: any = userDetails ? JSON.parse(userDetails) : null
@@ -43,8 +45,8 @@ let parsedUserDetails: any = userDetails ? JSON.parse(userDetails) : null
 // Chat management state
 const currentChatId = ref<string>('')
 const chats = ref<Chat[]>([])
-let isLoading = ref(false)
-let expanded = ref<boolean[]>([])
+const isLoading = ref(false) //  removed 'let' declaration
+const expanded = ref<boolean[]>([]) //  removed 'let' declaration
 
 // Current chat computed property
 const currentChat: ComputedRef<CurrentChat | undefined> = computed(() => {
@@ -156,16 +158,16 @@ function createNewChat(firstMessage?: string): string {
 // Fixed switchToChat function
 function switchToChat(chatId: string) {
   if (chats.value.find(chat => chat.id === chatId)) {
-    currentChatId.value = chatId;
-    updateExpandedArray();
-    localStorage.setItem('currentChatId', currentChatId.value);
+    currentChatId.value = chatId
+    updateExpandedArray()
+    localStorage.setItem('currentChatId', currentChatId.value)
 
     // Scroll to bottom after chat switch with proper timing
     nextTick(() => {
       setTimeout(() => {
-        scrollToBottom();
-      }, 100);
-    });
+        scrollToBottom()
+      }, 100)
+    })
   }
 }
 
@@ -187,6 +189,7 @@ function deleteChat(chatId: string) {
     confirmText: 'Delete',
     onConfirm: () => {
       chats.value.splice(chatIndex, 1)
+      const chatToDelete = chats.value[chatIndex]
 
       // If we deleted the current chat, switch to another one
       if (currentChatId.value === chatId) {
@@ -196,6 +199,21 @@ function deleteChat(chatId: string) {
           currentChatId.value = ''
         }
         updateExpandedArray()
+      }
+
+      // Remove link previews from cache
+      if(chatToDelete.messages.length !==0){
+        chatToDelete.messages.forEach(message=>{
+          const responseUrls = extractUrls(message.response || '')
+          const promptUrls = extractUrls(message.prompt || '')
+          const urls = [...new Set([...responseUrls, ...promptUrls])]
+          if (urls.length > 0) {
+            urls.forEach(url => {
+              linkPreviewCache.value.delete(url)
+            })
+            saveLinkPreviewCache()
+          }
+        })
       }
 
       confirmDialog.value.visible = false
@@ -223,18 +241,35 @@ function deleteMessage(messageIndex: number) {
     type: 'danger',
     confirmText: 'Delete',
     onConfirm: () => {
-      currentChat.value!.messages.splice(messageIndex, 1)
+      // Check if message exists before deletion
+      if (!currentChat.value || messageIndex >= currentChat.value.messages.length) return
+
+      // Get URLs before deleting the message
+      const messageToDelete = currentChat.value.messages[messageIndex]
+      const responseUrls = extractUrls(messageToDelete.response || '')
+      const promptUrls = extractUrls(messageToDelete.prompt || '')
+      const urls = [...new Set([...responseUrls, ...promptUrls])]
+
+      currentChat.value.messages.splice(messageIndex, 1)
       expanded.value.splice(messageIndex, 1)
 
       // Update chat's updatedAt timestamp
-      currentChat.value!.updatedAt = new Date().toISOString()
+      currentChat.value.updatedAt = new Date().toISOString()
 
       // Update title if we deleted the first message
-      if (messageIndex === 0 && currentChat.value!.messages.length > 0) {
-        const firstMessage = currentChat.value!.messages[0].prompt || currentChat.value!.messages[0].response
-        currentChat.value!.title = generateChatTitle(firstMessage)
-      } else if (currentChat.value!.messages.length === 0) {
-        currentChat.value!.title = 'New Chat'
+      if (messageIndex === 0 && currentChat.value.messages.length > 0) {
+        const firstMessage = currentChat.value.messages[0].prompt || currentChat.value.messages[0].response
+        currentChat.value.title = generateChatTitle(firstMessage)
+      } else if (currentChat.value.messages.length === 0) {
+        currentChat.value.title = 'New Chat'
+      }
+
+      // Remove link previews from cache
+      if (urls.length > 0) {
+        urls.forEach(url => {
+          linkPreviewCache.value.delete(url)
+        })
+        saveLinkPreviewCache()
       }
 
       confirmDialog.value.visible = false
@@ -247,8 +282,6 @@ function deleteMessage(messageIndex: number) {
   })
 }
 
-
-// Clear all chats
 // Enhanced clear all chats with custom dialog
 function clearAllChats() {
   if (isLoading.value) return
@@ -280,6 +313,7 @@ function clearAllChats() {
         duration: 5000,
         description: ''
       })
+      confirmDialog.value.visible = false
     }
   })
 }
@@ -288,7 +322,6 @@ function clearAllChats() {
 function renameChat(chatId: string, newTitle: string) {
   const chat = chats.value.find(c => c.id === chatId)
   if (chat && newTitle.trim()) {
-    const oldTitle = chat.title
     chat.title = newTitle.trim()
     chat.updatedAt = new Date().toISOString()
     saveChats()
@@ -297,7 +330,7 @@ function renameChat(chatId: string, newTitle: string) {
 
 // ---------- Link Preview Functions ----------
 
-// Extract URLs from text using regex
+// Extract URLs from text using regex (removed extra pipe character)
 function extractUrls(text: string): string[] {
   const urlRegex = /https?:\/\/[^\s<>"{}|\\^`[\]]+/gi
   return text.match(urlRegex) || []
@@ -313,52 +346,47 @@ async function fetchLinkPreview(url: string): Promise<LinkPreview> {
   linkPreviewCache.value.set(url, preview)
 
   try {
-    // Using a CORS proxy service for demonstration
-    // In production, you'd want your own backend endpoint
-    const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`
+    const lang = "en"
+    const proxyUrl = `https://spindle.villebiz.com/scrape?url=${encodeURIComponent(url)}&lang=${lang}`
 
     const response = await fetch(proxyUrl)
-    const data = await response.json()
-
-    if (data.contents) {
-      const parser = new DOMParser()
-      const doc = parser.parseFromString(data.contents, 'text/html')
-
-      // Extract meta tags
-      const title = doc.querySelector('meta[property="og:title"]')?.getAttribute('content') ||
-        doc.querySelector('title')?.textContent ||
-        'No title'
-
-      const description = doc.querySelector('meta[property="og:description"]')?.getAttribute('content') ||
-        doc.querySelector('meta[name="description"]')?.getAttribute('content') ||
-        ''
-
-      const image = doc.querySelector('meta[property="og:image"]')?.getAttribute('content') ||
-        doc.querySelector('meta[name="twitter:image"]')?.getAttribute('content') ||
-        ''
-
-      const domain = new URL(url).hostname
-
-      const updatedPreview: LinkPreview = {
-        url,
-        title: title.slice(0, 100), // Limit title length
-        description: description.slice(0, 200), // Limit description length
-        image,
-        domain,
-        loading: false,
-        error: false
-      }
-
-      linkPreviewCache.value.set(url, updatedPreview)
-      // Save to localStorage after successful fetch
-      saveLinkPreviewCache()
-      return updatedPreview
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`)
     }
+
+    const results = await response.json()
+    const domain = new URL(url).hostname
+    console.log("Scraped data:", results)
+
+    // Enhanced video detection and processing
+    const videoInfo = await detectAndProcessVideo(url, results)
+
+    const updatedPreview: LinkPreview = {
+      url,
+      title: results.title?.slice(0, 100) || domain,
+      description: results.description?.slice(0, 200) || "",
+      images: results.images || [],
+      previewImage: videoInfo.thumbnail || results.preview_image || results.images?.[0] || "",
+      domain,
+      favicon: results.favicon || `https://www.google.com/s2/favicons?domain=${domain}`,
+      links: results.links || [],
+      video: videoInfo.videoUrl || results.video || "",
+      videoType: videoInfo.type,
+      videoDuration: videoInfo.duration,
+      videoThumbnail: videoInfo.thumbnail,
+      embedHtml: videoInfo.embedHtml,
+      loading: false,
+      error: false
+    }
+
+    linkPreviewCache.value.set(url, updatedPreview)
+    saveLinkPreviewCache()
+    return updatedPreview
   } catch (error) {
-    console.error('Failed to fetch link preview:', error)
+    console.error("Failed to fetch link preview:", error)
   }
 
-  // Fallback preview
+  // Fallback preview if failed
   const fallbackPreview: LinkPreview = {
     url,
     title: new URL(url).hostname,
@@ -368,19 +396,18 @@ async function fetchLinkPreview(url: string): Promise<LinkPreview> {
   }
 
   linkPreviewCache.value.set(url, fallbackPreview)
-  // Save even error states to avoid repeated failures
   saveLinkPreviewCache()
   return fallbackPreview
 }
 
-// Component for rendering link previews
+// Enhanced video preview component with stop/continue functionality
 function LinkPreviewComponent({ preview }: { preview: LinkPreview }) {
   if (preview.loading) {
     return `
-      <div class="link-preview loading border border-gray-200 rounded-lg p-3 my-2 bg-gray-50">
+      <div class="link-preview loading border border-gray-200 rounded-lg p-3 my-2 bg-gray-50 max-w-full">
         <div class="flex items-center gap-2">
-          <i class="pi pi-spin pi-spinner text-gray-400"></i>
-          <span class="text-sm text-gray-500">Loading preview...</span>
+          <i class="pi pi-spin pi-spinner text-gray-400 flex-shrink-0"></i>
+          <span class="text-sm text-gray-500 truncate">Loading preview...</span>
         </div>
       </div>
     `
@@ -388,11 +415,11 @@ function LinkPreviewComponent({ preview }: { preview: LinkPreview }) {
 
   if (preview.error) {
     return `
-      <div class="link-preview error border border-gray-200 rounded-lg p-3 my-2 bg-gray-50">
-        <div class="flex items-center gap-2">
-          <i class="pi pi-external-link text-gray-400"></i>
+      <div class="link-preview error border border-gray-200 rounded-lg p-3 my-2 bg-gray-50 max-w-full">
+        <div class="flex items-center gap-2 min-w-0">
+          <i class="pi pi-external-link text-gray-400 flex-shrink-0"></i>
           <a href="${preview.url}" target="_blank" rel="noopener noreferrer" 
-             class="text-blue-600 hover:text-blue-800 text-sm font-medium">
+             class="text-blue-600 hover:text-blue-800 text-sm font-medium truncate min-w-0 flex-1">
             ${preview.domain}
           </a>
         </div>
@@ -400,34 +427,206 @@ function LinkPreviewComponent({ preview }: { preview: LinkPreview }) {
     `
   }
 
-  return `
-    <div class="link-preview border border-gray-200 rounded-lg overflow-hidden my-2 bg-white hover:shadow-md transition-shadow">
-      <a href="${preview.url}" target="_blank" rel="noopener noreferrer" class="block">
-        ${preview.image ? `
-          <div class="aspect-video w-full overflow-hidden bg-gray-100">
-            <img src="${preview.image}" alt="${preview.title}" 
-                 class="w-full h-full object-cover"
-                 onerror="this.parentElement.style.display='none'">
-          </div>
-        ` : ''}
-        <div class="p-3">
-          <div class="flex items-start justify-between gap-2">
-            <div class="flex-1 min-w-0">
-              <h4 class="font-medium text-gray-900 text-sm line-clamp-2 mb-1">${preview.title}</h4>
-              ${preview.description ? `
-                <p class="text-gray-600 text-xs line-clamp-2 mb-2">${preview.description}</p>
+  // Generate unique ID for this video instance
+  const videoId = `video-${Math.random().toString(36).substr(2, 9)}`
+
+  // Video preview component with stop/continue controls
+  const renderVideoPreview = () => {
+    if (!preview.video && !preview.embedHtml) return ''
+
+    // For embeddable videos (YouTube, Vimeo)
+    if (preview.embedHtml && (preview.videoType === 'youtube' || preview.videoType === 'vimeo')) {
+      return `
+        <div class="aspect-video w-fit bg-black relative group overflow-hidden" id="${videoId}">
+          <div class="video-embed-container object-contain md:w-full w-fit h-full" 
+               data-embed='${preview.embedHtml.replace(/'/g, '&apos;')}'
+               data-video-type="${preview.videoType}"
+               data-video-id="${videoId}">
+            
+            <!-- Initial thumbnail state -->
+            <div class="video-thumbnail w-full h-full bg-gray-900 flex items-center justify-center cursor-pointer overflow-hidden"
+                 onclick="playEmbeddedVideo(this, '${videoId}')">
+              ${preview.videoThumbnail || preview.previewImage ? `
+                <img src="${preview.videoThumbnail || preview.previewImage}" 
+                     alt="${preview.title}" class="w-full h-full object-cover">
               ` : ''}
-              <div class="flex items-center gap-1 text-xs text-gray-500">
-                <i class="pi pi-external-link"></i>
-                <span>${preview.domain}</span>
+              <div class="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30 group-hover:bg-opacity-20 transition-colors">
+                <div class="w-12 h-12 sm:w-16 sm:h-16 bg-red-600 hover:bg-red-700 rounded-full flex items-center justify-center flex-shrink-0 transform hover:scale-110 transition-all duration-200">
+                  <svg class="w-4 h-4 sm:w-6 sm:h-6 text-white ml-0.5 sm:ml-1" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M8 5v14l11-7z"/>
+                  </svg>
+                </div>
+              </div>
+              ${preview.videoDuration ? `
+                <div class="absolute bottom-2 right-2 bg-black bg-opacity-80 text-white text-xs px-2 py-1 rounded max-w-[calc(100%-1rem)] truncate">
+                  ${preview.videoDuration}
+                </div>
+              ` : ''}
+            </div>
+          </div>
+          
+          <!-- Video controls overlay (hidden initially) -->
+          <div class="video-controls absolute top-2 right-2 flex gap-2 opacity-0 transition-opacity duration-200" 
+               id="${videoId}-controls">
+            <button onclick="pauseVideo('${videoId}')" 
+                    class="pause-btn w-8 h-8 bg-black bg-opacity-70 hover:bg-opacity-90 rounded-full flex items-center justify-center text-white transition-all"
+                    title="Pause">
+              <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+              </svg>
+            </button>
+            <button onclick="resumeVideo('${videoId}')" 
+                    class="play-btn w-8 h-8 bg-black bg-opacity-70 hover:bg-opacity-90 rounded-full flex items-center justify-center text-white transition-all hidden"
+                    title="Resume">
+              <svg class="w-4 h-4 ml-0.5" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M8 5v14l11-7z"/>
+              </svg>
+            </button>
+            <button onclick="stopVideo('${videoId}')" 
+                    class="stop-btn w-8 h-8 bg-black bg-opacity-70 hover:bg-opacity-90 rounded-full flex items-center justify-center text-white transition-all"
+                    title="Stop">
+              <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M6 6h12v12H6z"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+      `
+    }
+
+    // For direct video files
+    if (preview.videoType === 'direct' && preview.video) {
+      return `
+        <div class="aspect-video w-fit bg-black overflow-hidden relative group" id="${videoId}">
+          <video 
+            id="${videoId}-video"
+            controls 
+            preload="metadata" 
+            class="w-fit h-full object-contain" 
+            poster="${preview.previewImage || ''}"
+            onplay="showVideoControls('${videoId}')"
+            onpause="updateVideoControls('${videoId}', 'paused')"
+            onended="updateVideoControls('${videoId}', 'ended')">
+            <source src="${preview.video}" type="video/mp4">
+            <source src="${preview.video}" type="video/webm">
+            Your browser does not support the video tag.
+          </video>
+          
+          <!-- Custom controls overlay for direct videos -->
+          <div class="video-controls absolute top-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200" 
+               id="${videoId}-controls">
+            <button onclick="toggleDirectVideo('${videoId}')" 
+                    class="toggle-btn w-8 h-8 bg-black bg-opacity-70 hover:bg-opacity-90 rounded-full flex items-center justify-center text-white transition-all"
+                    title="Play/Pause">
+              <svg class="play-icon w-4 h-4 ml-0.5" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M8 5v14l11-7z"/>
+              </svg>
+              <svg class="pause-icon w-4 h-4 hidden" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+              </svg>
+            </button>
+            <button onclick="stopDirectVideo('${videoId}')" 
+                    class="stop-btn w-8 h-8 bg-black bg-opacity-70 hover:bg-opacity-90 rounded-full flex items-center justify-center text-white transition-all"
+                    title="Stop">
+              <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M6 6h12v12H6z"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+      `
+    }
+
+    // For social media videos (no stop/continue - just external link)
+    if ((preview.videoType === 'twitter' || preview.videoType === 'tiktok') && preview.previewImage) {
+      return `
+        <div class="aspect-video w-fit bg-gray-100 relative group overflow-hidden cursor-pointer"
+             onclick="playSocialVideo('${preview.url}', '${preview.videoType}')">
+          <img src="${preview.previewImage}" alt="${preview.title}" 
+               class="w-full h-full object-cover">
+          <div class="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30 group-hover:bg-opacity-20 transition-colors">
+            <div class="w-10 h-10 sm:w-12 sm:h-12 bg-white bg-opacity-90 hover:bg-opacity-100 rounded-full flex items-center justify-center flex-shrink-0 transform hover:scale-110 transition-all duration-200">
+              <svg class="w-3 h-3 sm:w-4 sm:h-4 text-gray-800 ml-0.5" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M8 5v14l11-7z"/>
+              </svg>
+            </div>
+          </div>
+          <div class="absolute top-2 left-2 bg-black bg-opacity-80 text-white text-xs px-2 py-1 rounded capitalize">
+            ${preview.videoType}
+          </div>
+        </div>
+      `
+    }
+
+    return ''
+  }
+
+  const hasVideo = preview.video || preview.embedHtml
+  const videoPreview = renderVideoPreview()
+
+  return `
+    <div class="link-preview border border-gray-200 rounded-lg overflow-hidden my-2 bg-white hover:shadow-md transition-shadow w-fit">
+      ${hasVideo ? `
+        <div class="w-full md:w-[500px]">
+          ${videoPreview}
+          <div class="p-3 sm:p-4 min-w-0">
+            <div class="flex items-start justify-between gap-2 min-w-0">
+              <div class="flex-1 min-w-0">
+                <h4 class="font-medium text-gray-900 text-sm sm:text-base line-clamp-2 mb-1 break-words">
+                  <i class="pi pi-play-circle text-red-600 mr-1 flex-shrink-0"></i>
+                  <a href="${preview.url}" target="_blank" rel="noopener noreferrer" class="hover:text-blue-600 break-words">
+                    ${preview.title}
+                  </a>
+                </h4>
+                ${preview.description ? `
+                  <p class="text-gray-600 text-xs sm:text-sm line-clamp-2 sm:line-clamp-3 mb-2 break-words leading-relaxed">${preview.description}</p>
+                ` : ''}
+                <div class="flex items-center gap-1 text-xs sm:text-sm text-gray-500 min-w-0">
+                  <i class="pi pi-video text-red-600 flex-shrink-0"></i>
+                  <span class="truncate min-w-0 flex-1">${preview.domain}</span>
+                  ${preview.videoDuration ? `<span class="ml-2 flex-shrink-0 hidden xs:inline">• ${preview.videoDuration}</span>` : ''}
+                </div>
+                ${preview.videoDuration ? `
+                  <div class="text-xs text-gray-500 mt-1 xs:hidden">
+                    Duration: ${preview.videoDuration}
+                  </div>
+                ` : ''}
               </div>
             </div>
           </div>
         </div>
-      </a>
+      ` : `
+        <!-- Regular link preview -->
+        <a href="${preview.url}" class="w-full md:w-[300px]" target="_blank" rel="noopener noreferrer" class="block">
+          ${preview.previewImage ? `
+            <div class="aspect-video overflow-hidden bg-gray-100">
+              <img src="${preview.previewImage}" alt="${preview.title}" 
+                   class="w-full h-full object-cover"
+                   onerror="this.parentElement.style.display='none'">
+            </div>
+          ` : ''}
+          <div class="p-3 sm:p-4 min-w-0">
+            <div class="flex items-start justify-between gap-2 min-w-0">
+              <div class="flex-1 min-w-0">
+                <h4 class="font-medium text-gray-900 text-sm sm:text-base line-clamp-2 mb-1 break-words">
+                  <span class="break-words">${preview.title}</span>
+                </h4>
+                ${preview.description ? `
+                  <p class="text-gray-600 text-xs sm:text-sm line-clamp-2 sm:line-clamp-3 mb-2 break-words leading-relaxed">${preview.description}</p>
+                ` : ''}
+                <div class="flex items-center gap-1 text-xs sm:text-sm text-gray-500 min-w-0">
+                  <i class="pi pi-external-link flex-shrink-0"></i>
+                  <span class="truncate min-w-0 flex-1">${preview.domain}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </a>
+      `}
     </div>
   `
 }
+
 
 // ---------- Authentication Functions ----------
 function nextAuthStep() {
@@ -534,6 +733,7 @@ function logout() {
         expanded.value = []
         showInput.value = false
         isCollapsed.value = false
+        confirmDialog.value.visible = false
 
       } catch (err) {
         console.error('Error during logout:', err)
@@ -545,7 +745,6 @@ function logout() {
     }
   })
 }
-
 
 function isAuthenticated(): boolean {
   return parsedUserDetails && parsedUserDetails.email && parsedUserDetails.username && parsedUserDetails.sessionId
@@ -623,126 +822,241 @@ function renderMarkdown(text?: string) {
 }
 
 function isPromptTooShort(prompt: string): boolean {
-  // Example heuristic: less than 30 words
   return prompt.trim().split(/\s+/).length < 30
 }
 
-// Debounced scroll handler to improve performance
-let scrollTimeout: any = null;
+//  Debounced scroll handler to improve performance
+let scrollTimeout: any = null
 function debouncedHandleScroll() {
   if (scrollTimeout) {
-    clearTimeout(scrollTimeout);
+    clearTimeout(scrollTimeout)
   }
   
   scrollTimeout = setTimeout(() => {
-    handleScroll();
-  }, 16); // ~60fps
+    handleScroll()
+  }, 16) // ~60fps
 }
 
-// Enhanced submit function with better scroll handling
-async function handleSubmit(e?: any, retryPrompt?: string) {
-  e?.preventDefault?.();
+// Add this function to detect if prompt is just a URL
+function isJustALink(prompt: string): boolean {
+  const trimmed = prompt.trim()
+  const urls = extractUrls(trimmed)
+  
+  // Check if the entire prompt is essentially just one URL
+  // Allow for minor additional text like "check this out: [url]"
+  if (urls.length === 1) {
+    const url = urls[0]
+    const promptWithoutUrl = trimmed.replace(url, '').trim()
+    // If remaining text is very short (just intro words), consider it "just a link"
+    return promptWithoutUrl.split(/\s+/).length <= 3
+  }
+  
+  return false
+}
 
-  let promptValue = retryPrompt || e?.target?.prompt?.value?.trim();
-  let fabricatedPrompt = promptValue;
-  if (!promptValue || isLoading.value) return;
+// Modified handleSubmit function (around line 420)
+async function handleSubmit(e?: any, retryPrompt?: string) {
+  e?.preventDefault?.()
+
+  let promptValue = retryPrompt || e?.target?.prompt?.value?.trim()
+  let fabricatedPrompt = promptValue
+  if (!promptValue || isLoading.value) return
 
   if (!isAuthenticated()) {
     toast.warning('Please create a session first', {
       duration: 4000,
       description: 'You need to be logged in.'
-    });
-    return;
+    })
+    return
+  }
+
+  // handling for link-only prompts
+  if (isJustALink(promptValue)) {
+    const urls = extractUrls(promptValue)
+    const url = urls[0]
+    
+    // Create new chat if none exists
+    if (!currentChatId.value || !currentChat.value) {
+      createNewChat(promptValue)
+    }
+
+    isLoading.value = true
+
+    if (!retryPrompt && e?.target?.prompt) {
+      e.target.prompt.value = ""
+      e.target.prompt.style.height = "auto"
+    }
+
+    // Add user message
+    const tempResp: Res = { prompt: promptValue, response: "..." }
+    if (currentChat.value) {
+      currentChat.value.messages.push(tempResp)
+      currentChat.value.updatedAt = new Date().toISOString()
+
+      if (currentChat.value.messages.length === 1) {
+        currentChat.value.title = generateChatTitle(promptValue)
+      }
+    }
+    expanded.value.push(false)
+
+    // Scroll and process links
+    await nextTick()
+    scrollToBottom()
+
+    try {
+      // Fetch link preview data
+      const linkPreview = await fetchLinkPreview(url)
+      
+      // Generate response based on link data
+      let linkDataResponse = `I've analyzed the link you shared:\n\n**${linkPreview.title || 'Untitled'}**\n\n`
+      
+      if (linkPreview.description) {
+        linkDataResponse += `**Description:** ${linkPreview.description}\n\n`
+      }
+      
+      if (linkPreview.domain) {
+        linkDataResponse += `**Domain:** ${linkPreview.domain}\n\n`
+      }
+      
+      if (linkPreview.videoType && linkPreview.videoDuration) {
+        linkDataResponse += `**Content Type:** ${linkPreview.videoType} video (${linkPreview.videoDuration})\n\n`
+      }
+      
+      linkDataResponse += `**URL:** ${url}`
+      
+      if (linkPreview.error) {
+        linkDataResponse = `I was unable to fully analyze this link, but here's what I can tell you:\n\n**URL:** ${url}\n**Domain:** ${linkPreview.domain || new URL(url).hostname}\n\nThe link appears to be inaccessible or the content couldn't be retrieved.`
+      }
+
+      // Update the response
+      if (currentChat.value) {
+        const lastMessageIndex = currentChat.value.messages.length - 1
+        currentChat.value.messages[lastMessageIndex] = {
+          prompt: promptValue,
+          response: linkDataResponse,
+          status: 200
+        }
+        currentChat.value.updatedAt = new Date().toISOString()
+      }
+
+    } catch (err: any) {
+      // Fallback response for link analysis
+      const fallbackResponse = `I received your link: ${url}\n\nHowever, I encountered an error while trying to analyze it: ${err.message || 'Unknown error'}\n\nThe link appears to point to: ${new URL(url).hostname}`
+      
+      if (currentChat.value) {
+        const lastMessageIndex = currentChat.value.messages.length - 1
+        currentChat.value.messages[lastMessageIndex] = {
+          prompt: promptValue,
+          response: fallbackResponse
+        }
+        currentChat.value.updatedAt = new Date().toISOString()
+      }
+    } finally {
+      isLoading.value = false
+      saveChats()
+      
+      // Observe any new video containers
+      observeNewVideoContainers()
+
+      // Scroll to bottom after response is complete
+      await nextTick()
+      scrollToBottom()
+    }
+    
+    return // Exit early for link-only prompts
   }
 
   // Merge with only the latest message if prompt is short
   if (isPromptTooShort(promptValue) && currentMessages.value.length > 0) {
-    const lastMessage = currentMessages.value[currentMessages.value.length - 1];
-    fabricatedPrompt = `${lastMessage.prompt || ''} ${lastMessage.response || ''}\nUser: ${promptValue}`;
+    const lastMessage = currentMessages.value[currentMessages.value.length - 1]
+    fabricatedPrompt = `${lastMessage.prompt || ''} ${lastMessage.response || ''}\nUser: ${promptValue}`
   }
 
   // Create new chat if none exists
   if (!currentChatId.value || !currentChat.value) {
-    createNewChat(promptValue);
+    createNewChat(promptValue)
   }
 
-  isLoading.value = true;
+  isLoading.value = true
 
   if (!retryPrompt && e?.target?.prompt) {
-    e.target.prompt.value = "";
-    e.target.prompt.style.height = "auto";
+    e.target.prompt.value = ""
+    e.target.prompt.style.height = "auto"
   }
 
-  const tempResp: Res = { prompt: promptValue, response: "..." };
+  const tempResp: Res = { prompt: promptValue, response: "..." }
 
   // Add message to current chat
   if (currentChat.value) {
-    currentChat.value.messages.push(tempResp);
-    currentChat.value.updatedAt = new Date().toISOString();
+    currentChat.value.messages.push(tempResp)
+    currentChat.value.updatedAt = new Date().toISOString()
 
     // Update chat title if this is the first message
     if (currentChat.value.messages.length === 1) {
-      currentChat.value.title = generateChatTitle(promptValue);
+      currentChat.value.title = generateChatTitle(promptValue)
     }
   }
 
-  expanded.value.push(false);
+  expanded.value.push(false)
 
   // Process links in user prompt
-  processLinksInUserPrompt(promptValue);
+  processLinksInUserPrompt(promptValue)
 
   // Scroll to bottom after adding user message
-  await nextTick();
-  scrollToBottom();
+  await nextTick()
+  scrollToBottom()
 
   try {
-    let url = `https://wrapper.villebiz.com/v1/genai`;
+    let url = `https://wrapper.villebiz.com/v1/genai`
     let response = await fetch(url, {
       method: "POST",
       body: JSON.stringify(fabricatedPrompt),
       headers: { "content-type": "application/json" }
-    });
+    })
 
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
     }
 
-    let parseRes = await response.json();
+    let parseRes = await response.json()
 
     if (currentChat.value) {
-      const lastMessageIndex = currentChat.value.messages.length - 1;
+      const lastMessageIndex = currentChat.value.messages.length - 1
       currentChat.value.messages[lastMessageIndex] = {
         prompt: promptValue,
         response: parseRes.error ? parseRes.error : parseRes.response,
         status: response.status
-      };
-      currentChat.value.updatedAt = new Date().toISOString();
+      }
+      currentChat.value.updatedAt = new Date().toISOString()
     }
 
     // Trigger link preview generation for the new response
-    await processLinksInResponse(currentMessages.value.length - 1);
+    await processLinksInResponse(currentMessages.value.length - 1)
 
   } catch (err: any) {
     toast.error(`Failed to get AI response: ${err.message}`, {
       duration: 5000,
       description: ''
-    });
+    })
 
     if (currentChat.value) {
-      const lastMessageIndex = currentChat.value.messages.length - 1;
+      const lastMessageIndex = currentChat.value.messages.length - 1
       currentChat.value.messages[lastMessageIndex] = {
         prompt: promptValue,
         response: `⚠️ Error: ${err.message || 'Failed to get response. Please try again.'}`
-      };
-      currentChat.value.updatedAt = new Date().toISOString();
+      }
+      currentChat.value.updatedAt = new Date().toISOString()
     }
   } finally {
-    isLoading.value = false;
-    saveChats();
+    isLoading.value = false
+    saveChats()
     
+    // Observe any new video containers
+    observeNewVideoContainers();
+
     // Scroll to bottom after response is complete
-    await nextTick();
-    scrollToBottom();
+    await nextTick()
+    scrollToBottom()
   }
 }
 
@@ -809,7 +1123,6 @@ function copyResponse(text: string, index?: number) {
     })
 }
 
-
 function toggleSidebar() {
   isCollapsed.value = !isCollapsed.value
   localStorage.setItem("isCollapsed", String(isCollapsed.value))
@@ -865,6 +1178,7 @@ function clearLinkPreviewCache() {
       try {
         localStorage.removeItem('linkPreviews')
         linkPreviewCache.value.clear()
+        confirmDialog.value.visible = false
       } catch (err) {
         console.error('Failed to clear link preview cache:', err)
         toast.error('Failed to clear link preview cache.', {
@@ -895,7 +1209,7 @@ function setShowInput() {
   })
 }
 
-
+//  Improved scroll functions
 function scrollToBottom() {
   if (!scrollableElem.value) return;
   
@@ -1016,12 +1330,28 @@ onMounted(() => {
   };
   document.addEventListener("click", copyListener);
 
-  // Set up scroll listener with proper cleanup
-  if (scrollableElem.value) {
-    scrollableElem.value.addEventListener("scroll", debouncedHandleScroll, { passive: true });
+  // Make functions globally available
+  if (typeof window !== 'undefined') {
+    (window as any).playEmbeddedVideo = playEmbeddedVideo;
+    (window as any).pauseVideo = pauseVideo;
+    (window as any).resumeVideo = resumeVideo;
+    (window as any).stopVideo = stopVideo;
+    (window as any).toggleDirectVideo = toggleDirectVideo;
+    (window as any).stopDirectVideo = stopDirectVideo;
+    (window as any).showVideoControls = showVideoControls;
+    (window as any).updateVideoControls = updateVideoControls;
+    (window as any).playSocialVideo = playSocialVideo;
   }
 
+  // Initialize video lazy loading once
+  initializeVideoLazyLoading();
+  
   nextTick(() => {
+    // Set up scroll listener with proper cleanup
+    if (scrollableElem.value) {
+      scrollableElem.value.addEventListener("scroll", debouncedHandleScroll, { passive: true });
+    }
+
     // Auto-focus input
     if (showInput.value || currentMessages.value.length > 0) {
       const textarea = document.getElementById("prompt") as HTMLTextAreaElement;
@@ -1035,13 +1365,16 @@ onMounted(() => {
       }
     });
 
+    // Observe existing video containers after processing links
+    observeNewVideoContainers();
+
     // Initial scroll to bottom with delay to ensure content is rendered
     setTimeout(() => {
       scrollToBottom();
     }, 100);
   });
 
-  // Cleanup function
+  // Store cleanup function for onBeforeUnmount
   onBeforeUnmount(() => {
     document.removeEventListener("click", copyListener);
     
@@ -1050,11 +1383,23 @@ onMounted(() => {
       scrollableElem.value.removeEventListener("scroll", debouncedHandleScroll);
     }
     
+    // Clean up video lazy loading observer
+    destroyVideoLazyLoading();
+    
     // Clear timeouts
     if (scrollTimeout) {
       clearTimeout(scrollTimeout);
     }
+    if (resizeTimeout) {
+      clearTimeout(resizeTimeout);
+    }
   });
+});
+
+// Move onUpdated outside of onMounted
+onUpdated(() => {
+  // Check for new video containers after DOM updates
+  observeNewVideoContainers();
 });
 
 </script>
@@ -1079,7 +1424,8 @@ onMounted(() => {
             class="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
             {{ confirmDialog.cancelText }}
           </button>
-          <button @click="() => { confirmDialog.onConfirm(); confirmDialog.visible = false }" :class="confirmDialog.type === 'danger' ? 'bg-red-600 hover:bg-red-700' :
+          <button @click="() => { confirmDialog.onConfirm(); confirmDialog.visible = false }" 
+            :class="confirmDialog.type === 'danger' ? 'bg-red-600 hover:bg-red-700' :
             confirmDialog.type === 'warning' ? 'bg-orange-600 hover:bg-orange-700' :
               'bg-blue-600 hover:bg-blue-700'" class="px-4 py-2 text-white rounded-lg transition-colors">
             {{ confirmDialog.confirmText }}
@@ -1087,6 +1433,7 @@ onMounted(() => {
         </div>
       </div>
     </div>
+
     <!-- Sidebar -->
     <SideNav v-if="isAuthenticated()" :data="{
       chats,
@@ -1114,6 +1461,7 @@ onMounted(() => {
         'flex-grow flex flex-col items-center justify-center ml-[60px] font-light text-sm transition-all duration-300 ease-in-out'
       )
         : 'text-sm font-light flex-grow items-center justify-center flex flex-col transition-all duration-300 ease-in-out'">
+      
       <TopNav v-if="isAuthenticated()" :data="{
         currentChat,
         parsedUserDetails,
@@ -1131,161 +1479,162 @@ onMounted(() => {
         <!-- Empty State -->
         <div v-if="currentMessages.length === 0 || !isAuthenticated()"
           class="flex flex-col items-center justify-center h-[90vh]">
-            <div class="max-md:flex-col flex gap-10 items-center justify-center h-full w-full max-md:px-5">
-              <div v-if="(showCreateSession===false&&screenWidth < 720)||screenWidth > 720" class="flex flex-col md:flex-grow items-center gap-3 text-gray-600">
-                <div class="rounded-full bg-gray-200 w-[60px] h-[60px] flex justify-center items-center">
-                  <span class="pi pi-comment text-lg"></span>
+          <div class="max-md:flex-col flex gap-10 items-center justify-center h-full w-full max-md:px-5">
+            <div v-if="(showCreateSession===false&&screenWidth < 720)||screenWidth > 720" 
+              class="flex flex-col md:flex-grow items-center gap-3 text-gray-600">
+              <div class="rounded-full bg-gray-200 w-[60px] h-[60px] flex justify-center items-center">
+                <span class="pi pi-comment text-lg"></span>
+              </div>
+              <p class="text-3xl font-semibold">{{ parsedUserDetails?.username || 'Gemmie' }}</p>
+              <div class="text-center text-base md:max-w-[400px]">
+                <p>Your private AI assistant.</p>
+                <p class="text-sm text-gray-500">
+                  We focus on privacy and security. Your data never leaves your device.
+                  All your chats are stored locally in your browser.
+                  Therefore, please make sure to back up your chats if you clear your browser data or switch devices.
+                </p>
+              </div>
+              <button v-if="isAuthenticated()" @click="setShowInput"
+                class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors">
+                Write a prompt
+              </button>
+              <button v-else-if="screenWidth < 720" @click="()=> showCreateSession=true"
+                class="px-4 py-2 w-full bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors">
+                Get Started
+              </button>
+            </div>
+
+            <div v-if="(!isAuthenticated()&&showCreateSession===true&&screenWidth < 720)||(!isAuthenticated()&&screenWidth > 720)" 
+              class="flex-grow text-sm md:px-4 px-1 relative overflow-hidden"
+              :class="screenWidth > 720 ? 'max-w-md w-full' : (!isAuthenticated()&&showCreateSession===true)?
+              'flex flex-col justify-center w-full h-full translate-x-0 opacity-100':'translate-x-full opacity-0'">
+              
+              <!-- Progress indicator -->
+              <div class="flex justify-center mb-6">
+                <div class="flex items-center space-x-2">
+                  <div v-for="step in 3" :key="step" :class="step <= authStep ? 'bg-blue-600' : 'bg-gray-300'"
+                    class="w-3 h-3 rounded-full transition-colors duration-300">
+                  </div>
                 </div>
-                <p class="text-3xl font-semibold">{{ parsedUserDetails?.username || 'Gemmie' }}</p>
-                <div class="text-center text-base md:max-w-[400px]">
-                  <p>Your private AI assistant.</p>
-                  <p class="text-sm text-gray-500">
-                    We focus on privacy and security. Your data never leaves your device.
-                    All your chats are stored locally in your browser.
-                    Therefore, please make sure to back up your chats if you clear your browser data or switch devices.
-                  </p>
-                </div>
-                <button v-if="isAuthenticated()" @click="setShowInput"
-                  class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors">
-                  Write a prompt
-                </button>
-                <button v-else-if="screenWidth < 720" @click="()=> showCreateSession=true"
-                  class="px-4 py-2 w-full bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors">
-                  Get Started
-                </button>
               </div>
 
-              <div v-if="(!isAuthenticated()&&showCreateSession===true&&screenWidth < 720)||(!isAuthenticated()&&screenWidth > 720)" 
-                class="flex-grow text-sm  md:px-4 px-1 relative overflow-hidden"
-                :class="screenWidth > 720 ? 'max-w-md w-full' : (!isAuthenticated()&&showCreateSession===true)?
-                'flex flex-col justify-center w-full h-fulltranslate-x-0 opacity-100':'translate-x-full opacity-0'"
-              >
-                <!-- Progress indicator -->
-                <div class="flex justify-center mb-6">
-                  <div class="flex items-center space-x-2">
-                    <div v-for="step in 3" :key="step" :class="step <= authStep ? 'bg-blue-600' : 'bg-gray-300'"
-                      class="w-3 h-3 rounded-full transition-colors duration-300">
-                    </div>
+              <!-- Multi-step form container -->
+              <div class="relative h-80">
+                <!-- Step 1: Username -->
+                <div :class="authStep === 1 ? 'translate-x-0 opacity-100' :
+                  authStep > 1 ? '-translate-x-full opacity-0' : 'translate-x-full opacity-0'"
+                  class="absolute inset-0 transition-all duration-500 ease-in-out transform">
+                  <div class="text-center mb-6">
+                    <h2 class="text-xl font-semibold text-gray-900 mb-2">Welcome!</h2>
+                    <p class="text-gray-600">Let's start by creating your username</p>
                   </div>
+
+                  <form @submit="handleStepSubmit" class="space-y-4">
+                    <div>
+                      <label class="block text-sm font-medium text-gray-700 mb-2">
+                        Choose a username
+                      </label>
+                      <input v-model="authData.username" required type="text" placeholder="johndoe"
+                        class="border border-gray-300 rounded-lg px-4 py-2 w-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                        :class="authData.username && !validateCurrentStep() ? 'border-red-300' : ''" />
+                      <p class="text-xs text-gray-500 mt-1">This will be your display name</p>
+                    </div>
+
+                    <button type="submit" :disabled="!validateCurrentStep()"
+                      class="w-full bg-blue-600 text-white rounded-lg px-4 py-2 font-medium hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors duration-200">
+                      Continue
+                    </button>
+                  </form>
                 </div>
 
-                <!-- Multi-step form container -->
-                <div class="relative h-80">
-                  <!-- Step 1: Username -->
-                  <div :class="authStep === 1 ? 'translate-x-0 opacity-100' :
-                    authStep > 1 ? '-translate-x-full opacity-0' : 'translate-x-full opacity-0'"
-                    class="absolute inset-0 transition-all duration-500 ease-in-out transform">
-                    <div class="text-center mb-6">
-                      <h2 class="text-xl font-semibold text-gray-900 mb-2">Welcome!</h2>
-                      <p class="text-gray-600">Let's start by creating your username</p>
+                <!-- Step 2: Email -->
+                <div :class="authStep === 2 ? 'translate-x-0 opacity-100' :
+                  authStep > 2 ? '-translate-x-full opacity-0' : 'translate-x-full opacity-0'"
+                  class="absolute inset-0 transition-all duration-500 ease-in-out transform">
+                  <div class="text-center mb-6">
+                    <h2 class="text-xl font-semibold text-gray-900 mb-2">Hi {{ authData.username }}!</h2>
+                    <p class="text-gray-600">What's your email address?</p>
+                  </div>
+
+                  <form @submit="handleStepSubmit" class="space-y-4">
+                    <div>
+                      <label class="block text-sm font-medium text-gray-700 mb-2">
+                        Email address
+                      </label>
+                      <input v-model="authData.email" required type="email" placeholder="johndoe@example.com"
+                        class="border border-gray-300 rounded-lg px-4 py-2 w-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                        :class="authData.email && !validateCurrentStep() ? 'border-red-300' : ''" />
+                      <p class="text-xs text-gray-500 mt-1">Used for session identification only</p>
                     </div>
 
-                    <form @submit="handleStepSubmit" class="space-y-4">
-                      <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">
-                          Choose a username
-                        </label>
-                        <input v-model="authData.username" required type="text" placeholder="johndoe"
-                          class="border border-gray-300 rounded-lg px-4 py-2 w-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                          :class="authData.username && !validateCurrentStep() ? 'border-red-300' : ''" />
-                        <p class="text-xs text-gray-500 mt-1">This will be your display name</p>
-                      </div>
-
+                    <div class="flex gap-3">
+                      <button type="button" @click="prevAuthStep"
+                        class="flex-1 bg-gray-100 text-gray-700 rounded-lg px-4 py-2 font-medium hover:bg-gray-200 transition-colors duration-200">
+                        Back
+                      </button>
                       <button type="submit" :disabled="!validateCurrentStep()"
-                        class="w-full bg-blue-600 text-white rounded-lg px-4 py-2 font-medium hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors duration-200">
+                        class="flex-1 bg-blue-600 text-white rounded-lg px-4 py-2 font-medium hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors duration-200">
                         Continue
                       </button>
-                    </form>
+                    </div>
+                  </form>
+                </div>
+
+                <!-- Step 3: Password -->
+                <div :class="authStep === 3 ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0'"
+                  class="absolute inset-0 transition-all duration-500 ease-in-out transform">
+                  <div class="text-center mb-6">
+                    <h2 class="text-xl font-semibold text-gray-900 mb-2">Almost there!</h2>
+                    <p class="text-gray-600">Create a secure password</p>
                   </div>
 
-                  <!-- Step 2: Email -->
-                  <div :class="authStep === 2 ? 'translate-x-0 opacity-100' :
-                    authStep > 2 ? '-translate-x-full opacity-0' : 'translate-x-full opacity-0'"
-                    class="absolute inset-0 transition-all duration-500 ease-in-out transform">
-                    <div class="text-center mb-6">
-                      <h2 class="text-xl font-semibold text-gray-900 mb-2">Hi {{ authData.username }}!</h2>
-                      <p class="text-gray-600">What's your email address?</p>
-                    </div>
-
-                    <form @submit="handleStepSubmit" class="space-y-4">
-                      <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">
-                          Email address
-                        </label>
-                        <input v-model="authData.email" required type="email" placeholder="johndoe@example.com"
-                          class="border border-gray-300 rounded-lg px-4 py-2 w-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                          :class="authData.email && !validateCurrentStep() ? 'border-red-300' : ''" />
-                        <p class="text-xs text-gray-500 mt-1">Used for session identification only</p>
-                      </div>
-
-                      <div class="flex gap-3">
-                        <button type="button" @click="prevAuthStep"
-                          class="flex-1 bg-gray-100 text-gray-700 rounded-lg px-4 py-2 font-medium hover:bg-gray-200 transition-colors duration-200">
-                          Back
-                        </button>
-                        <button type="submit" :disabled="!validateCurrentStep()"
-                          class="flex-1 bg-blue-600 text-white rounded-lg px-4 py-2 font-medium hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors duration-200">
-                          Continue
-                        </button>
-                      </div>
-                    </form>
-                  </div>
-
-                  <!-- Step 3: Password -->
-                  <div :class="authStep === 3 ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0'"
-                    class="absolute inset-0 transition-all duration-500 ease-in-out transform">
-                    <div class="text-center mb-6">
-                      <h2 class="text-xl font-semibold text-gray-900 mb-2">Almost there!</h2>
-                      <p class="text-gray-600">Create a secure password</p>
-                    </div>
-
-                    <form @submit="handleStepSubmit" class="space-y-4">
-                      <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">
-                          Password
-                        </label>
-                        <input v-model="authData.password" required type="password" placeholder="Enter a secure password"
-                          minlength="6"
-                          class="border border-gray-300 rounded-lg px-4 py-2 w-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                          :class="authData.password && !validateCurrentStep() ? 'border-red-300' : ''" />
-                        <div class="mt-2">
-                          <div class="flex items-center gap-2 text-xs">
-                            <div :class="authData.password.length >= 6 ? 'text-green-600' : 'text-gray-400'"
-                              class="flex items-center gap-1">
-                              <i :class="authData.password.length >= 6 ? 'pi pi-check' : 'pi pi-circle'"
-                                class="text-xs"></i>
-                              <span>At least 6 characters</span>
-                            </div>
+                  <form @submit="handleStepSubmit" class="space-y-4">
+                    <div>
+                      <label class="block text-sm font-medium text-gray-700 mb-2">
+                        Password
+                      </label>
+                      <input v-model="authData.password" required type="password" placeholder="Enter a secure password"
+                        minlength="6"
+                        class="border border-gray-300 rounded-lg px-4 py-2 w-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                        :class="authData.password && !validateCurrentStep() ? 'border-red-300' : ''" />
+                      <div class="mt-2">
+                        <div class="flex items-center gap-2 text-xs">
+                          <div :class="authData.password.length >= 6 ? 'text-green-600' : 'text-gray-400'"
+                            class="flex items-center gap-1">
+                            <i :class="authData.password.length >= 6 ? 'pi pi-check' : 'pi pi-circle'"
+                              class="text-xs"></i>
+                            <span>At least 6 characters</span>
                           </div>
                         </div>
                       </div>
+                    </div>
 
-                      <div class="flex gap-3">
-                        <button type="button" @click="prevAuthStep"
-                          class="flex-1 bg-gray-100 text-gray-700 rounded-lg px-4 py-2 font-medium hover:bg-gray-200 transition-colors duration-200">
-                          Back
-                        </button>
-                        <button type="submit" :disabled="!validateCurrentStep()"
-                          class="flex-1 bg-blue-600 text-white rounded-lg px-4 py-2 font-medium hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors duration-200">
-                          <i class="pi pi-check mr-2"></i>
-                          Create Session
-                        </button>
-                      </div>
-                    </form>
-                  </div>
-                </div>
-
-                <!-- Footer note -->
-                <div class="text-center">
-                  <p class="text-xs text-gray-500 leading-relaxed">
-                    Your credentials are only stored locally on your device for session management.
-                    <br>All data stays private and secure.
-                  </p>
+                    <div class="flex gap-3">
+                      <button type="button" @click="prevAuthStep"
+                        class="flex-1 bg-gray-100 text-gray-700 rounded-lg px-4 py-2 font-medium hover:bg-gray-200 transition-colors duration-200">
+                        Back
+                      </button>
+                      <button type="submit" :disabled="!validateCurrentStep()"
+                        class="flex-1 bg-blue-600 text-white rounded-lg px-4 py-2 font-medium hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors duration-200">
+                        <i class="pi pi-check mr-2"></i>
+                        Create Session
+                      </button>
+                    </div>
+                  </form>
                 </div>
               </div>
-            </div>
 
-            <p v-if="isAuthenticated()" class="text-sm mt-2 text-gray-400">Gemmie can make mistakes. Check important info.</p>
+              <!-- Footer note -->
+              <div class="text-center">
+                <p class="text-xs text-gray-500 leading-relaxed">
+                  Your credentials are only stored locally on your device for session management.
+                  <br>All data stays private and secure.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <p v-if="isAuthenticated()" class="text-sm mt-2 text-gray-400">Gemmie can make mistakes. Check important info.</p>
         </div>
 
         <!-- Chat Messages -->
@@ -1293,7 +1642,7 @@ onMounted(() => {
           class="flex-grow no-scrollbar overflow-y-auto px-4 space-y-4 pt-[90px] pb-[120px]">
           <div v-for="(item, i) in currentMessages" :key="`chat-${i}`" class="flex flex-col gap-2">
             <!-- User Bubble -->
-            <div class="flex justify-end chat-message ">
+            <div class="flex justify-end chat-message">
               <div :class="screenWidth > 720 ? 'max-w-[70%]' : 'max-w-[95%]'"
                 class="bg-gray-50 text-black p-3 rounded-2xl prose prose-sm max-w-none chat-bubble">
                 <p class="text-xs opacity-80 text-right mb-1">{{ parsedUserDetails?.username || "You" }}</p>
@@ -1356,20 +1705,23 @@ onMounted(() => {
                 </div>
               </div>
             </div>
-
           </div>
         </div>
 
-        <button v-if="showScrollDownButton&&currentMessages.length !== 0 && isAuthenticated()"  @click="scrollToBottom"
+        <!-- Scroll to Bottom Button -->
+        <button v-if="showScrollDownButton && currentMessages.length !== 0 && isAuthenticated()" @click="scrollToBottom"
           class="fixed bottom-24 bg-gray-50 text-gray-500 border px-3 h-[34px] rounded-full shadow-lg hover:bg-gray-100 transition-colors z-20">
           <div class="flex gap-2 items-center justify-center w-full font-semibold h-full">
-            <i class="pi pi-arrow-down text-center"></i> <p>Scroll To Bottom</p>
+            <i class="pi pi-arrow-down text-center"></i>
+            <p>Scroll To Bottom</p>
           </div>
         </button>
 
         <!-- Input -->
-        <div v-if="(currentMessages.length !== 0 || showInput === true) && isAuthenticated()" :style="screenWidth > 720 && !isCollapsed ? 'left:270px;' :
-          screenWidth > 720 && isCollapsed ? 'left:60px;' : 'left:0px;'" class="bg-white z-20 bottom-0 right-0 fixed pb-5 px-5">
+        <div v-if="(currentMessages.length !== 0 || showInput === true) && isAuthenticated()" 
+          :style="screenWidth > 720 && !isCollapsed ? 'left:270px;' :
+            screenWidth > 720 && isCollapsed ? 'left:60px;' : 'left:0px;'" 
+          class="bg-white z-20 bottom-0 right-0 fixed pb-5 px-5">
           <div class="flex items-center justify-center w-full">
             <form @submit="handleSubmit"
               :class="screenWidth > 720 ? 'relative flex px-3 py-2 border-2 shadow rounded-2xl items-center gap-2 w-[85%]' : 'relative flex px-3 py-2 border-2 shadow rounded-2xl w-full items-center gap-2'">

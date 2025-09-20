@@ -485,3 +485,11 @@
   transition-property: all;
   transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
 }
+
+/* Responsive video/iframe wrapper */
+@media (max-width: 480px) {
+  .video-embed-container iframe {
+    height: 100%; 
+    width: 300px;
+  }
+}

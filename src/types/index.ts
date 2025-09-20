@@ -13,13 +13,21 @@ export type Chat = {
   updatedAt: string
 }
 
-export type LinkPreview = {
-  url: string,
-  title?: string,
-  description?: string,
-  image?: string,
-  domain?: string,
-  loading?: boolean,
+export interface LinkPreview {
+  url: string
+  title?: string
+  description?: string
+  images?: string[]
+  previewImage?: string
+  domain?: string
+  favicon?: string
+  links?: string[]
+  video?: string
+  videoType?: 'youtube' | 'vimeo' | 'direct' | 'twitter' | 'tiktok'
+  videoDuration?: string
+  videoThumbnail?: string
+  embedHtml?: string
+  loading?: boolean
   error?: boolean
 }
 
