@@ -1,0 +1,9 @@
+services:
+  gemmie-server:
+    image: ghcr.io/imrany/gemmie-server:latest
+    container_name: gemmie-server
+    restart: unless-stopped
+    volumes:
+      - ~/.gemmie-server/:/var/opt/gemmie-server
+    ports:
+      - 8081:8081

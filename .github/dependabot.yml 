@@ -1,0 +1,8 @@
+version: 2
+updates:
+  - package-ecosystem: "gomod"
+    commit-message:
+      prefix: "chore"
+    directory: "/auth-server"
+    schedule:
+      interval: "monthly"
