@@ -12,6 +12,13 @@ func GenerateUserID() string {
 	return fmt.Sprintf("user_%d", time.Now().UnixNano())
 }
 
+func GenerateID(prefix string) string {
+	if prefix == "" {
+		prefix = "id"
+	}
+	return fmt.Sprintf("%s_%d", prefix, time.Now().UnixNano())
+}
+
 // hashCredentials creates a SHA-256 hash of username + email + password
 func HashCredentials(username, email, password string) string {
 	combined := username + email + password

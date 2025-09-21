@@ -10,13 +10,6 @@ import (
 	"github.com/imrany/gemmie/gemmie-server/store"
 )
 
-// Response represents API response
-type Response struct {
-	Success bool        `json:"success"`
-	Message string      `json:"message"`
-	Data    interface{} `json:"data,omitempty"`
-}
-
 // DeleteAccountRequest represents request payload for account deletion
 type DeleteAccountRequest struct {
     Email    string `json:"email"`
@@ -88,7 +81,7 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 
 	var req RegisterRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		json.NewEncoder(w).Encode(Response{
+		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
 			Message: "Invalid request body",
 		})
@@ -97,7 +90,7 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Validate required fields
 	if req.Username == "" || req.Email == "" || req.Password == "" {
-		json.NewEncoder(w).Encode(Response{
+		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
 			Message: "Username, email, and password are required",
 		})
@@ -106,7 +99,7 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Check if user already exists
 	if _, exists := FindUserByEmail(req.Email); exists {
-		json.NewEncoder(w).Encode(Response{
+		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
 			Message: "User with this email already exists",
 		})
@@ -114,7 +107,7 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if _, exists := findUserByUsername(req.Username); exists {
-		json.NewEncoder(w).Encode(Response{
+		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
 			Message: "User with this username already exists",
 		})
@@ -152,7 +145,7 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	store.SaveStorage()
 
 	// Return response with user data
-	json.NewEncoder(w).Encode(Response{
+	json.NewEncoder(w).Encode(store.Response{
 		Success: true,
 		Message: "User registered successfully",
 		Data: AuthResponse{
@@ -173,7 +166,7 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 
 	var req LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		json.NewEncoder(w).Encode(Response{
+		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
 			Message: "Invalid request body",
 		})
@@ -182,7 +175,7 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Validate required fields
 	if req.Email == "" || req.Password == "" || req.Username == "" {
-		json.NewEncoder(w).Encode(Response{
+		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
 			Message: "Username, email, and password are required",
 		})
@@ -192,7 +185,7 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	// Find user by email
 	user, exists := FindUserByEmail(req.Email)
 	if !exists {
-		json.NewEncoder(w).Encode(Response{
+		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
 			Message: "Invalid credentials",
 		})
@@ -202,7 +195,7 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	// Verify credentials hash
 	expectedHash := encrypt.HashCredentials(req.Username, req.Email, req.Password)
 	if user.PasswordHash != expectedHash {
-		json.NewEncoder(w).Encode(Response{
+		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
 			Message: "Invalid credentials",
 		})
@@ -232,7 +225,7 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Return response with user data
-	json.NewEncoder(w).Encode(Response{
+	json.NewEncoder(w).Encode(store.Response{
 		Success: true,
 		Message: "Login successful",
 		Data: AuthResponse{
@@ -253,7 +246,7 @@ func SyncHandler(w http.ResponseWriter, r *http.Request) {
 
 	userID := r.Header.Get("X-User-ID")
 	if userID == "" {
-		json.NewEncoder(w).Encode(Response{
+		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
 			Message: "User ID header required",
 		})
@@ -266,7 +259,7 @@ func SyncHandler(w http.ResponseWriter, r *http.Request) {
 	store.Storage.Mu.RUnlock()
 
 	if !userExists {
-		json.NewEncoder(w).Encode(Response{
+		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
 			Message: "User not found",
 		})
@@ -281,14 +274,14 @@ func SyncHandler(w http.ResponseWriter, r *http.Request) {
 		store.Storage.Mu.RUnlock()
 
 		if !exists {
-			json.NewEncoder(w).Encode(Response{
+			json.NewEncoder(w).Encode(store.Response{
 				Success: false,
 				Message: "User data not found",
 			})
 			return
 		}
 
-		json.NewEncoder(w).Encode(Response{
+		json.NewEncoder(w).Encode(store.Response{
 			Success: true,
 			Message: "Data retrieved successfully",
 			Data: map[string]interface{}{
@@ -303,7 +296,7 @@ func SyncHandler(w http.ResponseWriter, r *http.Request) {
 		// Update user data
 		var req SyncRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			json.NewEncoder(w).Encode(Response{
+			json.NewEncoder(w).Encode(store.Response{
 				Success: false,
 				Message: "Invalid request body",
 			})
@@ -324,7 +317,7 @@ func SyncHandler(w http.ResponseWriter, r *http.Request) {
 
 		store.SaveStorage()
 
-		json.NewEncoder(w).Encode(Response{
+		json.NewEncoder(w).Encode(store.Response{
 			Success: true,
 			Message: "Data synchronized successfully",
 			Data: map[string]interface{}{
@@ -333,27 +326,31 @@ func SyncHandler(w http.ResponseWriter, r *http.Request) {
 		})
 
 	default:
-		json.NewEncoder(w).Encode(Response{
+		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
 			Message: "Method not allowed",
 		})
 	}
 }
 
-// healthHandler handles health check
+// Health check handler
 func HealthHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	
+
 	store.Storage.Mu.RLock()
 	userCount := len(store.Storage.Users)
+	transactionCount := len(store.Storage.Transactions)
+	orderCount := len(store.Storage.Orders)
 	store.Storage.Mu.RUnlock()
 
-	json.NewEncoder(w).Encode(Response{
+	json.NewEncoder(w).Encode(store.Response{
 		Success: true,
 		Message: "Server is healthy",
 		Data: map[string]interface{}{
-			"timestamp":  time.Now(),
-			"user_count": userCount,
+			"timestamp":         time.Now(),
+			"user_count":        userCount,
+			"transaction_count": transactionCount,
+			"order_count":       orderCount,
 		},
 	})
 }
@@ -365,7 +362,7 @@ func DeleteAccountHandler(w http.ResponseWriter, r *http.Request) {
     // Only allow DELETE method
     if r.Method != http.MethodDelete {
         w.WriteHeader(http.StatusMethodNotAllowed)
-        json.NewEncoder(w).Encode(Response{
+        json.NewEncoder(w).Encode(store.Response{
             Success: false,
             Message: "Method not allowed",
         })
@@ -376,7 +373,7 @@ func DeleteAccountHandler(w http.ResponseWriter, r *http.Request) {
     userID := r.Header.Get("X-User-ID")
     if userID == "" {
         w.WriteHeader(http.StatusUnauthorized)
-        json.NewEncoder(w).Encode(Response{
+        json.NewEncoder(w).Encode(store.Response{
             Success: false,
             Message: "User ID header required",
         })
@@ -387,7 +384,7 @@ func DeleteAccountHandler(w http.ResponseWriter, r *http.Request) {
     var req DeleteAccountRequest
     if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
         w.WriteHeader(http.StatusBadRequest)
-        json.NewEncoder(w).Encode(Response{
+        json.NewEncoder(w).Encode(store.Response{
             Success: false,
             Message: "Invalid request body",
         })
@@ -397,7 +394,7 @@ func DeleteAccountHandler(w http.ResponseWriter, r *http.Request) {
     // Validate input
     if req.Email == "" || req.Username == "" || req.Password == "" {
         w.WriteHeader(http.StatusBadRequest)
-        json.NewEncoder(w).Encode(Response{
+        json.NewEncoder(w).Encode(store.Response{
             Success: false,
             Message: "Username, email, and password are required",
         })
@@ -411,7 +408,7 @@ func DeleteAccountHandler(w http.ResponseWriter, r *http.Request) {
 
     if !userExists {
         w.WriteHeader(http.StatusNotFound)
-        json.NewEncoder(w).Encode(Response{
+        json.NewEncoder(w).Encode(store.Response{
             Success: false,
             Message: "User not found",
         })
@@ -421,7 +418,7 @@ func DeleteAccountHandler(w http.ResponseWriter, r *http.Request) {
     // Verify the email matches the user ID (additional security check)
     if user.Email != req.Email {
         w.WriteHeader(http.StatusUnauthorized)
-        json.NewEncoder(w).Encode(Response{
+        json.NewEncoder(w).Encode(store.Response{
             Success: false,
             Message: "Invalid credentials",
         })
@@ -431,7 +428,7 @@ func DeleteAccountHandler(w http.ResponseWriter, r *http.Request) {
     // Verify username matches
     if user.Username != req.Username {
         w.WriteHeader(http.StatusUnauthorized)
-        json.NewEncoder(w).Encode(Response{
+        json.NewEncoder(w).Encode(store.Response{
             Success: false,
             Message: "Invalid credentials",
         })
@@ -442,7 +439,7 @@ func DeleteAccountHandler(w http.ResponseWriter, r *http.Request) {
     expectedHash := encrypt.HashCredentials(req.Username, req.Email, req.Password)
     if user.PasswordHash != expectedHash {
         w.WriteHeader(http.StatusUnauthorized)
-        json.NewEncoder(w).Encode(Response{
+        json.NewEncoder(w).Encode(store.Response{
             Success: false,
             Message: "Invalid credentials",
         })
@@ -473,7 +470,7 @@ func DeleteAccountHandler(w http.ResponseWriter, r *http.Request) {
         // You might want to handle this differently based on your requirements
     }
 
-    json.NewEncoder(w).Encode(Response{
+    json.NewEncoder(w).Encode(store.Response{
         Success: true,
         Message: "Account deleted successfully",
     })
