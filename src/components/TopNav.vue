@@ -97,8 +97,7 @@ let props = defineProps<{
           @click="() => props.functions.deleteChat(props.data.currentChat?.id || '')"
           title="Delete Chat"
           v-if="
-            props.data.currentChat?.id.length !== 0 &&
-            props.data.currentChat?.messages.length !== 0
+            props.data.currentChat?.id.length !== 0
           "
           class="flex items-center gap-2 text-gray-500 hover:text-red-600 border border-gray-200 hover:border-red-400 hover:bg-red-50 rounded-full px-3 py-1.5 text-sm font-medium transition"
         >
