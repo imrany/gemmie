@@ -1,6 +1,8 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import HomeView from '../views/HomeView.vue'
 import DeleteAccView from '../views/DeleteAccView.vue'
+import UpgradeView from '@/views/UpgradeView.vue'
+import SettingsView from '@/views/SettingsView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -14,6 +16,16 @@ const router = createRouter({
       path: '/auth/delete_account',
       name: 'delete_account',
       component: DeleteAccView
+    },
+    {
+      path: '/upgrade',
+      name: 'upgrade',
+      component: UpgradeView
+    },
+    {
+      path: '/settings',
+      name: 'settings',
+      component: SettingsView
     },
   ]
 })
