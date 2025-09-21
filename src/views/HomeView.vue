@@ -10,8 +10,7 @@ import type { Chat, ConfirmDialogOptions, CurrentChat, LinkPreview, Res } from "
 import { toast } from 'vue-sonner'
 import { destroyVideoLazyLoading, detectAndProcessVideo, initializeVideoLazyLoading, observeNewVideoContainers, pauseVideo, playEmbeddedVideo, playSocialVideo, resumeVideo, showVideoControls, stopDirectVideo, stopVideo, toggleDirectVideo, updateVideoControls } from "@/utils/videoProcessing"
 import { onUpdated } from "vue"
-
-const API_BASE_URL = 'http://localhost:8081/api'
+import { API_BASE_URL } from "@/utils/globals"
 
 // ---------- State ----------
 // Confirmation dialog state
@@ -950,7 +949,8 @@ function logout() {
         localStorage.removeItem('userdetails')
         localStorage.removeItem('isCollapsed')
         localStorage.removeItem('currentChatId')
-        // Keep chats and link previews cached locally
+        localStorage.removeItem('chats')
+        localStorage.removeItem('linkPreviews')
 
         // Reset state
         parsedUserDetails = null

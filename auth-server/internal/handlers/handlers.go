@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -16,6 +17,12 @@ type Response struct {
 	Data    interface{} `json:"data,omitempty"`
 }
 
+// DeleteAccountRequest represents request payload for account deletion
+type DeleteAccountRequest struct {
+    Email    string `json:"email"`
+    Username string `json:"username"`
+    Password string `json:"password"`
+}
 
 // LoginRequest represents login request payload
 type LoginRequest struct {
@@ -351,4 +358,123 @@ func HealthHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-//
+// DeleteAccountHandler handles account deletion securely
+func DeleteAccountHandler(w http.ResponseWriter, r *http.Request) {
+    w.Header().Set("Content-Type", "application/json")
+
+    // Only allow DELETE method
+    if r.Method != http.MethodDelete {
+        w.WriteHeader(http.StatusMethodNotAllowed)
+        json.NewEncoder(w).Encode(Response{
+            Success: false,
+            Message: "Method not allowed",
+        })
+        return
+    }
+
+    // Get user ID from header
+    userID := r.Header.Get("X-User-ID")
+    if userID == "" {
+        w.WriteHeader(http.StatusUnauthorized)
+        json.NewEncoder(w).Encode(Response{
+            Success: false,
+            Message: "User ID header required",
+        })
+        return
+    }
+
+    // Parse request body
+    var req DeleteAccountRequest
+    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+        w.WriteHeader(http.StatusBadRequest)
+        json.NewEncoder(w).Encode(Response{
+            Success: false,
+            Message: "Invalid request body",
+        })
+        return
+    }
+
+    // Validate input
+    if req.Email == "" || req.Username == "" || req.Password == "" {
+        w.WriteHeader(http.StatusBadRequest)
+        json.NewEncoder(w).Encode(Response{
+            Success: false,
+            Message: "Username, email, and password are required",
+        })
+        return
+    }
+
+    // Verify user exists and userID matches
+    store.Storage.Mu.RLock()
+    user, userExists := store.Storage.Users[userID]
+    store.Storage.Mu.RUnlock()
+
+    if !userExists {
+        w.WriteHeader(http.StatusNotFound)
+        json.NewEncoder(w).Encode(Response{
+            Success: false,
+            Message: "User not found",
+        })
+        return
+    }
+
+    // Verify the email matches the user ID (additional security check)
+    if user.Email != req.Email {
+        w.WriteHeader(http.StatusUnauthorized)
+        json.NewEncoder(w).Encode(Response{
+            Success: false,
+            Message: "Invalid credentials",
+        })
+        return
+    }
+
+    // Verify username matches
+    if user.Username != req.Username {
+        w.WriteHeader(http.StatusUnauthorized)
+        json.NewEncoder(w).Encode(Response{
+            Success: false,
+            Message: "Invalid credentials",
+        })
+        return
+    }
+
+    // Verify password
+    expectedHash := encrypt.HashCredentials(req.Username, req.Email, req.Password)
+    if user.PasswordHash != expectedHash {
+        w.WriteHeader(http.StatusUnauthorized)
+        json.NewEncoder(w).Encode(Response{
+            Success: false,
+            Message: "Invalid credentials",
+        })
+        return
+    }
+
+    // Log the deletion attempt (for audit purposes)
+    slog.Info("Account deletion requested", 
+        "user_id", userID,
+        "username", user.Username,
+        "email", user.Email,
+        "timestamp", time.Now(),
+    )
+
+    // Delete user and associated data
+    store.Storage.Mu.Lock()
+    delete(store.Storage.Users, userID)
+    delete(store.Storage.UserData, userID)
+    store.Storage.Mu.Unlock()
+
+    // Save changes to persistent storage
+    if err := store.SaveStorage(); err != nil {
+        slog.Error("Failed to save storage after account deletion", 
+            "user_id", userID, 
+            "error", err,
+        )
+        // Note: At this point the user is deleted from memory but not from disk
+        // You might want to handle this differently based on your requirements
+    }
+
+    json.NewEncoder(w).Encode(Response{
+        Success: true,
+        Message: "Account deleted successfully",
+    })
+}
