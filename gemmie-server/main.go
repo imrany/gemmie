@@ -8,8 +8,8 @@ import (
 	"syscall"
 	"time"
 
-	v1 "github.com/imrany/gemmie/auth-server/internal/handlers"
-	"github.com/imrany/gemmie/auth-server/store"
+	v1 "github.com/imrany/gemmie/gemmie-server/internal/handlers"
+	"github.com/imrany/gemmie/gemmie-server/store"
 
 	"log/slog"
 
@@ -59,7 +59,7 @@ func main() {
 
 	// Root command with Cobra
 	var rootCmd = &cobra.Command{
-		Use:   "auth-server",
+		Use:   "gemmie-server",
 		Short: "Auth Server with sync functionality",
 		Run: func(cmd *cobra.Command, args []string) {
 			runServer()
