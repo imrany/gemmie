@@ -75,7 +75,6 @@ func main() {
 	viper.BindPFlag("DATA_FILE", rootCmd.PersistentFlags().Lookup("data"))
 
 	// Bind env variables (PORT, DATA_FILE)
-	viper.SetEnvPrefix("AUTH") // AUTH_PORT, AUTH_DATA_FILE
 	viper.AutomaticEnv()
 
 	if err := rootCmd.Execute(); err != nil {
