@@ -3,22 +3,20 @@
 # -------------------------
 FROM golang:1.24-alpine AS builder
 
-WORKDIR /app
+WORKDIR /app/gemmie-server
 
 # Install build deps
 RUN apk add --no-cache git ca-certificates tzdata
 
-# Copy mod files first (better caching)
-COPY go.mod go.sum ./
-
-# Download deps with caching
+# Copy go.mod and go.sum first (for dependency caching)
+COPY gemmie-server/go.mod gemmie-server/go.sum ./
 RUN --mount=type=cache,target=/go/pkg/mod \
     go mod download
 
-# Copy source code
-COPY . .
+# Copy the rest of the source
+COPY gemmie-server/ .
 
-# Build the binary with version injection
+# Build the binary
 ARG VERSION=dev
 RUN --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 GOOS=linux go build \
@@ -42,7 +40,7 @@ WORKDIR /opt/gemmie
 # Copy binary from builder
 COPY --from=builder /gemmie-server .
 
-# Ensure it’s executable
+# Ensure executable
 RUN chmod +x gemmie-server
 
 # Run as non-root
@@ -51,7 +49,7 @@ USER gemmie
 # Expose default port
 EXPOSE 8081
 
-# Default envs (can be overridden at runtime)
+# Default envs (override in docker-compose or runtime)
 ENV DATA_FILE=/opt/gemmie/gemmie_data.json \
     PORT=8081
 
