@@ -1,0 +1,17 @@
+# Ignore editor stuff
+.git
+.gitignore
+
+# Ignore local artifacts
+*.log
+*.env
+*.DS_Store
+
+# Ignore runtime data
+gemmie-server/gemmie-server/gemmie_data.json
+
+# Ignore frontend files
+node_modules
+dist
+firebase.json
+index.html
