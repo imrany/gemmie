@@ -54,26 +54,6 @@ function openUpgrade() {
           Gemmie
         </p>
         <div class="flex gap-2 items-center ml-auto">
-          <div v-if="props.data.isAuthenticated()&&props.data.screenWidth < 720" class="relative">
-            <div v-if="props.data.syncStatus.syncing"
-              class="flex items-center gap-2 bg-blue-50 text-blue-700 px-3 py-1.5 rounded-full text-xs border border-blue-200 shadow-sm animate-pulse">
-              <i class="pi pi-spin pi-spinner"></i>
-              <span>Syncing...</span>
-            </div>
-
-            <div v-else-if="props.data.syncStatus.hasUnsyncedChanges"
-              class="flex items-center gap-2 bg-orange-50 text-orange-700 px-3 py-1.5 rounded-full text-xs border border-orange-200 shadow-sm cursor-pointer hover:bg-orange-100 transition"
-              @click="props.functions.manualSync">
-              <i class="pi pi-cloud-upload"></i>
-              <span>Sync pending</span>
-            </div>
-
-            <div v-else-if="props.data.syncStatus.lastSync"
-              class="flex items-center gap-2 bg-green-50 text-green-700 px-3 py-1.5 rounded-full text-xs border border-green-200 shadow-sm">
-              <i class="pi pi-check-circle"></i>
-              <span>Synced</span>
-            </div>
-          </div>
           <button @click="props.functions.toggleSidebar" title="Toggle Sidebar"
             class="w-[30px] h-[30px] flex items-center justify-center hover:bg-gray-100 rounded-full cursor-pointer">
             <span class="pi pi-bars text-base"></span>
