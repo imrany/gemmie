@@ -82,15 +82,7 @@ const shouldShowAuth = computed(() => {
           <span class="pi pi-comment text-lg"></span>
         </div>
         
-        <p class="text-3xl font-semibold">{{ parsedUserDetails?.username || 'Gemmie' }}</p>
-        <!-- <div class="text-center text-base md:max-w-[400px]">
-          <p>Your private AI assistant.</p>
-          <p class="text-sm text-gray-500">
-            We take your privacy seriously. All your data stays on your device.
-            Your chats are stored locally in your browser, so they are never sent to any server.
-            Make sure to back up your chats if you clear your browser data or switch to a new device.
-          </p>
-        </div> -->
+        <p class="text-3xl text-black font-semibold">{{ parsedUserDetails?.username || 'Gemmie' }}</p>
         <div class="text-center max-w-md space-y-2">
           <p class="text-gray-600 leading-relaxed">
             Experience privacy-first conversations with advanced AI. Your data stays secure, local and synced to your all devices.

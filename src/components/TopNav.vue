@@ -30,7 +30,7 @@ let props = defineProps<{
     ">
     <div class="flex h-full px-4 items-center justify-between w-full">
       <!-- Brand -->
-      <p class="text-gray-800 text-xl font-semibold tracking-wide select-none">
+      <p class="text-black text-xl font-semibold tracking-wide select-none">
         Gemmie
       </p>
 
