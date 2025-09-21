@@ -11,6 +11,8 @@ import { toast } from 'vue-sonner'
 import { destroyVideoLazyLoading, detectAndProcessVideo, initializeVideoLazyLoading, observeNewVideoContainers, pauseVideo, playEmbeddedVideo, playSocialVideo, resumeVideo, showVideoControls, stopDirectVideo, stopVideo, toggleDirectVideo, updateVideoControls } from "@/utils/videoProcessing"
 import { onUpdated } from "vue"
 
+const API_BASE_URL = 'http://localhost:8081/api'
+
 // ---------- State ----------
 // Confirmation dialog state
 const confirmDialog = ref<ConfirmDialogOptions>({
@@ -28,6 +30,11 @@ const authData = ref({
   username: '',
   email: '',
   password: ''
+})
+const syncStatus = ref({
+  lastSync: null as Date | null,
+  syncing: false,
+  hasUnsyncedChanges: false
 })
 
 const showInput = ref(false) //  removed 'let' declaration
@@ -118,16 +125,6 @@ function loadChats() {
   }
 }
 
-// Save chats to localStorage
-function saveChats() {
-  try {
-    localStorage.setItem('chats', JSON.stringify(chats.value))
-    localStorage.setItem('currentChatId', currentChatId.value)
-  } catch (error) {
-    console.error('Failed to save chats:', error)
-  }
-}
-
 // Update expanded array to match current messages
 function updateExpandedArray() {
   expanded.value = currentMessages.value.map(() => false)
@@ -202,8 +199,8 @@ function deleteChat(chatId: string) {
       }
 
       // Remove link previews from cache
-      if(chatToDelete.messages.length !==0){
-        chatToDelete.messages.forEach(message=>{
+      if (chatToDelete.messages.length !== 0) {
+        chatToDelete.messages.forEach(message => {
           const responseUrls = extractUrls(message.response || '')
           const promptUrls = extractUrls(message.prompt || '')
           const urls = [...new Set([...responseUrls, ...promptUrls])]
@@ -627,6 +624,266 @@ function LinkPreviewComponent({ preview }: { preview: LinkPreview }) {
   `
 }
 
+// API helper function
+async function apiCall(endpoint: string, options: RequestInit = {}) {
+  try {
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(parsedUserDetails?.user_id ? { 'X-User-ID': parsedUserDetails.user_id } : {}),
+        ...options.headers,
+      },
+    })
+
+    const data = await response.json()
+
+    if (!data.success) {
+      throw new Error(data.message || 'API request failed')
+    }
+
+    return data
+  } catch (error) {
+    console.error('API Error:', error)
+    throw error
+  }
+}
+
+function validateCredentials(username: string, email: string, password: string): string | null {
+  // Username: 3–12 chars, no spaces, only letters, numbers, underscores, hyphens
+  const usernameRegex = /^[a-zA-Z0-9_-]{3,12}$/
+  if (!usernameRegex.test(username)) {
+    return "Username must be 3–12 characters, no spaces, only letters, numbers, _ or -"
+  }
+
+  // Email: basic check
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  if (!emailRegex.test(email)) {
+    return "Invalid email format"
+  }
+
+  // Password: at least 8 chars
+  if (password.length < 8) {
+    return "Password must be at least 8 characters"
+  }
+
+  return null
+}
+
+async function handleAuth(e: Event) {
+  e.preventDefault()
+
+  const { username, email, password } = authData.value
+
+  // Custom validation
+  const validationError = validateCredentials(username, email, password)
+  if (validationError) {
+    toast.error(validationError, { duration: 4000 })
+    return
+  }
+
+  try {
+    isLoading.value = true
+
+    let response
+    try {
+      // Try login
+      response = await apiCall('/login', {
+        method: 'POST',
+        body: JSON.stringify({ username, email, password })
+      })
+
+      toast.success('Welcome back!', {
+        duration: 3000,
+        description: `Logged in as ${response.data.username}`
+      })
+    } catch (loginError) {
+      // Try register if login fails
+      response = await apiCall('/register', {
+        method: 'POST',
+        body: JSON.stringify({ username, email, password })
+      })
+
+      toast.success('Account created successfully!', {
+        duration: 3000,
+        description: `Welcome ${response.data.username}!`
+      })
+    }
+
+    // Store user details locally
+    const userData = {
+      user_id: response.data.user_id,
+      username: response.data.username,
+      email: response.data.email,
+      created_at: response.data.created_at,
+      sessionId: btoa(email + ':' + password + ':' + username)
+    }
+
+    localStorage.setItem('userdetails', JSON.stringify(userData))
+    parsedUserDetails = userData
+
+    // Sync data from server
+    await syncFromServer(response.data)
+
+    // Reset form
+    authStep.value = 1
+    authData.value = { username: '', email: '', password: '' }
+
+    nextTick(() => {
+      const textarea = document.getElementById("prompt") as HTMLTextAreaElement
+      if (textarea) textarea.focus()
+    })
+
+  } catch (error: any) {
+    console.error('Authentication error:', error)
+    toast.error('Authentication failed', {
+      duration: 4000,
+      description: error.message || 'Please check your credentials and try again.'
+    })
+  } finally {
+    isLoading.value = false
+  }
+}
+
+
+// Sync data from server to local storage
+async function syncFromServer(serverData?: any) {
+  if (!parsedUserDetails?.user_id) return
+
+  try {
+    syncStatus.value.syncing = true
+
+    let data = serverData
+    if (!data) {
+      const response = await apiCall('/sync', { method: 'GET' })
+      data = response.data
+    }
+
+    // Parse and merge server data
+    if (data.chats && data.chats !== '[]') {
+      try {
+        const serverChats = JSON.parse(data.chats)
+        const localChats = chats.value
+
+        // Merge chats (server takes precedence for newer data)
+        const mergedChats = mergeChats(serverChats, localChats)
+        chats.value = mergedChats
+        localStorage.setItem('chats', JSON.stringify(mergedChats))
+      } catch (error) {
+        console.error('Error parsing server chats:', error)
+      }
+    }
+
+    if (data.link_previews && data.link_previews !== '{}') {
+      try {
+        const serverPreviews = JSON.parse(data.link_previews)
+        // Merge with local previews
+        const localPreviews = Object.fromEntries(linkPreviewCache.value)
+        const mergedPreviews = { ...localPreviews, ...serverPreviews }
+
+        linkPreviewCache.value = new Map(Object.entries(mergedPreviews))
+        localStorage.setItem('linkPreviews', JSON.stringify(mergedPreviews))
+      } catch (error) {
+        console.error('Error parsing server link previews:', error)
+      }
+    }
+
+    if (data.current_chat_id) {
+      currentChatId.value = data.current_chat_id
+      localStorage.setItem('currentChatId', data.current_chat_id)
+    }
+
+    syncStatus.value.lastSync = new Date()
+    syncStatus.value.hasUnsyncedChanges = false
+    updateExpandedArray()
+
+  } catch (error: any) {
+    console.error('Sync from server failed:', error)
+    toast.warning('Failed to sync data from server', {
+      duration: 3000,
+      description: 'Using local data instead'
+    })
+  } finally {
+    syncStatus.value.syncing = false
+  }
+}
+
+// Sync local data to server
+async function syncToServer() {
+  if (!parsedUserDetails?.user_id) return
+
+  try {
+    syncStatus.value.syncing = true
+
+    const syncData = {
+      chats: JSON.stringify(chats.value),
+      link_previews: JSON.stringify(Object.fromEntries(linkPreviewCache.value)),
+      current_chat_id: currentChatId.value
+    }
+
+    await apiCall('/sync', {
+      method: 'POST',
+      body: JSON.stringify(syncData)
+    })
+
+    syncStatus.value.lastSync = new Date()
+    syncStatus.value.hasUnsyncedChanges = false
+
+  } catch (error: any) {
+    console.error('Sync to server failed:', error)
+    syncStatus.value.hasUnsyncedChanges = true
+    toast.error('Failed to sync data to server', {
+      duration: 3000,
+      description: 'Your data is saved locally'
+    })
+  } finally {
+    syncStatus.value.syncing = false
+  }
+}
+
+// Merge chats function (server data takes precedence for conflicts)
+function mergeChats(serverChats: Chat[], localChats: Chat[]): Chat[] {
+  const merged = new Map<string, Chat>()
+
+  // Add local chats first
+  localChats.forEach(chat => {
+    merged.set(chat.id, chat)
+  })
+
+  // Add server chats (will overwrite local if same ID and server is newer)
+  serverChats.forEach(serverChat => {
+    const localChat = merged.get(serverChat.id)
+    if (!localChat || new Date(serverChat.updatedAt) > new Date(localChat.updatedAt)) {
+      merged.set(serverChat.id, serverChat)
+    }
+  })
+
+  // Sort by updatedAt (most recent first)
+  return Array.from(merged.values()).sort((a, b) =>
+    new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+  )
+}
+
+// Updated saveChats function with server sync
+function saveChats() {
+  try {
+    localStorage.setItem('chats', JSON.stringify(chats.value))
+    localStorage.setItem('currentChatId', currentChatId.value)
+
+    // Mark as having unsynced changes
+    syncStatus.value.hasUnsyncedChanges = true
+
+    // Auto-sync after a delay
+    setTimeout(() => {
+      if (syncStatus.value.hasUnsyncedChanges && !syncStatus.value.syncing) {
+        syncToServer()
+      }
+    }, 2000)
+
+  } catch (error) {
+    console.error('Failed to save chats:', error)
+  }
+}
 
 // ---------- Authentication Functions ----------
 function nextAuthStep() {
@@ -670,84 +927,138 @@ function handleStepSubmit(e: Event) {
   }
 }
 
-// Update the existing handleAuth function to work with the new data structure
-function handleAuth(e: Event) {
-  e.preventDefault()
-
-  const { username, email, password } = authData.value
-  const createdAt = new Date().toISOString()
-
-  if (!email || !password || !username) {
-    toast.error('Please fill in all required fields', {
-      duration: 4000,
-      description: ''
-    })
-    return
-  }
-
-  const userData = {
-    email,
-    username,
-    createdAt,
-    sessionId: btoa(email + ':' + password + ':' + username)
-  }
-
-  try {
-    localStorage.setItem('userdetails', JSON.stringify(userData))
-    parsedUserDetails = userData
-
-    // Load existing chats after authentication
-    loadChats()
-    window.location.reload()
-
-    nextTick(() => {
-      const textarea = document.getElementById("prompt") as HTMLTextAreaElement
-      if (textarea) textarea.focus()
-    })
-  } catch (err) {
-    console.error('Failed to save user data:', err)
-    toast.error('Failed to create session. Please try again.', {
-      duration: 4000,
-      description: ''
-    })
-  }
-}
-
+// Updated logout function
 function logout() {
   showConfirmDialog({
     visible: true,
     title: 'Logout Confirmation',
-    message: 'Are you sure you want to logout? This will clear your session on this device.',
+    message: 'Are you sure you want to logout? Your data will be synced before logging out.',
     type: 'warning',
     confirmText: 'Logout',
-    onConfirm: () => {
+    onConfirm: async () => {
       try {
+        // Sync to server before logout if there are unsynced changes
+        if (syncStatus.value.hasUnsyncedChanges) {
+          toast.info('Syncing your data...', {
+            duration: 2000,
+            description: 'Please wait'
+          })
+          await syncToServer()
+        }
+
+        // Clear local storage
         localStorage.removeItem('userdetails')
         localStorage.removeItem('isCollapsed')
         localStorage.removeItem('currentChatId')
-        // Keep chats and link previews cached even after logout
+        // Keep chats and link previews cached locally
 
+        // Reset state
         parsedUserDetails = null
         chats.value = []
         currentChatId.value = ''
         expanded.value = []
         showInput.value = false
         isCollapsed.value = false
+        syncStatus.value = {
+          lastSync: null,
+          syncing: false,
+          hasUnsyncedChanges: false
+        }
+
         confirmDialog.value.visible = false
+
+        toast.success('Logged out successfully', {
+          duration: 3000,
+          description: 'Your data has been synced'
+        })
 
       } catch (err) {
         console.error('Error during logout:', err)
-        toast.error('Error during logout. Please try again.', {
+        toast.error('Error during logout', {
           duration: 4000,
-          description: ''
+          description: 'Data may not have been fully synced'
         })
       }
     }
   })
 }
 
+// Manual sync function
+async function manualSync() {
+  if (!parsedUserDetails?.user_id) {
+    toast.warning('Please log in to sync data', {
+      duration: 3000,
+      description: ''
+    })
+    return
+  }
+
+  try {
+    // First sync to server, then from server to get latest
+    await syncToServer()
+    await syncFromServer()
+
+    toast.success('Data synced successfully', {
+      duration: 3000,
+      description: 'Your data is up to date across all devices'
+    })
+  } catch (error) {
+    toast.error('Sync failed', {
+      duration: 4000,
+      description: 'Please check your internet connection'
+    })
+  }
+}
+
+// Updated isAuthenticated function
 function isAuthenticated(): boolean {
-  return parsedUserDetails && parsedUserDetails.email && parsedUserDetails.username && parsedUserDetails.sessionId
+  return parsedUserDetails &&
+    parsedUserDetails.email &&
+    parsedUserDetails.username &&
+    parsedUserDetails.user_id &&
+    parsedUserDetails.sessionId
+}
+
+
+// Auto-sync on app focus (when user comes back to tab)
+let autoSyncInterval: any = null
+
+function setupAutoSync() {
+  // Clear existing interval
+  if (autoSyncInterval) {
+    clearInterval(autoSyncInterval)
+  }
+
+  // Auto sync every 5 minutes if authenticated and has unsynced changes
+  autoSyncInterval = setInterval(() => {
+    if (isAuthenticated() && syncStatus.value.hasUnsyncedChanges && !syncStatus.value.syncing) {
+      syncToServer()
+    }
+  }, 5 * 60 * 1000) // 5 minutes
+
+  // Sync when page becomes visible
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && isAuthenticated()) {
+      // Small delay to ensure tab is fully active
+      setTimeout(() => {
+        syncFromServer()
+      }, 1000)
+    }
+  })
+
+  // Sync before page unload
+  window.addEventListener('beforeunload', () => {
+    if (syncStatus.value.hasUnsyncedChanges) {
+      // Use sendBeacon for reliable data sending on page unload
+      const syncData = {
+        chats: JSON.stringify(chats.value),
+        link_previews: JSON.stringify(Object.fromEntries(linkPreviewCache.value)),
+        current_chat_id: currentChatId.value
+      }
+
+      navigator.sendBeacon(`${API_BASE_URL}/sync`, JSON.stringify(syncData))
+    }
+  })
 }
 
 // ---------- Helpers ----------
@@ -831,7 +1142,7 @@ function debouncedHandleScroll() {
   if (scrollTimeout) {
     clearTimeout(scrollTimeout)
   }
-  
+
   scrollTimeout = setTimeout(() => {
     handleScroll()
   }, 16) // ~60fps
@@ -1016,7 +1327,7 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
   } finally {
     isLoading.value = false
     saveChats()
-    
+
     // Observe any new video containers
     observeNewVideoContainers();
 
@@ -1178,7 +1489,7 @@ function setShowInput() {
 //  Improved scroll functions
 function scrollToBottom() {
   if (!scrollableElem.value) return;
-  
+
   // Use requestAnimationFrame for smooth scrolling
   requestAnimationFrame(() => {
     if (scrollableElem.value) {
@@ -1188,7 +1499,7 @@ function scrollToBottom() {
       });
     }
   });
-  
+
   // Update button visibility after scrolling
   setTimeout(() => {
     handleScroll();
@@ -1202,7 +1513,7 @@ function handleScroll() {
   // More lenient threshold - consider "at bottom" if within 50px
   const threshold = 50;
   const isAtBottom = elem.scrollTop + elem.clientHeight >= elem.scrollHeight - threshold;
-  
+
   // Only show button when user has scrolled up significantly AND there's content to scroll to
   const hasScrollableContent = elem.scrollHeight > elem.clientHeight + threshold;
   showScrollDownButton.value = !isAtBottom && hasScrollableContent;
@@ -1267,6 +1578,14 @@ onMounted(() => {
   // Load chats if logged in
   if (isAuthenticated()) {
     loadChats();
+    
+    // Setup auto-sync
+    setupAutoSync()
+    
+    // Initial sync from server (delayed to avoid conflicts)
+    setTimeout(() => {
+      syncFromServer()
+    }, 1000)
 
     // Pre-process links in existing messages
     currentMessages.value.forEach((item, index) => {
@@ -1352,12 +1671,28 @@ onMounted(() => {
     // Clean up video lazy loading observer
     destroyVideoLazyLoading();
     
+    // Clean up sync functions
+    if (autoSyncInterval) {
+      clearInterval(autoSyncInterval);
+    }
+    
+    // Remove event listeners
+    // if (window.syncCleanupFunctions) {
+    //   window.syncCleanupFunctions.forEach((cleanup: Function) => cleanup())
+    //   window.syncCleanupFunctions = []
+    // }
+    
     // Clear timeouts
     if (scrollTimeout) {
       clearTimeout(scrollTimeout);
     }
     if (resizeTimeout) {
       clearTimeout(resizeTimeout);
+    }
+    
+    // Final sync if needed
+    if (syncStatus.value.hasUnsyncedChanges) {
+      syncToServer()
     }
   });
 });
@@ -1390,8 +1725,7 @@ onUpdated(() => {
             class="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
             {{ confirmDialog.cancelText }}
           </button>
-          <button @click="() => { confirmDialog.onConfirm(); confirmDialog.visible = false }" 
-            :class="confirmDialog.type === 'danger' ? 'bg-red-600 hover:bg-red-700' :
+          <button @click="() => { confirmDialog.onConfirm(); confirmDialog.visible = false }" :class="confirmDialog.type === 'danger' ? 'bg-red-600 hover:bg-red-700' :
             confirmDialog.type === 'warning' ? 'bg-orange-600 hover:bg-orange-700' :
               'bg-blue-600 hover:bg-blue-700'" class="px-4 py-2 text-white rounded-lg transition-colors">
             {{ confirmDialog.confirmText }}
@@ -1406,7 +1740,9 @@ onUpdated(() => {
       currentChatId,
       parsedUserDetails,
       screenWidth,
-      isCollapsed
+      isCollapsed,
+      syncStatus,
+      isAuthenticated
     }" :functions="{
       setShowInput,
       hideSidebar,
@@ -1416,7 +1752,8 @@ onUpdated(() => {
       createNewChat,
       switchToChat,
       deleteChat,
-      renameChat
+      renameChat,
+      manualSync,
     }" />
 
     <!-- Main Chat Window -->
@@ -1427,26 +1764,30 @@ onUpdated(() => {
         'flex-grow flex flex-col items-center justify-center ml-[60px] font-light text-sm transition-all duration-300 ease-in-out'
       )
         : 'text-sm font-light flex-grow items-center justify-center flex flex-col transition-all duration-300 ease-in-out'">
-      
+
       <TopNav v-if="isAuthenticated()" :data="{
         currentChat,
         parsedUserDetails,
         screenWidth,
         isCollapsed,
-        isSidebarHidden
+        isSidebarHidden,
+        syncStatus,
+        isAuthenticated
       }" :functions="{
         hideSidebar,
         deleteChat,
         createNewChat,
-        renameChat
+        renameChat,
+        manualSync,
       }" />
 
-      <div :class="(screenWidth > 720 && isAuthenticated()) ? 'h-screen flex flex-col items-center justify-center w-[85%]' : 'h-screen flex flex-col items-center justify-center'">
+      <div
+        :class="(screenWidth > 720 && isAuthenticated()) ? 'h-screen flex flex-col items-center justify-center w-[85%]' : 'h-screen flex flex-col items-center justify-center'">
         <!-- Empty State -->
         <div v-if="currentMessages.length === 0 || !isAuthenticated()"
           class="flex flex-col items-center justify-center h-[90vh]">
           <div class="max-md:flex-col flex gap-10 items-center justify-center h-full w-full max-md:px-5">
-            <div v-if="(showCreateSession===false&&screenWidth < 720)||screenWidth > 720" 
+            <div v-if="(showCreateSession === false && screenWidth < 720) || screenWidth > 720"
               class="flex flex-col md:flex-grow items-center gap-3 text-gray-600">
               <div class="rounded-full bg-gray-200 w-[60px] h-[60px] flex justify-center items-center">
                 <span class="pi pi-comment text-lg"></span>
@@ -1464,17 +1805,18 @@ onUpdated(() => {
                 class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors">
                 Write a prompt
               </button>
-              <button v-else-if="screenWidth < 720" @click="()=> showCreateSession=true"
+              <button v-else-if="screenWidth < 720" @click="() => showCreateSession = true"
                 class="px-4 py-2 w-full bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors">
                 Get Started
               </button>
             </div>
 
+            <!-- Multi-step Auth Form -->
             <div v-if="(!isAuthenticated()&&showCreateSession===true&&screenWidth < 720)||(!isAuthenticated()&&screenWidth > 720)" 
               class="flex-grow text-sm md:px-4 px-1 relative overflow-hidden"
               :class="screenWidth > 720 ? 'max-w-md w-full' : (!isAuthenticated()&&showCreateSession===true)?
               'flex flex-col justify-center w-full h-full translate-x-0 opacity-100':'translate-x-full opacity-0'">
-              
+
               <!-- Progress indicator -->
               <div class="flex justify-center mb-6">
                 <div class="flex items-center space-x-2">
@@ -1560,16 +1902,16 @@ onUpdated(() => {
                         Password
                       </label>
                       <input v-model="authData.password" required type="password" placeholder="Enter a secure password"
-                        minlength="6"
+                        minlength="8"
                         class="border border-gray-300 rounded-lg px-4 py-2 w-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
                         :class="authData.password && !validateCurrentStep() ? 'border-red-300' : ''" />
                       <div class="mt-2">
                         <div class="flex items-center gap-2 text-xs">
-                          <div :class="authData.password.length >= 6 ? 'text-green-600' : 'text-gray-400'"
+                          <div :class="authData.password.length >= 8 ? 'text-green-600' : 'text-gray-400'"
                             class="flex items-center gap-1">
-                            <i :class="authData.password.length >= 6 ? 'pi pi-check' : 'pi pi-circle'"
+                            <i :class="authData.password.length >= 8 ? 'pi pi-check' : 'pi pi-circle'"
                               class="text-xs"></i>
-                            <span>At least 6 characters</span>
+                            <span>At least 8 characters</span>
                           </div>
                         </div>
                       </div>
@@ -1580,10 +1922,11 @@ onUpdated(() => {
                         class="flex-1 bg-gray-100 text-gray-700 rounded-lg px-4 py-2 font-medium hover:bg-gray-200 transition-colors duration-200">
                         Back
                       </button>
-                      <button type="submit" :disabled="!validateCurrentStep()"
-                        class="flex-1 bg-blue-600 text-white rounded-lg px-4 py-2 font-medium hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors duration-200">
-                        <i class="pi pi-check mr-2"></i>
-                        Create Session
+                      <button type="submit" 
+                              :disabled="!validateCurrentStep() || isLoading"
+                              class="flex-1 bg-blue-600 text-white rounded-lg px-4 py-2 font-medium hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors duration-200 flex items-center justify-center gap-2">
+                        <i v-if="isLoading" class="pi pi-spin pi-spinner" :class="isLoading ? '' : 'pi pi-check'"></i>
+                        <span>{{ isLoading ? 'Creating...' : 'Create Session' }}</span>
                       </button>
                     </div>
                   </form>
@@ -1593,14 +1936,15 @@ onUpdated(() => {
               <!-- Footer note -->
               <div class="text-center">
                 <p class="text-xs text-gray-500 leading-relaxed">
-                  Your credentials are only stored locally on your device for session management.
-                  <br>All data stays private and secure.
+                  Your data is securely encrypted and synced across all your devices.
+                  <br>Create an account to access your chats anywhere.
                 </p>
               </div>
             </div>
           </div>
 
-          <p v-if="isAuthenticated()" class="text-sm mt-2 text-gray-400">Gemmie can make mistakes. Check important info.</p>
+          <p v-if="isAuthenticated()" class="text-sm mt-2 text-gray-400">Gemmie can make mistakes. Check important info.
+          </p>
         </div>
 
         <!-- Chat Messages -->
@@ -1684,9 +2028,8 @@ onUpdated(() => {
         </button>
 
         <!-- Input -->
-        <div v-if="(currentMessages.length !== 0 || showInput === true) && isAuthenticated()" 
-          :style="screenWidth > 720 && !isCollapsed ? 'left:270px;' :
-            screenWidth > 720 && isCollapsed ? 'left:60px;' : 'left:0px;'" 
+        <div v-if="(currentMessages.length !== 0 || showInput === true) && isAuthenticated()" :style="screenWidth > 720 && !isCollapsed ? 'left:270px;' :
+          screenWidth > 720 && isCollapsed ? 'left:60px;' : 'left:0px;'"
           class="bg-white z-20 bottom-0 right-0 fixed pb-5 px-5">
           <div class="flex items-center justify-center w-full">
             <form @submit="handleSubmit"

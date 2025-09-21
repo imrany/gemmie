@@ -433,38 +433,6 @@
   }
 }
 
-/* Dark mode support */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --preview-bg: #1f2937;
-    --preview-border: #374151;
-    --preview-hover: #111827;
-    --preview-shadow: rgba(0, 0, 0, 0.3);
-  }
-  
-  .link-preview {
-    background: var(--preview-bg);
-    border-color: var(--preview-border);
-    color: #f9fafb;
-  }
-  
-  .link-preview.error {
-    background: #451a1a;
-  }
-  
-  .link-preview h4 {
-    color: #f9fafb;
-  }
-  
-  .link-preview p {
-    color: #d1d5db;
-  }
-  
-  .link-preview .domain-info {
-    color: #9ca3af;
-  }
-}
-
 /* Dialog backdrop blur */
 .dialog-backdrop {
   backdrop-filter: blur(4px);
