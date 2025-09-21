@@ -18,7 +18,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 ARG VERSION=dev
 RUN --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 GOOS=linux go build \
-    -ldflags="-w -s -X github.com/imrany/gemmie/auth-server/internal/version.version=${VERSION}" \
+    -ldflags="-w -s -X github.com/imrany/gemmie/gemmie-server/internal/version.version=${VERSION}" \
     -o gemmie-server \
     ./main.go
 
