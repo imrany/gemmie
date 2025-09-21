@@ -69,10 +69,19 @@ func main() {
 	// Flags
 	rootCmd.PersistentFlags().String("port", "8081", "Port to run the server on")
 	rootCmd.PersistentFlags().String("data", "./gemmie_data.json", "Path to data file")
+	rootCmd.PersistentFlags().String("PAYHERO_USERNAME", "", "PayHero username (env: PAYHERO_USERNAME)")
+	rootCmd.PersistentFlags().String("PAYHERO_PASSWORD", "", "PayHero password (env: PAYHERO_PASSWORD)")
+	rootCmd.PersistentFlags().String("PAYHERO_CHANNEL_ID", "", "PayHero channel ID (env: PAYHERO_CHANNEL_ID)")
+	rootCmd.PersistentFlags().String("CALLBACK_URL", "", "Callback URL for PayHero (env: CALLBACK_URL)")
+	
 
 	// Bind flags to viper
 	viper.BindPFlag("PORT", rootCmd.PersistentFlags().Lookup("port"))
 	viper.BindPFlag("DATA_FILE", rootCmd.PersistentFlags().Lookup("data"))
+	viper.BindPFlag("PAYHERO_USERNAME", rootCmd.PersistentFlags().Lookup("PAYHERO_USERNAME"))
+	viper.BindPFlag("PAYHERO_PASSWORD", rootCmd.PersistentFlags().Lookup("PAYHERO_PASSWORD"))
+	viper.BindPFlag("PAYHERO_CHANNEL_ID", rootCmd.PersistentFlags().Lookup("PAYHERO_CHANNEL_ID"))
+	viper.BindPFlag("CALLBACK_URL", rootCmd.PersistentFlags().Lookup("CALLBACK_URL"))
 
 	// Bind env variables (PORT, DATA_FILE)
 	viper.AutomaticEnv()
@@ -98,6 +107,11 @@ func runServer() {
 	r.HandleFunc("/api/health", v1.HealthHandler).Methods(http.MethodGet)
 	r.HandleFunc("/api/delete_account", v1.DeleteAccountHandler).Methods(http.MethodDelete)
 
+	// Payment routes
+	r.HandleFunc("/api/payments/stk", v1.SendSTKHandler).Methods(http.MethodPost)
+	r.HandleFunc("/api/transactions", v1.GetTransactionsHandler).Methods(http.MethodGet)
+	r.HandleFunc("/api/transactions/{external_reference}", v1.GetTransactionByRefHandler).Methods(http.MethodGet)
+	r.HandleFunc("/api/callback", v1.StoreTransactionHandler).Methods(http.MethodPost)
 
 	// Handle CORS preflight
 	r.Methods(http.MethodOptions).HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

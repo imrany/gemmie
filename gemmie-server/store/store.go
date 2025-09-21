@@ -8,10 +8,19 @@ import (
 	"time"
 )
 
+// Response represents API response
+type Response struct {
+	Success bool        `json:"success"`
+	Message string      `json:"message"`
+	Data    interface{} `json:"data,omitempty"`
+}
+
 type StorageType struct {
-	Users    map[string]User     `json:"users"`     // key: user_id
-	UserData map[string]UserData `json:"user_data"` // key: user_id
-	Mu       sync.RWMutex        `json:"-"`
+	Users        map[string]User                 `json:"users"`         // key: user_id
+	UserData     map[string]UserData             `json:"user_data"`     // key: user_id
+	Orders       map[string]Order         `json:"orders"`        // key: order_id
+	Transactions map[string]Transaction `json:"transactions"` // key: transaction_id
+	Mu           sync.RWMutex                    `json:"-"`
 }
 
 type User struct {
@@ -31,17 +40,53 @@ type UserData struct {
 	UpdatedAt     time.Time `json:"updated_at"`
 }
 
-var Storage *StorageType
-var storageFile string
+// Order represents an order
+type Order struct {
+	ID                string    `json:"id"`
+	ExternalReference string    `json:"external_reference"`
+	CustomerName      string    `json:"customer_name"`
+	CustomerEmail     string    `json:"customer_email"`
+	CustomerPhone     string    `json:"customer_phone"`
+	ProductName       string    `json:"product_name"`
+	Amount            int       `json:"amount"`
+	Status            string    `json:"status"`
+	CreatedAt         time.Time `json:"created_at"`
+	UpdatedAt         time.Time `json:"updated_at"`
+}
+
+// Transaction represents a payment transaction
+type Transaction struct {
+	ID                 string    `json:"id"`
+	ExternalReference  string    `json:"external_reference"`
+	MpesaReceiptNumber string    `json:"mpesa_receipt_number"`
+	CheckoutRequestID  string    `json:"checkout_request_id"`
+	MerchantRequestID  string    `json:"merchant_request_id"`
+	Amount             int       `json:"amount"`
+	PhoneNumber        string    `json:"phone_number"`
+	ResultCode         string    `json:"result_code"`
+	ResultDescription  string    `json:"result_description"`
+	Status             string    `json:"status"`
+	CreatedAt          time.Time `json:"created_at"`
+	UpdatedAt          time.Time `json:"updated_at"`
+}
+
+
+var (
+	Storage     *StorageType
+	storageFile string
+)
 
 // InitStorage initializes the storage system with the given file path.
 func InitStorage(filePath string) {
 	storageFile = filePath
 
+	// Initialize storage
 	Storage = &StorageType{
-		Users:    make(map[string]User),
-		UserData: make(map[string]UserData),
-		Mu:       sync.RWMutex{},
+		Users:        make(map[string]User),
+		UserData:     make(map[string]UserData),
+		Transactions: make(map[string]Transaction),
+		Orders:       make(map[string]Order),
+		Mu:           sync.RWMutex{},
 	}
 
 	loadStorage()
@@ -69,12 +114,23 @@ func loadStorage() {
 
 	if err := json.Unmarshal(data, Storage); err != nil {
 		slog.Error("Error unmarshaling storage data", "error", err)
+		Storage = &StorageType{
+			Users:        make(map[string]User),
+			UserData:     make(map[string]UserData),
+			Transactions: make(map[string]Transaction),
+			Orders:       make(map[string]Order),
+			Mu:           sync.RWMutex{},
+		}
+
+		slog.Warn("Storage reset due to unmarshaling error")
 		return
 	}
 
 	slog.Info("Storage loaded",
 		"users", len(Storage.Users),
 		"user_data_records", len(Storage.UserData),
+		"orders", len(Storage.Orders),
+		"transactions", len(Storage.Transactions),
 	)
 }
 
