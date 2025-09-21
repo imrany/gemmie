@@ -1,12 +1,20 @@
+version: "3.9"
+
 services:
   gemmie-server:
     image: ghcr.io/imrany/gemmie-server:latest
     container_name: gemmie-server
     restart: unless-stopped
+    
+    # Persist app data outside container
     volumes:
-      - ~/.gemmie-server/:/var/opt/gemmie-server
+      - ~/.gemmie-server:/var/opt/gemmie-server
+    
+    # Expose the service port
     ports:
-      - 8081:8081
+      - "8081:8081"
+    
+    # Use environment variables for config
     environment:
-      - PORT=8081
-      - DATA_FILE=/var/opt/gemmie-server/gemmie_data.json
+      PORT: "8081"
+      DATA_FILE: "/var/opt/gemmie-server/gemmie_data.json"
