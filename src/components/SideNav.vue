@@ -50,7 +50,7 @@ function openUpgrade() {
     <div class="flex-1 overflow-y-auto">
       <!-- Top Header -->
       <div class="flex items-center justify-between p-3">
-        <p v-if="!props.data.isCollapsed" class="font-light text-xl text-black">
+        <p v-if="!props.data.isCollapsed" class="font-semibold text-xl text-black">
           Gemmie
         </p>
         <div class="flex gap-2 items-center ml-auto">
