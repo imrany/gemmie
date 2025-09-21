@@ -1791,7 +1791,6 @@ function setShowCreateSession(value: boolean) {
       <div
         :class="(screenWidth > 720 && isAuthenticated()) ? 'h-screen flex flex-col items-center justify-center w-[85%]' : 'h-screen flex flex-col items-center justify-center'">
         <!-- Empty State -->
-        <!-- In HomeView template, replace the CreateSessView usage -->
         <CreateSessView v-if="currentMessages.length === 0 || !isAuthenticated()" :chats="chats"
           :current-chat-id="currentChatId" :is-collapsed="isCollapsed" :parsed-user-details="parsedUserDetails"
           :screen-width="screenWidth" :sync-status="syncStatus" :is-authenticated="isAuthenticated"
