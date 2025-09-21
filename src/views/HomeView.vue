@@ -10,7 +10,7 @@ import type { Chat, ConfirmDialogOptions, CurrentChat, LinkPreview, Res } from "
 import { toast } from 'vue-sonner'
 import { destroyVideoLazyLoading, detectAndProcessVideo, initializeVideoLazyLoading, observeNewVideoContainers, pauseVideo, playEmbeddedVideo, playSocialVideo, resumeVideo, showVideoControls, stopDirectVideo, stopVideo, toggleDirectVideo, updateVideoControls } from "@/utils/videoProcessing"
 import { onUpdated } from "vue"
-import { API_BASE_URL } from "@/utils/globals"
+import { API_BASE_URL, WRAPPER_URL } from "@/utils/globals"
 
 // ---------- State ----------
 // Confirmation dialog state
@@ -1284,8 +1284,7 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
   scrollToBottom()
 
   try {
-    let url = `https://wrapper.villebiz.com/v1/genai`
-    let response = await fetch(url, {
+    let response = await fetch(WRAPPER_URL, {
       method: "POST",
       body: JSON.stringify(fabricatedPrompt),
       headers: { "content-type": "application/json" }
