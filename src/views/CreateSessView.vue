@@ -81,25 +81,54 @@ const shouldShowAuth = computed(() => {
         <div class="rounded-full bg-gray-200 w-[60px] h-[60px] flex justify-center items-center">
           <span class="pi pi-comment text-lg"></span>
         </div>
+        
         <p class="text-3xl font-semibold">{{ parsedUserDetails?.username || 'Gemmie' }}</p>
-        <div class="text-center text-base md:max-w-[400px]">
+        <!-- <div class="text-center text-base md:max-w-[400px]">
           <p>Your private AI assistant.</p>
           <p class="text-sm text-gray-500">
             We take your privacy seriously. All your data stays on your device.
             Your chats are stored locally in your browser, so they are never sent to any server.
             Make sure to back up your chats if you clear your browser data or switch to a new device.
           </p>
+        </div> -->
+        <div class="text-center max-w-md space-y-2">
+          <p class="text-gray-600 leading-relaxed">
+            Experience privacy-first conversations with advanced AI. Your data stays secure, local and synced to your all devices.
+          </p>
+          <div class="flex items-center justify-center gap-6 text-sm text-gray-500 mt-4">
+            <div class="flex items-center gap-1">
+              <i class="pi pi-shield text-green-500"></i>
+              <span>Private</span>
+            </div>
+            <div class="flex items-center gap-1">
+              <i class="pi pi-database text-blue-500"></i>
+              <span>Local Stored</span>
+            </div>
+            <div class="flex items-center gap-1">
+              <i class="pi pi-sync text-purple-500"></i>
+              <span>Synced</span>
+            </div>
+          </div>
         </div>
-        <button v-if="isAuthenticated()" 
-                @click="setShowInput"
-                class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors">
-          Write a prompt
-        </button>
-        <button v-else-if="screenWidth < 720" 
-                @click="() => setShowCreateSession(true)"
-                class="px-4 py-2 w-full bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors">
-          Get Started
-        </button>
+        <div class="flex flex-col gap-3 w-full max-w-xs">
+          <button v-if="isAuthenticated()" 
+                  @click="setShowInput"
+                  class="group px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg hover:from-blue-600 hover:to-purple-700 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl font-medium">
+            <span class="flex items-center justify-center gap-2">
+              <i class="pi pi-pencil group-hover:rotate-12 transition-transform"></i>
+              Start Writing
+            </span>
+          </button>
+          
+          <button v-else-if="screenWidth < 720" 
+                  @click="() => setShowCreateSession(true)"
+                  class="group px-6 py-3 bg-gradient-to-r from-indigo-500 to-blue-600 text-white rounded-lg hover:from-indigo-600 hover:to-blue-700 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl font-medium">
+            <span class="flex items-center justify-center gap-2">
+              <i class="pi pi-arrow-right group-hover:translate-x-1 transition-transform"></i>
+              Get Started
+            </span>
+          </button>
+        </div>
       </div>
 
       <!-- Multi-step Auth Form -->
@@ -146,11 +175,11 @@ const shouldShowAuth = computed(() => {
                 <p class="text-xs text-gray-500 mt-1">This will be your display name</p>
               </div>
 
-              <button type="submit" 
-                      :disabled="!validateCurrentStep"
-                      class="w-full bg-blue-600 text-white rounded-lg px-4 py-2 font-medium hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors duration-200">
-                Continue
-              </button>
+                <button type="submit" 
+                        :disabled="!validateCurrentStep"
+                        class="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg px-6 py-2 font-semibold hover:from-blue-600 hover:to-purple-700 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed transition-all duration-300 transform hover:scale-[1.02] shadow-lg">
+                  Continue
+                </button>
             </form>
           </div>
 
@@ -179,18 +208,19 @@ const shouldShowAuth = computed(() => {
                 <p class="text-xs text-gray-500 mt-1">Used for session identification only</p>
               </div>
 
-              <div class="flex gap-3">
-                <button type="button" 
-                        @click="prevAuthStep"
-                        class="flex-1 bg-gray-100 text-gray-700 rounded-lg px-4 py-2 font-medium hover:bg-gray-200 transition-colors duration-200">
-                  Back
-                </button>
-                <button type="submit" 
-                        :disabled="!validateCurrentStep"
-                        class="flex-1 bg-blue-600 text-white rounded-lg px-4 py-2 font-medium hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors duration-200">
-                  Continue
-                </button>
-              </div>
+                <div class="flex gap-3">
+                  <button type="button" 
+                          @click="prevAuthStep"
+                          class="flex-grow flex gap-2 items-center justify-center bg-gray-100 backdrop-blur-sm text-gray-700 rounded-lg px-4 py-2 font-medium hover:bg-white/60 transition-all duration-200 border border-white/80">
+                    <i class="pi pi-arrow-left"></i> Back
+                  </button>
+                  <button type="submit" 
+                    :disabled="!validateCurrentStep"
+                    class="bg-gradient-to-r from-blue-500 to-purple-600 flex-grow flex gap-2 items-center justify-center hover:from-blue-600 hover:to-purple-700 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed transform hover:scale-[1.02] shadow-lg rounded-lg px-4 py-2 font-medium text-white hover:bg-white/60 transition-all duration-200 border border-white/80"
+                  >
+                    Continue
+                  </button>
+                </div>
             </form>
           </div>
 
@@ -230,13 +260,15 @@ const shouldShowAuth = computed(() => {
 
               <div class="flex gap-3">
                 <button type="button" 
-                        @click="prevAuthStep"
-                        class="flex-1 bg-gray-100 text-gray-700 rounded-lg px-4 py-2 font-medium hover:bg-gray-200 transition-colors duration-200">
-                  Back
+                    @click="prevAuthStep"
+                    class="flex-grow flex gap-2 items-center justify-center bg-gray-100 backdrop-blur-sm text-gray-700 rounded-lg px-4 py-2 font-medium hover:bg-white/60 transition-all duration-200 border border-white/80"
+                >
+                    <i class="pi pi-arrow-left"></i> Back
                 </button>
                 <button type="submit" 
-                        :disabled="!validateCurrentStep || isLoading"
-                        class="flex-1 bg-blue-600 text-white rounded-lg px-4 py-2 font-medium hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors duration-200 flex items-center justify-center gap-2">
+                    :disabled="!validateCurrentStep || isLoading"
+                    class="bg-gradient-to-r from-blue-500 to-purple-600 flex-grow flex gap-2 items-center justify-center hover:from-blue-600 hover:to-purple-700 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed transform hover:scale-[1.02] shadow-lg rounded-lg px-4 py-2 font-medium text-white hover:bg-white/60 transition-all duration-200 border border-white/80"
+                >
                   <i v-if="isLoading" class="pi pi-spin pi-spinner"
                      :class="isLoading ? '' : 'pi pi-check'"></i>
                   <span>{{ isLoading ? 'Creating...' : 'Create Session' }}</span>
