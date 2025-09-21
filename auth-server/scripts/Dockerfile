@@ -9,37 +9,35 @@ RUN apk add --no-cache git ca-certificates tzdata
 # Cache Go modules
 COPY go.mod go.sum ./
 RUN --mount=type=cache,target=/go/pkg/mod \
-    go mod download && go mod verify
+    go mod download
 
 # Copy source code
 COPY . .
 
 # Build the binary
+# Inject version from build arg (default: dev)
 ARG VERSION=dev
 RUN --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 GOOS=linux go build \
     -ldflags="-w -s -X github.com/imrany/gemmie/auth-server/internal/version.version=${VERSION}" \
-    -o gemmie-server \
+    -o gemmie \
     ./main.go
 
 # Stage 2: Final runtime image
 FROM alpine:3.19
 
-# Update package repository and install dependencies
-RUN apk update && \
-    apk upgrade && \
-    apk add --no-cache ca-certificates tzdata && \
-    addgroup -S gemmie-server && \
-    adduser -S gemmie-server -G gemmie-server && \
-    rm -rf /var/cache/apk/*
+# Install runtime dependencies
+RUN apk --no-cache add ca-certificates tzdata && \
+    addgroup -S gemmie && \
+    adduser -S gemmie -G gemmie
 
-WORKDIR /opt/gemmie-server
+WORKDIR /opt/gemmie
 
 # Copy binary
-COPY --from=builder /app/gemmie-server .
+COPY --from=builder /app/gemmie .
 
 # Run as non-root
-USER gemmie-server
+USER gemmie
 
 # Expose default port
 EXPOSE 8081
