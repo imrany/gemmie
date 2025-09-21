@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/imrany/gemmie/auth-server/internal/encrypt"
-	"github.com/imrany/gemmie/auth-server/store"
+	"github.com/imrany/gemmie/gemmie-server/internal/encrypt"
+	"github.com/imrany/gemmie/gemmie-server/store"
 )
 
 // Response represents API response

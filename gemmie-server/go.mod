@@ -1,4 +1,4 @@
-module github.com/imrany/gemmie/auth-server
+module github.com/imrany/gemmie/gemmie-server
 
 go 1.24.3
 
