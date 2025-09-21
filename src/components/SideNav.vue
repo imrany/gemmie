@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import type { Chat } from '@/types'
+import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 
 let props = defineProps<{
@@ -9,6 +10,7 @@ let props = defineProps<{
     isCollapsed?: boolean
     parsedUserDetails: {
       username: string
+      email: string
     }
     screenWidth: number,
     syncStatus: any,
@@ -29,10 +31,12 @@ let props = defineProps<{
 }>()
 
 const router = useRouter()
+const showProfileMenu = ref(false)
 
 function reload() {
   window.location.reload()
 }
+
 
 function openUpgrade() {
   window.open('https://github.com/sponsors/imrany', '_blank')
@@ -109,14 +113,6 @@ function openUpgrade() {
           <p>Delete Chat</p>
         </button>
 
-        <button @click="props.functions.logout" title="Log out"
-          class="w-full flex items-center gap-2 h-[40px] hover:bg-yellow-100 rounded-lg px-2">
-          <i class="pi pi-sign-out text-gray-500 mb-[2px]"></i>
-          <p v-if="!props.data.isCollapsed || props.data.screenWidth < 720">
-            Logout
-          </p>
-        </button>
-
         <button @click="() => { router.push('/auth/delete_account') }" title="Delete Account"
           class="w-full flex items-center gap-2 h-[40px] hover:bg-red-100 rounded-lg px-2">
           <i class="pi pi-user-minus text-gray-500 mb-[2px]"></i>
@@ -124,7 +120,6 @@ function openUpgrade() {
             Delete Account
           </p>
         </button>
-
       </div>
 
       <!-- Recent Chat Preview -->
@@ -154,25 +149,32 @@ function openUpgrade() {
       </div>
     </div>
 
-    <!-- Fixed Bottom User Profile -->
+   <!-- Fixed Bottom User Profile -->
     <div class="border-t border-gray-200 p-3 bg-gray-100 sticky bottom-0">
-      <div class="flex items-center justify-between">
+      <div class="flex items-center justify-between cursor-pointer mr-1" @click="showProfileMenu = !showProfileMenu">
         <div class="flex items-center gap-2">
           <div class="w-[35px] h-[35px] flex justify-center items-center bg-gray-300 rounded-full">
             <span class="text-sm">{{ props.data.parsedUserDetails.username.toUpperCase().slice(0, 2) }}</span>
-
           </div>
           <p v-if="!props.data.isCollapsed || props.data.screenWidth < 720" class="text-base font-light">
             {{ props.data.parsedUserDetails.username }}
           </p>
         </div>
-        <button @click="openUpgrade" title="Upgrade to Pro" v-if="
-          (!props.data.isCollapsed || props.data.screenWidth < 720) &&
-          props.data.chats.length !== 0
-        " class="rounded-full bg-white border text-black text-sm px-4 py-1">
-          Upgrade
-        </button>
+        <i class="pi pi-chevron-up text-xs" v-if="showProfileMenu"></i>
+        <i class="pi pi-chevron-down text-xs" v-else></i>
       </div>
+
+      <!-- Dropdown Menu -->
+      <transition name="fade">
+        <div v-if="showProfileMenu" class="absolute bottom-14 left-3 right-3 bg-white border rounded-lg shadow-lg text-sm z-50">
+          <p class="px-4 py-2 text-gray-500 border-b">{{ props.data.parsedUserDetails.email || 'No email' }}</p>
+          <button @click="router.push('/settings')" class="w-full text-left px-4 py-2 hover:bg-gray-100">Settings</button>
+          <button class="w-full text-left px-4 py-2 hover:bg-gray-100">Get Help</button>
+          <button @click="router.push('/upgrade')" class="w-full text-left px-4 py-2 hover:bg-gray-100">Upgrade Plan</button>
+          <button class="w-full text-left px-4 py-2 hover:bg-gray-100">Learn More</button>
+          <button @click="props.functions.logout" class="w-full text-left px-4 py-2 text-red-600 hover:bg-red-100">Log Out</button>
+        </div>
+      </transition>
     </div>
   </div>
 </template>

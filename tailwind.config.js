@@ -3,11 +3,10 @@ export default {
     content: ['./index.html', './src/**/*.{vue,js,ts,jsx,tsx}'],
     darkMode: 'media', // or false or 'class'
     theme: {
-        extend: {},
+       extend: {},
     },
     variants: {
         extend: {},
     },
     plugins: [],
 }
-
