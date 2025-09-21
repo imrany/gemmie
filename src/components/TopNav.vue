@@ -1,50 +1,111 @@
 <script lang="ts" setup>
-import type { CurrentChat } from '@/types';
+import type { CurrentChat } from '@/types'
 
-let props=defineProps<{
-    data:{
-        isCollapsed?:boolean,
-        parsedUserDetails:{
-            username:string
-        },
-        currentChat:CurrentChat | undefined, 
-        screenWidth:number,
-        isSidebarHidden?:boolean,
-    },
-    functions:{
-        hideSidebar: ()=> void, 
-        deleteChat: (chatId: string) => void 
-        createNewChat: ()=> void, 
-        renameChat: (chatId:string, newTitle:string)=> void
-    }
+let props = defineProps<{
+  data: {
+    isCollapsed?: boolean
+    parsedUserDetails: { username: string }
+    currentChat: CurrentChat | undefined
+    screenWidth: number
+    isSidebarHidden?: boolean
+    isAuthenticated: () => boolean
+    syncStatus: any
+  }
+  functions: {
+    hideSidebar: () => void
+    deleteChat: (chatId: string) => void
+    createNewChat: () => void
+    renameChat: (chatId: string, newTitle: string) => void
+    manualSync: () => void
+  }
 }>()
 </script>
+
 <template>
-    <div class="h-[44px] bg-white z-30 fixed top-0 right-0 border-b-[1px] transition-all duration-300 ease-in-out" :style="props.data.screenWidth>720&&!props.data.isCollapsed?'left:270px':props.data.screenWidth>720&&props.data.isCollapsed?'left:60px;':'left:0;'">
-        <div class="flex h-full px-5 items-center justify-between w-full">
-            <p class="my-3 text-black text-lg font-light">Gemmie</p>
-            <div v-if="props.data.screenWidth < 720" class="my-3 flex gap-2 items-center ml-auto">
-                <!-- Sidebar Toggle Icon -->
-                <button
-                    @click="props.functions.hideSidebar"
-                    title="Toggle Sidebar"
-                    class="w-[30px] h-[30px] flex items-center justify-center hover:bg-gray-100 rounded-full cursor-pointer"
-                >
-                    <span v-if="props.data.isSidebarHidden" class="pi pi-bars text-base"></span>
-                    <span v-else class="pi pi-times text-base"></span>
-                </button>
-            </div>
-            <div v-else class="flex gap-2 items-center ml-auto">
-                <button
-                    @click="()=>props.functions.deleteChat(props.data.currentChat?.id || '')"
-                    title="Delete Chat"
-                    v-if="props.data.currentChat?.id.length!==0"
-                    class="w-full flex items-center bg-none text-gray-500 hover:text-red-500 gap-2 border-none hover:bg-red-100 hover:border-red-500 rounded-full py-1 px-3"
-                >
-                    <i class="pi pi-trash mb-[2px]"></i>
-                    <p>Delete</p>
-                </button>
-            </div>
+  <div
+    class="h-[52px] bg-white z-30 fixed top-0 right-0 border-b transition-all duration-300 ease-in-out "
+    :style="
+      props.data.screenWidth > 720 && !props.data.isCollapsed
+        ? 'left:270px'
+        : props.data.screenWidth > 720 && props.data.isCollapsed
+        ? 'left:60px'
+        : 'left:0'
+    "
+  >
+    <div class="flex h-full px-4 items-center justify-between w-full">
+      <!-- Brand -->
+      <p class="text-gray-800 text-xl font-semibold tracking-wide select-none">
+        Gemmie
+      </p>
+
+      <!-- Mobile Sidebar Toggle -->
+      <div
+        v-if="props.data.screenWidth < 720"
+        class="flex gap-2 items-center ml-auto"
+      >
+        <button
+          @click="props.functions.hideSidebar"
+          title="Toggle Sidebar"
+          class="w-9 h-9 flex items-center justify-center hover:bg-gray-100 rounded-full cursor-pointer transition-colors"
+        >
+          <span
+            v-if="props.data.isSidebarHidden"
+            class="pi pi-bars text-lg text-gray-700"
+          ></span>
+          <span
+            v-else
+            class="pi pi-times text-lg text-gray-700"
+          ></span>
+        </button>
+      </div>
+
+      <!-- Desktop Actions -->
+      <div v-else class="flex gap-3 items-center ml-auto">
+        <!-- Sync Status -->
+        <div
+          v-if="props.data.isAuthenticated()"
+          class="relative"
+        >
+          <div
+            v-if="props.data.syncStatus.syncing"
+            class="flex items-center gap-2 bg-blue-50 text-blue-700 px-3 py-1.5 rounded-full text-xs border border-blue-200 shadow-sm animate-pulse"
+          >
+            <i class="pi pi-spin pi-spinner"></i>
+            <span>Syncing...</span>
+          </div>
+
+          <div
+            v-else-if="props.data.syncStatus.hasUnsyncedChanges"
+            class="flex items-center gap-2 bg-orange-50 text-orange-700 px-3 py-1.5 rounded-full text-xs border border-orange-200 shadow-sm cursor-pointer hover:bg-orange-100 transition"
+            @click="props.functions.manualSync"
+          >
+            <i class="pi pi-cloud-upload"></i>
+            <span>Sync pending</span>
+          </div>
+
+          <div
+            v-else-if="props.data.syncStatus.lastSync"
+            class="flex items-center gap-2 bg-green-50 text-green-700 px-3 py-1.5 rounded-full text-xs border border-green-200 shadow-sm"
+          >
+            <i class="pi pi-check-circle"></i>
+            <span>Synced</span>
+          </div>
         </div>
+
+        <!-- Delete Chat -->
+        <button
+          @click="() => props.functions.deleteChat(props.data.currentChat?.id || '')"
+          title="Delete Chat"
+          v-if="
+            props.data.currentChat?.id.length !== 0 &&
+            props.data.currentChat?.messages.length !== 0
+          "
+          class="flex items-center gap-2 text-gray-500 hover:text-red-600 border border-gray-200 hover:border-red-400 hover:bg-red-50 rounded-full px-3 py-1.5 text-sm font-medium transition"
+        >
+          <i class="pi pi-trash"></i>
+          <span>Delete Chat</span>
+        </button>
+      </div>
     </div>
+  </div>
 </template>

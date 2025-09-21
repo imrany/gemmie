@@ -2,20 +2,18 @@ package store
 
 import (
 	"encoding/json"
-	"log"
+	"log/slog"
 	"os"
 	"sync"
 	"time"
 )
 
-// Storage represents the JSON file storage
 type StorageType struct {
 	Users    map[string]User     `json:"users"`     // key: user_id
 	UserData map[string]UserData `json:"user_data"` // key: user_id
 	Mu       sync.RWMutex        `json:"-"`
 }
 
-// User represents a user in the system
 type User struct {
 	ID           string    `json:"id"`
 	Username     string    `json:"username"`
@@ -25,7 +23,6 @@ type User struct {
 	UpdatedAt    time.Time `json:"updated_at"`
 }
 
-// UserData represents the synced data for a user
 type UserData struct {
 	UserID        string    `json:"user_id"`
 	Chats         string    `json:"chats"`
@@ -35,29 +32,35 @@ type UserData struct {
 }
 
 var Storage *StorageType
-const storageFile = "gemmie_data.json"
+var storageFile string
 
-func init() {
+// InitStorage initializes the storage system with the given file path.
+func InitStorage(filePath string) {
+	storageFile = filePath
+
 	Storage = &StorageType{
 		Users:    make(map[string]User),
 		UserData: make(map[string]UserData),
 		Mu:       sync.RWMutex{},
 	}
+
 	loadStorage()
-	log.Println("JSON file storage initialized")
+	slog.Info("JSON file storage initialized", "path", storageFile)
 }
 
-// loadStorage loads data from JSON file
 func loadStorage() {
 	if _, err := os.Stat(storageFile); os.IsNotExist(err) {
-		log.Println("Storage file does not exist, creating new one")
-		SaveStorage()
+		slog.Warn("Storage file does not exist, creating new one", "path", storageFile)
+		if err := SaveStorage(); err != nil {
+			slog.Error("Failed to create initial storage file", "error", err)
+			os.Exit(1)
+		}
 		return
 	}
 
 	data, err := os.ReadFile(storageFile)
 	if err != nil {
-		log.Printf("Error reading storage file: %v", err)
+		slog.Error("Error reading storage file", "error", err)
 		return
 	}
 
@@ -65,25 +68,31 @@ func loadStorage() {
 	defer Storage.Mu.Unlock()
 
 	if err := json.Unmarshal(data, Storage); err != nil {
-		log.Printf("Error unmarshaling storage data: %v", err)
+		slog.Error("Error unmarshaling storage data", "error", err)
 		return
 	}
 
-	log.Printf("Loaded %d users and %d user data records from storage", len(Storage.Users), len(Storage.UserData))
+	slog.Info("Storage loaded",
+		"users", len(Storage.Users),
+		"user_data_records", len(Storage.UserData),
+	)
 }
 
-// saveStorage saves data to JSON file
-func SaveStorage() {
-	Storage.Mu.RLock()
-	defer Storage.Mu.RUnlock()
+func SaveStorage() error {
+	Storage.Mu.Lock()
+	defer Storage.Mu.Unlock()
 
 	data, err := json.MarshalIndent(Storage, "", "  ")
 	if err != nil {
-		log.Printf("Error marshaling storage data: %v", err)
-		return
+		slog.Error("Error marshaling storage data", "error", err)
+		return err
 	}
 
 	if err := os.WriteFile(storageFile, data, 0644); err != nil {
-		log.Printf("Error writing storage file: %v", err)
+		slog.Error("Error writing storage file", "error", err)
+		return err
 	}
+
+	slog.Debug("Storage saved", "path", storageFile)
+	return nil
 }
