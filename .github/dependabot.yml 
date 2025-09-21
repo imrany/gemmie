@@ -3,6 +3,6 @@ updates:
   - package-ecosystem: "gomod"
     commit-message:
       prefix: "chore"
-    directory: "/auth-server"
+    directory: "/gemmie-server"
     schedule:
       interval: "monthly"
