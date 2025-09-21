@@ -154,7 +154,8 @@ export PORT=8081
 5. **Backup**: Regular backups of `gemmie_data.json`
 
 ### Environment Variables
-- `PORT`: Server port (default: 8081)
+- `AUTH_PORT`: Server port (default: 8081)
+- `AUTH_DATA_FILE`: Server data file (default: `gemmie_data.json`)
 
 ## Troubleshooting
 

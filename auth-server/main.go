@@ -93,10 +93,12 @@ func runServer() {
 
 	// Router setup
 	r := mux.NewRouter()
-	r.HandleFunc("/api/register", v1.RegisterHandler).Methods("POST")
-	r.HandleFunc("/api/login", v1.LoginHandler).Methods("POST")
-	r.HandleFunc("/api/sync", v1.SyncHandler).Methods("GET", "POST")
-	r.HandleFunc("/api/health", v1.HealthHandler).Methods("GET")
+	r.HandleFunc("/api/register", v1.RegisterHandler).Methods(http.MethodPost)
+	r.HandleFunc("/api/login", v1.LoginHandler).Methods(http.MethodPost)
+	r.HandleFunc("/api/sync", v1.SyncHandler).Methods(http.MethodGet, http.MethodPost)
+	r.HandleFunc("/api/health", v1.HealthHandler).Methods(http.MethodGet)
+	r.HandleFunc("/api/delete_account", v1.DeleteAccountHandler).Methods(http.MethodDelete)
+
 
 	// Handle CORS preflight
 	r.Methods(http.MethodOptions).HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

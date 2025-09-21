@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import type { Chat } from '@/types'
+import { useRouter } from 'vue-router';
 
 let props = defineProps<{
   data: {
@@ -26,6 +27,8 @@ let props = defineProps<{
     manualSync: () => void
   }
 }>()
+
+const router = useRouter()
 
 function reload() {
   window.location.reload()
@@ -110,6 +113,14 @@ function openUpgrade() {
           </p>
         </button>
 
+        <button @click="() => { router.push('/auth/delete_account') }" title="Delete Account"
+          class="w-full flex items-center gap-2 h-[40px] hover:bg-red-100 rounded-lg px-2">
+          <i class="pi pi-user-minus text-gray-500 mb-[2px]"></i>
+          <p v-if="!props.data.isCollapsed || props.data.screenWidth < 720">
+            Delete Account
+          </p>
+        </button>
+
       </div>
 
       <!-- Recent Chat Preview -->
@@ -121,7 +132,7 @@ function openUpgrade() {
           Chats
         </p>
         <div class="flex flex-col gap-2">
-          <button v-for="chat in props.data.chats" :key="chat.id" @click="
+          <button v-for="chat in !props.data.isCollapsed?props.data.chats:props.data.chats.slice(0,1)" :key="chat.id" @click="
             () => {
               props.functions.switchToChat(chat.id)
               props.functions.setShowInput()
@@ -143,7 +154,8 @@ function openUpgrade() {
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-2">
           <div class="w-[35px] h-[35px] flex justify-center items-center bg-gray-300 rounded-full">
-            <span class="pi pi-user text-sm"></span>
+            <span class="text-sm">{{ props.data.parsedUserDetails.username.toUpperCase().slice(0,2) }}</span>
+
           </div>
           <p v-if="!props.data.isCollapsed || props.data.screenWidth < 720" class="text-base font-light">
             {{ props.data.parsedUserDetails.username }}
