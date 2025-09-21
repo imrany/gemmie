@@ -41,10 +41,10 @@ function openUpgrade() {
 
 <template>
   <div id="side_nav" :class="props.data.screenWidth > 720
-      ? props.data.isCollapsed
-        ? 'w-[60px] bg-white z-30 fixed top-0 left-0 bottom-0 border-r flex flex-col transition-all duration-300 ease-in-out'
-        : 'w-[270px] bg-white z-30 fixed top-0 left-0 bottom-0 border-r flex flex-col transition-all duration-300 ease-in-out'
-      : 'none'
+    ? props.data.isCollapsed
+      ? 'w-[60px] bg-white z-30 fixed top-0 left-0 bottom-0 border-r flex flex-col transition-all duration-300 ease-in-out'
+      : 'w-[270px] bg-white z-30 fixed top-0 left-0 bottom-0 border-r flex flex-col transition-all duration-300 ease-in-out'
+    : 'none'
     ">
     <!-- Scrollable area -->
     <div class="flex-1 overflow-y-auto">
@@ -54,6 +54,26 @@ function openUpgrade() {
           Gemmie
         </p>
         <div class="flex gap-2 items-center ml-auto">
+          <div v-if="props.data.isAuthenticated()&&props.data.screenWidth < 720" class="relative">
+            <div v-if="props.data.syncStatus.syncing"
+              class="flex items-center gap-2 bg-blue-50 text-blue-700 px-3 py-1.5 rounded-full text-xs border border-blue-200 shadow-sm animate-pulse">
+              <i class="pi pi-spin pi-spinner"></i>
+              <span>Syncing...</span>
+            </div>
+
+            <div v-else-if="props.data.syncStatus.hasUnsyncedChanges"
+              class="flex items-center gap-2 bg-orange-50 text-orange-700 px-3 py-1.5 rounded-full text-xs border border-orange-200 shadow-sm cursor-pointer hover:bg-orange-100 transition"
+              @click="props.functions.manualSync">
+              <i class="pi pi-cloud-upload"></i>
+              <span>Sync pending</span>
+            </div>
+
+            <div v-else-if="props.data.syncStatus.lastSync"
+              class="flex items-center gap-2 bg-green-50 text-green-700 px-3 py-1.5 rounded-full text-xs border border-green-200 shadow-sm">
+              <i class="pi pi-check-circle"></i>
+              <span>Synced</span>
+            </div>
+          </div>
           <button @click="props.functions.toggleSidebar" title="Toggle Sidebar"
             class="w-[30px] h-[30px] flex items-center justify-center hover:bg-gray-100 rounded-full cursor-pointer">
             <span class="pi pi-bars text-base"></span>
@@ -87,11 +107,15 @@ function openUpgrade() {
           </p>
         </button> -->
 
-        <button title="Sync Data" v-if="props.data.isAuthenticated()" @click="props.functions.manualSync" :disabled="props.data.syncStatus.syncing"
+        <button title="Sync Data" v-if="props.data.isAuthenticated()" @click="props.functions.manualSync"
+          :disabled="props.data.syncStatus.syncing"
           class="w-full flex items-center gap-2 h-[40px] hover:bg-gray-100 rounded-lg px-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
           <i :class="props.data.syncStatus.syncing ? 'pi pi-spin pi-spinner' : 'pi pi-refresh'"></i>
-          <span v-if="!props.data.isCollapsed || props.data.screenWidth < 720">{{ props.data.syncStatus.syncing ? 'Syncing...' : 'Sync Data' }}</span>
-          <div v-if="props.data.syncStatus.hasUnsyncedChanges&&(!props.data.isCollapsed || props.data.screenWidth < 720)" class="ml-auto w-2 h-2 bg-orange-500 rounded-full"></div>
+          <span v-if="!props.data.isCollapsed || props.data.screenWidth < 720">{{ props.data.syncStatus.syncing ?
+            'Syncing...' : 'Sync Data' }}</span>
+          <div
+            v-if="props.data.syncStatus.hasUnsyncedChanges && (!props.data.isCollapsed || props.data.screenWidth < 720)"
+            class="ml-auto w-2 h-2 bg-orange-500 rounded-full"></div>
         </button>
 
         <button @click="
@@ -132,13 +156,14 @@ function openUpgrade() {
           Chats
         </p>
         <div class="flex flex-col gap-2">
-          <button v-for="chat in !props.data.isCollapsed?props.data.chats:props.data.chats.slice(0,1)" :key="chat.id" @click="
-            () => {
-              props.functions.switchToChat(chat.id)
-              props.functions.setShowInput()
-              if (props.data.screenWidth < 720) props.functions.hideSidebar()
-            }
-          " title="Open Chat"
+          <button v-for="chat in !props.data.isCollapsed ? props.data.chats : props.data.chats.slice(0, 1)" :key="chat.id"
+            @click="
+              () => {
+                props.functions.switchToChat(chat.id)
+                props.functions.setShowInput()
+                if (props.data.screenWidth < 720) props.functions.hideSidebar()
+              }
+            " title="Open Chat"
             :class="chat.id === props.data.currentChatId ? 'w-full flex h-[32px] text-sm items-center bg-gray-300 rounded-lg px-2' : 'w-full flex h-[32px] text-sm items-center hover:bg-gray-100 rounded-lg px-2'">
             <i class="pi pi-comments mr-2 text-gray-500 mb-[2px]"></i>
             <p v-if="!props.data.isCollapsed || props.data.screenWidth < 720" class="truncate">
@@ -154,7 +179,7 @@ function openUpgrade() {
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-2">
           <div class="w-[35px] h-[35px] flex justify-center items-center bg-gray-300 rounded-full">
-            <span class="text-sm">{{ props.data.parsedUserDetails.username.toUpperCase().slice(0,2) }}</span>
+            <span class="text-sm">{{ props.data.parsedUserDetails.username.toUpperCase().slice(0, 2) }}</span>
 
           </div>
           <p v-if="!props.data.isCollapsed || props.data.screenWidth < 720" class="text-base font-light">
