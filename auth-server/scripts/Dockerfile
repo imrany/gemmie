@@ -43,8 +43,8 @@ USER gemmie-server
 EXPOSE 8081
 
 # Set defaults
-ENV AUTH_DATA_FILE=./gemmie_data.json \
-    AUTH_PORT=8081
+ENV DATA_FILE=./gemmie_data.json \
+    PORT=8081
 
 LABEL org.opencontainers.image.title="gemmie-server" \
       org.opencontainers.image.description="gemmie's server side program." \

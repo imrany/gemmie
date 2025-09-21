@@ -8,5 +8,5 @@ services:
     ports:
       - 8081:8081
     environment:
-      - AUTH_PORT=8081
-      - AUTH_DATA_FILE=/var/opt/gemmie-server/gemmie_data.json
+      - PORT=8081
+      - DATA_FILE=/var/opt/gemmie-server/gemmie_data.json
