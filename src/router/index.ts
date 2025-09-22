@@ -27,6 +27,10 @@ const router = createRouter({
       name: 'settings',
       component: SettingsView
     },
+    {
+      path: '/:pathMatch(.*)*',
+      redirect: '/'
+    }
   ]
 })
 
