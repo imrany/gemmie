@@ -1206,8 +1206,8 @@ function setShowCreateSession(value: boolean) {
                   </div>
                 </div>
 
-                <!-- Actions (hidden during loading) -->
-                <div v-if="item.response !== '...'" class="flex gap-3 mt-2 text-gray-500 text-sm">
+                <!-- Actions (hidden during loading and refreshing) -->
+                <div v-if="item.response !== '...' && item.response !== 'refreshing...'" class="flex gap-3 mt-2 text-gray-500 text-sm">
                   <button @click="copyResponse(item.response, i)"
                     class="flex items-center gap-1 hover:text-blue-600 transition-colors">
                     <i class="pi pi-copy"></i>
