@@ -619,7 +619,6 @@ async function fetchLinkPreview(url: string): Promise<LinkPreview> {
 
     const results = await response.json()
     const domain = new URL(url).hostname
-    console.log("Scraped data:", results)
 
     // Enhanced video detection and processing
     const videoInfo = await detectAndProcessVideo(url, results)
