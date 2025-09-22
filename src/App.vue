@@ -162,101 +162,6 @@ async function unsecureApiCall(endpoint: string, options: RequestInit = {}) {
   }
 }
 
-// Sync data from server to local storage
-async function syncFromServer(serverData?: any) {
-  if (!parsedUserDetails.value.user_id) return
-
-  try {
-    syncStatus.value.syncing = true
-
-    let data = serverData
-    if (!data) {
-      const response = await apiCall('/sync', { method: 'GET' })
-      data = response.data
-    }
-
-    // Parse and merge server data
-    if (data.chats && data.chats !== '[]') {
-      try {
-        const serverChats = JSON.parse(data.chats)
-        const localChats = chats.value
-
-        // Merge chats (server takes precedence for newer data)
-        const mergedChats = mergeChats(serverChats, localChats)
-        chats.value = mergedChats
-        localStorage.setItem('chats', JSON.stringify(mergedChats))
-      } catch (error) {
-        console.error('Error parsing server chats:', error)
-      }
-    }
-
-    if (data.link_previews && data.link_previews !== '{}') {
-      try {
-        const serverPreviews = JSON.parse(data.link_previews)
-        // Merge with local previews
-        const localPreviews = Object.fromEntries(linkPreviewCache.value)
-        const mergedPreviews = { ...localPreviews, ...serverPreviews }
-
-        linkPreviewCache.value = new Map(Object.entries(mergedPreviews))
-        localStorage.setItem('linkPreviews', JSON.stringify(mergedPreviews))
-      } catch (error) {
-        console.error('Error parsing server link previews:', error)
-      }
-    }
-
-    if (data.current_chat_id) {
-      currentChatId.value = data.current_chat_id
-      localStorage.setItem('currentChatId', data.current_chat_id)
-    }
-
-    syncStatus.value.lastSync = new Date()
-    syncStatus.value.hasUnsyncedChanges = false
-    updateExpandedArray()
-
-  } catch (error: any) {
-    console.error('Sync from server failed:', error)
-    toast.warning('Failed to sync data from server', {
-      duration: 3000,
-      description: 'Using local data instead'
-    })
-  } finally {
-    syncStatus.value.syncing = false
-  }
-}
-
-// Sync local data to server
-async function syncToServer() {
-  if (!parsedUserDetails.value.user_id) return
-
-  try {
-    syncStatus.value.syncing = true
-
-    const syncData = {
-      chats: JSON.stringify(chats.value),
-      link_previews: JSON.stringify(Object.fromEntries(linkPreviewCache.value)),
-      current_chat_id: currentChatId.value
-    }
-
-    await apiCall('/sync', {
-      method: 'POST',
-      body: JSON.stringify(syncData)
-    })
-
-    syncStatus.value.lastSync = new Date()
-    syncStatus.value.hasUnsyncedChanges = false
-
-  } catch (error: any) {
-    console.error('Sync to server failed:', error)
-    syncStatus.value.hasUnsyncedChanges = true
-    toast.error('Failed to sync data to server', {
-      duration: 3000,
-      description: 'Your data is saved locally'
-    })
-  } finally {
-    syncStatus.value.syncing = false
-  }
-}
-
 // Merge chats function (server data takes precedence for conflicts)
 function mergeChats(serverChats: Chat[], localChats: Chat[]): Chat[] {
   const merged = new Map<string, Chat>()
@@ -278,27 +183,6 @@ function mergeChats(serverChats: Chat[], localChats: Chat[]): Chat[] {
   return Array.from(merged.values()).sort((a, b) =>
     new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
   )
-}
-
-// Updated saveChats function with server sync
-function saveChats() {
-  try {
-    localStorage.setItem('chats', JSON.stringify(chats.value))
-    localStorage.setItem('currentChatId', currentChatId.value)
-
-    // Mark as having unsynced changes
-    syncStatus.value.hasUnsyncedChanges = true
-
-    // Auto-sync after a delay
-    setTimeout(() => {
-      if (syncStatus.value.hasUnsyncedChanges && !syncStatus.value.syncing) {
-        syncToServer()
-      }
-    }, 2000)
-
-  } catch (error) {
-    console.error('Failed to save chats:', error)
-  }
 }
 
 // Updated logout function
@@ -328,17 +212,19 @@ async function logout() {
           syncing: false,
           hasUnsyncedChanges: false
         }
-        localStorage.removeItem('chats')
-        localStorage.removeItem('currentChatId')
-        localStorage.removeItem('linkPreviews')
+        if(parsedUserDetails.value.sync_enabled){
+          localStorage.removeItem('chats')
+          localStorage.removeItem('currentChatId')
+          localStorage.removeItem('linkPreviews')
+          linkPreviewCache.value.clear()
+        }
         localStorage.removeItem('userdetails')
-        linkPreviewCache.value.clear()
 
         confirmDialog.value.visible = false
 
         toast.success('Logged out successfully', {
           duration: 3000,
-          description: 'Your data has been synced'
+          description: parsedUserDetails.value.sync_enabled?'Your data has been synced':'Your data was stored locally'
         })
       } catch (err) {
         console.error('Error during logout:', err)
@@ -593,74 +479,6 @@ function deleteMessage(messageIndex: number) {
   })
 }
 
-async function handleAuth(data: {
-  username: string
-  email: string
-  password: string
-}) {
-  const { username, email, password } = data
-  // Custom validation
-  const validationError = validateCredentials(username, email, password)
-  if (validationError) {
-    toast.error(validationError, { duration: 4000 })
-    return
-  }
-
-  try {
-    isLoading.value = true
-
-    let response
-    try {
-      // Try login
-      response = await unsecureApiCall('/login', {
-        method: 'POST',
-        body: JSON.stringify({ username, email, password })
-      })
-
-      toast.success('Welcome back!', {
-        duration: 3000,
-        description: `Logged in as ${response.data.username}`
-      })
-    } catch (loginError) {
-      // Try register if login fails
-      response = await unsecureApiCall('/register', {
-        method: 'POST',
-        body: JSON.stringify({ username, email, password })
-      })
-
-      toast.success('Account created successfully!', {
-        duration: 3000,
-        description: `Welcome ${response.data.username}!`
-      })
-    }
-
-    // Store user details locally
-    const userData = {
-      user_id: response.data.user_id,
-      username: response.data.username,
-      email: response.data.email,
-      created_at: response.data.created_at,
-      sessionId: btoa(email + ':' + password + ':' + username)
-    }
-
-    localStorage.setItem('userdetails', JSON.stringify(userData))
-    parsedUserDetails.value = userData
-
-    // Sync data from server
-    await syncFromServer(response.data)
-    return response
-
-  } catch (error: any) {
-    console.error('Authentication error:', error)
-    toast.error('Authentication failed', {
-      duration: 4000,
-      description: error.message || 'Please check your credentials and try again.'
-    })
-  } finally {
-    isLoading.value = false
-  }
-}
-
 // Enhanced clear all chats with custom dialog
 function clearAllChats() {
   if (isLoading.value) return
@@ -772,12 +590,270 @@ function toggleSidebar() {
   localStorage.setItem("isCollapsed", String(isCollapsed.value))
 }
 
-// Manual sync function
+// Close menus when clicking outside
+function handleClickOutside() {
+  activeChatMenu.value = null
+  showProfileMenu.value = false
+}
+
+// Updated saveChats function with conditional server sync
+function saveChats() {
+  try {
+    localStorage.setItem('chats', JSON.stringify(chats.value))
+    localStorage.setItem('currentChatId', currentChatId.value)
+
+    // Only sync to server if sync is enabled and user is authenticated
+    const shouldSync = parsedUserDetails.value?.sync_enabled !== false && isAuthenticated.value
+    
+    if (shouldSync) {
+      // Mark as having unsynced changes
+      syncStatus.value.hasUnsyncedChanges = true
+
+      // Auto-sync after a delay
+      setTimeout(() => {
+        if (syncStatus.value.hasUnsyncedChanges && !syncStatus.value.syncing) {
+          syncToServer()
+        }
+      }, 2000)
+    }
+
+  } catch (error) {
+    console.error('Failed to save chats:', error)
+  }
+}
+
+// Updated sync functions to respect user preferences
+async function syncFromServer(serverData?: any) {
+  // Only sync from server if sync is enabled or if it's initial data during auth
+  const shouldSync = parsedUserDetails.value?.sync_enabled !== false || serverData
+  
+  if (!parsedUserDetails.value.user_id || !shouldSync) return
+
+  try {
+    syncStatus.value.syncing = true
+
+    let data = serverData
+    if (!data) {
+      const response = await apiCall('/sync', { method: 'GET' })
+      data = response.data
+    }
+
+    // Parse and merge server data
+    if (data.chats && data.chats !== '[]') {
+      try {
+        const serverChats = JSON.parse(data.chats)
+        const localChats = chats.value
+
+        // Merge chats (server takes precedence for newer data)
+        const mergedChats = mergeChats(serverChats, localChats)
+        chats.value = mergedChats
+        localStorage.setItem('chats', JSON.stringify(mergedChats))
+      } catch (error) {
+        console.error('Error parsing server chats:', error)
+      }
+    }
+
+    if (data.link_previews && data.link_previews !== '{}') {
+      try {
+        const serverPreviews = JSON.parse(data.link_previews)
+        // Merge with local previews
+        const localPreviews = Object.fromEntries(linkPreviewCache.value)
+        const mergedPreviews = { ...localPreviews, ...serverPreviews }
+
+        linkPreviewCache.value = new Map(Object.entries(mergedPreviews))
+        localStorage.setItem('linkPreviews', JSON.stringify(mergedPreviews))
+      } catch (error) {
+        console.error('Error parsing server link previews:', error)
+      }
+    }
+
+    if (data.current_chat_id) {
+      currentChatId.value = data.current_chat_id
+      localStorage.setItem('currentChatId', data.current_chat_id)
+    }
+
+    // Update user sync preference if provided
+    if (typeof data.sync_enabled === 'boolean') {
+      parsedUserDetails.value.sync_enabled = data.sync_enabled
+      localStorage.setItem('syncEnabled', String(data.sync_enabled))
+      localStorage.setItem("userdetails", JSON.stringify(parsedUserDetails.value))
+    }
+
+    syncStatus.value.lastSync = new Date()
+    syncStatus.value.hasUnsyncedChanges = false
+    updateExpandedArray()
+
+  } catch (error: any) {
+    console.error('Sync from server failed:', error)
+    toast.warning('Failed to sync data from server', {
+      duration: 3000,
+      description: 'Using local data instead'
+    })
+  } finally {
+    syncStatus.value.syncing = false
+  }
+}
+
+// Updated sync to server with sync preference check
+async function syncToServer() {
+  // Only sync if user has sync enabled
+  if (!parsedUserDetails.value.user_id || parsedUserDetails.value.sync_enabled === false) {
+    return
+  }
+
+  try {
+    syncStatus.value.syncing = true
+
+    const syncData = {
+      chats: JSON.stringify(chats.value),
+      link_previews: JSON.stringify(Object.fromEntries(linkPreviewCache.value)),
+      current_chat_id: currentChatId.value,
+      username: parsedUserDetails.value.username,
+      preferences: parsedUserDetails.value.preferences || '',
+      work_function: parsedUserDetails.value.workFunction || '',
+      theme: parsedUserDetails.value.theme || 'system',
+      sync_enabled: parsedUserDetails.value.sync_enabled
+    }
+
+    await apiCall('/sync', {
+      method: 'POST',
+      body: JSON.stringify(syncData)
+    })
+
+    syncStatus.value.lastSync = new Date()
+    syncStatus.value.hasUnsyncedChanges = false
+
+  } catch (error: any) {
+    console.error('Sync to server failed:', error)
+    syncStatus.value.hasUnsyncedChanges = true
+    toast.error('Failed to sync data to server', {
+      duration: 3000,
+      description: 'Your data is saved locally'
+    })
+  } finally {
+    syncStatus.value.syncing = false
+  }
+}
+
+// Updated handleAuth to properly set sync preference
+async function handleAuth(data: {
+  username: string
+  email: string
+  password: string
+}) {
+  const { username, email, password } = data
+  // Custom validation
+  const validationError = validateCredentials(username, email, password)
+  if (validationError) {
+    toast.error(validationError, { duration: 4000 })
+    return
+  }
+
+  try {
+    isLoading.value = true
+
+    let response
+    try {
+      // Try login
+      response = await unsecureApiCall('/login', {
+        method: 'POST',
+        body: JSON.stringify({ username, email, password })
+      })
+
+      toast.success('Welcome back!', {
+        duration: 3000,
+        description: `Logged in as ${response.data.username}`
+      })
+    } catch (loginError) {
+      // Try register if login fails
+      response = await unsecureApiCall('/register', {
+        method: 'POST',
+        body: JSON.stringify({ username, email, password })
+      })
+
+      toast.success('Account created successfully!', {
+        duration: 3000,
+        description: `Welcome ${response.data.username}!`
+      })
+    }
+
+    console.log('Auth response:', response)
+    // Store user details locally with sync preference
+    const userData = {
+      user_id: response.data.user_id,
+      username: response.data.username,
+      email: response.data.email,
+      created_at: response.data.created_at,
+      sessionId: btoa(email + ':' + password + ':' + username),
+      workFunction: response.data.work_function || "",
+      preferences: response.data.preferences || "",
+      theme: response.data.theme || "system",
+      sync_enabled: response.data.sync_enabled !== false // Default to true if not specified
+    }
+
+    localStorage.setItem('userdetails', JSON.stringify(userData))
+    localStorage.setItem('syncEnabled', String(userData.sync_enabled))
+    parsedUserDetails.value = userData
+
+    // Only sync data from server if sync is enabled
+    if (userData.sync_enabled) {
+      await syncFromServer(response.data)
+    } else {
+      // Just load local data if sync is disabled
+      loadLocalData()
+    }
+    
+    return response
+
+  } catch (error: any) {
+    console.error('Authentication error:', error)
+    toast.error('Authentication failed', {
+      duration: 4000,
+      description: error.message || 'Please check your credentials and try again.'
+    })
+  } finally {
+    isLoading.value = false
+  }
+}
+
+// Function to load data from localStorage only
+function loadLocalData() {
+  try {
+    // Load chats
+    const storedChats = localStorage.getItem('chats')
+    if (storedChats) {
+      chats.value = JSON.parse(storedChats)
+    }
+
+    // Load current chat ID
+    const storedChatId = localStorage.getItem('currentChatId')
+    if (storedChatId) {
+      currentChatId.value = storedChatId
+    }
+
+    // Load link previews
+    loadLinkPreviewCache()
+    
+    updateExpandedArray()
+  } catch (error) {
+    console.error('Error loading local data:', error)
+  }
+}
+
+// Updated manual sync function to check sync preference
 async function manualSync() {
   if (!parsedUserDetails.value.user_id) {
     toast.warning('Please log in to sync data', {
       duration: 3000,
       description: ''
+    })
+    return
+  }
+
+  if (parsedUserDetails.value.sync_enabled === false) {
+    toast.info('Sync is disabled', {
+      duration: 3000,
+      description: 'Enable auto-sync in settings to sync your data'
     })
     return
   }
@@ -799,25 +875,29 @@ async function manualSync() {
   }
 }
 
-// Auto-sync on app focus (when user comes back to tab)
+// Updated auto-sync setup to respect sync preferences
 let autoSyncInterval: any = null
-
 function setupAutoSync() {
   // Clear existing interval
   if (autoSyncInterval) {
     clearInterval(autoSyncInterval)
   }
 
-  // Auto sync every 5 minutes if authenticated and has unsynced changes
+  // Auto sync every 5 minutes if authenticated, sync enabled, and has unsynced changes
   autoSyncInterval = setInterval(() => {
-    if (isAuthenticated.value && syncStatus.value.hasUnsyncedChanges && !syncStatus.value.syncing) {
+    if (isAuthenticated.value && 
+        parsedUserDetails.value?.sync_enabled !== false && 
+        syncStatus.value.hasUnsyncedChanges && 
+        !syncStatus.value.syncing) {
       syncToServer()
     }
   }, 5 * 60 * 1000) // 5 minutes
 
-  // Sync when page becomes visible
+  // Sync when page becomes visible (only if sync enabled)
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden && isAuthenticated.value) {
+    if (!document.hidden && 
+        isAuthenticated.value && 
+        parsedUserDetails.value?.sync_enabled !== false) {
       // Small delay to ensure tab is fully active
       setTimeout(() => {
         syncFromServer()
@@ -825,25 +905,25 @@ function setupAutoSync() {
     }
   })
 
-  // Sync before page unload
+  // Sync before page unload (only if sync enabled and has changes)
   window.addEventListener('beforeunload', () => {
-    if (syncStatus.value.hasUnsyncedChanges) {
+    if (syncStatus.value.hasUnsyncedChanges && 
+        parsedUserDetails.value?.sync_enabled !== false) {
       // Use sendBeacon for reliable data sending on page unload
       const syncData = {
         chats: JSON.stringify(chats.value),
         link_previews: JSON.stringify(Object.fromEntries(linkPreviewCache.value)),
-        current_chat_id: currentChatId.value
+        current_chat_id: currentChatId.value,
+        username: parsedUserDetails.value.username,
+        preferences: parsedUserDetails.value.preferences || '',
+        work_function: parsedUserDetails.value.workFunction || '',
+        theme: parsedUserDetails.value.theme || 'system',
+        sync_enabled: parsedUserDetails.value.sync_enabled
       }
 
       navigator.sendBeacon(`${API_BASE_URL}/sync`, JSON.stringify(syncData))
     }
   })
-}
-
-// Close menus when clicking outside
-function handleClickOutside() {
-  activeChatMenu.value = null
-  showProfileMenu.value = false
 }
 
 const globalState ={

@@ -30,6 +30,10 @@ type User struct {
 	PasswordHash string    `json:"password_hash"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
+	Preferences  string    `json:"preferences,omitempty"`
+	WorkFunction string    `json:"work_function,omitempty"`
+	Theme        string    `json:"theme,omitempty"`
+	SyncEnabled  bool      `json:"sync_enabled"`
 }
 
 type UserData struct {

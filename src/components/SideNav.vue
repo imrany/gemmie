@@ -5,11 +5,11 @@ import { useRouter } from 'vue-router';
 import ChatDropdown from './Dropdowns/ChatDropdown.vue';
 import type { Ref } from 'vue';
 
-const globalState= inject('globalState') as {
-  activeChatMenu:Ref<string | null>,
-  toggleChatMenu:(chatId: string, event: Event)=>void
+const globalState = inject('globalState') as {
+  activeChatMenu: Ref<string | null>,
+  toggleChatMenu: (chatId: string, event: Event) => void
   showProfileMenu: Ref<boolean>,
-  handleClickOutside: ()=>void,
+  handleClickOutside: () => void,
   isAuthenticated: Ref<boolean>
 }
 const {
@@ -18,7 +18,7 @@ const {
   showProfileMenu,
   handleClickOutside,
   isAuthenticated
-}= globalState
+} = globalState
 
 const props = defineProps<{
   data: {
@@ -28,6 +28,7 @@ const props = defineProps<{
     parsedUserDetails: {
       username: string
       email: string
+      sync_enabled: boolean
     }
     screenWidth: number,
     syncStatus: any
@@ -61,7 +62,7 @@ function startRename(chatId: string, currentTitle: string) {
   isRenaming.value = chatId
   renameValue.value = currentTitle
   activeChatMenu.value = null
-  
+
   // Focus the input after Vue updates the DOM
   setTimeout(() => {
     const input = document.getElementById(`rename-${chatId}`) as HTMLInputElement
@@ -104,7 +105,7 @@ function handleChatClick(chatId: string) {
       : 'w-[270px] bg-white z-30 fixed top-0 left-0 bottom-0 border-r flex flex-col transition-all duration-300 ease-in-out'
     : 'none'
     " @click="handleClickOutside">
-    
+
     <!-- Scrollable area -->
     <div class="flex-1 overflow-y-auto">
       <!-- Top Header -->
@@ -136,17 +137,29 @@ function handleChatClick(chatId: string) {
           <p v-if="!props.data.isCollapsed || props.data.screenWidth < 720">New Chat</p>
         </button>
 
-        <button title="Sync Data" v-if="isAuthenticated" @click="props.functions.manualSync"
-          :disabled="props.data.syncStatus.syncing"
-          class="w-full flex items-center gap-2 h-[40px] hover:bg-gray-100 rounded-lg px-2 disabled:opacity-50 disabled:cursor-not-allowed">
-          <i :class="props.data.syncStatus.syncing ? 'pi pi-spin pi-spinner' : 'pi pi-refresh'"></i>
-          <span v-if="!props.data.isCollapsed || props.data.screenWidth < 720">
-            {{ props.data.syncStatus.syncing ? 'Syncing...' : 'Sync Data' }}
-          </span>
-          <div
-            v-if="props.data.syncStatus.hasUnsyncedChanges && (!props.data.isCollapsed || props.data.screenWidth < 720)"
-            class="ml-auto w-2 h-2 bg-orange-500 rounded-full"></div>
-        </button>
+        <div v-if="isAuthenticated">
+          <!-- Sync button -->
+          <button title="Sync Data" @click="props.functions.manualSync"
+            :disabled="props.data.syncStatus.syncing || !props.data.parsedUserDetails.sync_enabled"
+            class="w-full flex items-center gap-2 h-[40px] hover:bg-gray-100 rounded-lg px-2 disabled:opacity-50 disabled:cursor-not-allowed">
+            <i :class="props.data.syncStatus.syncing ? 'pi pi-spin pi-spinner' : 'pi pi-refresh'"></i>
+            <span v-if="!props.data.isCollapsed || props.data.screenWidth < 720">
+              {{ props.data.syncStatus.syncing ? 'Syncing...' : 'Sync Data' }}
+            </span>
+            <div
+              v-if="props.data.syncStatus.hasUnsyncedChanges && props.data.parsedUserDetails.sync_enabled && (!props.data.isCollapsed || props.data.screenWidth < 720)"
+              class="ml-auto w-2 h-2 bg-orange-500 rounded-full"></div>
+          </button>
+
+          <!-- Toggle sync -->
+          <!-- <div v-if="!props.data.isCollapsed || props.data.screenWidth < 720"
+            class="flex items-center justify-between mt-2 px-2">
+            <span class="text-sm text-gray-700">Enable Sync</span>
+            <input type="checkbox" v-model="props.data.parsedUserDetails.sync_enabled"
+              class="rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+          </div> -->
+        </div>
+
       </div>
 
       <!-- Recent Chats -->
@@ -154,27 +167,20 @@ function handleChatClick(chatId: string) {
         class="flex flex-col px-2 mb-2 py-4 font-light">
         <p v-if="!props.data.isCollapsed || props.data.screenWidth < 720" class="text-base text-gray-600 mb-2">Chats</p>
         <div class="flex flex-col gap-2">
-          <div v-for="chat in !props.data.isCollapsed ? props.data.chats : props.data.chats.slice(0, 1)"
-            :key="chat.id" 
+          <div v-for="chat in !props.data.isCollapsed ? props.data.chats : props.data.chats.slice(0, 1)" :key="chat.id"
             :class="chat.id === props.data.currentChatId
               ? 'w-full flex h-[32px] text-sm items-center bg-gray-300 rounded-lg relative'
               : 'w-full flex h-[32px] text-sm items-center hover:bg-gray-100 rounded-lg relative'">
-            
+
             <!-- Chat content area -->
-            <div @click="handleChatClick(chat.id)" 
-                 class="flex items-center h-full flex-grow px-2 cursor-pointer">
+            <div @click="handleChatClick(chat.id)" class="flex items-center h-full flex-grow px-2 cursor-pointer">
               <i class="pi pi-comments mr-2 text-gray-500 mb-[2px]"></i>
-              
+
               <!-- Chat title or rename input -->
               <div v-if="isRenaming === chat.id" class="flex-grow" @click.stop>
-                <input 
-                  :id="`rename-${chat.id}`"
-                  v-model="renameValue" 
-                  @keyup.enter="submitRename(chat.id)"
-                  @keyup.escape="cancelRename"
-                  @blur="submitRename(chat.id)"
-                  class="w-full px-1 py-0.5 text-xs bg-white border border-blue-500 rounded focus:outline-none"
-                />
+                <input :id="`rename-${chat.id}`" v-model="renameValue" @keyup.enter="submitRename(chat.id)"
+                  @keyup.escape="cancelRename" @blur="submitRename(chat.id)"
+                  class="w-full px-1 py-0.5 text-xs bg-white border border-blue-500 rounded focus:outline-none" />
               </div>
               <p v-else-if="!props.data.isCollapsed || props.data.screenWidth < 720" class="truncate">
                 {{ chat.title || 'Untitled Chat' }}
@@ -182,9 +188,8 @@ function handleChatClick(chatId: string) {
             </div>
 
             <!-- Menu button -->
-            <div v-if="!props.data.isCollapsed || props.data.screenWidth < 720" 
-                 @click="toggleChatMenu(chat.id, $event)" 
-                 class="flex items-center justify-center h-full hover:bg-blue-600 hover:text-white rounded-r-lg flex-shrink px-2 cursor-pointer">
+            <div v-if="!props.data.isCollapsed || props.data.screenWidth < 720" @click="toggleChatMenu(chat.id, $event)"
+              class="flex items-center justify-center h-full hover:bg-blue-600 hover:text-white rounded-r-lg flex-shrink px-2 cursor-pointer">
               <i class="pi pi-ellipsis-h"></i>
             </div>
 
@@ -194,7 +199,7 @@ function handleChatClick(chatId: string) {
             }" :functions="{
               deleteChat: props.functions.deleteChat,
               startRename
-            }"/>
+            }" />
           </div>
         </div>
       </div>
@@ -202,8 +207,8 @@ function handleChatClick(chatId: string) {
 
     <!-- Fixed Bottom User Profile -->
     <div class="border-t border-gray-200 p-3 bg-gray-100 sticky bottom-0">
-      <div class="flex items-center justify-between cursor-pointer mr-1" 
-           @click.stop="showProfileMenu = !showProfileMenu">
+      <div class="flex items-center justify-between cursor-pointer mr-1"
+        @click.stop="showProfileMenu = !showProfileMenu">
         <div class="flex items-center gap-2">
           <div class="w-[35px] h-[35px] flex justify-center items-center bg-gray-300 rounded-full">
             <span class="text-sm">{{ props.data.parsedUserDetails.username.toUpperCase().slice(0, 2) }}</span>
@@ -226,7 +231,7 @@ function handleChatClick(chatId: string) {
             class="w-full text-left px-4 py-2 hover:bg-gray-100">
             {{ option.label }}
           </button>
-          <button @click="props.functions.logout" 
+          <button @click="props.functions.logout"
             class="w-full text-left px-4 py-2 text-red-600 hover:bg-red-100 rounded-b-lg">
             Log Out
           </button>

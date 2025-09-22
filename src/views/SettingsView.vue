@@ -2,196 +2,271 @@
 import router from '@/router';
 import type { Chat, ConfirmDialogOptions } from '@/types';
 import { inject, ref, reactive, type Ref, computed, watch, onMounted } from 'vue';
-import SideNav from '@/components/SideNav.vue'; // Add this import
+import SideNav from '@/components/SideNav.vue';
 import { toast } from 'vue-sonner';
 import { useRoute } from 'vue-router';
 
 const globalState = inject('globalState') as {
-    screenWidth: Ref<number>,
-    confirmDialog: Ref<ConfirmDialogOptions>,
-    isCollapsed: Ref<boolean>,
-    isSidebarHidden: Ref<boolean>,
-    authData: Ref<{
-        username: string;
-        email: string;
-        password: string;
-        workFunction?: string,
-        preferences?: string
-    }>,
-    syncStatus: Ref<{ lastSync: Date | null; syncing: boolean; hasUnsyncedChanges: boolean; }>,
-    isAuthenticated: Ref<boolean>,
-    parsedUserDetails: any,
-    currentChatId: Ref<string>,
-    chats: Ref<Chat[]>
-    logout: () => void,
-    isLoading: Ref<boolean>,
-    showInput: Ref<boolean>,
-    hideSidebar: () => void,
-    setShowInput: () => void,
-    clearAllChats: () => void,
-    switchToChat: (chatId: string) => void,
-    createNewChat: (initialMessage?: string) => void,
-    deleteChat: (chatId: string) => void,
-    renameChat: (chatId: string, newTitle: string) => void,
-    toggleSidebar: () => void,
-    manualSync: () => Promise<any>,
-    apiCall: (endpoint: string, options?: RequestInit) => Promise<any>
+  screenWidth: Ref<number>,
+  confirmDialog: Ref<ConfirmDialogOptions>,
+  isCollapsed: Ref<boolean>,
+  isSidebarHidden: Ref<boolean>,
+  authData: Ref<{
+    username: string;
+    email: string;
+    password: string;
+    workFunction?: string,
+    preferences?: string
+  }>,
+  syncStatus: Ref<{ lastSync: Date | null; syncing: boolean; hasUnsyncedChanges: boolean; }>,
+  isAuthenticated: Ref<boolean>,
+  parsedUserDetails: Ref<any>,
+  currentChatId: Ref<string>,
+  chats: Ref<Chat[]>
+  logout: () => void,
+  isLoading: Ref<boolean>,
+  showInput: Ref<boolean>,
+  hideSidebar: () => void,
+  setShowInput: () => void,
+  clearAllChats: () => void,
+  switchToChat: (chatId: string) => void,
+  createNewChat: (initialMessage?: string) => void,
+  deleteChat: (chatId: string) => void,
+  renameChat: (chatId: string, newTitle: string) => void,
+  toggleSidebar: () => void,
+  manualSync: () => Promise<any>,
+  apiCall: (endpoint: string, options?: RequestInit) => Promise<any>
 }
 
 const {
-    screenWidth,
-    isCollapsed,
-    authData,
-    isAuthenticated,
-    currentChatId,
-    chats,
-    logout,
-    syncStatus,
-    toggleSidebar,
-    manualSync,
-    hideSidebar,
-    setShowInput,
-    clearAllChats,
-    switchToChat,
-    createNewChat,
-    deleteChat,
-    renameChat,
-    apiCall
+  screenWidth,
+  isCollapsed,
+  authData,
+  isAuthenticated,
+  currentChatId,
+  chats,
+  logout,
+  syncStatus,
+  toggleSidebar,
+  manualSync,
+  hideSidebar,
+  setShowInput,
+  clearAllChats,
+  switchToChat,
+  createNewChat,
+  deleteChat,
+  renameChat,
+  apiCall
 } = globalState
 
 const route = useRoute()
 const parsedUserDetails = globalState.parsedUserDetails
 const tabParam = route.params.tab as 'profile' | 'account' | 'billing' | undefined
 
-// Create a local reactive copy for form editing
+// Local form state
 const profileData = reactive({
-    username: parsedUserDetails?.username || '',
-    email: parsedUserDetails?.email || '',
-    workFunction: parsedUserDetails?.workFunction || '',
-    preferences: parsedUserDetails?.preferences || ''
+  username: parsedUserDetails.value?.username || '',
+  email: parsedUserDetails.value?.email || '',
+  workFunction: parsedUserDetails.value?.workFunction || '',
+  preferences: parsedUserDetails.value?.preferences || ''
 })
 
-// Sync settings
-const syncEnabled = ref(localStorage.getItem('syncEnabled') !== 'false') // Default to true
+// Get sync setting from user details or localStorage, default to true
+const syncEnabled = ref(
+  parsedUserDetails.value?.sync_enabled ?? 
+  (localStorage.getItem('syncEnabled') !== 'false')
+)
 
 const showDropdown = ref(false)
 const activeTab = ref<'profile' | 'account' | 'billing'>(tabParam ?? 'profile')
 const isSaving = ref(false)
 
+/**
+ * Save profile changes - only sync to server if sync is enabled
+ */
 async function saveProfile() {
-    if (!profileData.username.trim()) {
-        toast.error('Username is required')
-        return
-    }
+  if (!profileData.username.trim()) {
+    toast.error('Username is required')
+    return
+  }
 
-    try {
-        isSaving.value = true
+  try {
+    isSaving.value = true
 
-        // Update the global state
-        parsedUserDetails.username = profileData.username.trim()
-        parsedUserDetails.workFunction = profileData.workFunction
-        parsedUserDetails.preferences = profileData.preferences
+    // Update global state
+    parsedUserDetails.value.username = profileData.username.trim()
+    parsedUserDetails.value.workFunction = profileData.workFunction
+    parsedUserDetails.value.preferences = profileData.preferences
 
-        // Save to localStorage
-        const userDetails = JSON.parse(localStorage.getItem('userdetails') || '{}')
-        userDetails.username = profileData.username.trim()
-        userDetails.workFunction = profileData.workFunction
-        userDetails.preferences = profileData.preferences
-        localStorage.setItem('userdetails', JSON.stringify(userDetails))
+    // Always save to localStorage
+    localStorage.setItem("userdetails", JSON.stringify(parsedUserDetails.value))
 
-        // Only sync with server if sync is enabled
-        if (syncEnabled.value) {
-            try {
-                await apiCall('/profile', {
-                    method: 'PUT',
-                    body: JSON.stringify({
-                        username: profileData.username.trim(),
-                        workFunction: profileData.workFunction,
-                        preferences: profileData.preferences
-                    })
-                })
-            } catch (serverError) {
-                console.warn('Failed to sync profile to server:', serverError)
-                // Still show success since local save worked
-            }
-        }
-
-        toast.success('Profile updated successfully')
-    } catch (error) {
-        console.error('Failed to save profile:', error)
-        toast.error('Failed to save profile changes')
-    } finally {
-        isSaving.value = false
-    }
-}
-
-// Toggle sync functionality
-function toggleSync() {
-    syncEnabled.value = !syncEnabled.value
-    localStorage.setItem('syncEnabled', syncEnabled.value.toString())
-
+    // Server sync only if enabled
     if (syncEnabled.value) {
-        toast.success('Auto-sync enabled')
+      try {
+        await apiCall('/sync', {
+          method: 'POST',
+          body: JSON.stringify({
+            username: profileData.username.trim(),
+            workFunction: profileData.workFunction,
+            preferences: profileData.preferences,
+            chats: JSON.stringify(chats.value),
+            link_previews: "{}",
+            current_chat_id: currentChatId.value,
+            sync_enabled: syncEnabled.value
+          })
+        })
+        toast.success('Profile updated and synced successfully')
+      } catch (serverError) {
+        console.warn('Failed to sync profile to server:', serverError)
+        toast.success('Profile updated locally (sync failed)')
+      }
     } else {
-        toast.info('Auto-sync disabled - data will only be saved locally')
+      toast.success('Profile updated locally')
     }
+
+  } catch (error) {
+    console.error('Failed to save profile:', error)
+    toast.error('Failed to save profile changes')
+  } finally {
+    isSaving.value = false
+  }
 }
 
-// Reset form data when switching tabs or on mount
+/**
+ * Toggle auto-sync - this affects all future sync operations
+ */
+async function toggleSync() {
+  const newSyncValue = !syncEnabled.value
+  
+  try {
+    // Update local state first
+    syncEnabled.value = newSyncValue
+    parsedUserDetails.value.sync_enabled = newSyncValue
+    
+    // Save to localStorage
+    localStorage.setItem('syncEnabled', String(newSyncValue))
+    localStorage.setItem("userdetails", JSON.stringify(parsedUserDetails.value))
+
+    // If enabling sync, sync current data to server
+    if (newSyncValue) {
+      try {
+        await apiCall('/sync', {
+          method: 'POST',
+          body: JSON.stringify({
+            username: parsedUserDetails.value.username,
+            workFunction: parsedUserDetails.value.workFunction || '',
+            preferences: parsedUserDetails.value.preferences || '',
+            chats: JSON.stringify(chats.value),
+            link_previews: "{}",
+            current_chat_id: currentChatId.value,
+            sync_enabled: newSyncValue
+          })
+        })
+        toast.success('Auto-sync enabled and data synced to server')
+      } catch (error) {
+        console.warn('Failed to sync to server:', error)
+        toast.success('Auto-sync enabled (initial sync failed)')
+      }
+    } else {
+      // When disabling sync, still notify the server about the preference change
+      try {
+        await apiCall('/sync', {
+          method: 'POST',
+          body: JSON.stringify({
+            username: parsedUserDetails.value.username,
+            workFunction: parsedUserDetails.value.workFunction || '',
+            preferences: parsedUserDetails.value.preferences || '',
+            chats: JSON.stringify(chats.value),
+            link_previews: "{}",
+            current_chat_id: currentChatId.value,
+            sync_enabled: newSyncValue
+          })
+        })
+      } catch (error) {
+        console.warn('Failed to update sync preference on server:', error)
+      }
+      toast.info('Auto-sync disabled - data will only be saved locally')
+    }
+
+  } catch (error) {
+    console.error('Failed to toggle sync:', error)
+    // Revert the change on error
+    syncEnabled.value = !newSyncValue
+    parsedUserDetails.value.sync_enabled = !newSyncValue
+    toast.error('Failed to update sync setting')
+  }
+}
+
+/**
+ * Reset form when switching tabs
+ */
 function resetProfileData() {
-    profileData.username = parsedUserDetails.username || ''
-    profileData.email = parsedUserDetails.email || ''
-    profileData.workFunction = parsedUserDetails.workFunction || ''
-    profileData.preferences = parsedUserDetails.preferences || ''
+  profileData.username = parsedUserDetails.value?.username || ''
+  profileData.email = parsedUserDetails.value?.email || ''
+  profileData.workFunction = parsedUserDetails.value?.workFunction || ''
+  profileData.preferences = parsedUserDetails.value?.preferences || ''
 }
 
-// Watch for changes to parsedUserDetails and update form
-// This ensures the form stays in sync with global state changes
-function syncFormData() {
-    if (parsedUserDetails.username !== profileData.username) {
-        resetProfileData()
-    }
-}
-
-// Check if form has unsaved changes
+/**
+ * Detect unsaved changes
+ */
 const hasUnsavedChanges = computed(() => {
-    return profileData.username !== (parsedUserDetails?.username || '') ||
-        profileData.workFunction !== (parsedUserDetails?.workFunction || '') ||
-        profileData.preferences !== (parsedUserDetails?.preferences || '')
+  return profileData.username !== (parsedUserDetails.value?.username || '') ||
+    profileData.workFunction !== (parsedUserDetails.value?.workFunction || '') ||
+    profileData.preferences !== (parsedUserDetails.value?.preferences || '')
 })
 
+/**
+ * Watch tab changes
+ */
 watch(activeTab, (newVal, oldVal) => {
-    if (hasUnsavedChanges.value) {
-        const confirmLeave = confirm("You have unsaved changes. Leave without saving?")
-        if (!confirmLeave) {
-            activeTab.value = oldVal // revert
-            return
-        }
+  if (hasUnsavedChanges.value) {
+    const confirmLeave = confirm("You have unsaved changes. Leave without saving?")
+    if (!confirmLeave) {
+      activeTab.value = oldVal
+      return
     }
-
-    // Update the URL when tab changes
-    router.push({ name: 'settings', params: { tab: newVal } })
+  }
+  router.push({ name: 'settings', params: { tab: newVal } })
 })
 
+/**
+ * Watch for changes in parsedUserDetails and update syncEnabled accordingly
+ */
+watch(parsedUserDetails, (newVal) => {
+  if (newVal) {
+    // Update sync setting from user details if it exists
+    if (typeof newVal.sync_enabled === 'boolean') {
+      syncEnabled.value = newVal.sync_enabled
+    }
+  }
+}, { deep: true })
+
+/**
+ * Lifecycle hooks
+ */
 onMounted(() => {
-    if(parsedUserDetails) {
-        resetProfileData()
-    } else if (isAuthenticated.value) {
-        // If user details are missing but authenticated, log out to reset state
-        logout()
-        router.push('/')
+  if (parsedUserDetails.value) {
+    resetProfileData()
+    // Ensure sync setting is in sync with user details
+    if (typeof parsedUserDetails.value.sync_enabled === 'boolean') {
+      syncEnabled.value = parsedUserDetails.value.sync_enabled
     }
-    if(!isAuthenticated.value){
-        router.push('/login')
-    }
+  } else if (isAuthenticated.value) {
+    logout()
+    router.push('/')
+  }
+  if (!isAuthenticated.value) {
+    router.push('/login')
+  }
 })
 
-watch(isAuthenticated,(val)=>{
-    if(val===false){
-        router.push('/')
-    }
+watch(isAuthenticated, (val) => {
+  if (val === false) {
+    router.push('/')
+  }
 })
-
 </script>
 
 <template>
@@ -357,7 +432,7 @@ watch(isAuthenticated,(val)=>{
                                     <div>
                                         <h3 class="text-sm font-medium text-gray-800">Auto Sync</h3>
                                         <p class="text-xs text-gray-500">
-                                            {{ syncEnabled ? 'Data would be synced to all your devices automatically' :
+                                            {{ syncEnabled ? 'Data is synced across all your devices automatically' :
                                             'Data is only stored locally on this device' }}
                                         </p>
                                     </div>
@@ -367,6 +442,20 @@ watch(isAuthenticated,(val)=>{
                                         <span
                                             class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform"
                                             :class="syncEnabled ? 'translate-x-6' : 'translate-x-1'" />
+                                    </button>
+                                </div>
+
+                                <!-- Manual Sync Button (only show if sync is enabled) -->
+                                <div v-if="syncEnabled" class="flex items-center justify-between">
+                                    <div>
+                                        <h3 class="text-sm font-medium text-gray-800">Manual Sync</h3>
+                                        <p class="text-xs text-gray-500">Force sync your data now</p>
+                                    </div>
+                                    <button @click="manualSync"
+                                        :disabled="syncStatus.syncing"
+                                        class="px-4 py-2 border font-medium border-gray-300 hover:bg-gray-50 disabled:bg-gray-100 disabled:cursor-not-allowed rounded-lg transition-all flex items-center gap-2">
+                                        <i v-if="syncStatus.syncing" class="pi pi-spin pi-spinner text-sm"></i>
+                                        <span>{{ syncStatus.syncing ? 'Syncing...' : 'Sync Now' }}</span>
                                     </button>
                                 </div>
 
@@ -398,12 +487,30 @@ watch(isAuthenticated,(val)=>{
                                 <!-- Session ID -->
                                 <div class="space-y-2">
                                     <label class="block text-sm font-medium text-gray-700">Session ID</label>
-                                    <input type="text" :value="parsedUserDetails?.sessionId" readonly
+                                    <input type="text" :value="parsedUserDetails.sessionId" readonly
                                         class="w-full px-4 py-2 text-sm border border-gray-300 rounded-lg bg-gray-50 text-gray-600 font-mono" />
+                                </div>
+
+                                <!-- Sync Status -->
+                                <div v-if="syncEnabled" class="space-y-2">
+                                    <label class="block text-sm font-medium text-gray-700">Sync Status</label>
+                                    <div class="text-sm text-gray-600">
+                                        <div class="flex items-center gap-2">
+                                            <div :class="syncStatus.syncing ? 'bg-yellow-500' : 
+                                                         syncStatus.hasUnsyncedChanges ? 'bg-orange-500' : 'bg-green-500'" 
+                                                 class="w-2 h-2 rounded-full"></div>
+                                            <span>
+                                                {{ syncStatus.syncing ? 'Syncing...' : 
+                                                   syncStatus.hasUnsyncedChanges ? 'Unsynced changes' : 'Synced' }}
+                                            </span>
+                                        </div>
+                                        <div v-if="syncStatus.lastSync" class="text-xs text-gray-500 mt-1">
+                                            Last sync: {{ new Date(syncStatus.lastSync).toLocaleString() }}
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
-
 
                         <!-- Billing -->
                         <div v-if="activeTab === 'billing'"
