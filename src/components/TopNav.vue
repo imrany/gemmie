@@ -33,7 +33,7 @@ let props = defineProps<{
     ">
     <div class="flex h-full px-4 items-center justify-between w-full">
       <!-- Brand -->
-      <p v-if="props.data.currentChat" class="text-black font-medium truncate text-base tracking-wide select-none">
+      <p v-if="props.data.currentChat&&props.data.screenWidth > 720" class="text-black font-medium truncate text-base select-none">
         <span v-if="props.data.currentChat.title.length>20">{{ props.data.currentChat.title.slice(0,20) }}...</span>
         <span v-else>{{ props.data.currentChat.title }}</span>
       </p>
