@@ -85,6 +85,8 @@ const chats = ref<Chat[]>([])
 const isLoading = ref(false) //  removed 'let' declaration
 const expanded = ref<boolean[]>([]) //  removed 'let' declaration
 const showInput = ref(false) //  removed 'let' declaration
+const activeChatMenu = ref<string | null>(null) // Track which chat's menu is open
+const showProfileMenu = ref(false)
 
 function showConfirmDialog(options: ConfirmDialogOptions) {
   confirmDialog.value = {
@@ -417,6 +419,11 @@ function hideSidebar() {
   }
 }
 
+function toggleChatMenu(chatId: string, event: Event) {
+  event.stopPropagation()
+  activeChatMenu.value = activeChatMenu.value === chatId ? null : chatId
+}
+
 // Fixed switchToChat function
 function switchToChat(chatId: string) {
   if (chats.value.find(chat => chat.id === chatId)) {
@@ -735,6 +742,12 @@ function setupAutoSync() {
   })
 }
 
+// Close menus when clicking outside
+function handleClickOutside() {
+  activeChatMenu.value = null
+  showProfileMenu.value = false
+}
+
 const globalState ={
   screenWidth,
   confirmDialog,
@@ -777,13 +790,19 @@ const globalState ={
   toggleSidebar,
   manualSync,
   setupAutoSync,
-  autoSyncInterval
+  autoSyncInterval,
+  activeChatMenu,
+  toggleChatMenu,
+  showProfileMenu,
+  handleClickOutside
 }
 provide("globalState", globalState)
 </script>
 
 <template>
-  <Toaster position="top-right" :closeButton="true" closeButtonPosition="top-left"/>
-  <ConfirmDialog v-if="confirmDialog.visible" :confirmDialog="confirmDialog" />
-  <RouterView/>
+  <div @click="handleClickOutside">
+    <Toaster position="top-right" :closeButton="true" closeButtonPosition="top-left"/>
+    <ConfirmDialog v-if="confirmDialog.visible" :confirmDialog="confirmDialog" />
+    <RouterView/>
+  </div>
 </template>

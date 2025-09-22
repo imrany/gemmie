@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import type { CurrentChat } from '@/types'
+import type { Chat, CurrentChat } from '@/types'
 
 let props = defineProps<{
   data: {
@@ -9,13 +9,11 @@ let props = defineProps<{
     screenWidth: number
     isSidebarHidden?: boolean
     isAuthenticated: () => boolean
-    syncStatus: any
+    syncStatus: any,
+    chat?:Chat,
   }
   functions: {
     hideSidebar: () => void
-    deleteChat: (chatId: string) => void
-    createNewChat: () => void
-    renameChat: (chatId: string, newTitle: string) => void
     manualSync: () => void
   }
 }>()
@@ -30,9 +28,14 @@ let props = defineProps<{
     ">
     <div class="flex h-full px-4 items-center justify-between w-full">
       <!-- Brand -->
-      <p class="text-black text-xl font-semibold tracking-wide select-none">
+      <p v-if="props.data.currentChat" class="text-black font-medium truncate text-base tracking-wide select-none">
+        <span v-if="props.data.currentChat.title.length>40">{{ props.data.currentChat.title.slice(0,40) }}...</span>
+        <span v-else>{{ props.data.currentChat.title }}</span>
+      </p>
+      <p v-else class="text-black text-xl font-semibold tracking-wide select-none">
         Gemmie
       </p>
+
 
       <!-- Mobile Sidebar Toggle -->
       <div v-if="props.data.screenWidth < 720" class="flex gap-2 items-center ml-auto">
@@ -86,15 +89,6 @@ let props = defineProps<{
             <span>Synced</span>
           </div>
         </div>
-
-        <!-- Delete Chat -->
-        <button @click="() => props.functions.deleteChat(props.data.currentChat?.id || '')" title="Delete Chat" v-if="
-          props.data.currentChat?.id.length !== 0
-        "
-          class="flex items-center gap-2 text-gray-500 hover:text-red-600 border border-gray-200 hover:border-red-400 hover:bg-red-50 rounded-full px-3 py-1.5 text-sm font-medium transition">
-          <i class="pi pi-trash"></i>
-          <span>Delete Chat</span>
-        </button>
       </div>
     </div>
   </div>
