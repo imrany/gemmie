@@ -50,7 +50,7 @@ const isRenaming = ref<string | null>(null) // Track which chat is being renamed
 const renameValue = ref('')
 
 const profileOptions = [
-  { id: 'settings', label: 'Settings', action: () => router.push('/settings') },
+  { id: 'settings', label: 'Settings', action: () => router.push('/settings/profile') },
   { id: 'help', label: 'Get Help', action: () => { /* Add your help action */ } },
   { id: 'upgrade', label: 'Upgrade Plan', action: () => router.push('/upgrade') },
   { id: 'learn', label: 'Learn More', action: () => { /* Add your learn more action */ } }
@@ -145,12 +145,6 @@ function handleChatClick(chatId: string) {
           <div
             v-if="props.data.syncStatus.hasUnsyncedChanges && (!props.data.isCollapsed || props.data.screenWidth < 720)"
             class="ml-auto w-2 h-2 bg-orange-500 rounded-full"></div>
-        </button>
-
-        <button @click="() => { router.push('/auth/delete_account') }" title="Delete Account"
-          class="w-full flex items-center gap-2 h-[40px] hover:bg-red-100 rounded-lg px-2">
-          <i class="pi pi-user-minus text-gray-500 mb-[2px]"></i>
-          <p v-if="!props.data.isCollapsed || props.data.screenWidth < 720">Delete Account</p>
         </button>
       </div>
 
