@@ -1133,12 +1133,9 @@ function setShowCreateSession(value: boolean) {
         isCollapsed,
         isSidebarHidden,
         syncStatus,
-        isAuthenticated
+        isAuthenticated,
       }" :functions="{
         hideSidebar,
-        deleteChat,
-        createNewChat,
-        renameChat,
         manualSync,
       }" />
 
