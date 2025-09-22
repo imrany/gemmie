@@ -8,7 +8,7 @@ import { nextTick } from 'vue';
 import { detectAndProcessVideo } from './utils/videoProcessing';
 import ConfirmDialog from './components/ConfirmDialog.vue';
 
-const screenWidth = ref(screen.width) //  removed 'let' declaration
+const screenWidth = ref(screen.width) 
 const scrollableElem = ref<HTMLElement | null>(null)
 const showScrollDownButton = ref(false)
 const confirmDialog = ref<ConfirmDialogOptions>({ 
@@ -71,7 +71,7 @@ function saveLinkPreviewCache() {
 
 let userDetails: any = localStorage.getItem("userdetails")
 let parsedUserDetails: any = userDetails ? JSON.parse(userDetails) : null
-// Updated isAuthenticated function
+
 function isAuthenticated(): boolean {
   return parsedUserDetails &&
     parsedUserDetails.email &&
@@ -82,10 +82,10 @@ function isAuthenticated(): boolean {
 
 const currentChatId = ref<string>('')
 const chats = ref<Chat[]>([])
-const isLoading = ref(false) //  removed 'let' declaration
-const expanded = ref<boolean[]>([]) //  removed 'let' declaration
-const showInput = ref(false) //  removed 'let' declaration
-const activeChatMenu = ref<string | null>(null) // Track which chat's menu is open
+const isLoading = ref(false) 
+const expanded = ref<boolean[]>([]) 
+const showInput = ref(false) 
+const activeChatMenu = ref<string | null>(null) 
 const showProfileMenu = ref(false)
 
 function showConfirmDialog(options: ConfirmDialogOptions) {
@@ -314,7 +314,6 @@ function logout() {
           duration: 3000,
           description: 'Your data has been synced'
         })
-
       } catch (err) {
         console.error('Error during logout:', err)
         toast.error('Error during logout', {
