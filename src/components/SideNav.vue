@@ -183,13 +183,14 @@ function handleChatClick(chatId: string) {
                   class="w-full px-1 py-0.5 text-xs bg-white border border-blue-500 rounded focus:outline-none" />
               </div>
               <p v-else-if="!props.data.isCollapsed || props.data.screenWidth < 720" class="truncate">
-                {{ chat.title.slice(0,20) || 'Untitled Chat' }}
+                <span v-if="chat.title.length>20">{{ `${chat.title.slice(0,20)}..` || 'Untitled Chat' }}</span>
+                <span v-else>{{ chat.title || 'Untitled Chat' }}</span>
               </p>
             </div>
 
             <!-- Menu button -->
             <div v-if="!props.data.isCollapsed || props.data.screenWidth < 720" @click="toggleChatMenu(chat.id, $event)"
-              class="flex items-center justify-center h-full hover:bg-blue-600 hover:text-white rounded-r-lg flex-shrink px-2 cursor-pointer">
+              class="flex items-center justify-center h-full hover:bg-blue-600 hover:text-white rounded-r-lg flex-shrink px-3 cursor-pointer">
               <i class="pi pi-ellipsis-h"></i>
             </div>
 

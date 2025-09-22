@@ -311,7 +311,7 @@ watch(isAuthenticated, (val) => {
                 <!-- Mobile Dropdown Toggle -->
                 <div class="relative mb-4 md:hidden">
                     <button @click="showDropdown = !showDropdown"
-                        class="w-full flex justify-between items-center px-4 py-2 border border-gray-300 rounded-md bg-gray-100 shadow-sm text-sm focus:outline-none">
+                        class="w-full flex justify-between font-medium items-center px-4 py-2 border border-gray-300 rounded-md bg-gray-50 shadow-sm text-sm focus:outline-none">
                         <span>
                             {{ activeTab === 'profile' ? 'Profile' : activeTab === 'account' ? 'Account' : 'Billing' }}
                         </span>
