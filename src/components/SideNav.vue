@@ -10,12 +10,14 @@ const globalState= inject('globalState') as {
   toggleChatMenu:(chatId: string, event: Event)=>void
   showProfileMenu: Ref<boolean>,
   handleClickOutside: ()=>void,
+  isAuthenticated: Ref<boolean>
 }
 const {
   activeChatMenu,
   toggleChatMenu,
   showProfileMenu,
-  handleClickOutside
+  handleClickOutside,
+  isAuthenticated
 }= globalState
 
 const props = defineProps<{
@@ -28,8 +30,7 @@ const props = defineProps<{
       email: string
     }
     screenWidth: number,
-    syncStatus: any,
-    isAuthenticated: () => boolean
+    syncStatus: any
   }
   functions: {
     setShowInput: () => void
@@ -135,7 +136,7 @@ function handleChatClick(chatId: string) {
           <p v-if="!props.data.isCollapsed || props.data.screenWidth < 720">New Chat</p>
         </button>
 
-        <button title="Sync Data" v-if="props.data.isAuthenticated()" @click="props.functions.manualSync"
+        <button title="Sync Data" v-if="isAuthenticated" @click="props.functions.manualSync"
           :disabled="props.data.syncStatus.syncing"
           class="w-full flex items-center gap-2 h-[40px] hover:bg-gray-100 rounded-lg px-2 disabled:opacity-50 disabled:cursor-not-allowed">
           <i :class="props.data.syncStatus.syncing ? 'pi pi-spin pi-spinner' : 'pi pi-refresh'"></i>

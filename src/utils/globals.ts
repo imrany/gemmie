@@ -42,3 +42,24 @@ export function copyCode(text: string, button?: HTMLElement) {
       })
     })
 }
+
+export function validateCredentials(username: string, email: string, password: string): string | null {
+  // Username: 3–12 chars, no spaces, only letters, numbers, underscores, hyphens
+  const usernameRegex = /^[a-zA-Z0-9_-]{3,12}$/
+  if (!usernameRegex.test(username)) {
+    return "Username must be 3–12 characters, no spaces, only letters, numbers, _ or -"
+  }
+
+  // Email: basic check
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  if (!emailRegex.test(email)) {
+    return "Invalid email format"
+  }
+
+  // Password: at least 8 chars
+  if (password.length < 8) {
+    return "Password must be at least 8 characters"
+  }
+
+  return null
+}
