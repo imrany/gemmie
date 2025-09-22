@@ -23,7 +23,7 @@ const router = createRouter({
       component: UpgradeView
     },
     {
-      path: '/settings',
+      path: '/settings/:tab',
       name: 'settings',
       component: SettingsView
     },
