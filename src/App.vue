@@ -695,6 +695,47 @@ async function manualSync() {
   }
 }
 
+// Auto-sync on app focus (when user comes back to tab)
+let autoSyncInterval: any = null
+
+function setupAutoSync() {
+  // Clear existing interval
+  if (autoSyncInterval) {
+    clearInterval(autoSyncInterval)
+  }
+
+  // Auto sync every 5 minutes if authenticated and has unsynced changes
+  autoSyncInterval = setInterval(() => {
+    if (isAuthenticated() && syncStatus.value.hasUnsyncedChanges && !syncStatus.value.syncing) {
+      syncToServer()
+    }
+  }, 5 * 60 * 1000) // 5 minutes
+
+  // Sync when page becomes visible
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && isAuthenticated()) {
+      // Small delay to ensure tab is fully active
+      setTimeout(() => {
+        syncFromServer()
+      }, 1000)
+    }
+  })
+
+  // Sync before page unload
+  window.addEventListener('beforeunload', () => {
+    if (syncStatus.value.hasUnsyncedChanges) {
+      // Use sendBeacon for reliable data sending on page unload
+      const syncData = {
+        chats: JSON.stringify(chats.value),
+        link_previews: JSON.stringify(Object.fromEntries(linkPreviewCache.value)),
+        current_chat_id: currentChatId.value
+      }
+
+      navigator.sendBeacon(`${API_BASE_URL}/sync`, JSON.stringify(syncData))
+    }
+  })
+}
+
 const globalState ={
   screenWidth,
   confirmDialog,
@@ -735,7 +776,9 @@ const globalState ={
   updateExpandedArray,
   apiCall,
   toggleSidebar,
-  manualSync
+  manualSync,
+  setupAutoSync,
+  autoSyncInterval
 }
 provide("globalState", globalState)
 </script>

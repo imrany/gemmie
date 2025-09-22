@@ -115,8 +115,9 @@ let parsedUserDetails = globalState.parsedUserDetails
                 :
                 'flex-grow flex flex-col items-center justify-center ml-[60px] font-light text-sm transition-all duration-300 ease-in-out'
             )
-                : 'text-sm font-light flex-grow items-center justify-center flex flex-col transition-all duration-300 ease-in-out'">
-            >
+                : 'text-sm font-light flex-grow items-center justify-center flex flex-col transition-all duration-300 ease-in-out'"
+        >
+            Settings    
         </div>
     </div>
 </template>
