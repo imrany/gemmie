@@ -112,7 +112,7 @@ func runServer() {
 	r.HandleFunc("/api/transactions", v1.GetTransactionsHandler).Methods(http.MethodGet)
 	r.HandleFunc("/api/transactions/{external_reference}", v1.GetTransactionByRefHandler).Methods(http.MethodGet)
 	r.HandleFunc("/api/callback", v1.StoreTransactionHandler).Methods(http.MethodPost)
-
+	r.HandleFunc("/api/profile", v1.ProfileHandler)
 	// Handle CORS preflight
 	r.Methods(http.MethodOptions).HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)

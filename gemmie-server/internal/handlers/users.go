@@ -36,6 +36,11 @@ type SyncRequest struct {
 	Chats         string `json:"chats"`
 	LinkPreviews  string `json:"link_previews"`
 	CurrentChatID string `json:"current_chat_id"`
+	Preferences   string `json:"preferences,omitempty"`
+	WorkFunction  string `json:"work_function,omitempty"`
+	Theme         string `json:"theme,omitempty"`
+	SyncEnabled  bool      `json:"sync_enabled"`
+	Username     string   `json:"username"`
 }
 
 // AuthResponse represents authentication response
@@ -47,6 +52,18 @@ type AuthResponse struct {
 	Chats         string    `json:"chats,omitempty"`
 	LinkPreviews  string    `json:"link_previews,omitempty"`
 	CurrentChatID string    `json:"current_chat_id,omitempty"`
+	Preferences    string    `json:"preferences,omitempty"`
+	WorkFunction  string    `json:"work_function,omitempty"`
+	Theme         string    `json:"theme,omitempty"`
+	SyncEnabled  bool      `json:"sync_enabled"`
+}
+
+type ProfileUpdateRequest struct {
+	Username     string `json:"username,omitempty"`
+	WorkFunction string `json:"workFunction,omitempty"`
+	Preferences  string `json:"preferences,omitempty"`
+	Theme        string `json:"theme,omitempty"`
+	SyncEnabled  *bool  `json:"sync_enabled,omitempty"` // Pointer to handle explicit false
 }
 
 // findUserByEmail finds a user by email
@@ -125,6 +142,10 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		PasswordHash: passwordHash,
 		CreatedAt:    time.Now(),
 		UpdatedAt:    time.Now(),
+		Preferences: "",
+		WorkFunction: "",
+		Theme:      "system",
+		SyncEnabled: true,
 	}
 
 	// Create empty user data record
@@ -156,6 +177,10 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 			Chats:         userData.Chats,
 			LinkPreviews:  userData.LinkPreviews,
 			CurrentChatID: userData.CurrentChatID,
+			Preferences:    user.Preferences,
+			WorkFunction:  user.WorkFunction,
+			Theme:         user.Theme,
+			SyncEnabled: user.SyncEnabled,
 		},
 	})
 }
@@ -236,6 +261,10 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 			Chats:         userData.Chats,
 			LinkPreviews:  userData.LinkPreviews,
 			CurrentChatID: userData.CurrentChatID,
+			Preferences:    user.Preferences,
+			WorkFunction:  user.WorkFunction,
+			Theme:         user.Theme,
+			SyncEnabled: user.SyncEnabled,
 		},
 	})
 }
@@ -271,6 +300,7 @@ func SyncHandler(w http.ResponseWriter, r *http.Request) {
 		// Get user data
 		store.Storage.Mu.RLock()
 		userData, exists := store.Storage.UserData[userID]
+		user:= store.Storage.Users[userID]
 		store.Storage.Mu.RUnlock()
 
 		if !exists {
@@ -289,6 +319,10 @@ func SyncHandler(w http.ResponseWriter, r *http.Request) {
 				"link_previews":   userData.LinkPreviews,
 				"current_chat_id": userData.CurrentChatID,
 				"updated_at":      userData.UpdatedAt,
+				"preferences":     user.Preferences,
+				"work_function":   user.WorkFunction,
+				"theme":          user.Theme,
+				"sync_enabled": user.SyncEnabled,
 			},
 		})
 
@@ -303,6 +337,7 @@ func SyncHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		// Update UserData
 		userData := store.UserData{
 			UserID:        userID,
 			Chats:         req.Chats,
@@ -311,11 +346,52 @@ func SyncHandler(w http.ResponseWriter, r *http.Request) {
 			UpdatedAt:     time.Now(),
 		}
 
+		// Get existing user and update only profile fields
 		store.Storage.Mu.Lock()
+		
+		// Update UserData
 		store.Storage.UserData[userID] = userData
+		
+		slog.Debug("Debug", "req: ", req)
+		// Update User profile fields while preserving existing data
+		if existingUser, exists := store.Storage.Users[userID]; exists {
+			// Only update profile fields if they're provided in the request
+			if req.Username != "" {
+				existingUser.Username = req.Username
+			}
+			if req.Preferences != "" {
+				existingUser.Preferences = req.Preferences
+			}
+			if req.WorkFunction != "" {
+				existingUser.WorkFunction = req.WorkFunction
+			}
+			if req.Theme != "" {
+				existingUser.Theme = req.Theme
+			}
+			if req.SyncEnabled != existingUser.SyncEnabled{
+				existingUser.SyncEnabled = req.SyncEnabled
+			}
+			// Always update the timestamp
+			existingUser.UpdatedAt = time.Now()
+			
+			// Save the updated user back to storage
+			store.Storage.Users[userID] = existingUser
+		}
+		
 		store.Storage.Mu.Unlock()
 
-		store.SaveStorage()
+		// Save to persistent storage
+		if err := store.SaveStorage(); err != nil {
+			slog.Error("Failed to save storage after sync", 
+				"user_id", userID, 
+				"error", err,
+			)
+			json.NewEncoder(w).Encode(store.Response{
+				Success: false,
+				Message: "Failed to save data",
+			})
+			return
+		}
 
 		json.NewEncoder(w).Encode(store.Response{
 			Success: true,
@@ -326,11 +402,128 @@ func SyncHandler(w http.ResponseWriter, r *http.Request) {
 		})
 
 	default:
+		w.WriteHeader(http.StatusMethodNotAllowed)
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
 			Message: "Method not allowed",
 		})
 	}
+}
+
+// ProfileHandler handles profile updates (PUT method only)
+func ProfileHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	// Only allow PUT method
+	if r.Method != http.MethodPut {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		json.NewEncoder(w).Encode(store.Response{
+			Success: false,
+			Message: "Method not allowed",
+		})
+		return
+	}
+
+	userID := r.Header.Get("X-User-ID")
+	if userID == "" {
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(store.Response{
+			Success: false,
+			Message: "User ID header required",
+		})
+		return
+	}
+
+	// Verify user exists
+	store.Storage.Mu.RLock()
+	existingUser, userExists := store.Storage.Users[userID]
+	store.Storage.Mu.RUnlock()
+
+	if !userExists {
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(store.Response{
+			Success: false,
+			Message: "User not found",
+		})
+		return
+	}
+
+	// Parse request body
+	var req ProfileUpdateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(store.Response{
+			Success: false,
+			Message: "Invalid request body",
+		})
+		return
+	}
+
+	// Update user profile fields
+	store.Storage.Mu.Lock()
+	updatedUser := existingUser // Copy existing user data
+	
+	if req.Username != "" {
+		// Check if username is already taken by another user
+		for otherUserID, otherUser := range store.Storage.Users {
+			if otherUserID != userID && otherUser.Username == req.Username {
+				store.Storage.Mu.Unlock()
+				w.WriteHeader(http.StatusConflict)
+				json.NewEncoder(w).Encode(store.Response{
+					Success: false,
+					Message: "Username is already taken",
+				})
+				return
+			}
+		}
+		updatedUser.Username = req.Username
+	}
+	
+	if req.WorkFunction != "" {
+		updatedUser.WorkFunction = req.WorkFunction
+	}
+	
+	if req.Preferences != "" {
+		updatedUser.Preferences = req.Preferences
+	}
+	
+	if req.Theme != "" {
+		updatedUser.Theme = req.Theme
+	}
+	
+	if req.SyncEnabled != nil {
+		updatedUser.SyncEnabled = *req.SyncEnabled
+	}
+	
+	// Always update the timestamp
+	updatedUser.UpdatedAt = time.Now()
+	
+	// Save back to storage
+	store.Storage.Users[userID] = updatedUser
+	store.Storage.Mu.Unlock()
+
+	// Save to persistent storage
+	if err := store.SaveStorage(); err != nil {
+		json.NewEncoder(w).Encode(store.Response{
+			Success: false,
+			Message: "Failed to save profile changes",
+		})
+		return
+	}
+
+	// Return success response
+	json.NewEncoder(w).Encode(store.Response{
+		Success: true,
+		Message: "Profile updated successfully",
+		Data: map[string]interface{}{
+			"username":      updatedUser.Username,
+			"work_function": updatedUser.WorkFunction,
+			"preferences":   updatedUser.Preferences,
+			"theme":         updatedUser.Theme,
+			"sync_enabled":  updatedUser.SyncEnabled,
+			"updated_at":    updatedUser.UpdatedAt,
+		},
+	})
 }
 
 // Health check handler

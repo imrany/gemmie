@@ -40,12 +40,12 @@ export type CurrentChat ={
 }
 
 export type ConfirmDialogOptions = {
-    visible: boolean
+    visible?: boolean
     title: string
     message: string
     type?: 'danger' | 'warning' | 'info'
     confirmText?: string
     cancelText?: string
     onConfirm: () => void
-    onCancel: () => void
+    onCancel?: () => void
 }
