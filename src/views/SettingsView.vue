@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import router from '@/router';
 import type { Chat, ConfirmDialogOptions } from '@/types';
-import { inject, ref, reactive, type Ref, computed, watch } from 'vue';
+import { inject, ref, reactive, type Ref, computed, watch, onMounted } from 'vue';
 import SideNav from '@/components/SideNav.vue'; // Add this import
 import { toast } from 'vue-sonner';
 import { useRoute } from 'vue-router';
@@ -65,10 +65,10 @@ const tabParam = route.params.tab as 'profile' | 'account' | 'billing' | undefin
 
 // Create a local reactive copy for form editing
 const profileData = reactive({
-    username: parsedUserDetails.username || '',
-    email: parsedUserDetails.email || '',
-    workFunction: parsedUserDetails.workFunction || '',
-    preferences: parsedUserDetails.preferences || ''
+    username: parsedUserDetails?.username || '',
+    email: parsedUserDetails?.email || '',
+    workFunction: parsedUserDetails?.workFunction || '',
+    preferences: parsedUserDetails?.preferences || ''
 })
 
 // Sync settings
@@ -155,9 +155,9 @@ function syncFormData() {
 
 // Check if form has unsaved changes
 const hasUnsavedChanges = computed(() => {
-    return profileData.username !== (parsedUserDetails.username || '') ||
-        profileData.workFunction !== (parsedUserDetails.workFunction || '') ||
-        profileData.preferences !== (parsedUserDetails.preferences || '')
+    return profileData.username !== (parsedUserDetails?.username || '') ||
+        profileData.workFunction !== (parsedUserDetails?.workFunction || '') ||
+        profileData.preferences !== (parsedUserDetails?.preferences || '')
 })
 
 watch(activeTab, (newVal, oldVal) => {
@@ -171,6 +171,19 @@ watch(activeTab, (newVal, oldVal) => {
 
     // Update the URL when tab changes
     router.push({ name: 'settings', params: { tab: newVal } })
+})
+
+onMounted(() => {
+    if(parsedUserDetails) {
+        resetProfileData()
+    } else if (isAuthenticated()) {
+        // If user details are missing but authenticated, log out to reset state
+        logout()
+        router.push('/')
+    }
+    if(!isAuthenticated()){
+        router.push('/login')
+    }
 })
 
 </script>
@@ -380,7 +393,7 @@ watch(activeTab, (newVal, oldVal) => {
                                 <!-- Session ID -->
                                 <div class="space-y-2">
                                     <label class="block text-sm font-medium text-gray-700">Session ID</label>
-                                    <input type="text" :value="parsedUserDetails.sessionId" readonly
+                                    <input type="text" :value="parsedUserDetails?.sessionId" readonly
                                         class="w-full px-4 py-2 text-sm border border-gray-300 rounded-lg bg-gray-50 text-gray-600 font-mono" />
                                 </div>
                             </div>
