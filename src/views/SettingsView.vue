@@ -19,7 +19,7 @@ const globalState = inject('globalState') as {
         preferences?: string
     }>,
     syncStatus: Ref<{ lastSync: Date | null; syncing: boolean; hasUnsyncedChanges: boolean; }>,
-    isAuthenticated: () => boolean,
+    isAuthenticated: Ref<boolean>,
     parsedUserDetails: any,
     currentChatId: Ref<string>,
     chats: Ref<Chat[]>
@@ -176,13 +176,19 @@ watch(activeTab, (newVal, oldVal) => {
 onMounted(() => {
     if(parsedUserDetails) {
         resetProfileData()
-    } else if (isAuthenticated()) {
+    } else if (isAuthenticated.value) {
         // If user details are missing but authenticated, log out to reset state
         logout()
         router.push('/')
     }
-    if(!isAuthenticated()){
+    if(!isAuthenticated.value){
         router.push('/login')
+    }
+})
+
+watch(isAuthenticated,(val)=>{
+    if(val===false){
+        router.push('/')
     }
 })
 
@@ -191,14 +197,13 @@ onMounted(() => {
 <template>
     <div class="flex h-[100vh]">
         <!-- Sidebar -->
-        <SideNav v-if="isAuthenticated()" :data="{
+        <SideNav v-if="isAuthenticated" :data="{
             chats,
             currentChatId,
             parsedUserDetails,
             screenWidth,
             isCollapsed,
             syncStatus,
-            isAuthenticated
         }" :functions="{
             setShowInput,
             hideSidebar,
@@ -213,7 +218,7 @@ onMounted(() => {
         }" />
 
         <!-- Main Content -->
-        <div :class="screenWidth > 720 && isAuthenticated()
+        <div :class="screenWidth > 720 && isAuthenticated
             ? (!isCollapsed
                 ? 'flex-grow flex flex-col ml-[270px] font-light text-sm transition-all duration-300 ease-in-out'
                 : 'flex-grow flex flex-col ml-[60px] font-light text-sm transition-all duration-300 ease-in-out')

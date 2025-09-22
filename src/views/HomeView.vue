@@ -394,7 +394,7 @@ function validateCurrentStep(): boolean {
   }
 }
 
-function handleStepSubmit(e: Event) {
+async function handleStepSubmit(e: Event) {
   e.preventDefault()
 
   if (!validateCurrentStep()) {
@@ -404,20 +404,29 @@ function handleStepSubmit(e: Event) {
   if (authStep.value < 3) {
     nextAuthStep()
   } else {
-    // Final step - create session
-    const response = handleAuth(authData.value)
-    if(response.data && response.data.success) {
-      setShowCreateSession(false)
-      isAuthenticated.value=true // Update auth status
-
-      // Reset form
-      authStep.value = 1
-      authData.value = { username: '', email: '', password: '' }
-
-      nextTick(() => {
-        const textarea = document.getElementById("prompt") as HTMLTextAreaElement
-        if (textarea) textarea.focus()
-      })
+    try{
+      // Final step - create session
+      const response = await handleAuth(authData.value)
+  
+      console.log(response)
+      if(response.error){
+        throw new Error(response.error)
+      }
+      if(response.data && response.success) {
+        setShowCreateSession(false)
+        isAuthenticated.value=true // Update auth status
+  
+        // Reset form
+        authStep.value = 1
+        authData.value = { username: '', email: '', password: '' }
+  
+        nextTick(() => {
+          const textarea = document.getElementById("prompt") as HTMLTextAreaElement
+          if (textarea) textarea.focus()
+        })
+      }
+    }catch(err:any){
+      throw new Error(err.message || 'Authentication failed')
     }
   }
 }
