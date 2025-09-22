@@ -37,7 +37,6 @@ function reload() {
   window.location.reload()
 }
 
-
 function openUpgrade() {
   window.open('https://github.com/sponsors/imrany', '_blank')
 }
@@ -66,80 +65,62 @@ function openUpgrade() {
       </div>
 
       <!-- New Chat & Actions -->
-      <div v-if="
-        props.data.parsedUserDetails.username &&
-        props.data.parsedUserDetails.username.length > 0
-      " class="px-3 my-4 flex flex-col gap-1 font-light text-sm">
+      <div v-if="props.data.parsedUserDetails.username"
+        class="px-3 my-4 flex flex-col gap-1 font-light text-sm">
+        
         <button @click="
           () => {
             props.functions.createNewChat()
             props.functions.setShowInput()
+            if (router.currentRoute.value.path !== '/') {
+              router.push('/')
+            }
             if (props.data.screenWidth < 720) props.functions.hideSidebar()
           }
         " title="New Chat" class="w-full flex items-center gap-2 h-[40px] hover:bg-gray-100 rounded-lg px-2">
           <i class="pi pi-pencil text-gray-500 mb-[2px]"></i>
-          <p v-if="!props.data.isCollapsed || props.data.screenWidth < 720">
-            New Chat
-          </p>
+          <p v-if="!props.data.isCollapsed || props.data.screenWidth < 720">New Chat</p>
         </button>
-
-        <!-- <button @click="reload" v-if="props.data.chats.length !== 0" title="Refresh Page"
-          class="w-full flex items-center gap-2 h-[40px] hover:bg-gray-100 rounded-lg px-2">
-          <i class="pi pi-refresh text-gray-500 mb-[2px]"></i>
-          <p v-if="!props.data.isCollapsed || props.data.screenWidth < 720">
-            Refresh Page
-          </p>
-        </button> -->
 
         <button title="Sync Data" v-if="props.data.isAuthenticated()" @click="props.functions.manualSync"
           :disabled="props.data.syncStatus.syncing"
-          class="w-full flex items-center gap-2 h-[40px] hover:bg-gray-100 rounded-lg px-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+          class="w-full flex items-center gap-2 h-[40px] hover:bg-gray-100 rounded-lg px-2 disabled:opacity-50 disabled:cursor-not-allowed">
           <i :class="props.data.syncStatus.syncing ? 'pi pi-spin pi-spinner' : 'pi pi-refresh'"></i>
-          <span v-if="!props.data.isCollapsed || props.data.screenWidth < 720">{{ props.data.syncStatus.syncing ?
-            'Syncing...' : 'Sync Data' }}</span>
-          <div
-            v-if="props.data.syncStatus.hasUnsyncedChanges && (!props.data.isCollapsed || props.data.screenWidth < 720)"
+          <span v-if="!props.data.isCollapsed || props.data.screenWidth < 720">
+            {{ props.data.syncStatus.syncing ? 'Syncing...' : 'Sync Data' }}
+          </span>
+          <div v-if="props.data.syncStatus.hasUnsyncedChanges && (!props.data.isCollapsed || props.data.screenWidth < 720)"
             class="ml-auto w-2 h-2 bg-orange-500 rounded-full"></div>
-        </button>
-
-        <button @click="
-          () => {
-            props.functions.deleteChat(props.data.currentChatId || '')
-            props.functions.hideSidebar()
-          }
-        " title="Delete Chat" v-if="props.data.screenWidth < 720 && props.data.chats.length !== 0"
-          class="w-full flex items-center gap-2 h-[40px] hover:bg-red-100 rounded-lg px-2">
-          <i class="pi pi-trash text-gray-500 mb-[2px]"></i>
-          <p>Delete Chat</p>
         </button>
 
         <button @click="() => { router.push('/auth/delete_account') }" title="Delete Account"
           class="w-full flex items-center gap-2 h-[40px] hover:bg-red-100 rounded-lg px-2">
           <i class="pi pi-user-minus text-gray-500 mb-[2px]"></i>
-          <p v-if="!props.data.isCollapsed || props.data.screenWidth < 720">
-            Delete Account
-          </p>
+          <p v-if="!props.data.isCollapsed || props.data.screenWidth < 720">Delete Account</p>
         </button>
       </div>
 
-      <!-- Recent Chat Preview -->
-      <div v-if="
-        props.data.chats.length !== 0 &&
-        props.data.parsedUserDetails.username.length !== 0
-      " class="flex flex-col px-2 mb-2 py-4 font-light">
-        <p v-if="!props.data.isCollapsed || props.data.screenWidth < 720" class="text-base text-gray-600 mb-2">
-          Chats
-        </p>
+      <!-- Recent Chats -->
+      <div v-if="props.data.chats.length && props.data.parsedUserDetails.username"
+        class="flex flex-col px-2 mb-2 py-4 font-light">
+        <p v-if="!props.data.isCollapsed || props.data.screenWidth < 720"
+          class="text-base text-gray-600 mb-2">Chats</p>
         <div class="flex flex-col gap-2">
-          <button v-for="chat in !props.data.isCollapsed ? props.data.chats : props.data.chats.slice(0, 1)" :key="chat.id"
+          <button v-for="chat in !props.data.isCollapsed ? props.data.chats : props.data.chats.slice(0, 1)"
+            :key="chat.id"
             @click="
               () => {
                 props.functions.switchToChat(chat.id)
                 props.functions.setShowInput()
+                if (router.currentRoute.value.path !== '/') {
+                  router.push('/')
+                }
                 if (props.data.screenWidth < 720) props.functions.hideSidebar()
               }
-            " title="Open Chat"
-            :class="chat.id === props.data.currentChatId ? 'w-full flex h-[32px] text-sm items-center bg-gray-300 rounded-lg px-2' : 'w-full flex h-[32px] text-sm items-center hover:bg-gray-100 rounded-lg px-2'">
+            "
+            :class="chat.id === props.data.currentChatId 
+              ? 'w-full flex h-[32px] text-sm items-center bg-gray-300 rounded-lg px-2'
+              : 'w-full flex h-[32px] text-sm items-center hover:bg-gray-100 rounded-lg px-2'">
             <i class="pi pi-comments mr-2 text-gray-500 mb-[2px]"></i>
             <p v-if="!props.data.isCollapsed || props.data.screenWidth < 720" class="truncate">
               {{ chat.title || 'Untitled Chat' }}
@@ -149,7 +130,7 @@ function openUpgrade() {
       </div>
     </div>
 
-   <!-- Fixed Bottom User Profile -->
+    <!-- Fixed Bottom User Profile -->
     <div class="border-t border-gray-200 p-3 bg-gray-100 sticky bottom-0">
       <div class="flex items-center justify-between cursor-pointer mr-1" @click="showProfileMenu = !showProfileMenu">
         <div class="flex items-center gap-2">
@@ -164,15 +145,17 @@ function openUpgrade() {
         <i class="pi pi-chevron-down text-xs" v-else></i>
       </div>
 
-      <!-- Dropdown Menu -->
+      <!-- Dropdown -->
       <transition name="fade">
-        <div v-if="showProfileMenu" class="absolute bottom-14 left-3 right-3 bg-white border rounded-lg shadow-lg text-sm z-50">
+        <div v-if="showProfileMenu"
+          class="absolute bottom-14 left-3 right-3 bg-white border rounded-lg shadow-lg text-sm z-50">
           <p class="px-4 py-2 text-gray-500 border-b">{{ props.data.parsedUserDetails.email || 'No email' }}</p>
           <button @click="router.push('/settings')" class="w-full text-left px-4 py-2 hover:bg-gray-100">Settings</button>
           <button class="w-full text-left px-4 py-2 hover:bg-gray-100">Get Help</button>
           <button @click="router.push('/upgrade')" class="w-full text-left px-4 py-2 hover:bg-gray-100">Upgrade Plan</button>
           <button class="w-full text-left px-4 py-2 hover:bg-gray-100">Learn More</button>
-          <button @click="props.functions.logout" class="w-full text-left px-4 py-2 text-red-600 hover:bg-red-100">Log Out</button>
+          <button @click="props.functions.logout"
+            class="w-full text-left px-4 py-2 text-red-600 hover:bg-red-100">Log Out</button>
         </div>
       </transition>
     </div>

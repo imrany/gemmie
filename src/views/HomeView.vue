@@ -10,7 +10,7 @@ import type { Chat, ConfirmDialogOptions, CurrentChat, LinkPreview, Res } from "
 import { toast } from 'vue-sonner'
 import { destroyVideoLazyLoading, initializeVideoLazyLoading, observeNewVideoContainers, pauseVideo, playEmbeddedVideo, playSocialVideo, resumeVideo, showVideoControls, stopDirectVideo, stopVideo, toggleDirectVideo, updateVideoControls } from "@/utils/videoProcessing"
 import { onUpdated } from "vue"
-import { API_BASE_URL, extractUrls, generateChatTitle, isPromptTooShort, WRAPPER_URL } from "@/utils/globals"
+import { extractUrls, generateChatTitle, copyCode, isPromptTooShort, WRAPPER_URL } from "@/utils/globals"
 import CreateSessView from "./CreateSessView.vue"
 
 // Inject global state
@@ -23,7 +23,7 @@ const globalState = inject('globalState') as {
   syncStatus: Ref<{ lastSync: Date | null; syncing: boolean; hasUnsyncedChanges: boolean; }>,
   isAuthenticated: () => boolean,
   parsedUserDetails: any,
-  currentChatId:Ref<string>,
+  currentChatId: Ref<string>,
   chats: Ref<Chat[]>
   logout: () => void,
   isLoading: Ref<boolean>,
@@ -41,21 +41,23 @@ const globalState = inject('globalState') as {
   scrollableElem: Ref<HTMLElement | null>,
   showScrollDownButton: Ref<boolean>,
   handleScroll: () => void,
-  scrollToBottom: ()=>void,
-  saveChats: ()=>void,
+  scrollToBottom: () => void,
+  saveChats: () => void,
   linkPreviewCache: Ref<Map<string, LinkPreview>>,
-  fetchLinkPreview: (url: string)=>Promise<LinkPreview>,
-  loadLinkPreviewCache: ()=>void,
-  saveLinkPreviewCache: ()=>void,
-  syncFromServer: (data?: any)=>void,
-  syncToServer: ()=>void,
+  fetchLinkPreview: (url: string) => Promise<LinkPreview>,
+  loadLinkPreviewCache: () => void,
+  saveLinkPreviewCache: () => void,
+  syncFromServer: (data?: any) => void,
+  syncToServer: () => void,
   currentChat: Ref<CurrentChat | undefined>,
   currentMessages: Ref<Res[]>,
   linkPreview: LinkPreview,
-  updateExpandedArray: ()=> void,
-  apiCall: (endpoint: string, options: RequestInit)=>any,
-  manualSync: ()=> Promise<any>
-  toggleSidebar: ()=>void
+  updateExpandedArray: () => void,
+  apiCall: (endpoint: string, options: RequestInit) => any,
+  manualSync: () => Promise<any>
+  toggleSidebar: () => void,
+  setupAutoSync: () => void,
+  autoSyncInterval: any,
 }
 
 const {
@@ -99,6 +101,8 @@ const {
   apiCall,
   manualSync,
   toggleSidebar,
+  setupAutoSync,
+  autoSyncInterval,
 } = globalState
 let parsedUserDetails = globalState.parsedUserDetails
 
@@ -495,66 +499,6 @@ function handleStepSubmit(e: Event) {
   }
 }
 
-// Auto-sync on app focus (when user comes back to tab)
-let autoSyncInterval: any = null
-
-function setupAutoSync() {
-  // Clear existing interval
-  if (autoSyncInterval) {
-    clearInterval(autoSyncInterval)
-  }
-
-  // Auto sync every 5 minutes if authenticated and has unsynced changes
-  autoSyncInterval = setInterval(() => {
-    if (isAuthenticated() && syncStatus.value.hasUnsyncedChanges && !syncStatus.value.syncing) {
-      syncToServer()
-    }
-  }, 5 * 60 * 1000) // 5 minutes
-
-  // Sync when page becomes visible
-  document.addEventListener('visibilitychange', () => {
-    if (!document.hidden && isAuthenticated()) {
-      // Small delay to ensure tab is fully active
-      setTimeout(() => {
-        syncFromServer()
-      }, 1000)
-    }
-  })
-
-  // Sync before page unload
-  window.addEventListener('beforeunload', () => {
-    if (syncStatus.value.hasUnsyncedChanges) {
-      // Use sendBeacon for reliable data sending on page unload
-      const syncData = {
-        chats: JSON.stringify(chats.value),
-        link_previews: JSON.stringify(Object.fromEntries(linkPreviewCache.value)),
-        current_chat_id: currentChatId.value
-      }
-
-      navigator.sendBeacon(`${API_BASE_URL}/sync`, JSON.stringify(syncData))
-    }
-  })
-}
-
-// ---------- Helpers ----------
-// Helper function to show confirmation dialog
-function copyCode(text: string, button?: HTMLElement) {
-  navigator.clipboard.writeText(text)
-    .then(() => {
-      if (button) {
-        button.innerText = 'Copied!'
-        setTimeout(() => (button.innerText = 'Copy code'), 2000)
-      }
-    })
-    .catch(err => {
-      console.error('Failed to copy text: ', err)
-      toast.error('Failed to copy code to clipboard', {
-        duration: 3000,
-        description: ''
-      })
-    })
-}
-
 // Enhanced marked configuration with link handling
 marked.use({
   renderer: {
@@ -880,11 +824,57 @@ function shareResponse(text: string, prompt?: string) {
   }
 }
 
-function refreshResponse(prompt?: string) {
-  if (prompt && !isLoading.value) {
-    handleSubmit(undefined, prompt)
+async function refreshResponse(oldPrompt?: string) {
+  const chatIndex = chats.value.findIndex(chat => chat.id === currentChatId.value)
+  if (chatIndex === -1) return
+
+  const chat = chats.value[chatIndex]
+  const msgIndex = chat.messages.findIndex(m => m.prompt === oldPrompt)
+  if (msgIndex === -1) return
+
+  const oldMessage = chat.messages[msgIndex]
+
+  // Show placeholder while refreshing
+  chat.messages[msgIndex] = {
+    ...oldMessage,
+    response: "refreshing...",
+  }
+
+  try {
+    // Fetch new response using the same prompt
+    let response = await fetch(WRAPPER_URL, {
+      method: "POST",
+      body: JSON.stringify(oldMessage.prompt),
+      headers: { "content-type": "application/json" }
+    })
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+    }
+
+    let parseRes = await response.json()
+
+    // Replace the same message with the refreshed response
+    chat.messages[msgIndex] = {
+      ...oldMessage,
+      response: parseRes.error ? parseRes.error : parseRes.response,
+      status: response.status,
+    }
+
+    chat.updatedAt = new Date().toISOString()
+    saveChats()
+
+    // Re-run link previews if needed
+    await processLinksInResponse(msgIndex)
+
+  } catch (err: any) {
+    chat.messages[msgIndex] = {
+      ...oldMessage,
+      response: `⚠️ Failed to refresh response: ${err.message || "Unknown error"}`,
+    }
   }
 }
+
 
 // Add function to manually clear link preview cache
 function clearLinkPreviewCache() {
@@ -922,7 +912,6 @@ function clearLinkPreviewCache() {
     }
   })
 }
-
 
 let resizeTimeout: any
 window.onresize = () => {
@@ -1165,8 +1154,7 @@ function setShowCreateSession(value: boolean) {
           :toggle-sidebar="toggleSidebar" :logout="logout" :create-new-chat="createNewChat"
           :switch-to-chat="switchToChat" :delete-chat="deleteChat" :rename-chat="renameChat" :manual-sync="manualSync"
           :handle-step-submit="handleStepSubmit" :prev-auth-step="prevAuthStep" :update-auth-data="updateAuthData"
-          :set-show-create-session="setShowCreateSession" 
-        />
+          :set-show-create-session="setShowCreateSession" />
 
 
         <!-- Chat Messages -->
@@ -1199,6 +1187,10 @@ function setShowCreateSession(value: boolean) {
                 <div v-if="item.response === '...'" class="flex items-center gap-2 text-gray-500">
                   <i class="pi pi-spin pi-spinner"></i>
                   <span>Thinking...</span>
+                </div>
+                 <div v-else-if="item.response === 'refreshing...'" class="flex items-center gap-2 text-gray-500">
+                  <i class="pi pi-spin pi-spinner"></i>
+                  <span>Refreshing...</span>
                 </div>
 
                 <!-- Regular response with enhanced link handling -->

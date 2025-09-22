@@ -1,3 +1,5 @@
+import { toast } from "vue-sonner"
+
 export const API_BASE_URL = 'http://localhost:8081/api'
 // export const API_BASE_URL = 'https://gemmie.villebiz.com/api'
 export const WRAPPER_URL = 'https://wrapper.villebiz.com/v1/genai'
@@ -21,4 +23,22 @@ export function generateChatTitle(firstMessage: string): string {
 export function extractUrls(text: string): string[] {
   const urlRegex = /https?:\/\/[^\s<>"{}|\\^`[\]]+/gi
   return text.match(urlRegex) || []
+}
+
+// Helper function to show confirmation dialog
+export function copyCode(text: string, button?: HTMLElement) {
+  navigator.clipboard.writeText(text)
+    .then(() => {
+      if (button) {
+        button.innerText = 'Copied!'
+        setTimeout(() => (button.innerText = 'Copy code'), 2000)
+      }
+    })
+    .catch(err => {
+      console.error('Failed to copy text: ', err)
+      toast.error('Failed to copy code to clipboard', {
+        duration: 3000,
+        description: ''
+      })
+    })
 }
