@@ -99,7 +99,7 @@ function cancelDelete() {
 </script>
 
 <template>
-    <div class="flex items-center font-light justify-center min-h-screen bg-gray-50">
+    <div class="flex items-center font-light justify-center min-h-screen">
         <div class="w-full max-w-md max-lg:px-4 bg-none p-6">
             <h1 v-if="!showConfirm" class="text-xl font-semibold text-red-600 mb-2">Delete My Account</h1>
             <p v-if="!showConfirm" class="text-sm text-gray-600 mb-6">
