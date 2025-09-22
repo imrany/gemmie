@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import type { Ref } from "vue"
-import { ref, onMounted, nextTick, computed, onBeforeUnmount, inject } from "vue"
+import { ref, onMounted, nextTick, computed, onBeforeUnmount, inject, watch } from "vue"
 import { marked } from "marked"
 import hljs from "highlight.js"
 import "highlight.js/styles/night-owl.css"
@@ -15,13 +15,18 @@ import CreateSessView from "./CreateSessView.vue"
 
 // Inject global state
 const globalState = inject('globalState') as {
+  handleAuth: (data:{
+    username: string;
+    email: string;
+    password: string;
+  }) => any,
   screenWidth: Ref<number>,
   confirmDialog: Ref<ConfirmDialogOptions>,
   isCollapsed: Ref<boolean>,
   isSidebarHidden: Ref<boolean>,
   authData: Ref<{ username: string; email: string; password: string; }>,
   syncStatus: Ref<{ lastSync: Date | null; syncing: boolean; hasUnsyncedChanges: boolean; }>,
-  isAuthenticated: () => boolean,
+  isAuthenticated: Ref<boolean>,
   parsedUserDetails: any,
   currentChatId: Ref<string>,
   chats: Ref<Chat[]>
@@ -103,6 +108,7 @@ const {
   toggleSidebar,
   setupAutoSync,
   autoSyncInterval,
+  handleAuth,
 } = globalState
 let parsedUserDetails = globalState.parsedUserDetails
 
@@ -361,102 +367,6 @@ function LinkPreviewComponent({ preview }: { preview: LinkPreview }) {
   `
 }
 
-function validateCredentials(username: string, email: string, password: string): string | null {
-  // Username: 3–12 chars, no spaces, only letters, numbers, underscores, hyphens
-  const usernameRegex = /^[a-zA-Z0-9_-]{3,12}$/
-  if (!usernameRegex.test(username)) {
-    return "Username must be 3–12 characters, no spaces, only letters, numbers, _ or -"
-  }
-
-  // Email: basic check
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-  if (!emailRegex.test(email)) {
-    return "Invalid email format"
-  }
-
-  // Password: at least 8 chars
-  if (password.length < 8) {
-    return "Password must be at least 8 characters"
-  }
-
-  return null
-}
-
-async function handleAuth(e: Event) {
-  e.preventDefault()
-
-  const { username, email, password } = authData.value
-
-  // Custom validation
-  const validationError = validateCredentials(username, email, password)
-  if (validationError) {
-    toast.error(validationError, { duration: 4000 })
-    return
-  }
-
-  try {
-    isLoading.value = true
-
-    let response
-    try {
-      // Try login
-      response = await apiCall('/login', {
-        method: 'POST',
-        body: JSON.stringify({ username, email, password })
-      })
-
-      toast.success('Welcome back!', {
-        duration: 3000,
-        description: `Logged in as ${response.data.username}`
-      })
-    } catch (loginError) {
-      // Try register if login fails
-      response = await apiCall('/register', {
-        method: 'POST',
-        body: JSON.stringify({ username, email, password })
-      })
-
-      toast.success('Account created successfully!', {
-        duration: 3000,
-        description: `Welcome ${response.data.username}!`
-      })
-    }
-
-    // Store user details locally
-    const userData = {
-      user_id: response.data.user_id,
-      username: response.data.username,
-      email: response.data.email,
-      created_at: response.data.created_at,
-      sessionId: btoa(email + ':' + password + ':' + username)
-    }
-
-    localStorage.setItem('userdetails', JSON.stringify(userData))
-    parsedUserDetails = userData
-
-    // Sync data from server
-    await syncFromServer(response.data)
-
-    // Reset form
-    authStep.value = 1
-    authData.value = { username: '', email: '', password: '' }
-
-    nextTick(() => {
-      const textarea = document.getElementById("prompt") as HTMLTextAreaElement
-      if (textarea) textarea.focus()
-    })
-
-  } catch (error: any) {
-    console.error('Authentication error:', error)
-    toast.error('Authentication failed', {
-      duration: 4000,
-      description: error.message || 'Please check your credentials and try again.'
-    })
-  } finally {
-    isLoading.value = false
-  }
-}
-
 // ---------- Authentication Functions ----------
 function nextAuthStep() {
   if (authStep.value < 3) {
@@ -495,7 +405,20 @@ function handleStepSubmit(e: Event) {
     nextAuthStep()
   } else {
     // Final step - create session
-    handleAuth(e)
+    const response = handleAuth(authData.value)
+    if(response.data && response.data.success) {
+      setShowCreateSession(false)
+      isAuthenticated.value=true // Update auth status
+
+      // Reset form
+      authStep.value = 1
+      authData.value = { username: '', email: '', password: '' }
+
+      nextTick(() => {
+        const textarea = document.getElementById("prompt") as HTMLTextAreaElement
+        if (textarea) textarea.focus()
+      })
+    }
   }
 }
 
@@ -576,7 +499,7 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
   let fabricatedPrompt = promptValue
   if (!promptValue || isLoading.value) return
 
-  if (!isAuthenticated()) {
+  if (!isAuthenticated) {
     toast.warning('Please create a session first', {
       duration: 4000,
       description: 'You need to be logged in.'
@@ -957,7 +880,7 @@ onMounted(() => {
   loadLinkPreviewCache();
 
   // Load chats if logged in
-  if (isAuthenticated()) {
+  if (isAuthenticated) {
     loadChats();
 
     // Setup auto-sync
@@ -1091,19 +1014,24 @@ function updateAuthData(data: Partial<{ username: string; email: string; passwor
 function setShowCreateSession(value: boolean) {
   showCreateSession.value = value
 }
+
+watch(isAuthenticated,(newVal) => {
+  if (newVal) {
+    showCreateSession.value = false
+  }
+})
 </script>
 
 <template>
   <div class="flex h-[100vh]">
     <!-- Sidebar -->
-    <SideNav v-if="isAuthenticated()" :data="{
+    <SideNav v-if="isAuthenticated" :data="{
       chats,
       currentChatId,
       parsedUserDetails,
       screenWidth,
       isCollapsed,
       syncStatus,
-      isAuthenticated
     }" :functions="{
       setShowInput,
       hideSidebar,
@@ -1119,45 +1047,91 @@ function setShowCreateSession(value: boolean) {
 
     <!-- Main Chat Window -->
     <div
-      :class="screenWidth > 720 && isAuthenticated() ? (!isCollapsed ?
+      :class="screenWidth > 720 && isAuthenticated ? (!isCollapsed ?
         'flex-grow flex flex-col items-center justify-center ml-[270px] font-light text-sm transition-all duration-300 ease-in-out'
         :
         'flex-grow flex flex-col items-center justify-center ml-[60px] font-light text-sm transition-all duration-300 ease-in-out'
       )
         : 'text-sm font-light flex-grow items-center justify-center flex flex-col transition-all duration-300 ease-in-out'">
 
-      <TopNav v-if="isAuthenticated()" :data="{
+      <TopNav v-if="isAuthenticated" :data="{
         currentChat,
         parsedUserDetails,
         screenWidth,
         isCollapsed,
         isSidebarHidden,
         syncStatus,
-        isAuthenticated,
       }" :functions="{
         hideSidebar,
         manualSync,
       }" />
 
       <div
-        :class="(screenWidth > 720 && isAuthenticated()) ? 'h-screen flex flex-col items-center justify-center w-[85%]' : 'h-screen flex flex-col items-center justify-center'">
+        :class="(screenWidth > 720 && isAuthenticated) ? 'h-screen flex flex-col items-center justify-center w-[85%]' : 'h-screen flex flex-col items-center justify-center'">
         <!-- Empty State -->
-        <CreateSessView v-if="currentMessages.length === 0 || !isAuthenticated()" :chats="chats"
-          :current-chat-id="currentChatId" :is-collapsed="isCollapsed" :parsed-user-details="parsedUserDetails"
-          :screen-width="screenWidth" :sync-status="syncStatus" :is-authenticated="isAuthenticated"
-          :is-loading="isLoading" :auth-step="authStep" :show-create-session="showCreateSession" :auth-data="authData"
-          :current-messages="currentMessages" :validate-current-step="validateCurrentStep()"
-          :set-show-input="setShowInput" :hide-sidebar="hideSidebar" :clear-all-chats="clearAllChats"
-          :toggle-sidebar="toggleSidebar" :logout="logout" :create-new-chat="createNewChat"
-          :switch-to-chat="switchToChat" :delete-chat="deleteChat" :rename-chat="renameChat" :manual-sync="manualSync"
-          :handle-step-submit="handleStepSubmit" :prev-auth-step="prevAuthStep" :update-auth-data="updateAuthData"
+        <CreateSessView v-if="!isAuthenticated" :chats="chats" :current-chat-id="currentChatId" :is-collapsed="isCollapsed"
+          :parsed-user-details="parsedUserDetails" :screen-width="screenWidth" :sync-status="syncStatus"
+          :is-loading="isLoading" :auth-step="authStep"
+          :show-create-session="showCreateSession" :auth-data="authData" :current-messages="currentMessages"
+          :validate-current-step="validateCurrentStep()" :set-show-input="setShowInput" :hide-sidebar="hideSidebar"
+          :clear-all-chats="clearAllChats" :toggle-sidebar="toggleSidebar" :logout="logout"
+          :create-new-chat="createNewChat" :switch-to-chat="switchToChat" :delete-chat="deleteChat"
+          :rename-chat="renameChat" :manual-sync="manualSync" :handle-step-submit="handleStepSubmit"
+          :prev-auth-step="prevAuthStep" :update-auth-data="updateAuthData"
           :set-show-create-session="setShowCreateSession" />
 
+        <div v-else-if="isAuthenticated && currentMessages.length === 0">
+          <!-- Loading Overlay -->
+          <div v-if="isLoading"
+            class="absolute top-0 left-0 w-full h-full bg-white bg-opacity-80 z-10 flex flex-col items-center justify-center">
+            <i class="pi pi-spin pi-spinner text-4xl text-gray-500 mb-4"></i>
+            <p class="text-gray-700">Loading...</p>
+          </div>
+
+          <div v-else class="flex flex-col md:flex-grow items-center gap-3 text-gray-600">
+            <div class="rounded-full bg-gray-200 w-[60px] h-[60px] flex justify-center items-center">
+              <span class="pi pi-comment text-lg"></span>
+            </div>
+
+            <p class="text-3xl text-black font-semibold">{{ parsedUserDetails?.username || 'Gemmie' }}</p>
+            <div class="text-center max-w-md space-y-2">
+              <p class="text-gray-600 leading-relaxed">
+                Experience privacy-first conversations with advanced AI. Your data stays secure, local and synced to
+                your
+                all devices.
+              </p>
+              <div class="flex items-center justify-center gap-6 text-sm text-gray-500 mt-4">
+                <div class="flex items-center gap-1">
+                  <i class="pi pi-shield text-green-500"></i>
+                  <span>Private</span>
+                </div>
+                <div class="flex items-center gap-1">
+                  <i class="pi pi-database text-blue-500"></i>
+                  <span>Local Stored</span>
+                </div>
+                <div class="flex items-center gap-1">
+                  <i class="pi pi-sync text-purple-500"></i>
+                  <span>Synced</span>
+                </div>
+              </div>
+            </div>
+            <div class="flex flex-col gap-3 w-full max-w-xs">
+              <button v-if="!setShowInput" @click="setShowInput"
+                class="group px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg hover:from-blue-600 hover:to-purple-700 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl font-medium">
+                <span class="flex items-center justify-center gap-2">
+                  <i class="pi pi-pencil group-hover:rotate-12 transition-transform"></i>
+                  Start Writing
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
 
         <!-- Chat Messages -->
-        <div ref="scrollableElem" v-else-if="currentMessages.length !== 0 && isAuthenticated()"
-          class="flex-grow no-scrollbar overflow-y-auto px-4 space-y-4 pt-[90px] pb-[120px]">
-          <div v-for="(item, i) in currentMessages" :key="`chat-${i}`" class="flex flex-col gap-2">
+        <div ref="scrollableElem" v-else-if="currentMessages.length !== 0 && isAuthenticated"
+          class="flex-grow no-scrollbar overflow-y-auto px-4 space-y-4 mt-[90px] mb-[120px]">
+          <div v-if="currentMessages.length !== 0" v-for="(item, i) in currentMessages" :key="`chat-${i}`"
+            class="flex flex-col gap-2">
             <!-- User Bubble -->
             <div class="flex justify-end chat-message">
               <div :class="screenWidth > 720 ? 'max-w-[70%]' : 'max-w-[95%]'"
@@ -1185,7 +1159,7 @@ function setShowCreateSession(value: boolean) {
                   <i class="pi pi-spin pi-spinner"></i>
                   <span>Thinking...</span>
                 </div>
-                 <div v-else-if="item.response === 'refreshing...'" class="flex items-center gap-2 text-gray-500">
+                <div v-else-if="item.response === 'refreshing...'" class="flex items-center gap-2 text-gray-500">
                   <i class="pi pi-spin pi-spinner"></i>
                   <span>Refreshing...</span>
                 </div>
@@ -1204,7 +1178,8 @@ function setShowCreateSession(value: boolean) {
                 </div>
 
                 <!-- Actions (hidden during loading and refreshing) -->
-                <div v-if="item.response !== '...' && item.response !== 'refreshing...'" class="flex gap-3 mt-2 text-gray-500 text-sm">
+                <div v-if="item.response !== '...' && item.response !== 'refreshing...'"
+                  class="flex gap-3 mt-2 text-gray-500 text-sm">
                   <button @click="copyResponse(item.response, i)"
                     class="flex items-center gap-1 hover:text-blue-600 transition-colors">
                     <i class="pi pi-copy"></i>
@@ -1230,7 +1205,7 @@ function setShowCreateSession(value: boolean) {
         </div>
 
         <!-- Scroll to Bottom Button -->
-        <button v-if="showScrollDownButton && currentMessages.length !== 0 && isAuthenticated()" @click="scrollToBottom"
+        <button v-if="showScrollDownButton && currentMessages.length !== 0 && isAuthenticated" @click="scrollToBottom"
           class="fixed bottom-24 bg-gray-50 text-gray-500 border px-3 h-[34px] rounded-full shadow-lg hover:bg-gray-100 transition-colors z-20">
           <div class="flex gap-2 items-center justify-center w-full font-semibold h-full">
             <i class="pi pi-arrow-down text-center"></i>
@@ -1239,7 +1214,7 @@ function setShowCreateSession(value: boolean) {
         </button>
 
         <!-- Input -->
-        <div v-if="(currentMessages.length !== 0 || showInput === true) && isAuthenticated()" :style="screenWidth > 720 && !isCollapsed ? 'left:270px;' :
+        <div v-if="(currentMessages.length !== 0 || showInput === true) && isAuthenticated" :style="screenWidth > 720 && !isCollapsed ? 'left:270px;' :
           screenWidth > 720 && isCollapsed ? 'left:60px;' : 'left:0px;'"
           class="bg-white z-20 bottom-0 right-0 fixed pb-5 px-5">
           <div class="flex items-center justify-center w-full">

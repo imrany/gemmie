@@ -1,6 +1,12 @@
 <script lang="ts" setup>
 import type { Chat, CurrentChat } from '@/types'
+import type { Ref } from 'vue';
+import { inject } from 'vue';
 
+const globalState= inject('globalState') as {
+  isAuthenticated: Ref<boolean>
+}
+const { isAuthenticated }= globalState
 let props = defineProps<{
   data: {
     isCollapsed?: boolean
@@ -8,7 +14,6 @@ let props = defineProps<{
     currentChat: CurrentChat | undefined
     screenWidth: number
     isSidebarHidden?: boolean
-    isAuthenticated: () => boolean
     syncStatus: any,
     chat?:Chat,
   }
@@ -39,7 +44,7 @@ let props = defineProps<{
 
       <!-- Mobile Sidebar Toggle -->
       <div v-if="props.data.screenWidth < 720" class="flex gap-2 items-center ml-auto">
-        <div v-if="props.data.isAuthenticated()" class="relative">
+        <div v-if="isAuthenticated" class="relative">
           <div v-if="props.data.syncStatus.syncing"
             class="flex items-center gap-2 bg-blue-50 text-blue-700 px-3 py-1.5 rounded-full text-xs border border-blue-200 shadow-sm animate-pulse">
             <i class="pi pi-spin pi-spinner"></i>
@@ -69,7 +74,7 @@ let props = defineProps<{
       <!-- Desktop Actions -->
       <div v-else class="flex gap-3 items-center ml-auto">
         <!-- Sync Status -->
-        <div v-if="props.data.isAuthenticated()" class="relative">
+        <div v-if="isAuthenticated" class="relative">
           <div v-if="props.data.syncStatus.syncing"
             class="flex items-center gap-2 bg-blue-50 text-blue-700 px-3 py-1.5 rounded-full text-xs border border-blue-200 shadow-sm animate-pulse">
             <i class="pi pi-spin pi-spinner"></i>

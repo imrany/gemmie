@@ -3,7 +3,7 @@ import { computed, provide, ref, type ComputedRef } from 'vue';
 import { toast, Toaster } from 'vue-sonner'
 import 'vue-sonner/style.css'
 import type { Chat, ConfirmDialogOptions, CurrentChat, LinkPreview } from './types';
-import { API_BASE_URL, generateChatId, generateChatTitle, extractUrls } from './utils/globals';
+import { API_BASE_URL, generateChatId, generateChatTitle, extractUrls, validateCredentials } from './utils/globals';
 import { nextTick } from 'vue';
 import { detectAndProcessVideo } from './utils/videoProcessing';
 import ConfirmDialog from './components/ConfirmDialog.vue';
@@ -70,15 +70,24 @@ function saveLinkPreviewCache() {
 }
 
 let userDetails: any = localStorage.getItem("userdetails")
-let parsedUserDetails: any = userDetails ? JSON.parse(userDetails) : null
+// Initialize user details reactively
+const parsedUserDetails = ref<any>(
+  userDetails
+    ? JSON.parse(userDetails)
+    : null
+)
 
-function isAuthenticated(): boolean {
-  return parsedUserDetails &&
-    parsedUserDetails.email &&
-    parsedUserDetails.username &&
-    parsedUserDetails.user_id &&
-    parsedUserDetails.sessionId
-}
+// Reactive authentication state
+const isAuthenticated = computed(() => {
+  const user = parsedUserDetails.value
+  return !!(
+    user &&
+    user.email &&
+    user.username &&
+    user.user_id &&
+    user.sessionId
+  )
+})
 
 const currentChatId = ref<string>('')
 const chats = ref<Chat[]>([])
@@ -112,7 +121,30 @@ async function apiCall(endpoint: string, options: RequestInit = {}) {
       ...options,
       headers: {
         'Content-Type': 'application/json',
-        ...(parsedUserDetails?.user_id ? { 'X-User-ID': parsedUserDetails.user_id } : {}),
+        ...(parsedUserDetails.value.user_id ? { 'X-User-ID': parsedUserDetails.value.user_id } : {}),
+        ...options.headers,
+      },
+    })
+
+    const data = await response.json()
+
+    if (!data.success) {
+      throw new Error(data.message || 'API request failed')
+    }
+
+    return data
+  } catch (error) {
+    console.error('API Error:', error)
+    throw error
+  }
+}
+
+async function unsecureApiCall(endpoint: string, options: RequestInit = {}) {
+  try {
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
         ...options.headers,
       },
     })
@@ -132,7 +164,7 @@ async function apiCall(endpoint: string, options: RequestInit = {}) {
 
 // Sync data from server to local storage
 async function syncFromServer(serverData?: any) {
-  if (!parsedUserDetails?.user_id) return
+  if (!parsedUserDetails.value.user_id) return
 
   try {
     syncStatus.value.syncing = true
@@ -194,7 +226,7 @@ async function syncFromServer(serverData?: any) {
 
 // Sync local data to server
 async function syncToServer() {
-  if (!parsedUserDetails?.user_id) return
+  if (!parsedUserDetails.value.user_id) return
 
   try {
     syncStatus.value.syncing = true
@@ -270,7 +302,7 @@ function saveChats() {
 }
 
 // Updated logout function
-function logout() {
+async function logout() {
   showConfirmDialog({
     visible: true,
     title: 'Logout Confirmation',
@@ -279,24 +311,13 @@ function logout() {
     confirmText: 'Logout',
     onConfirm: async () => {
       try {
-        // Sync to server before logout if there are unsynced changes
         if (syncStatus.value.hasUnsyncedChanges) {
-          toast.info('Syncing your data...', {
-            duration: 2000,
-            description: 'Please wait'
-          })
+          toast.info('Syncing your data...', { duration: 2000 })
           await syncToServer()
         }
 
-        // Clear local storage
-        localStorage.removeItem('userdetails')
-        localStorage.removeItem('isCollapsed')
-        localStorage.removeItem('currentChatId')
-        localStorage.removeItem('chats')
-        localStorage.removeItem('linkPreviews')
-
-        // Reset state
-        parsedUserDetails = null
+        // Clear everything
+        parsedUserDetails.value = null   // ✅ update ref, triggers isAuthenticated
         chats.value = []
         currentChatId.value = ''
         expanded.value = []
@@ -307,6 +328,11 @@ function logout() {
           syncing: false,
           hasUnsyncedChanges: false
         }
+        localStorage.removeItem('chats')
+        localStorage.removeItem('currentChatId')
+        localStorage.removeItem('linkPreviews')
+        localStorage.removeItem('userdetails')
+        linkPreviewCache.value.clear()
 
         confirmDialog.value.visible = false
 
@@ -323,16 +349,17 @@ function logout() {
       }
     },
     onCancel: () => {
-      confirmDialog.value.visible = false // Close dialog on cancel
+      confirmDialog.value.visible = false
     }
   })
 }
+
 
 function setShowInput() {
   if (currentMessages.value.length !== 0) {
     return
   }
-  if (!isAuthenticated()) {
+  if (!isAuthenticated.value) {
     toast.warning('Please create a session first', {
       duration: 3000,
       description: 'You need to be logged in.'
@@ -566,6 +593,74 @@ function deleteMessage(messageIndex: number) {
   })
 }
 
+async function handleAuth(data: {
+  username: string
+  email: string
+  password: string
+}) {
+  const { username, email, password } = data
+  // Custom validation
+  const validationError = validateCredentials(username, email, password)
+  if (validationError) {
+    toast.error(validationError, { duration: 4000 })
+    return
+  }
+
+  try {
+    isLoading.value = true
+
+    let response
+    try {
+      // Try login
+      response = await unsecureApiCall('/login', {
+        method: 'POST',
+        body: JSON.stringify({ username, email, password })
+      })
+
+      toast.success('Welcome back!', {
+        duration: 3000,
+        description: `Logged in as ${response.data.username}`
+      })
+    } catch (loginError) {
+      // Try register if login fails
+      response = await unsecureApiCall('/register', {
+        method: 'POST',
+        body: JSON.stringify({ username, email, password })
+      })
+
+      toast.success('Account created successfully!', {
+        duration: 3000,
+        description: `Welcome ${response.data.username}!`
+      })
+    }
+
+    // Store user details locally
+    const userData = {
+      user_id: response.data.user_id,
+      username: response.data.username,
+      email: response.data.email,
+      created_at: response.data.created_at,
+      sessionId: btoa(email + ':' + password + ':' + username)
+    }
+
+    localStorage.setItem('userdetails', JSON.stringify(userData))
+    parsedUserDetails.value = userData
+
+    // Sync data from server
+    await syncFromServer(response.data)
+    return response
+
+  } catch (error: any) {
+    console.error('Authentication error:', error)
+    toast.error('Authentication failed', {
+      duration: 4000,
+      description: error.message || 'Please check your credentials and try again.'
+    })
+  } finally {
+    isLoading.value = false
+  }
+}
+
 // Enhanced clear all chats with custom dialog
 function clearAllChats() {
   if (isLoading.value) return
@@ -591,6 +686,10 @@ function clearAllChats() {
       chats.value = []
       currentChatId.value = ''
       expanded.value = []
+      localStorage.removeItem('chats')
+      localStorage.removeItem('currentChatId')
+      localStorage.removeItem('linkPreviews')
+      linkPreviewCache.value.clear()
       saveChats()
 
       toast.error(`${totalChats} chats with ${totalMessages} messages deleted`, {
@@ -675,7 +774,7 @@ function toggleSidebar() {
 
 // Manual sync function
 async function manualSync() {
-  if (!parsedUserDetails?.user_id) {
+  if (!parsedUserDetails.value.user_id) {
     toast.warning('Please log in to sync data', {
       duration: 3000,
       description: ''
@@ -711,14 +810,14 @@ function setupAutoSync() {
 
   // Auto sync every 5 minutes if authenticated and has unsynced changes
   autoSyncInterval = setInterval(() => {
-    if (isAuthenticated() && syncStatus.value.hasUnsyncedChanges && !syncStatus.value.syncing) {
+    if (isAuthenticated.value && syncStatus.value.hasUnsyncedChanges && !syncStatus.value.syncing) {
       syncToServer()
     }
   }, 5 * 60 * 1000) // 5 minutes
 
   // Sync when page becomes visible
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden && isAuthenticated()) {
+    if (!document.hidden && isAuthenticated.value) {
       // Small delay to ensure tab is fully active
       setTimeout(() => {
         syncFromServer()
@@ -793,7 +892,8 @@ const globalState ={
   activeChatMenu,
   toggleChatMenu,
   showProfileMenu,
-  handleClickOutside
+  handleClickOutside,
+  handleAuth
 }
 provide("globalState", globalState)
 </script>
