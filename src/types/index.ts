@@ -47,4 +47,5 @@ export type ConfirmDialogOptions = {
     confirmText?: string
     cancelText?: string
     onConfirm: () => void
+    onCancel: () => void
 }
