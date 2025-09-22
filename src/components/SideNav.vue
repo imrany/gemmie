@@ -183,7 +183,7 @@ function handleChatClick(chatId: string) {
                   class="w-full px-1 py-0.5 text-xs bg-white border border-blue-500 rounded focus:outline-none" />
               </div>
               <p v-else-if="!props.data.isCollapsed || props.data.screenWidth < 720" class="truncate">
-                {{ chat.title || 'Untitled Chat' }}
+                {{ chat.title.slice(0,20) || 'Untitled Chat' }}
               </p>
             </div>
 
