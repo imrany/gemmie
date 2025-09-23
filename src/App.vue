@@ -201,7 +201,6 @@ async function logout() {
         }
 
         // Clear everything
-        parsedUserDetails.value = null   // ✅ update ref, triggers isAuthenticated
         chats.value = []
         currentChatId.value = ''
         expanded.value = []
@@ -219,9 +218,9 @@ async function logout() {
           linkPreviewCache.value.clear()
         }
         localStorage.removeItem('userdetails')
-
+        parsedUserDetails.value = null   // ✅ update ref, triggers isAuthenticated
+        
         confirmDialog.value.visible = false
-
         toast.success('Logged out successfully', {
           duration: 3000,
           description: parsedUserDetails.value.sync_enabled?'Your data has been synced':'Your data was stored locally'
@@ -776,7 +775,6 @@ async function handleAuth(data: {
       })
     }
 
-    console.log('Auth response:', response)
     // Store user details locally with sync preference
     const userData = {
       user_id: response.data.user_id,
@@ -791,7 +789,6 @@ async function handleAuth(data: {
     }
 
     localStorage.setItem('userdetails', JSON.stringify(userData))
-    localStorage.setItem('syncEnabled', String(userData.sync_enabled))
     parsedUserDetails.value = userData
 
     // Only sync data from server if sync is enabled

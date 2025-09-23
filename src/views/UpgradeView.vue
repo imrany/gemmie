@@ -241,6 +241,10 @@ onUnmounted(() => {
 })
 
 onMounted(() => {
+  if(parsedUserDetails.value===undefined || parsedUserDetails.value===null){
+    router.push("/")
+  }
+
   // Start ticking every second for reactive time updates
   timer = window.setInterval(() => {
     now.value = Date.now()
