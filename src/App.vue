@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, provide, ref, type ComputedRef } from 'vue';
+import { computed, onMounted, provide, ref, type ComputedRef } from 'vue';
 import { toast, Toaster } from 'vue-sonner'
 import 'vue-sonner/style.css'
 import type { Chat, ConfirmDialogOptions, CurrentChat, LinkPreview } from './types';
@@ -8,18 +8,18 @@ import { nextTick } from 'vue';
 import { detectAndProcessVideo } from './utils/videoProcessing';
 import ConfirmDialog from './components/ConfirmDialog.vue';
 
-const screenWidth = ref(screen.width) 
+const screenWidth = ref(screen.width)
 const scrollableElem = ref<HTMLElement | null>(null)
 const showScrollDownButton = ref(false)
-const confirmDialog = ref<ConfirmDialogOptions>({ 
-  visible: false, 
+const confirmDialog = ref<ConfirmDialogOptions>({
+  visible: false,
   title: "",
-  message: "", 
+  message: "",
   type: undefined,
   confirmText: "",
   cancelText: "",
-  onConfirm: () => {},
-  onCancel: () => {}
+  onConfirm: () => { },
+  onCancel: () => { }
 })
 const isCollapsed = ref(false) //  local state for collapse toggle
 const isSidebarHidden = ref(true)
@@ -91,10 +91,10 @@ const isAuthenticated = computed(() => {
 
 const currentChatId = ref<string>('')
 const chats = ref<Chat[]>([])
-const isLoading = ref(false) 
-const expanded = ref<boolean[]>([]) 
-const showInput = ref(false) 
-const activeChatMenu = ref<string | null>(null) 
+const isLoading = ref(false)
+const expanded = ref<boolean[]>([])
+const showInput = ref(false)
+const activeChatMenu = ref<string | null>(null)
 const showProfileMenu = ref(false)
 
 function showConfirmDialog(options: ConfirmDialogOptions) {
@@ -195,12 +195,14 @@ async function logout() {
     confirmText: 'Logout',
     onConfirm: async () => {
       try {
-        if (syncStatus.value.hasUnsyncedChanges) {
+        const syncEnabled = parsedUserDetails.value?.sync_enabled // save before clearing
+
+        if (syncStatus.value.hasUnsyncedChanges && syncEnabled) {
           toast.info('Syncing your data...', { duration: 2000 })
           await syncToServer()
         }
 
-        // Clear everything
+        // Clear chats and states
         chats.value = []
         currentChatId.value = ''
         expanded.value = []
@@ -211,19 +213,23 @@ async function logout() {
           syncing: false,
           hasUnsyncedChanges: false
         }
-        if(parsedUserDetails.value.sync_enabled){
+
+        if (syncEnabled) {
           localStorage.removeItem('chats')
           localStorage.removeItem('currentChatId')
           localStorage.removeItem('linkPreviews')
           linkPreviewCache.value.clear()
         }
+
         localStorage.removeItem('userdetails')
         parsedUserDetails.value = null   // ✅ update ref, triggers isAuthenticated
-        
+
         confirmDialog.value.visible = false
         toast.success('Logged out successfully', {
           duration: 3000,
-          description: parsedUserDetails.value.sync_enabled?'Your data has been synced':'Your data was stored locally'
+          description: syncEnabled
+            ? 'Your data has been synced'
+            : 'Your data was stored locally'
         })
       } catch (err) {
         console.error('Error during logout:', err)
@@ -600,21 +606,19 @@ function saveChats() {
     localStorage.setItem('chats', JSON.stringify(chats.value))
     localStorage.setItem('currentChatId', currentChatId.value)
 
-    // Only sync to server if sync is enabled and user is authenticated
-    const shouldSync = parsedUserDetails.value?.sync_enabled !== false && isAuthenticated.value
-    
+    // Only sync to server if user is authenticated and sync is enabled
+    const shouldSync = isAuthenticated.value && parsedUserDetails.value?.sync_enabled
+
     if (shouldSync) {
-      // Mark as having unsynced changes
       syncStatus.value.hasUnsyncedChanges = true
 
-      // Auto-sync after a delay
+      // Auto-sync after short delay
       setTimeout(() => {
         if (syncStatus.value.hasUnsyncedChanges && !syncStatus.value.syncing) {
           syncToServer()
         }
       }, 2000)
     }
-
   } catch (error) {
     console.error('Failed to save chats:', error)
   }
@@ -624,8 +628,8 @@ function saveChats() {
 async function syncFromServer(serverData?: any) {
   // Only sync from server if sync is enabled or if it's initial data during auth
   const shouldSync = parsedUserDetails.value?.sync_enabled !== false || serverData
-  
-  if (!parsedUserDetails.value.user_id || !shouldSync) return
+
+  if (!parsedUserDetails.value?.user_id || !shouldSync) return
 
   try {
     syncStatus.value.syncing = true
@@ -672,8 +676,21 @@ async function syncFromServer(serverData?: any) {
 
     // Update user sync preference if provided
     if (typeof data.sync_enabled === 'boolean') {
-      parsedUserDetails.value.sync_enabled = data.sync_enabled
-      localStorage.setItem('syncEnabled', String(data.sync_enabled))
+      parsedUserDetails.value = {
+        ...parsedUserDetails.value,
+        preferences: data.preferences || parsedUserDetails.value.preferences,
+        theme: data.theme || parsedUserDetails.value.theme,
+        workFunction: data.work_function || parsedUserDetails.value.workFunction,
+        phone_number: data.phone_number || parsedUserDetails.value.phone_number,
+        plan: data.plan || parsedUserDetails.value.plan,
+        plan_name: data.plan_name || parsedUserDetails.value.plan_name,
+        amount: data.amount ?? parsedUserDetails.value.amount,
+        duration: data.duration || parsedUserDetails.value.duration,
+        price: data.price || parsedUserDetails.value.price,
+        expiry_timestamp: data.expiry_timestamp || parsedUserDetails.value.expiry_timestamp,
+        expire_duration: data.expire_duration || parsedUserDetails.value.expire_duration,
+        sync_enabled: data.sync_enabled
+      }
       localStorage.setItem("userdetails", JSON.stringify(parsedUserDetails.value))
     }
 
@@ -710,7 +727,7 @@ async function syncToServer() {
       preferences: parsedUserDetails.value.preferences || '',
       work_function: parsedUserDetails.value.workFunction || '',
       theme: parsedUserDetails.value.theme || 'system',
-      sync_enabled: parsedUserDetails.value.sync_enabled
+      sync_enabled: parsedUserDetails.value.sync_enabled,
     }
 
     await apiCall('/sync', {
@@ -785,7 +802,8 @@ async function handleAuth(data: {
       workFunction: response.data.work_function || "",
       preferences: response.data.preferences || "",
       theme: response.data.theme || "system",
-      sync_enabled: response.data.sync_enabled !== false // Default to true if not specified
+      sync_enabled: response.data.sync_enabled !== false, // Default to true if not specified
+      phone_number: response.data.phone_number || "",
     }
 
     localStorage.setItem('userdetails', JSON.stringify(userData))
@@ -798,7 +816,7 @@ async function handleAuth(data: {
       // Just load local data if sync is disabled
       loadLocalData()
     }
-    
+
     return response
 
   } catch (error: any) {
@@ -829,7 +847,7 @@ function loadLocalData() {
 
     // Load link previews
     loadLinkPreviewCache()
-    
+
     updateExpandedArray()
   } catch (error) {
     console.error('Error loading local data:', error)
@@ -881,19 +899,19 @@ function setupAutoSync() {
 
   // Auto sync every 5 minutes if authenticated, sync enabled, and has unsynced changes
   autoSyncInterval = setInterval(() => {
-    if (isAuthenticated.value && 
-        parsedUserDetails.value?.sync_enabled !== false && 
-        syncStatus.value.hasUnsyncedChanges && 
-        !syncStatus.value.syncing) {
+    if (isAuthenticated.value &&
+      parsedUserDetails.value?.sync_enabled !== false &&
+      syncStatus.value.hasUnsyncedChanges &&
+      !syncStatus.value.syncing) {
       syncToServer()
     }
   }, 5 * 60 * 1000) // 5 minutes
 
   // Sync when page becomes visible (only if sync enabled)
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden && 
-        isAuthenticated.value && 
-        parsedUserDetails.value?.sync_enabled !== false) {
+    if (!document.hidden &&
+      isAuthenticated.value &&
+      parsedUserDetails.value?.sync_enabled !== false) {
       // Small delay to ensure tab is fully active
       setTimeout(() => {
         syncFromServer()
@@ -903,8 +921,8 @@ function setupAutoSync() {
 
   // Sync before page unload (only if sync enabled and has changes)
   window.addEventListener('beforeunload', () => {
-    if (syncStatus.value.hasUnsyncedChanges && 
-        parsedUserDetails.value?.sync_enabled !== false) {
+    if (syncStatus.value.hasUnsyncedChanges &&
+      parsedUserDetails.value?.sync_enabled !== false) {
       // Use sendBeacon for reliable data sending on page unload
       const syncData = {
         chats: JSON.stringify(chats.value),
@@ -922,7 +940,23 @@ function setupAutoSync() {
   })
 }
 
-const globalState ={
+onMounted(async () => {
+  // Load initial state from localStorage
+  const storedIsCollapsed = localStorage.getItem("isCollapsed")
+  if (storedIsCollapsed !== null) {
+    isCollapsed.value = storedIsCollapsed === "true"
+  }
+
+  // Load screen width
+  screenWidth.value = window.innerWidth
+
+  // Listen for window resize to update screen width
+  window.addEventListener('resize', () => {
+    screenWidth.value = window.innerWidth
+  })
+})
+
+const globalState = {
   screenWidth,
   confirmDialog,
   isCollapsed,
@@ -976,8 +1010,8 @@ provide("globalState", globalState)
 
 <template>
   <div @click="handleClickOutside">
-    <Toaster position="top-right" :closeButton="true" closeButtonPosition="top-left"/>
+    <Toaster position="top-right" :closeButton="true" closeButtonPosition="top-left" />
     <ConfirmDialog v-if="confirmDialog.visible" :confirmDialog="confirmDialog" />
-    <RouterView/>
+    <RouterView />
   </div>
 </template>

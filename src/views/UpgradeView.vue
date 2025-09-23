@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import { API_BASE_URL, getTransaction } from '@/utils/globals';
 import type { Ref } from 'vue';
 import { onMounted, ref, watch, computed, inject, onUnmounted, reactive } from 'vue';
 import { useRoute } from 'vue-router';
@@ -9,7 +10,7 @@ const route = useRoute()
 const router = useRouter()
 const planName = route.params.plan as 'student' | 'pro' | 'hobbyist' | undefined
 const selectPlanName = ref<'student' | 'pro' | 'hobbyist'>(planName ?? 'pro')
-const globalState = inject("globalState") as{
+const globalState = inject("globalState") as {
   parsedUserDetails: Ref<any>,
 }
 const parsedUserDetails = globalState.parsedUserDetails
@@ -18,15 +19,16 @@ const plans = ref([
   {
     name: "Student",
     id: "student",
-    price: 50,
+    // price: 50,
+    price: 1,
     duration: "per 5 hours",
     description: "Perfect for quick sessions and light academic use.",
     features: [
-      "Strong privacy", 
+      "Strong privacy",
       "Good for light work",
       "Analyze and summarize text",
-      "Write, edit and create content", 
-      "Get web results and insights", 
+      "Write, edit and create content",
+      "Get web results and insights",
     ],
     popular: false,
   },
@@ -37,11 +39,11 @@ const plans = ref([
     duration: "per 24 hours",
     description: "Great for professionals needing reliable AI help all day.",
     features: [
-      "Everything in Student Plan", 
+      "Everything in Student Plan",
       "Handles heavy workloads",
-      "Downloadable content e.g PDFs", 
-      "Full privacy", 
-      "Data sync across all devices", 
+      "Downloadable content e.g PDFs",
+      "Full privacy",
+      "Data sync across all devices",
     ],
     popular: true,
   },
@@ -52,7 +54,7 @@ const plans = ref([
     duration: "per week",
     description: "Best for hobbyists and regular users exploring AI deeply.",
     features: [
-      "Everything in Pro Plan", 
+      "Everything in Pro Plan",
       "More usage time",
       "Persistent sync",
       "Extended access for projects",
@@ -75,16 +77,16 @@ const paymentForm = reactive({
 const isFormValid = computed(() => {
   const phoneRegex = /^(\+254|0)[17][0-9]{8}$/
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-  
+
   // Check username
   const hasValidUsername = paymentForm.username.trim() !== ''
-  
+
   // Check email
   const hasValidEmail = emailRegex.test(paymentForm.email)
-  
+
   // Check phone
   const hasValidPhone = phoneRegex.test(paymentForm.phone)
-  
+
   return hasValidUsername && hasValidEmail && hasValidPhone
 })
 
@@ -111,12 +113,12 @@ const timeLeft = computed(() => {
   if (!expiryTimestamp.value) return ''
   const diff = expiryTimestamp.value
   if (diff <= 0) return 'Expired'
-  
+
   const days = Math.floor(diff / (1000 * 60 * 60 * 24))
   const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
   const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
   const seconds = Math.floor((diff % (1000 * 60)) / 1000)
-  
+
   if (days > 0) {
     return `${days}d ${hours}h ${minutes}m`
   }
@@ -153,6 +155,10 @@ const isEmailPrefilled = computed(() => {
   return parsedUserDetails.value?.email && parsedUserDetails.value?.email.trim() !== ''
 })
 
+const isPhonePrefilled = computed(() => {
+  return parsedUserDetails.value?.phone_number && parsedUserDetails.value?.phone_number.trim() !== ''
+})
+
 function selectPlan(planId: string) {
   selectPlanName.value = planId as 'student' | 'pro' | 'hobbyist'
   plans.value.forEach((plan) => {
@@ -182,49 +188,167 @@ async function handlePayment() {
     toast.error('Please fill in all required fields with valid information.', { duration: 5000 })
     return
   }
-  
+
   isProcessing.value = true
-  
+
   try {
     // Get the actual expiry timestamp for submission
     const actualExpiryTimestamp = now.value + (expiryTimestamp.value || 0)
-    
+
     // Simulate M-Pesa payment API call
     const paymentData = {
+      external_reference: `${parsedUserDetails.value?.email.split("@")[0].slice(0, parsedUserDetails.value?.email.length - 3)}-${parsedUserDetails.value?.username}`, // Unique reference
       plan: selectPlanName.value,
-      planName: selectedPlan.value?.name,
+      plan_name: selectedPlan.value?.name,
       amount: selectedPlan.value?.price,
       duration: selectedPlan.value?.duration,
-      phone: paymentForm.phone,
+      phone_number: paymentForm.phone,
       email: paymentForm.email,
       username: paymentForm.username,
-      expiryTimestamp: actualExpiryTimestamp,
-      expireDuration: expiryTimestamp.value, // Duration in milliseconds
+      expiry_timestamp: actualExpiryTimestamp,
+      expire_duration: expiryTimestamp.value, // Duration in milliseconds
       price: `${selectedPlan.value?.price} Ksh`
     }
-    
-    console.log('Initiating M-Pesa payment:', paymentData)
-    
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 3000))
-    
-    // Show success message
-    alert(`M-Pesa prompt sent to ${paymentForm.phone}. Please check your phone and enter your M-Pesa PIN to complete the payment.`)
-    
-    // Simulate waiting for M-Pesa callback
-    setTimeout(() => {
-      alert(`Payment successful! Your ${selectedPlan.value?.name} plan is now active and will expire on ${expiryDate.value}.`)
-      // In a real app, you would redirect to dashboard or success page
-      // router.push('/dashboard')
-    }, 5000)
-    
+
+    console.log('Initiating M-Pesa payment')
+    const stkResults = await sendSTK(paymentData)
+    if (stkResults === undefined || stkResults.data.success === false) {
+      isProcessing.value = false
+      return
+    }
+    toast.success(`M-Pesa prompt sent to ${paymentForm.phone}. Please check your phone and enter your M-Pesa PIN to complete the payment.`, { duration: 5000 })
+    localStorage.setItem("stk", JSON.stringify(stkResults))
+
+    // confirm payment after 40sec, retry up to 5 times
+    let attempts = 0;
+    const interval = setInterval(async () => {
+      attempts++;
+      const transResults = await getTransaction(stkResults.external_reference);
+      if (transResults?.data?.status === "success") {
+        clearInterval(interval);
+        toast.success(`Payment successful! Your ${selectedPlan.value?.name} plan is active until ${expiryDate.value}.`, { duration: 5000 });
+        const syncRes = await syncTransaction({
+          external_reference: stkResults.external_reference,
+          plan: selectPlanName.value,
+          plan_name: selectedPlan.value?.name || '',
+          amount: selectedPlan.value?.price || 0,
+          duration: selectedPlan.value?.duration || '',
+          phone_number: paymentForm.phone,
+          email: paymentForm.email,
+          username: paymentForm.username,
+          expiry_timestamp: actualExpiryTimestamp,
+          expire_duration: expiryTimestamp.value || 0, // Duration in milliseconds
+          price: `${selectedPlan.value?.price} Ksh`,
+        });
+        if (syncRes?.success) {
+          const response = await apiCall('/sync', { method: 'GET' })
+          const data = response.data;
+          parsedUserDetails.value = {
+            ...parsedUserDetails.value,
+            phone_number: data.phone_number || parsedUserDetails.value.phone_number,
+            plan: data.plan || parsedUserDetails.value.plan,
+            plan_name: data.plan_name || parsedUserDetails.value.plan_name,
+            amount: data.amount ?? parsedUserDetails.value.amount,
+            duration: data.duration || parsedUserDetails.value.duration,
+            price: data.price || parsedUserDetails.value.price,
+            expiry_timestamp: data.expiry_timestamp || parsedUserDetails.value.expiry_timestamp,
+            expire_duration: data.expire_duration || parsedUserDetails.value.expire_duration,
+          }
+          localStorage.setItem("userdetails", JSON.stringify(parsedUserDetails.value))
+          toast.success("Subscription details synced to your account.", { duration: 4000 });
+        } else {
+          toast.error("Failed to sync subscription details. Please contact support if your plan is not updated.", { duration: 6000 });
+        }
+        isProcessing.value = false
+        setTimeout(() => {
+          router.push('/settings/profile')
+        }, 3000);
+      }
+      if (attempts >= 5) {
+        clearInterval(interval);
+        toast.error("Payment not confirmed. Please check M-Pesa SMS.", { duration: 6000 });
+        isProcessing.value = false
+      }
+    }, 1000 * 40);
+
   } catch (error) {
-    console.error('Payment failed:', error)
-    alert('Payment failed. Please try again.')
-  } finally {
     isProcessing.value = false
+    toast.error('Payment failed. Please try again.', {
+      duration: 5000,
+      action: {
+        label: "Try again",
+        onClick: () => handlePayment()
+      }
+    })
   }
 }
+
+async function syncTransaction(data: {
+  external_reference: string,
+  plan: string,
+  plan_name: string,
+  amount: number,
+  duration: string,
+  phone_number: string,
+  email: string,
+  username: string,
+  expiry_timestamp: number,
+  expire_duration: number,
+  price: string,
+}) {
+  try {
+    const res = await fetch(`${API_BASE_URL}/sync`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    return await res.json();
+  } catch {
+    toast.error("Failed to sync transaction", { duration: 5000 });
+  }
+}
+
+async function apiCall(endpoint: string, options: RequestInit = {}) {
+  try {
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(parsedUserDetails.value?.user_id ? { 'X-User-ID': parsedUserDetails.value?.user_id } : {}),
+        ...options.headers,
+      },
+    })
+
+    const data = await response.json()
+
+    if (!data.success) {
+      throw new Error(data.message || 'API request failed')
+    }
+
+    return data
+  } catch (error) {
+    console.error('API Error:', error)
+    throw error
+  }
+}
+
+async function sendSTK(paymentData: any) {
+  try {
+    const res = await fetch(`${API_BASE_URL}/payments/stk`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        external_reference: paymentData.external_reference,
+        phone_number: paymentData.phone_number,
+        amount: paymentData.amount,
+      }),
+    });
+    return await res.json();
+  } catch {
+    toast.error("Failed to send STK push", { duration: 5000 });
+  }
+}
+
 
 watch(selectPlanName, (newVal) => {
   if (!showCheckout.value) {
@@ -241,7 +365,7 @@ onUnmounted(() => {
 })
 
 onMounted(() => {
-  if(parsedUserDetails.value===undefined || parsedUserDetails.value===null){
+  if (parsedUserDetails.value === undefined || parsedUserDetails.value === null) {
     router.push("/")
   }
 
@@ -252,9 +376,9 @@ onMounted(() => {
 
   // Pre-fill form data from user details
   paymentForm.username = parsedUserDetails.value?.username || '',
-  paymentForm.email = parsedUserDetails.value?.email || '',
-  paymentForm.phone = parsedUserDetails.value?.phone || ''
-  
+    paymentForm.email = parsedUserDetails.value?.email || '',
+    paymentForm.phone = parsedUserDetails.value?.phone_number || ''
+
   if (planName) {
     // Find and select the plan from URL
     const foundPlan = plans.value.find(p => p.id === planName)
@@ -273,11 +397,9 @@ onMounted(() => {
   <div class="min-h-screen py-6 px-4 sm:px-6 lg:px-8">
     <!-- Back Button -->
     <div class="flex w-full mb-6">
-      <button 
-        @click="showCheckout ? goBackToPlans() : $router.back()" 
+      <button @click="showCheckout ? goBackToPlans() : $router.back()"
         class="text-gray-600 hover:bg-gray-400 rounded-md hover:text-white w-[35px] h-[35px] flex items-center justify-center transition-colors duration-200"
-        :title="showCheckout ? 'Back to Plans' : 'Go Back'"
-      >
+        :title="showCheckout ? 'Back to Plans' : 'Go Back'">
         <i class="pi pi-arrow-left text-lg font-semibold"></i>
       </button>
     </div>
@@ -292,17 +414,15 @@ onMounted(() => {
           Flexible pricing designed for Students, Professionals, and Hobbyists.
         </p>
       </div>
-  
+
       <div class="grid gap-8 md:grid-cols-3 max-w-7xl mx-auto">
-        <div 
-          v-for="plan in plans" 
-          :key="plan.id"
+        <div v-for="plan in plans" :key="plan.id"
           class="relative flex flex-col bg-white border rounded-2xl shadow-sm hover:shadow-lg transition-all duration-200 overflow-hidden cursor-pointer"
           :class="plan.popular ? 'border-blue-600 ring-2 ring-blue-600 transform scale-105' : 'border-gray-200'"
-          @click="selectPlan(plan.id)"
-        >
+          @click="selectPlan(plan.id)">
           <!-- SELECTED Badge -->
-          <div v-if="plan.popular" class="absolute top-0 right-0 bg-blue-600 text-white px-3 py-1 text-xs font-semibold rounded-bl-lg">
+          <div v-if="plan.popular"
+            class="absolute top-0 right-0 bg-blue-600 text-white px-3 py-1 text-xs font-semibold rounded-bl-lg">
             SELECTED
           </div>
 
@@ -311,27 +431,25 @@ onMounted(() => {
               {{ plan.name }}
             </h2>
             <p class="text-gray-600 mb-4 text-sm leading-relaxed">{{ plan.description }}</p>
-  
+
             <div class="mb-6">
               <span class="text-3xl font-bold text-gray-900">{{ plan.price }} Ksh</span>
               <span class="text-gray-500 text-sm ml-1">{{ plan.duration }}</span>
             </div>
-  
+
             <ul class="space-y-3 flex-grow mb-6">
               <li v-for="feature in plan.features" :key="feature" class="flex items-start text-gray-700 text-sm">
                 <i class="pi pi-check text-green-600 mr-3 mt-0.5 text-xs"></i>
                 <span class="leading-relaxed">{{ feature }}</span>
               </li>
             </ul>
-  
-            <button 
-              @click.stop="proceedToCheckout(plan.id)" 
+
+            <button @click.stop="proceedToCheckout(plan.id)"
               class="w-full py-3 px-4 rounded-lg text-white font-medium transition-all duration-200 transform hover:scale-105 active:scale-95"
               :class="plan.popular
                 ? 'bg-blue-600 hover:bg-blue-700 shadow-md'
                 : 'bg-gray-800 hover:bg-gray-900 shadow-md'
-              "
-            >
+                ">
               Get {{ plan.name }} Plan
             </button>
           </div>
@@ -365,7 +483,8 @@ onMounted(() => {
           <div class="bg-gray-50 rounded-lg p-4">
             <h4 class="font-medium text-gray-900 mb-3">What's included:</h4>
             <div class="grid grid-cols-1 gap-2">
-              <div v-for="feature in selectedPlan?.features" :key="feature" class="flex items-center text-sm text-gray-700">
+              <div v-for="feature in selectedPlan?.features" :key="feature"
+                class="flex items-center text-sm text-gray-700">
                 <i class="pi pi-check text-green-600 mr-2"></i>
                 <span>{{ feature }}</span>
               </div>
@@ -376,7 +495,7 @@ onMounted(() => {
         <!-- Payment Form -->
         <div class="p-6">
           <h4 class="font-medium text-gray-900 mb-4">Payment Information</h4>
-          
+
           <form @submit.prevent="handlePayment" class="space-y-4">
             <!-- User Information -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -384,35 +503,23 @@ onMounted(() => {
                 <label for="username" class="block text-sm font-medium text-gray-700 mb-1">
                   Username
                 </label>
-                <input
-                  id="username"
-                  v-model="paymentForm.username"
-                  type="text"
-                  required
-                  :disabled="isUsernamePrefilled"
+                <input id="username" v-model="paymentForm.username" type="text" required :disabled="isUsernamePrefilled"
                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
                   :class="isUsernamePrefilled ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'"
-                  placeholder="Enter your username"
-                />
+                  placeholder="Enter your username" />
                 <p v-if="isUsernamePrefilled" class="text-xs text-gray-500 mt-1">
                   Using your account username
                 </p>
               </div>
-              
+
               <div>
                 <label for="email" class="block text-sm font-medium text-gray-700 mb-1">
                   Email Address
                 </label>
-                <input
-                  id="email"
-                  v-model="paymentForm.email"
-                  type="email"
-                  required
-                  :disabled="isEmailPrefilled"
+                <input id="email" v-model="paymentForm.email" type="email" required :disabled="isEmailPrefilled"
                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
                   :class="isEmailPrefilled ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'"
-                  placeholder="your.email@example.com"
-                />
+                  placeholder="your.email@example.com" />
                 <p v-if="isEmailPrefilled" class="text-xs text-gray-500 mt-1">
                   Using your account email
                 </p>
@@ -423,16 +530,23 @@ onMounted(() => {
               <label for="phone" class="block text-sm font-medium text-gray-700 mb-1">
                 M-Pesa Phone Number
               </label>
-              <input
-                id="phone"
-                v-model="paymentForm.phone"
-                type="tel"
-                required
+              <input id="phone" v-model="paymentForm.phone" type="tel" required :disabled="isPhonePrefilled"
                 pattern="^(\+254|0)[17][0-9]{8}$"
                 class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
-                placeholder="0712345678 or +254712345678"
-              />
-              <p class="text-xs text-gray-500 mt-1">
+                placeholder="0712345678 or +254712345678" />
+              <!-- if isPhonePrefilled ask if user want to change phone -->
+              <div class="flex items-center justify-center" v-if="isPhonePrefilled">
+                <p class="text-xs text-gray-500 mt-1">
+                  Using your account phone number
+                </p>
+                <button type="button" class="ml-2 text-blue-600 hover:underline text-xs" @click="() => {
+                  paymentForm.phone = '';
+                  $nextTick(() => {
+                    isPhonePrefilled.value = false;
+                  })
+                }">Change</button>
+              </div>
+              <p v-else class="text-xs text-gray-500 mt-1">
                 Enter your Safaricom M-Pesa number
               </p>
             </div>
@@ -452,7 +566,8 @@ onMounted(() => {
                 </div>
               </div>
               <div v-if="timeLeft && timeLeft !== 'Expired'" class="text-center">
-                <div class="inline-flex items-center bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
+                <div
+                  class="inline-flex items-center bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
                   <i class="pi pi-clock mr-1"></i>
                   {{ timeLeft }} remaining after purchase
                 </div>
@@ -478,8 +593,7 @@ onMounted(() => {
             </div>
 
             <!-- Form Validation Message -->
-            <div v-if="!isFormValid && paymentForm.phone" 
-                 class="bg-red-50 border border-red-200 rounded-lg p-3">
+            <div v-if="!isFormValid && paymentForm.phone" class="bg-red-50 border border-red-200 rounded-lg p-3">
               <div class="flex items-center">
                 <i class="pi pi-exclamation-triangle text-red-600 mr-2"></i>
                 <p class="text-sm text-red-800">
@@ -488,25 +602,20 @@ onMounted(() => {
               </div>
               <ul class="text-xs text-red-700 mt-2 ml-6">
                 <li v-if="!paymentForm.username.trim()">Username is required</li>
-                <li v-if="!paymentForm.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(paymentForm.email)">Valid email is required</li>
+                <li v-if="!paymentForm.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(paymentForm.email)">Valid email is
+                  required</li>
                 <li v-if="!/^(\+254|0)[17][0-9]{8}$/.test(paymentForm.phone)">Valid Kenyan phone number is required</li>
               </ul>
             </div>
 
             <!-- Action Buttons -->
             <div class="flex gap-4 pt-4">
-              <button 
-                @click="goBackToPlans"
-                type="button"
-                class="flex-1 py-3 px-4 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors duration-200"
-              >
+              <button @click="goBackToPlans" type="button"
+                class="flex-1 py-3 px-4 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors duration-200">
                 Back to Plans
               </button>
-              <button 
-                type="submit"
-                :disabled="!isFormValid || isProcessing"
-                class="flex-1 py-3 px-4 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors duration-200 flex items-center justify-center"
-              >
+              <button type="submit" :disabled="!isFormValid || isProcessing"
+                class="flex-1 py-3 px-4 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors duration-200 flex items-center justify-center">
                 <i v-if="isProcessing" class="pi pi-spinner pi-spin mr-2"></i>
                 {{ isProcessing ? 'Processing...' : `Pay ${selectedPlan?.price} Ksh via M-Pesa` }}
               </button>

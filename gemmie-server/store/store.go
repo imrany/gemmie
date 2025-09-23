@@ -34,6 +34,14 @@ type User struct {
 	WorkFunction string    `json:"work_function,omitempty"`
 	Theme        string    `json:"theme,omitempty"`
 	SyncEnabled  bool      `json:"sync_enabled"`
+	Plan 	   string    `json:"plan,omitempty"`
+	PlanName	 string    `json:"plan_name,omitempty"`
+	Amount       int       `json:"amount,omitempty"`
+	Duration     string    `json:"duration,omitempty"`
+	PhoneNumber        string    `json:"phone_number,omitempty"`
+	ExpiryTimestamp int64  `json:"expiry_timestamp,omitempty"`
+	ExpireDuration int64   `json:"expire_duration,omitempty"`
+	Price        string    `json:"price,omitempty"`
 }
 
 type UserData struct {
@@ -48,10 +56,9 @@ type UserData struct {
 type Order struct {
 	ID                string    `json:"id"`
 	ExternalReference string    `json:"external_reference"`
-	CustomerName      string    `json:"customer_name"`
-	CustomerEmail     string    `json:"customer_email"`
-	CustomerPhone     string    `json:"customer_phone"`
-	ProductName       string    `json:"product_name"`
+	Username      string    `json:"username"`
+	Email     string    `json:"email"`
+	PhoneNumber     string    `json:"phone_number"`
 	Amount            int       `json:"amount"`
 	Status            string    `json:"status"`
 	CreatedAt         time.Time `json:"created_at"`

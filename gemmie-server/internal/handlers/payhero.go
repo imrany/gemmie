@@ -23,10 +23,8 @@ type STKRequest struct {
 }
 
 type STKResponse struct {
-	Response struct {
-		ExternalReference string      `json:"external_reference"`
-		Data              interface{} `json:"data"`
-	} `json:"response"`
+	ExternalReference string      `json:"external_reference"`
+	Data              interface{} `json:"data"`
 }
 
 type PayHeroResponse struct {
@@ -143,7 +141,7 @@ func SendSTKHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer resp.Body.Close()
 
-	var payHeroResp PayHeroResponse
+	var payHeroResp interface{}
 	if err := json.NewDecoder(resp.Body).Decode(&payHeroResp); err != nil {
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
@@ -152,15 +150,13 @@ func SendSTKHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if payHeroResp.Success {
+	if payHeroResp.(map[string]interface{})["success"] == true {
 		stkResponse := STKResponse{}
-		stkResponse.Response.ExternalReference = stkReq.ExternalReference
-		stkResponse.Response.Data = payHeroResp
+		stkResponse.Data = payHeroResp
 
-		json.NewEncoder(w).Encode(store.Response{
-			Success: true,
-			Message: "STK push sent successfully",
-			Data:    stkResponse.Response,
+		json.NewEncoder(w).Encode(STKResponse{
+			ExternalReference: stkReq.ExternalReference,
+			Data:    stkResponse.Data,
 		})
 	} else {
 		json.NewEncoder(w).Encode(store.Response{

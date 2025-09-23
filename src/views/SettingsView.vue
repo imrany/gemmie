@@ -473,7 +473,7 @@ watch(isAuthenticated, (val) => {
                                 <!-- Session ID -->
                                 <div class="space-y-2">
                                     <label class="block text-sm font-medium text-gray-700">Session ID</label>
-                                    <input type="text" :value="parsedUserDetails.sessionId" readonly
+                                    <input type="text" :value="parsedUserDetails?.sessionId" readonly
                                         class="w-full px-4 py-2 text-sm border border-gray-300 rounded-lg bg-gray-50 text-gray-600 font-mono" />
                                 </div>
 

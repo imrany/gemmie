@@ -69,6 +69,33 @@ export function validateCredentials(username: string, email: string, password: s
   return null
 }
 
+export async function getTransaction(external_reference: string){
+  try{
+    const parseRes=await fetch(`${API_BASE_URL}/transactions/${external_reference}`,{
+      method:"GET"
+    })
+    const res=await parseRes.json()
+    if(res.success){
+      return res.data
+    }else{
+      toast.error(res.message,{ 
+        duration:5000,
+        action:{
+          label:"Try again",
+          onClick:()=>toast.dismiss()
+        }
+      })
+    }
+  }catch(err:any){
+    toast.error(`Transaction failed, Try again`,{
+      duration:5000,
+        action:{
+          label:"Try again",
+          onClick:()=>toast.dismiss()
+        }
+    })
+  }
+}
 
 export let API_BASE_URL = getBaseURL() + '/api'
 export let SOCKET_URL = getBaseURL().replace(/^http/, 'ws') + '/ws'
