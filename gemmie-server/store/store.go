@@ -18,7 +18,6 @@ type Response struct {
 type StorageType struct {
 	Users        map[string]User                 `json:"users"`         // key: user_id
 	UserData     map[string]UserData             `json:"user_data"`     // key: user_id
-	Orders       map[string]Order         `json:"orders"`        // key: order_id
 	Transactions map[string]Transaction `json:"transactions"` // key: transaction_id
 	Mu           sync.RWMutex                    `json:"-"`
 }
@@ -52,19 +51,6 @@ type UserData struct {
 	UpdatedAt     time.Time `json:"updated_at"`
 }
 
-// Order represents an order
-type Order struct {
-	ID                string    `json:"id"`
-	ExternalReference string    `json:"external_reference"`
-	Username      string    `json:"username"`
-	Email     string    `json:"email"`
-	PhoneNumber     string    `json:"phone_number"`
-	Amount            int       `json:"amount"`
-	Status            string    `json:"status"`
-	CreatedAt         time.Time `json:"created_at"`
-	UpdatedAt         time.Time `json:"updated_at"`
-}
-
 // Transaction represents a payment transaction
 type Transaction struct {
 	ID                 string    `json:"id"`
@@ -96,7 +82,6 @@ func InitStorage(filePath string) {
 		Users:        make(map[string]User),
 		UserData:     make(map[string]UserData),
 		Transactions: make(map[string]Transaction),
-		Orders:       make(map[string]Order),
 		Mu:           sync.RWMutex{},
 	}
 
@@ -129,7 +114,6 @@ func loadStorage() {
 			Users:        make(map[string]User),
 			UserData:     make(map[string]UserData),
 			Transactions: make(map[string]Transaction),
-			Orders:       make(map[string]Order),
 			Mu:           sync.RWMutex{},
 		}
 
@@ -140,7 +124,6 @@ func loadStorage() {
 	slog.Info("Storage loaded",
 		"users", len(Storage.Users),
 		"user_data_records", len(Storage.UserData),
-		"orders", len(Storage.Orders),
 		"transactions", len(Storage.Transactions),
 	)
 }

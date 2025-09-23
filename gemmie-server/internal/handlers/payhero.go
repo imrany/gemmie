@@ -5,8 +5,8 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -31,8 +31,6 @@ type PayHeroResponse struct {
 	Success bool   `json:"success"`
 	Message string `json:"message"`
 }
-
-
 
 // Data access functions
 func findTransactionByRef(ref string) (*store.Transaction, bool) {
@@ -60,12 +58,28 @@ func createTransaction(t store.Transaction) error {
 	return nil
 }
 
-// Payment handlers
+// --- helper: try to find user by email or username in storage ---
+func findUserByEmailOrUsername(identifier string) (*store.User, string, bool) {
+	// returns (user, userID, found)
+	store.Storage.Mu.RLock()
+	defer store.Storage.Mu.RUnlock()
+
+	for id, u := range store.Storage.Users {
+		if strings.EqualFold(u.Email, identifier) || strings.EqualFold(u.Username, identifier) {
+			userCopy := u
+			return &userCopy, id, true
+		}
+	}
+	return nil, "", false
+}
+
+// --- SendSTKHandler: returns consistent store.Response with data object ---
 func SendSTKHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	var stkReq STKRequest
 	if err := json.NewDecoder(r.Body).Decode(&stkReq); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
 			Message: "Invalid request body",
@@ -99,7 +113,7 @@ func SendSTKHandler(w http.ResponseWriter, r *http.Request) {
 	credentials := PAYHERO_USERNAME + ":" + PAYHERO_PASSWORD
 	encodedCredentials := base64.StdEncoding.EncodeToString([]byte(credentials))
 
-	// Prepare request body
+	// Prepare request body to PayHero
 	requestBody, err := json.Marshal(map[string]interface{}{
 		"amount":             stkReq.Amount,
 		"phone_number":       stkReq.PhoneNumber,
@@ -116,7 +130,6 @@ func SendSTKHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create request
 	req, err := http.NewRequest("POST", "https://backend.payhero.co.ke/api/v2/payments", bytes.NewBuffer(requestBody))
 	if err != nil {
 		json.NewEncoder(w).Encode(store.Response{
@@ -129,8 +142,7 @@ func SendSTKHandler(w http.ResponseWriter, r *http.Request) {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Basic "+encodedCredentials)
 
-	// Make request
-	client := &http.Client{}
+	client := &http.Client{Timeout: 15 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		json.NewEncoder(w).Encode(store.Response{
@@ -141,7 +153,7 @@ func SendSTKHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer resp.Body.Close()
 
-	var payHeroResp interface{}
+	var payHeroResp map[string]interface{}
 	if err := json.NewDecoder(resp.Body).Decode(&payHeroResp); err != nil {
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
@@ -150,22 +162,33 @@ func SendSTKHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if payHeroResp.(map[string]interface{})["success"] == true {
-		stkResponse := STKResponse{}
-		stkResponse.Data = payHeroResp
-
-		json.NewEncoder(w).Encode(STKResponse{
-			ExternalReference: stkReq.ExternalReference,
-			Data:    stkResponse.Data,
-		})
-	} else {
+	// PayHero returns success boolean; respond consistently to frontend
+	if successVal, ok := payHeroResp["success"].(bool); ok && successVal {
+		// Return store.Response wrapping an STKResponse with the external_reference
 		json.NewEncoder(w).Encode(store.Response{
-			Success: false,
-			Message: "STK push was unsuccessful",
+			Success: true,
+			Message: "STK push sent successfully",
+			Data: STKResponse{
+				ExternalReference: stkReq.ExternalReference,
+				Data:              payHeroResp,
+			},
 		})
+		return
 	}
+
+	// If we reach here it's not successful
+	msg := "STK push was unsuccessful"
+	if m, ok := payHeroResp["message"].(string); ok && m != "" {
+		msg = msg + ": " + m
+	}
+
+	json.NewEncoder(w).Encode(store.Response{
+		Success: false,
+		Message: msg,
+	})
 }
 
+// --- StoreTransactionHandler: store successful transactions and update user if found ---
 func StoreTransactionHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
@@ -174,6 +197,7 @@ func StoreTransactionHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
 			Message: "Invalid request body",
@@ -183,36 +207,84 @@ func StoreTransactionHandler(w http.ResponseWriter, r *http.Request) {
 
 	transaction := reqBody.Response
 
-	// Check if transaction already exists
+	if strings.TrimSpace(transaction.ExternalReference) == "" {
+		json.NewEncoder(w).Encode(store.Response{
+			Success: false,
+			Message: "Missing external_reference",
+		})
+		return
+	}
+
+	// If transaction already stored, return early
 	if _, exists := findTransactionByRef(transaction.ExternalReference); exists {
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
-			Message: fmt.Sprintf("A transaction with reference %s already exists", transaction.ExternalReference),
+			Message: fmt.Sprintf("Transaction with reference %s already exists", transaction.ExternalReference),
 		})
 		return
 	}
 
-	// Store transaction
-	if err := createTransaction(transaction); err != nil {
-		json.NewEncoder(w).Encode(store.Response{
-			Success: false,
-			Message: "Failed to store transaction: " + err.Error(),
-		})
-		return
-	}
-
-	// Update order status if order exists
-	if order, exists := FindOrderByRef(transaction.ExternalReference); exists {
-		if err := UpdateOrderStatus(transaction.ExternalReference, "Paid"); err != nil {
-			log.Printf("Failed to update order status: %v", err)
+	// Store only successful transactions
+	if strings.EqualFold(transaction.Status, "Success") {
+		if err := createTransaction(transaction); err != nil {
+			json.NewEncoder(w).Encode(store.Response{
+				Success: false,
+				Message: "Failed to store transaction: " + err.Error(),
+			})
+			return
 		}
 
-		log.Printf("Order %s status updated to Paid", order.ID)
+		// Identify user
+		parts := strings.Split(transaction.ExternalReference, "-")
+		if len(parts) > 0 {
+			identifier := parts[0]
+			if _, userID, found := findUserByEmailOrUsername(identifier); found {
+				store.Storage.Mu.Lock()
+				u := store.Storage.Users[userID]
+
+				// Update common fields
+				u.Amount = transaction.Amount
+				u.PhoneNumber = transaction.PhoneNumber
+				u.UpdatedAt = time.Now()
+
+				// Assign plan details based on amount
+				now := time.Now()
+				switch transaction.Amount {
+				case 50:
+					u.Plan = "student"
+					u.PlanName = "Student Plan"
+					u.Price = "50 Ksh"
+					u.Duration = "5 hours"
+					u.ExpireDuration = int64(5 * time.Hour.Seconds())
+					u.ExpiryTimestamp = now.Add(5 * time.Hour).Unix()
+
+				case 100:
+					u.Plan = "hobbyist"
+					u.PlanName = "Hobbyist Plan"
+					u.Price = "100 Ksh"
+					u.Duration = "24 hours"
+					u.ExpireDuration = int64(24 * time.Hour.Seconds())
+					u.ExpiryTimestamp = now.Add(24 * time.Hour).Unix()
+
+				case 500:
+					u.Plan = "pro"
+					u.PlanName = "Pro Plan"
+					u.Price = "500 Ksh"
+					u.Duration = "1 week"
+					u.ExpireDuration = int64((7 * 24) * time.Hour.Seconds())
+					u.ExpiryTimestamp = now.Add(7 * 24 * time.Hour).Unix()
+				}
+
+				store.Storage.Users[userID] = u
+				store.Storage.Mu.Unlock()
+				_ = store.SaveStorage()
+			}
+		}
 	}
 
 	json.NewEncoder(w).Encode(store.Response{
 		Success: true,
-		Message: "Transaction stored successfully",
+		Message: "Transaction processed successfully",
 	})
 }
 
@@ -244,6 +316,14 @@ func GetTransactionByRefHandler(w http.ResponseWriter, r *http.Request) {
 
 	transaction, exists := findTransactionByRef(externalReference)
 	if !exists {
+		json.NewEncoder(w).Encode(store.Response{
+			Success: false,
+			Message: "Transaction not found",
+		})
+		return
+	}
+
+	if transaction.Status != "Success" {
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
 			Message: "Transaction not found",
