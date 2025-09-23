@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/imrany/gemmie/gemmie-server/internal/encrypt"
@@ -31,31 +33,48 @@ type RegisterRequest struct {
 	Password string `json:"password"`
 }
 
-// SyncRequest represents data sync request
+// SyncRequest represents data sync request - FIXED field naming consistency
 type SyncRequest struct {
-	Chats         string `json:"chats"`
-	LinkPreviews  string `json:"link_previews"`
-	CurrentChatID string `json:"current_chat_id"`
-	Preferences   string `json:"preferences,omitempty"`
-	WorkFunction  string `json:"work_function,omitempty"`
-	Theme         string `json:"theme,omitempty"`
-	SyncEnabled  bool      `json:"sync_enabled"`
-	Username     string   `json:"username"`
+	Chats           string `json:"chats"`
+	LinkPreviews    string `json:"link_previews"`
+	CurrentChatID   string `json:"current_chat_id"`
+	Preferences     string `json:"preferences,omitempty"`
+	WorkFunction    string `json:"work_function,omitempty"`
+	Theme           string `json:"theme,omitempty"`
+	SyncEnabled     bool   `json:"sync_enabled"`
+	Username        string `json:"username"`
+	Plan            string `json:"plan,omitempty"`
+	PlanName        string `json:"plan_name,omitempty"`
+	Amount          int    `json:"amount,omitempty"`
+	Duration        string `json:"duration,omitempty"`
+	PhoneNumber     string `json:"phone_number,omitempty"`     // Consistent naming
+	ExpiryTimestamp int64  `json:"expiry_timestamp,omitempty"`
+	ExpireDuration  int64  `json:"expire_duration,omitempty"`
+	Price           string `json:"price,omitempty"`
+	ExternalReference string `json:"external_reference,omitempty"` // For payment tracking
 }
 
-// AuthResponse represents authentication response
+// AuthResponse represents authentication response - FIXED field naming consistency
 type AuthResponse struct {
-	UserID        string    `json:"user_id"`
-	Username      string    `json:"username"`
-	Email         string    `json:"email"`
-	CreatedAt     time.Time `json:"created_at"`
-	Chats         string    `json:"chats,omitempty"`
-	LinkPreviews  string    `json:"link_previews,omitempty"`
-	CurrentChatID string    `json:"current_chat_id,omitempty"`
-	Preferences    string    `json:"preferences,omitempty"`
-	WorkFunction  string    `json:"work_function,omitempty"`
-	Theme         string    `json:"theme,omitempty"`
-	SyncEnabled  bool      `json:"sync_enabled"`
+	UserID          string    `json:"user_id"`
+	Username        string    `json:"username"`
+	Email           string    `json:"email"`
+	CreatedAt       time.Time `json:"created_at"`
+	Chats           string    `json:"chats,omitempty"`
+	LinkPreviews    string    `json:"link_previews,omitempty"`
+	CurrentChatID   string    `json:"current_chat_id,omitempty"`
+	Preferences     string    `json:"preferences,omitempty"`
+	WorkFunction    string    `json:"work_function,omitempty"`
+	Theme           string    `json:"theme,omitempty"`
+	SyncEnabled     bool      `json:"sync_enabled"`
+	Plan            string    `json:"plan,omitempty"`
+	PlanName        string    `json:"plan_name,omitempty"`
+	Amount          int       `json:"amount,omitempty"`
+	Duration        string    `json:"duration,omitempty"`
+	PhoneNumber     string    `json:"phone_number,omitempty"`     // Consistent naming
+	ExpiryTimestamp int64     `json:"expiry_timestamp,omitempty"`
+	ExpireDuration  int64     `json:"expire_duration,omitempty"`
+	Price           string    `json:"price,omitempty"`
 }
 
 type ProfileUpdateRequest struct {
@@ -64,6 +83,24 @@ type ProfileUpdateRequest struct {
 	Preferences  string `json:"preferences,omitempty"`
 	Theme        string `json:"theme,omitempty"`
 	SyncEnabled  *bool  `json:"sync_enabled,omitempty"` // Pointer to handle explicit false
+	PhoneNumber  string `json:"phone_number,omitempty"`  // Added phone number support
+}
+
+// ADDED: Phone number validation function
+func validatePhoneNumber(phone string) bool {
+	if phone == "" {
+		return true // Optional field
+	}
+	
+	// Kenyan phone number regex - supports Safaricom, Airtel, Telkom
+	// Formats: +254XXXXXXXXX, 254XXXXXXXXX, 07XXXXXXXX, 01XXXXXXXX
+	phoneRegex := regexp.MustCompile(`^(\+254|254|0)(7[0-9]{8}|1[0-9]{8})$`)
+	return phoneRegex.MatchString(strings.TrimSpace(phone))
+}
+
+// ADDED: Input sanitization function
+func sanitizeString(input string) string {
+	return strings.TrimSpace(input)
 }
 
 // findUserByEmail finds a user by email
@@ -92,12 +129,13 @@ func findUserByUsername(username string) (*store.User, bool) {
 	return nil, false
 }
 
-// registerHandler handles user registration
+// registerHandler handles user registration - ENHANCED with better validation
 func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	var req RegisterRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
 			Message: "Invalid request body",
@@ -105,8 +143,13 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate required fields
+	// Sanitize inputs
+	req.Username = sanitizeString(req.Username)
+	req.Email = sanitizeString(req.Email)
+
+	// Enhanced validation
 	if req.Username == "" || req.Email == "" || req.Password == "" {
+		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
 			Message: "Username, email, and password are required",
@@ -114,8 +157,41 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Validate email format
+	emailRegex := regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
+	if !emailRegex.MatchString(req.Email) {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(store.Response{
+			Success: false,
+			Message: "Invalid email format",
+		})
+		return
+	}
+
+	// Validate username (alphanumeric, underscore, hyphen, 3-30 chars)
+	usernameRegex := regexp.MustCompile(`^[a-zA-Z0-9_-]{3,30}$`)
+	if !usernameRegex.MatchString(req.Username) {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(store.Response{
+			Success: false,
+			Message: "Username must be 3-30 characters and contain only letters, numbers, underscores, or hyphens",
+		})
+		return
+	}
+
+	// Validate password strength (minimum 8 chars)
+	if len(req.Password) < 8 {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(store.Response{
+			Success: false,
+			Message: "Password must be at least 8 characters long",
+		})
+		return
+	}
+
 	// Check if user already exists
 	if _, exists := FindUserByEmail(req.Email); exists {
+		w.WriteHeader(http.StatusConflict)
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
 			Message: "User with this email already exists",
@@ -124,6 +200,7 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if _, exists := findUserByUsername(req.Username); exists {
+		w.WriteHeader(http.StatusConflict)
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
 			Message: "User with this username already exists",
@@ -131,21 +208,29 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create new user
+	// Create new user with consistent field naming
 	userID := encrypt.GenerateUserID()
 	passwordHash := encrypt.HashCredentials(req.Username, req.Email, req.Password)
 	
 	user := store.User{
-		ID:           userID,
-		Username:     req.Username,
-		Email:        req.Email,
-		PasswordHash: passwordHash,
-		CreatedAt:    time.Now(),
-		UpdatedAt:    time.Now(),
-		Preferences: "",
-		WorkFunction: "",
-		Theme:      "system",
-		SyncEnabled: true,
+		ID:              userID,
+		Username:        req.Username,
+		Email:           req.Email,
+		PasswordHash:    passwordHash,
+		CreatedAt:       time.Now(),
+		UpdatedAt:       time.Now(),
+		Preferences:     "",
+		WorkFunction:    "",
+		Theme:           "system",
+		SyncEnabled:     true,
+		Plan:            "Free",
+		PlanName:        "",
+		Amount:          0,
+		Duration:        "",
+		PhoneNumber:     "", // Consistent field naming
+		ExpiryTimestamp: 0,
+		ExpireDuration:  0,
+		Price:           "",
 	}
 
 	// Create empty user data record
@@ -163,9 +248,18 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	store.Storage.UserData[userID] = userData
 	store.Storage.Mu.Unlock()
 
-	store.SaveStorage()
+	if err := store.SaveStorage(); err != nil {
+		slog.Error("Failed to save storage after registration", "error", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(store.Response{
+			Success: false,
+			Message: "Failed to save user data",
+		})
+		return
+	}
 
 	// Return response with user data
+	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(store.Response{
 		Success: true,
 		Message: "User registered successfully",
@@ -177,20 +271,29 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 			Chats:         userData.Chats,
 			LinkPreviews:  userData.LinkPreviews,
 			CurrentChatID: userData.CurrentChatID,
-			Preferences:    user.Preferences,
+			Preferences:   user.Preferences,
 			WorkFunction:  user.WorkFunction,
 			Theme:         user.Theme,
-			SyncEnabled: user.SyncEnabled,
+			SyncEnabled:   user.SyncEnabled,
+			PhoneNumber:   user.PhoneNumber, // Consistent naming
+			Plan:          user.Plan,
+			PlanName:      user.PlanName,
+			Amount:        user.Amount,
+			Duration:      user.Duration,
+			Price:         user.Price,
+			ExpiryTimestamp: user.ExpiryTimestamp,
+			ExpireDuration:  user.ExpireDuration,
 		},
 	})
 }
 
-// loginHandler handles user login
+// loginHandler handles user login - ENHANCED with better validation
 func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	var req LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
 			Message: "Invalid request body",
@@ -198,8 +301,13 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Sanitize inputs
+	req.Email = sanitizeString(req.Email)
+	req.Username = sanitizeString(req.Username)
+
 	// Validate required fields
 	if req.Email == "" || req.Password == "" || req.Username == "" {
+		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
 			Message: "Username, email, and password are required",
@@ -210,6 +318,7 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	// Find user by email
 	user, exists := FindUserByEmail(req.Email)
 	if !exists {
+		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
 			Message: "Invalid credentials",
@@ -220,6 +329,7 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	// Verify credentials hash
 	expectedHash := encrypt.HashCredentials(req.Username, req.Email, req.Password)
 	if user.PasswordHash != expectedHash {
+		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
 			Message: "Invalid credentials",
@@ -249,32 +359,41 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 		store.SaveStorage()
 	}
 
-	// Return response with user data
+	// Return response with user data - FIXED consistent naming
 	json.NewEncoder(w).Encode(store.Response{
 		Success: true,
 		Message: "Login successful",
 		Data: AuthResponse{
-			UserID:        user.ID,
-			Username:      user.Username,
-			Email:         user.Email,
-			CreatedAt:     user.CreatedAt,
-			Chats:         userData.Chats,
-			LinkPreviews:  userData.LinkPreviews,
-			CurrentChatID: userData.CurrentChatID,
-			Preferences:    user.Preferences,
-			WorkFunction:  user.WorkFunction,
-			Theme:         user.Theme,
-			SyncEnabled: user.SyncEnabled,
+			UserID:          user.ID,
+			Username:        user.Username,
+			Email:           user.Email,
+			CreatedAt:       user.CreatedAt,
+			Chats:           userData.Chats,
+			LinkPreviews:    userData.LinkPreviews,
+			CurrentChatID:   userData.CurrentChatID,
+			Preferences:     user.Preferences,
+			WorkFunction:    user.WorkFunction,
+			Theme:           user.Theme,
+			SyncEnabled:     user.SyncEnabled,
+			Plan:            user.Plan,
+			PlanName:        user.PlanName,
+			Amount:          user.Amount,
+			Duration:        user.Duration,
+			PhoneNumber:     user.PhoneNumber,     // Consistent naming
+			ExpiryTimestamp: user.ExpiryTimestamp,
+			ExpireDuration:  user.ExpireDuration,
+			Price:           user.Price,
 		},
 	})
 }
 
-// syncHandler handles data synchronization
+// syncHandler handles data synchronization - ENHANCED with better validation
 func SyncHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	userID := r.Header.Get("X-User-ID")
 	if userID == "" {
+		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
 			Message: "User ID header required",
@@ -288,6 +407,7 @@ func SyncHandler(w http.ResponseWriter, r *http.Request) {
 	store.Storage.Mu.RUnlock()
 
 	if !userExists {
+		w.WriteHeader(http.StatusNotFound)
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
 			Message: "User not found",
@@ -300,10 +420,11 @@ func SyncHandler(w http.ResponseWriter, r *http.Request) {
 		// Get user data
 		store.Storage.Mu.RLock()
 		userData, exists := store.Storage.UserData[userID]
-		user:= store.Storage.Users[userID]
+		user := store.Storage.Users[userID]
 		store.Storage.Mu.RUnlock()
 
 		if !exists {
+			w.WriteHeader(http.StatusNotFound)
 			json.NewEncoder(w).Encode(store.Response{
 				Success: false,
 				Message: "User data not found",
@@ -315,14 +436,23 @@ func SyncHandler(w http.ResponseWriter, r *http.Request) {
 			Success: true,
 			Message: "Data retrieved successfully",
 			Data: map[string]interface{}{
-				"chats":           userData.Chats,
-				"link_previews":   userData.LinkPreviews,
-				"current_chat_id": userData.CurrentChatID,
-				"updated_at":      userData.UpdatedAt,
-				"preferences":     user.Preferences,
-				"work_function":   user.WorkFunction,
-				"theme":          user.Theme,
-				"sync_enabled": user.SyncEnabled,
+				"chats":             userData.Chats,
+				"link_previews":     userData.LinkPreviews,
+				"current_chat_id":   userData.CurrentChatID,
+				"updated_at":        userData.UpdatedAt,
+				"preferences":       user.Preferences,
+				"work_function":     user.WorkFunction,
+				"theme":             user.Theme,
+				"sync_enabled":      user.SyncEnabled,
+				"username":          user.Username,
+				"plan":              user.Plan,
+				"plan_name":         user.PlanName,
+				"amount":            user.Amount,
+				"duration":          user.Duration,
+				"phone_number":      user.PhoneNumber,      // Consistent naming
+				"expiry_timestamp":  user.ExpiryTimestamp,
+				"expire_duration":   user.ExpireDuration,
+				"price":             user.Price,
 			},
 		})
 
@@ -330,9 +460,26 @@ func SyncHandler(w http.ResponseWriter, r *http.Request) {
 		// Update user data
 		var req SyncRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
 			json.NewEncoder(w).Encode(store.Response{
 				Success: false,
 				Message: "Invalid request body",
+			})
+			return
+		}
+
+		// Sanitize string inputs
+		req.Username = sanitizeString(req.Username)
+		req.PhoneNumber = sanitizeString(req.PhoneNumber)
+		req.Plan = sanitizeString(req.Plan)
+		req.PlanName = sanitizeString(req.PlanName)
+
+		// Validate phone number if provided
+		if req.PhoneNumber != "" && !validatePhoneNumber(req.PhoneNumber) {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(store.Response{
+				Success: false,
+				Message: "Invalid phone number format",
 			})
 			return
 		}
@@ -352,10 +499,10 @@ func SyncHandler(w http.ResponseWriter, r *http.Request) {
 		// Update UserData
 		store.Storage.UserData[userID] = userData
 		
-		slog.Debug("Debug", "req: ", req)
+		
 		// Update User profile fields while preserving existing data
 		if existingUser, exists := store.Storage.Users[userID]; exists {
-			// Only update profile fields if they're provided in the request
+			// Only update fields if they're provided in the request
 			if req.Username != "" {
 				existingUser.Username = req.Username
 			}
@@ -368,8 +515,32 @@ func SyncHandler(w http.ResponseWriter, r *http.Request) {
 			if req.Theme != "" {
 				existingUser.Theme = req.Theme
 			}
-			if req.SyncEnabled != existingUser.SyncEnabled{
+			if req.SyncEnabled != existingUser.SyncEnabled {
 				existingUser.SyncEnabled = req.SyncEnabled
+			}
+			if req.Amount != 0 {
+				existingUser.Amount = req.Amount
+			}
+			if req.Plan != "" {
+				existingUser.Plan = req.Plan
+			}
+			if req.PlanName != "" {
+				existingUser.PlanName = req.PlanName
+			}
+			if req.Duration != "" {
+				existingUser.Duration = req.Duration
+			}
+			if req.PhoneNumber != "" {
+				existingUser.PhoneNumber = req.PhoneNumber // Consistent naming
+			}
+			if req.ExpiryTimestamp != 0 {
+				existingUser.ExpiryTimestamp = req.ExpiryTimestamp
+			}
+			if req.ExpireDuration != 0 {
+				existingUser.ExpireDuration = req.ExpireDuration
+			}
+			if req.Price != "" {
+				existingUser.Price = req.Price
 			}
 			// Always update the timestamp
 			existingUser.UpdatedAt = time.Now()
@@ -386,6 +557,7 @@ func SyncHandler(w http.ResponseWriter, r *http.Request) {
 				"user_id", userID, 
 				"error", err,
 			)
+			w.WriteHeader(http.StatusInternalServerError)
 			json.NewEncoder(w).Encode(store.Response{
 				Success: false,
 				Message: "Failed to save data",
@@ -397,7 +569,7 @@ func SyncHandler(w http.ResponseWriter, r *http.Request) {
 			Success: true,
 			Message: "Data synchronized successfully",
 			Data: map[string]interface{}{
-				"updated_at": userData.UpdatedAt,
+				"updated_at":        userData.UpdatedAt,
 			},
 		})
 
@@ -410,7 +582,7 @@ func SyncHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// ProfileHandler handles profile updates (PUT method only)
+// ProfileHandler handles profile updates - ENHANCED with phone validation
 func ProfileHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
@@ -459,6 +631,20 @@ func ProfileHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Sanitize inputs
+	req.Username = sanitizeString(req.Username)
+	req.PhoneNumber = sanitizeString(req.PhoneNumber)
+
+	// Validate phone number if provided
+	if req.PhoneNumber != "" && !validatePhoneNumber(req.PhoneNumber) {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(store.Response{
+			Success: false,
+			Message: "Invalid phone number format. Please use format: +254XXXXXXXXX or 07XXXXXXXX",
+		})
+		return
+	}
+
 	// Update user profile fields
 	store.Storage.Mu.Lock()
 	updatedUser := existingUser // Copy existing user data
@@ -494,6 +680,10 @@ func ProfileHandler(w http.ResponseWriter, r *http.Request) {
 	if req.SyncEnabled != nil {
 		updatedUser.SyncEnabled = *req.SyncEnabled
 	}
+
+	if req.PhoneNumber != "" {
+		updatedUser.PhoneNumber = req.PhoneNumber // Consistent naming
+	}
 	
 	// Always update the timestamp
 	updatedUser.UpdatedAt = time.Now()
@@ -504,6 +694,7 @@ func ProfileHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Save to persistent storage
 	if err := store.SaveStorage(); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
 			Message: "Failed to save profile changes",
@@ -511,7 +702,7 @@ func ProfileHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Return success response
+	// Return success response with consistent naming
 	json.NewEncoder(w).Encode(store.Response{
 		Success: true,
 		Message: "Profile updated successfully",
@@ -521,12 +712,13 @@ func ProfileHandler(w http.ResponseWriter, r *http.Request) {
 			"preferences":   updatedUser.Preferences,
 			"theme":         updatedUser.Theme,
 			"sync_enabled":  updatedUser.SyncEnabled,
+			"phone_number":  updatedUser.PhoneNumber, // Consistent naming
 			"updated_at":    updatedUser.UpdatedAt,
 		},
 	})
 }
 
-// Health check handler
+// Health check handler - ENHANCED with better metrics
 func HealthHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
@@ -544,11 +736,12 @@ func HealthHandler(w http.ResponseWriter, r *http.Request) {
 			"user_count":        userCount,
 			"transaction_count": transactionCount,
 			"order_count":       orderCount,
+			"version":           "1.0.0", // Add version info
 		},
 	})
 }
 
-// DeleteAccountHandler handles account deletion securely
+// DeleteAccountHandler handles account deletion securely - ENHANCED validation
 func DeleteAccountHandler(w http.ResponseWriter, r *http.Request) {
     w.Header().Set("Content-Type", "application/json")
 
@@ -583,6 +776,10 @@ func DeleteAccountHandler(w http.ResponseWriter, r *http.Request) {
         })
         return
     }
+
+    // Sanitize inputs
+    req.Email = sanitizeString(req.Email)
+    req.Username = sanitizeString(req.Username)
 
     // Validate input
     if req.Email == "" || req.Username == "" || req.Password == "" {
@@ -629,7 +826,7 @@ func DeleteAccountHandler(w http.ResponseWriter, r *http.Request) {
     }
 
     // Verify password
-    expectedHash := encrypt.HashCredentials(req.Username, req.Email, req.Password)
+	expectedHash := encrypt.HashCredentials(user.Username, user.Email, req.Password)
     if user.PasswordHash != expectedHash {
         w.WriteHeader(http.StatusUnauthorized)
         json.NewEncoder(w).Encode(store.Response{
@@ -660,7 +857,12 @@ func DeleteAccountHandler(w http.ResponseWriter, r *http.Request) {
             "error", err,
         )
         // Note: At this point the user is deleted from memory but not from disk
-        // You might want to handle this differently based on your requirements
+        w.WriteHeader(http.StatusInternalServerError)
+        json.NewEncoder(w).Encode(store.Response{
+            Success: false,
+            Message: "Failed to complete account deletion",
+        })
+        return
     }
 
     json.NewEncoder(w).Encode(store.Response{
