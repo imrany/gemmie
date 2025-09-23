@@ -105,7 +105,6 @@ async function saveProfile() {
         await apiCall('/sync', {
           method: 'POST',
           body: JSON.stringify({
-            username: profileData.username.trim(),
             workFunction: profileData.workFunction,
             preferences: profileData.preferences,
             chats: JSON.stringify(chats.value),
@@ -204,8 +203,7 @@ function resetProfileData() {
 
 // Detect unsaved changes
 const hasUnsavedChanges = computed(() => {
-  return profileData.username !== (parsedUserDetails.value?.username || '') ||
-    profileData.workFunction !== (parsedUserDetails.value?.workFunction || '') ||
+  return profileData.workFunction !== (parsedUserDetails.value?.workFunction || '') ||
     profileData.preferences !== (parsedUserDetails.value?.preferences || '')
 })
 
@@ -348,11 +346,11 @@ watch(isAuthenticated, (val) => {
                                 <!-- Username -->
                                 <div>
                                     <label class="block text-sm font-medium text-gray-700 mb-1">
-                                        What should Gemmie call you?
+                                        Your username
                                     </label>
-                                    <input v-model="profileData.username" type="text" required
-                                        class="border border-gray-300 rounded-lg px-4 py-2 w-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                                        placeholder="Enter your preferred name" />
+                                     <input v-model="profileData.username" type="text" disabled
+                                        class="border border-gray-300 rounded-lg px-4 py-2 w-full text-sm bg-gray-50 text-gray-600 cursor-not-allowed" />
+                                    <p class="text-xs text-gray-500 mt-1">Username cannot be changed</p>
                                 </div>
 
                                 <!-- Email -->
