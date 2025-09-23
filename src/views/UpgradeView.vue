@@ -1,5 +1,6 @@
 <script lang="ts" setup>
-import { onMounted, ref, watch, computed, inject, onUnmounted } from 'vue';
+import type { Ref } from 'vue';
+import { onMounted, ref, watch, computed, inject, onUnmounted, reactive } from 'vue';
 import { useRoute } from 'vue-router';
 import { useRouter } from 'vue-router';
 import { toast } from 'vue-sonner';
@@ -8,11 +9,10 @@ const route = useRoute()
 const router = useRouter()
 const planName = route.params.plan as 'student' | 'pro' | 'hobbyist' | undefined
 const selectPlanName = ref<'student' | 'pro' | 'hobbyist'>(planName ?? 'pro')
-const {
-  parsedUserDetails
-}=inject("globalState") as {
-  parsedUserDetails: any
+const globalState = inject("globalState") as{
+  parsedUserDetails: Ref<any>,
 }
+const parsedUserDetails = globalState.parsedUserDetails
 
 const plans = ref([
   {
@@ -65,9 +65,9 @@ const showCheckout = ref(false)
 const isProcessing = ref(false)
 
 // Payment form data - create local reactive references
-const paymentForm = ref({
-  username: '',
-  email: '',
+const paymentForm = reactive({
+  username: parsedUserDetails.value?.username || '',
+  email: parsedUserDetails.value?.email || '',
   phone: '',
 })
 
@@ -77,13 +77,13 @@ const isFormValid = computed(() => {
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
   
   // Check username
-  const hasValidUsername = paymentForm.value.username.trim() !== ''
+  const hasValidUsername = paymentForm.username.trim() !== ''
   
   // Check email
-  const hasValidEmail = emailRegex.test(paymentForm.value.email)
+  const hasValidEmail = emailRegex.test(paymentForm.email)
   
   // Check phone
-  const hasValidPhone = phoneRegex.test(paymentForm.value.phone)
+  const hasValidPhone = phoneRegex.test(paymentForm.phone)
   
   return hasValidUsername && hasValidEmail && hasValidPhone
 })
@@ -146,11 +146,11 @@ const selectedPlan = computed(() => {
 
 // Check if user details are pre-filled (for UI state)
 const isUsernamePrefilled = computed(() => {
-  return parsedUserDetails?.username && parsedUserDetails.username.trim() !== ''
+  return parsedUserDetails.value?.username && parsedUserDetails.value?.username.trim() !== ''
 })
 
 const isEmailPrefilled = computed(() => {
-  return parsedUserDetails?.email && parsedUserDetails.email.trim() !== ''
+  return parsedUserDetails.value?.email && parsedUserDetails.value?.email.trim() !== ''
 })
 
 function selectPlan(planId: string) {
@@ -172,11 +172,7 @@ function proceedToCheckout(planId: string) {
 function goBackToPlans() {
   showCheckout.value = false
   // Reset only phone field when going back (keep user details if they were pre-filled)
-  paymentForm.value = {
-    username: parsedUserDetails?.username || '',
-    email: parsedUserDetails?.email || '',
-    phone: '',
-  }
+  paymentForm.phone = ''
   router.replace({ name: 'upgrade' })
 }
 
@@ -199,9 +195,9 @@ async function handlePayment() {
       planName: selectedPlan.value?.name,
       amount: selectedPlan.value?.price,
       duration: selectedPlan.value?.duration,
-      phone: paymentForm.value.phone,
-      email: paymentForm.value.email,
-      username: paymentForm.value.username,
+      phone: paymentForm.phone,
+      email: paymentForm.email,
+      username: paymentForm.username,
       expiryTimestamp: actualExpiryTimestamp,
       expireDuration: expiryTimestamp.value, // Duration in milliseconds
       price: `${selectedPlan.value?.price} Ksh`
@@ -213,7 +209,7 @@ async function handlePayment() {
     await new Promise(resolve => setTimeout(resolve, 3000))
     
     // Show success message
-    alert(`M-Pesa prompt sent to ${paymentForm.value.phone}. Please check your phone and enter your M-Pesa PIN to complete the payment.`)
+    alert(`M-Pesa prompt sent to ${paymentForm.phone}. Please check your phone and enter your M-Pesa PIN to complete the payment.`)
     
     // Simulate waiting for M-Pesa callback
     setTimeout(() => {
@@ -251,11 +247,9 @@ onMounted(() => {
   }, 1000)
 
   // Pre-fill form data from user details
-  paymentForm.value = {
-    username: parsedUserDetails?.username || '',
-    email: parsedUserDetails?.email || '',
-    phone: parsedUserDetails?.phone || ''
-  }
+  paymentForm.username = parsedUserDetails.value?.username || '',
+  paymentForm.email = parsedUserDetails.value?.email || '',
+  paymentForm.phone = parsedUserDetails.value?.phone || ''
   
   if (planName) {
     // Find and select the plan from URL
