@@ -1,8 +1,13 @@
 import { toast } from "vue-sonner"
 
-// export const API_BASE_URL = 'http://localhost:8081/api'
-export const API_BASE_URL = 'https://gemmie.villebiz.com/api'
-export const WRAPPER_URL = 'https://wrapper.villebiz.com/v1/genai'
+function getBaseURL() {
+  if (import.meta.env.DEV) {
+    return 'http://localhost:8081'
+  } else {
+    // return window.location.origin
+    return 'https://gemmie.villebiz.com'
+  }
+}
 
 export function isPromptTooShort(prompt: string): boolean {
   return prompt.trim().split(/\s+/).length < 30
@@ -63,3 +68,8 @@ export function validateCredentials(username: string, email: string, password: s
 
   return null
 }
+
+
+export let API_BASE_URL = getBaseURL() + '/api'
+export let SOCKET_URL = getBaseURL().replace(/^http/, 'ws') + '/ws'
+export const WRAPPER_URL = 'https://wrapper.villebiz.com/v1/genai'
