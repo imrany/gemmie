@@ -53,9 +53,9 @@ const renameValue = ref('')
 
 const profileOptions = [
   { id: 'settings', label: 'Settings', action: () => router.push('/settings/profile') },
-  { id: 'help', label: 'Get Help', action: () => { /* Add your help action */ } },
-  { id: 'upgrade', label: 'Upgrade Plan', action: () => router.push('/upgrade') },
-  { id: 'learn', label: 'Learn More', action: () => { /* Add your learn more action */ } }
+  { id: 'help', label: 'Get help', action: () => { /* Add your help action */ } },
+  { id: 'upgrade', label: 'Upgrade plan', action: () => router.push('/upgrade') },
+  { id: 'learn', label: 'Learn more', action: () => { /* Add your learn more action */ } }
 ];
 
 function startRename(chatId: string, currentTitle: string) {
@@ -225,7 +225,7 @@ function handleChatClick(chatId: string) {
       <!-- Profile Dropdown -->
       <transition name="fade">
         <div v-if="showProfileMenu"
-          class="absolute bottom-full left-3 right-3 mb-2 bg-white border rounded-lg shadow-lg text-sm z-50"
+          class="absolute max-w-[245px] bottom-full left-3 right-3 mb-2 bg-white border rounded-lg shadow-lg text-sm z-50"
           @click.stop>
           <p class="px-4 py-2 text-gray-500 border-b">{{ props.data.parsedUserDetails.email || 'No email' }}</p>
           <button v-for="option in profileOptions" :key="option.id" @click="option.action"
