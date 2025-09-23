@@ -474,7 +474,7 @@ onMounted(() => {
             </div>
 
             <!-- Form Validation Message -->
-            <div v-if="!isFormValid && (paymentForm.phone || paymentForm.username || paymentForm.email)" 
+            <div v-if="!isFormValid && paymentForm.phone" 
                  class="bg-red-50 border border-red-200 rounded-lg p-3">
               <div class="flex items-center">
                 <i class="pi pi-exclamation-triangle text-red-600 mr-2"></i>
