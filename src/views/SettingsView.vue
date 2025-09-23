@@ -81,9 +81,7 @@ const showDropdown = ref(false)
 const activeTab = ref<'profile' | 'account' | 'billing'>(tabParam ?? 'profile')
 const isSaving = ref(false)
 
-/**
- * Save profile changes - only sync to server if sync is enabled
- */
+// Save profile changes - only sync to server if sync is enabled
 async function saveProfile() {
   if (!profileData.username.trim()) {
     toast.error('Username is required')
@@ -133,9 +131,7 @@ async function saveProfile() {
   }
 }
 
-/**
- * Toggle auto-sync - this affects all future sync operations
- */
+// Toggle auto-sync - this affects all future sync operations
 async function toggleSync() {
   const newSyncValue = !syncEnabled.value
   
@@ -198,9 +194,7 @@ async function toggleSync() {
   }
 }
 
-/**
- * Reset form when switching tabs
- */
+// Reset form when switching tabs
 function resetProfileData() {
   profileData.username = parsedUserDetails.value?.username || ''
   profileData.email = parsedUserDetails.value?.email || ''
@@ -208,9 +202,7 @@ function resetProfileData() {
   profileData.preferences = parsedUserDetails.value?.preferences || ''
 }
 
-/**
- * Detect unsaved changes
- */
+// Detect unsaved changes
 const hasUnsavedChanges = computed(() => {
   return profileData.username !== (parsedUserDetails.value?.username || '') ||
     profileData.workFunction !== (parsedUserDetails.value?.workFunction || '') ||
@@ -231,9 +223,7 @@ watch(activeTab, (newVal, oldVal) => {
   router.push({ name: 'settings', params: { tab: newVal } })
 })
 
-/**
- * Watch for changes in parsedUserDetails and update syncEnabled accordingly
- */
+//  Watch for changes in parsedUserDetails and update syncEnabled accordingly
 watch(parsedUserDetails, (newVal) => {
   if (newVal) {
     // Update sync setting from user details if it exists
@@ -243,9 +233,7 @@ watch(parsedUserDetails, (newVal) => {
   }
 }, { deep: true })
 
-/**
- * Lifecycle hooks
- */
+// Lifecycle hooks
 onMounted(() => {
   if (parsedUserDetails.value) {
     resetProfileData()

@@ -18,9 +18,10 @@ const router = createRouter({
       component: DeleteAccView
     },
     {
-      path: '/upgrade',
+      path: '/upgrade/:plan?',
       name: 'upgrade',
-      component: UpgradeView
+      component: UpgradeView,
+      props: true
     },
     {
       path: '/settings/:tab',

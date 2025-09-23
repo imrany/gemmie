@@ -48,17 +48,17 @@ const props = defineProps<{
 
 // Handle input updates
 const handleUsernameInput = (event: Event) => {
-  const value = (event.target as HTMLInputElement).value
+  const value = (event.target as HTMLInputElement).value.trim()
   props.updateAuthData({ username: value })
 }
 
 const handleEmailInput = (event: Event) => {
-  const value = (event.target as HTMLInputElement).value
+  const value = (event.target as HTMLInputElement).value.trim()
   props.updateAuthData({ email: value })
 }
 
 const handlePasswordInput = (event: Event) => {
-  const value = (event.target as HTMLInputElement).value
+  const value = (event.target as HTMLInputElement).value.trim()
   props.updateAuthData({ password: value })
 }
 

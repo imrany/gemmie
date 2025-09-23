@@ -240,7 +240,6 @@ async function logout() {
   })
 }
 
-
 function setShowInput() {
   if (currentMessages.value.length !== 0) {
     return
