@@ -18,3 +18,7 @@ services:
     environment:
       PORT: "8081"
       DATA_FILE: "/var/opt/gemmie-server/gemmie_data.json"
+      PAYHERO_USERNAME: ""
+      PAYHERO_PASSWORD: ""
+      PAYHERO_CHANNEL_ID: ""
+      CALLBACK_URL: ""

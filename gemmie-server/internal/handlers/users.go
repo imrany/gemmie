@@ -223,8 +223,8 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		WorkFunction:    "",
 		Theme:           "system",
 		SyncEnabled:     true,
-		Plan:            "Free",
-		PlanName:        "",
+		Plan:            "free",
+		PlanName:        "Free",
 		Amount:          0,
 		Duration:        "",
 		PhoneNumber:     "", // Consistent field naming
@@ -725,7 +725,6 @@ func HealthHandler(w http.ResponseWriter, r *http.Request) {
 	store.Storage.Mu.RLock()
 	userCount := len(store.Storage.Users)
 	transactionCount := len(store.Storage.Transactions)
-	orderCount := len(store.Storage.Orders)
 	store.Storage.Mu.RUnlock()
 
 	json.NewEncoder(w).Encode(store.Response{
@@ -735,7 +734,6 @@ func HealthHandler(w http.ResponseWriter, r *http.Request) {
 			"timestamp":         time.Now(),
 			"user_count":        userCount,
 			"transaction_count": transactionCount,
-			"order_count":       orderCount,
 			"version":           "1.0.0", // Add version info
 		},
 	})
