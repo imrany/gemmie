@@ -156,7 +156,7 @@ const isEmailPrefilled = computed(() => {
 })
 
 const isPhonePrefilled = computed(() => {
-  return parsedUserDetails.value?.phone_number && parsedUserDetails.value?.phone_number.trim() !== ''
+  return !!(parsedUserDetails.value?.phone_number && parsedUserDetails.value?.phone_number.trim() !== '')
 })
 
 function selectPlan(planId: string) {
@@ -197,7 +197,7 @@ async function handlePayment() {
 
     // Simulate M-Pesa payment API call
     const paymentData = {
-      external_reference: `${parsedUserDetails.value?.email.split("@")[0].slice(0, parsedUserDetails.value?.email.length - 3)}-${parsedUserDetails.value?.username}`, // Unique reference
+     external_reference: `${parsedUserDetails.value?.username}-${Date.now()}`,
       plan: selectPlanName.value,
       plan_name: selectedPlan.value?.name,
       amount: selectedPlan.value?.price,
@@ -217,60 +217,27 @@ async function handlePayment() {
       return
     }
     toast.success(`M-Pesa prompt sent to ${paymentForm.phone}. Please check your phone and enter your M-Pesa PIN to complete the payment.`, { duration: 5000 })
-    localStorage.setItem("stk", JSON.stringify(stkResults))
+    localStorage.setItem("external_reference", JSON.stringify(stkResults.external_reference))
 
-    // confirm payment after 40sec, retry up to 5 times
+    // confirm payment after 20sec, retry up to 10 times
     let attempts = 0;
     const interval = setInterval(async () => {
       attempts++;
-      const transResults = await getTransaction(stkResults.external_reference);
+      const transResults = await getTransaction(localStorage.getItem("external_reference") || "");
       if (transResults?.data?.status === "success") {
         clearInterval(interval);
         toast.success(`Payment successful! Your ${selectedPlan.value?.name} plan is active until ${expiryDate.value}.`, { duration: 5000 });
-        const syncRes = await syncTransaction({
-          external_reference: stkResults.external_reference,
-          plan: selectPlanName.value,
-          plan_name: selectedPlan.value?.name || '',
-          amount: selectedPlan.value?.price || 0,
-          duration: selectedPlan.value?.duration || '',
-          phone_number: paymentForm.phone,
-          email: paymentForm.email,
-          username: paymentForm.username,
-          expiry_timestamp: actualExpiryTimestamp,
-          expire_duration: expiryTimestamp.value || 0, // Duration in milliseconds
-          price: `${selectedPlan.value?.price} Ksh`,
-        });
-        if (syncRes?.success) {
-          const response = await apiCall('/sync', { method: 'GET' })
-          const data = response.data;
-          parsedUserDetails.value = {
-            ...parsedUserDetails.value,
-            phone_number: data.phone_number || parsedUserDetails.value.phone_number,
-            plan: data.plan || parsedUserDetails.value.plan,
-            plan_name: data.plan_name || parsedUserDetails.value.plan_name,
-            amount: data.amount ?? parsedUserDetails.value.amount,
-            duration: data.duration || parsedUserDetails.value.duration,
-            price: data.price || parsedUserDetails.value.price,
-            expiry_timestamp: data.expiry_timestamp || parsedUserDetails.value.expiry_timestamp,
-            expire_duration: data.expire_duration || parsedUserDetails.value.expire_duration,
-          }
-          localStorage.setItem("userdetails", JSON.stringify(parsedUserDetails.value))
-          toast.success("Subscription details synced to your account.", { duration: 4000 });
-        } else {
-          toast.error("Failed to sync subscription details. Please contact support if your plan is not updated.", { duration: 6000 });
-        }
         isProcessing.value = false
         setTimeout(() => {
           router.push('/settings/profile')
         }, 3000);
       }
-      if (attempts >= 5) {
+      if (attempts >= 10) { 
         clearInterval(interval);
         toast.error("Payment not confirmed. Please check M-Pesa SMS.", { duration: 6000 });
         isProcessing.value = false
       }
-    }, 1000 * 40);
-
+    }, 1000 * 20);
   } catch (error) {
     isProcessing.value = false
     toast.error('Payment failed. Please try again.', {
@@ -280,55 +247,6 @@ async function handlePayment() {
         onClick: () => handlePayment()
       }
     })
-  }
-}
-
-async function syncTransaction(data: {
-  external_reference: string,
-  plan: string,
-  plan_name: string,
-  amount: number,
-  duration: string,
-  phone_number: string,
-  email: string,
-  username: string,
-  expiry_timestamp: number,
-  expire_duration: number,
-  price: string,
-}) {
-  try {
-    const res = await fetch(`${API_BASE_URL}/sync`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
-    return await res.json();
-  } catch {
-    toast.error("Failed to sync transaction", { duration: 5000 });
-  }
-}
-
-async function apiCall(endpoint: string, options: RequestInit = {}) {
-  try {
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...(parsedUserDetails.value?.user_id ? { 'X-User-ID': parsedUserDetails.value?.user_id } : {}),
-        ...options.headers,
-      },
-    })
-
-    const data = await response.json()
-
-    if (!data.success) {
-      throw new Error(data.message || 'API request failed')
-    }
-
-    return data
-  } catch (error) {
-    console.error('API Error:', error)
-    throw error
   }
 }
 
@@ -530,20 +448,17 @@ onMounted(() => {
               <label for="phone" class="block text-sm font-medium text-gray-700 mb-1">
                 M-Pesa Phone Number
               </label>
-              <input id="phone" v-model="paymentForm.phone" type="tel" required :disabled="isPhonePrefilled"
+              <input id="phone" v-model="paymentForm.phone" type="tel" required
                 pattern="^(\+254|0)[17][0-9]{8}$"
                 class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
                 placeholder="0712345678 or +254712345678" />
               <!-- if isPhonePrefilled ask if user want to change phone -->
-              <div class="flex items-center justify-center" v-if="isPhonePrefilled">
-                <p class="text-xs text-gray-500 mt-1">
+              <div class="flex items-center gap-2 mt-1" v-if="isPhonePrefilled">
+                <p class="text-xs text-gray-500">
                   Using your account phone number
                 </p>
-                <button type="button" class="ml-2 text-blue-600 hover:underline text-xs" @click="() => {
-                  paymentForm.phone = '';
-                  $nextTick(() => {
-                    isPhonePrefilled.value = false;
-                  })
+                <button type="button" class="text-blue-600 hover:underline text-xs" @click="() => {
+                  paymentForm.phone = ''
                 }">Change</button>
               </div>
               <p v-else class="text-xs text-gray-500 mt-1">

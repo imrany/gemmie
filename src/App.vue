@@ -3,7 +3,7 @@ import { computed, onMounted, provide, ref, type ComputedRef } from 'vue';
 import { toast, Toaster } from 'vue-sonner'
 import 'vue-sonner/style.css'
 import type { Chat, ConfirmDialogOptions, CurrentChat, LinkPreview } from './types';
-import { API_BASE_URL, generateChatId, generateChatTitle, extractUrls, validateCredentials } from './utils/globals';
+import { API_BASE_URL, generateChatId, generateChatTitle, extractUrls, validateCredentials, getTransaction } from './utils/globals';
 import { nextTick } from 'vue';
 import { detectAndProcessVideo } from './utils/videoProcessing';
 import ConfirmDialog from './components/ConfirmDialog.vue';
@@ -945,6 +945,11 @@ onMounted(async () => {
   const storedIsCollapsed = localStorage.getItem("isCollapsed")
   if (storedIsCollapsed !== null) {
     isCollapsed.value = storedIsCollapsed === "true"
+  }
+
+  // sync info from server if authenticated and sync enabled
+  if (isAuthenticated.value) {
+    await syncFromServer()
   }
 
   // Load screen width
