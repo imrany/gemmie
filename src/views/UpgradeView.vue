@@ -64,22 +64,11 @@ const plans = ref([
 const showCheckout = ref(false)
 const isProcessing = ref(false)
 
-// Payment form data - initialize with user details if available
+// Payment form data - create local reactive references
 const paymentForm = ref({
+  username: '',
+  email: '',
   phone: '',
-  username: parsedUserDetails?.username || '',
-  email: parsedUserDetails?.email || ''
-})
-
-// Check if email is available from user details
-const hasUserEmail = computed(() => {
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-  return parsedUserDetails?.email && emailRegex.test(parsedUserDetails.email)
-})
-
-// Check if username is available from user details
-const hasUserUsername = computed(() => {
-  return parsedUserDetails?.username && parsedUserDetails.username.trim() !== ''
 })
 
 // Form validation
@@ -88,10 +77,10 @@ const isFormValid = computed(() => {
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
   
   // Check username
-  const hasValidUsername = paymentForm.value.username && paymentForm.value.username.trim() !== ''
+  const hasValidUsername = paymentForm.value.username.trim() !== ''
   
   // Check email
-  const hasValidEmail = paymentForm.value.email && emailRegex.test(paymentForm.value.email)
+  const hasValidEmail = emailRegex.test(paymentForm.value.email)
   
   // Check phone
   const hasValidPhone = phoneRegex.test(paymentForm.value.phone)
@@ -155,6 +144,15 @@ const selectedPlan = computed(() => {
   return plans.value.find(plan => plan.id === selectPlanName.value)
 })
 
+// Check if user details are pre-filled (for UI state)
+const isUsernamePrefilled = computed(() => {
+  return parsedUserDetails?.username && parsedUserDetails.username.trim() !== ''
+})
+
+const isEmailPrefilled = computed(() => {
+  return parsedUserDetails?.email && parsedUserDetails.email.trim() !== ''
+})
+
 function selectPlan(planId: string) {
   selectPlanName.value = planId as 'student' | 'pro' | 'hobbyist'
   plans.value.forEach((plan) => {
@@ -175,9 +173,9 @@ function goBackToPlans() {
   showCheckout.value = false
   // Reset only phone field when going back (keep user details if they were pre-filled)
   paymentForm.value = {
-    phone: '',
     username: parsedUserDetails?.username || '',
-    email: parsedUserDetails?.email || ''
+    email: parsedUserDetails?.email || '',
+    phone: '',
   }
   router.replace({ name: 'upgrade' })
 }
@@ -254,9 +252,9 @@ onMounted(() => {
 
   // Pre-fill form data from user details
   paymentForm.value = {
-    phone: parsedUserDetails?.phone || '',
     username: parsedUserDetails?.username || '',
-    email: parsedUserDetails?.email || ''
+    email: parsedUserDetails?.email || '',
+    phone: parsedUserDetails?.phone || ''
   }
   
   if (planName) {
@@ -393,12 +391,12 @@ onMounted(() => {
                   v-model="paymentForm.username"
                   type="text"
                   required
-                  :disabled="hasUserUsername"
+                  :disabled="isUsernamePrefilled"
                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
-                  :class="hasUserUsername ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'"
+                  :class="isUsernamePrefilled ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'"
                   placeholder="Enter your username"
                 />
-                <p v-if="hasUserUsername" class="text-xs text-gray-500 mt-1">
+                <p v-if="isUsernamePrefilled" class="text-xs text-gray-500 mt-1">
                   Using your account username
                 </p>
               </div>
@@ -412,12 +410,12 @@ onMounted(() => {
                   v-model="paymentForm.email"
                   type="email"
                   required
-                  :disabled="hasUserEmail"
+                  :disabled="isEmailPrefilled"
                   class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
-                  :class="hasUserEmail ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'"
+                  :class="isEmailPrefilled ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'"
                   placeholder="your.email@example.com"
                 />
-                <p v-if="hasUserEmail" class="text-xs text-gray-500 mt-1">
+                <p v-if="isEmailPrefilled" class="text-xs text-gray-500 mt-1">
                   Using your account email
                 </p>
               </div>
@@ -491,7 +489,7 @@ onMounted(() => {
                 </p>
               </div>
               <ul class="text-xs text-red-700 mt-2 ml-6">
-                <li v-if="!paymentForm.username?.trim()">Username is required</li>
+                <li v-if="!paymentForm.username.trim()">Username is required</li>
                 <li v-if="!paymentForm.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(paymentForm.email)">Valid email is required</li>
                 <li v-if="!/^(\+254|0)[17][0-9]{8}$/.test(paymentForm.phone)">Valid Kenyan phone number is required</li>
               </ul>
