@@ -1,0 +1,206 @@
+const CACHE_VERSION = 'v0.3.7';
+const staticCacheName = `site-static-${CACHE_VERSION}`;
+const dynamicCache = `site-dynamic-${CACHE_VERSION}`;
+
+const assets = [
+    '/index.html',
+    '/manifest.json',
+    '/full-logo.png',
+    '/logo.svg',
+    '/sounds/bell-notification.wav',
+    // Add other critical assets here
+    '/assets',
+];
+
+// Installing service worker
+self.addEventListener('install', (evt) => {
+    console.log('Service Worker installing...');
+    evt.waitUntil(
+        caches.open(staticCacheName)
+            .then((cache) => {
+                console.log('Caching assets...');
+                return cache.addAll(assets);
+            })
+            .then(() => {
+                console.log('Assets cached successfully');
+                return self.skipWaiting(); // Forces the waiting service worker to become active
+            })
+            .catch((error) => {
+                console.error('Failed to cache assets:', error);
+            })
+    );
+});
+
+// Activating service worker
+self.addEventListener('activate', (evt) => {
+    console.log('Service Worker activating...');
+    evt.waitUntil(
+        caches.keys().then((keys) => {
+            // Only delete caches that don't match current version
+            const deletePromises = keys
+                .filter(key => !key.includes(CACHE_VERSION))
+                .map((key) => {
+                    console.log('Deleting old cache:', key);
+                    return caches.delete(key);
+                });
+            
+            return Promise.all(deletePromises);
+        }).then(() => {
+            console.log('Service Worker activated');
+            return self.clients.claim(); // Take control of all clients
+        })
+    );
+});
+
+// Improved cache limit function with async/await
+const limitCacheSize = async (name, size) => {
+    try {
+        const cache = await caches.open(name);
+        const keys = await cache.keys();
+        
+        if (keys.length > size) {
+            await cache.delete(keys[0]);
+            // Recursively limit cache size
+            await limitCacheSize(name, size);
+        }
+    } catch (error) {
+        console.error('Error limiting cache size:', error);
+    }
+};
+
+// Helper function to check if request should be cached
+const shouldCacheRequest = (url) => {
+    // Skip external requests
+    if (url.origin !== location.origin) {
+        return false;
+    }
+    
+    // Skip API endpoints
+    if (url.pathname.startsWith('/api')) {
+        return false;
+    }
+    
+    // Skip share endpoints (these are SEO routes, don't cache them)
+    if (url.pathname.startsWith('/share')) {
+        return false;
+    }
+    
+    // Skip WebSocket connections
+    if (url.protocol === 'ws:' || url.protocol === 'wss:') {
+        return false;
+    }
+    
+    return true;
+};
+
+// Enhanced fetch event with better caching strategies
+self.addEventListener('fetch', (evt) => {
+    // Skip non-HTTP requests and extension requests
+    if (!evt.request.url.startsWith('http') || evt.request.url.includes('extension://')) {
+        return;
+    }
+
+    const url = new URL(evt.request.url);
+    const shouldCache = shouldCacheRequest(url);
+
+    // For requests that shouldn't be cached, just pass through
+    if (!shouldCache) {
+        evt.respondWith(fetch(evt.request));
+        return;
+    }
+
+    evt.respondWith(
+        caches.match(evt.request).then((cacheRes) => {
+            // If found in cache, return cached version
+            if (cacheRes) {
+                return cacheRes;
+            }
+
+            // Fetch from network
+            return fetch(evt.request).then((fetchRes) => {
+                // Only cache successful responses
+                if (fetchRes.status === 200) {
+                    const responseClone = fetchRes.clone();
+                    
+                    caches.open(dynamicCache).then((cache) => {
+                        cache.put(evt.request.url, responseClone);
+                        limitCacheSize(dynamicCache, 15);
+                    });
+                }
+                
+                return fetchRes;
+            });
+        }).catch((error) => {
+            console.error('Fetch failed:', error);
+            
+            // Fallback strategies
+            if (evt.request.destination === 'document') {
+                // For HTML pages, serve the main page
+                return caches.match('/index.html');
+            }
+            
+            // For other resources, you could return a default image, etc.
+            return new Response('Network error occurred', {
+                status: 503,
+                statusText: 'Service Unavailable'
+            });
+        })
+    );
+});
+
+// Enhanced push notification handler
+self.addEventListener("push", event => {
+    console.log("Push event received:", event);
+    const data = event.data.json();
+
+    self.registration.showNotification(data.title, {
+        body: data.body,
+        icon: data.icon || '/full-logo.png',
+        badge: data.badge || '/logo.svg',
+        // Enable sound
+        silent: false,
+        // Custom sound (limited browser support)
+        sound: '/sounds/bell-notification.wav',
+        data: { link: data.url } // Ensure the link is stored within the data
+    });
+});
+
+self.addEventListener("notificationclick", (event) => {
+    event.notification.close();
+    const link = event.notification.data.link;
+    if (link) {
+        event.waitUntil(
+            clients.matchAll({ type: "window", includeUncontrolled: true }).then((windowClients) => {
+                const matchingClient = windowClients.find(client => client.url === link);
+                if (matchingClient) {
+                    return matchingClient.focus();
+                } else {
+                    return clients.openWindow(link);
+                }
+            })
+        );
+    }
+});
+
+// Handle notification close events
+self.addEventListener("notificationclose", (event) => {
+    console.log('Notification closed:', event);
+    // You can track analytics or perform cleanup here
+});
+
+// Background sync (if needed)
+self.addEventListener('sync', (event) => {
+    if (event.tag === 'background-sync') {
+        event.waitUntil(
+            // Perform background sync operations
+            console.log('Background sync triggered')
+        );
+    }
+});
+
+// Handle service worker updates
+self.addEventListener('message', (event) => {
+    if (event.data && event.data.type === 'SKIP_WAITING') {
+        self.skipWaiting();
+    }
+});
