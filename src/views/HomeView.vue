@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import type { Ref } from "vue"
-import { ref, onMounted, nextTick, computed, onBeforeUnmount, inject, watch } from "vue"
+import { ref, onMounted, nextTick, computed, onBeforeUnmount, inject, watch, onUnmounted } from "vue"
 import { marked } from "marked"
 import hljs from "highlight.js"
 import "highlight.js/styles/night-owl.css"
@@ -112,7 +112,7 @@ const {
   handleAuth,
   isFreeUser,
 } = globalState
-let parsedUserDetails = globalState.parsedUserDetails
+let parsedUserDetails: Ref<any> = globalState.parsedUserDetails
 
 // ---------- State ----------
 const authStep = ref(1)
@@ -120,6 +120,7 @@ const showCreateSession = ref(false) //  removed 'let' declaration
 const copiedIndex = ref<number | null>(null) //  Track copied state
 const requestCount = ref(0)
 const FREE_REQUEST_LIMIT = 5
+const now = ref(Date.now())
 
 const requestsRemaining = computed(() => {
   if (!isFreeUser.value) return Infinity
@@ -1111,15 +1112,41 @@ watch(isAuthenticated, (newVal) => {
   }
 })
 
+const timeLeft = computed(() => {
+  const expiry = parsedUserDetails?.value.expiry_timestamp
+  if (!expiry) return ''
+  const diff = expiry * 1000 - now.value
+
+  // convert seconds → ms
+  if (diff <= 0) return 'Expired'
+
+  const days = Math.floor(diff / (1000 * 60 * 60 * 24))
+  const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
+  const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
+  const seconds = Math.floor((diff % (1000 * 60)) / 1000)
+
+  if (days > 0) {
+    return `${days}d ${hours}h ${minutes}m`
+  }
+  return `${hours}h ${minutes}m ${seconds}s`
+})
+
+onMounted(() => {
+  const interval = setInterval(() => {
+    now.value = Date.now()
+  }, 1000)
+  onUnmounted(() => clearInterval(interval))
+})
+
 //  watch to reset count when user upgrades
 watch(() => isFreeUser.value, (newValue, oldValue) => {
   // If user was free and now is paid, reset the counter
   if (oldValue === true && newValue === false) {
     requestCount.value = 0
     localStorage.removeItem('requestCount')
-    toast.success('Welcome to your upgraded plan!', {
-      duration: 3000,
-      description: 'You now have unlimited requests.'
+    toast.success(`Welcome to ${parsedUserDetails?.value.plan_name}!`, {
+      duration: Infinity,
+      description: `You now have unlimited requests for the next ${timeLeft.value}`
     })
   }
   // If user was paid and now is free, load the counter
@@ -1236,8 +1263,7 @@ watch(() => isFreeUser.value, (newValue, oldValue) => {
 
         <!-- Update your chat messages container -->
         <div ref="scrollableElem" v-else-if="currentMessages.length !== 0 && isAuthenticated"
-          class="flex-grow no-scrollbar overflow-y-auto px-2 sm:px-4 space-y-3 sm:space-y-4 mt-[90px]" 
-          :class="isRequestLimitExceeded || shouldShowUpgradePrompt ? 'pb-[160px] sm:pb-[150px]' :
+          class="flex-grow no-scrollbar overflow-y-auto px-2 sm:px-4 space-y-3 sm:space-y-4 mt-[90px]" :class="isRequestLimitExceeded || shouldShowUpgradePrompt ? 'pb-[160px] sm:pb-[150px]' :
             showScrollDownButton ? 'pb-[140px] sm:pb-[120px]' :
               'pb-[110px] sm:pb-[120px]'">
           <div v-if="currentMessages.length !== 0" v-for="(item, i) in currentMessages" :key="`chat-${i}`"
@@ -1291,27 +1317,27 @@ watch(() => isFreeUser.value, (newValue, oldValue) => {
                 <div v-if="item.response !== '...' && item.response !== 'refreshing...'"
                   class="flex flex-wrap gap-2 sm:gap-3 mt-2 text-gray-500 text-xs sm:text-sm">
                   <button @click="copyResponse(item.response, i)"
-                    class="flex items-center gap-1 hover:text-blue-600 transition-colors min-h-[32px] sm:min-h-0">
+                    class="flex items-center gap-1 hover:text-blue-600 transition-colors min-h-[32px]">
                     <i class="pi pi-copy"></i>
-                    <span class="hidden xs:inline">{{ copiedIndex === i ? 'Copied!' : 'Copy' }}</span>
+                    <span>{{ copiedIndex === i ? 'Copied!' : 'Copy' }}</span>
                   </button>
 
                   <button @click="shareResponse(item.response, item.prompt)"
-                    class="flex items-center gap-1 hover:text-green-600 transition-colors min-h-[32px] sm:min-h-0">
+                    class="flex items-center gap-1 hover:text-green-600 transition-colors min-h-[32px]">
                     <i class="pi pi-share-alt"></i>
-                    <span class="hidden xs:inline">Share</span>
+                    <span>Share</span>
                   </button>
 
                   <button @click="refreshResponse(item.prompt)" :disabled="isLoading"
-                    class="flex items-center gap-1 hover:text-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-h-[32px] sm:min-h-0">
+                    class="flex items-center gap-1 hover:text-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-h-[32px]">
                     <i class="pi pi-refresh"></i>
-                    <span class="hidden xs:inline">Refresh</span>
+                    <span>Refresh</span>
                   </button>
 
                   <button @click="deleteMessage(i)" :disabled="isLoading"
-                    class="flex items-center gap-1 hover:text-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-h-[32px] sm:min-h-0">
+                    class="flex items-center gap-1 hover:text-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-h-[32px]">
                     <i class="pi pi-trash"></i>
-                    <span class="hidden xs:inline">Delete</span>
+                    <span>Delete</span>
                   </button>
                 </div>
               </div>
@@ -1321,11 +1347,11 @@ watch(() => isFreeUser.value, (newValue, oldValue) => {
 
         <!-- Responsive Scroll to Bottom Button -->
         <button v-if="showScrollDownButton && currentMessages.length !== 0 && isAuthenticated" @click="scrollToBottom"
-          :class="isRequestLimitExceeded || shouldShowUpgradePrompt ? 'bottom-[160px]' : 'bottom-[90px] sm:bottom-[100px]'"
-          class="fixed bg-gray-50 text-gray-500 border px-2 sm:px-3 h-[30px] sm:h-[34px] rounded-full shadow-lg hover:bg-gray-100 transition-colors z-20 left-1/2 transform -translate-x-1/2">
+          :class="isRequestLimitExceeded || shouldShowUpgradePrompt ? 'bottom-[160px]' : 'bottom-[90px]'"
+          class="fixed bg-gray-50 text-gray-500 border px-5 h-[34px] rounded-full shadow-lg hover:bg-gray-100 transition-colors z-20 left-1/2 transform -translate-x-1/2">
           <div class="flex gap-1 sm:gap-2 items-center justify-center w-full font-semibold h-full">
-            <i class="pi pi-arrow-down text-center text-xs sm:text-sm"></i>
-            <p class="text-xs sm:text-sm whitespace-nowrap">Scroll Down</p>
+            <i class="pi pi-arrow-down text-center"></i>
+            <p class="whitespace-nowrap">Scroll Down</p>
           </div>
         </button>
 
@@ -1436,7 +1462,7 @@ watch(() => isFreeUser.value, (newValue, oldValue) => {
                   class="flex-grow py-2 placeholder:text-gray-500 rounded-t-2xl bg-white text-sm outline-none resize-none border-none max-h-[150px] sm:max-h-[200px] overflow-auto leading-relaxed disabled:opacity-50 disabled:cursor-not-allowed"
                   :placeholder="isRequestLimitExceeded ? (screenWidth > 640 ? 'Upgrade to continue chatting...' : 'Upgrade to continue...') :
                     isLoading ? 'Please wait...' :
-                      isFreeUser ? (screenWidth > 640 ? `Ask me a question... (${requestsRemaining} requests left)` : `Ask... (${requestsRemaining} left)`) :
+                      isFreeUser ? `Ask me a question... (${requestsRemaining} requests left)` :
                         'Ask me a question...'"></textarea>
                 <button type="submit" :disabled="isLoading || isRequestLimitExceeded"
                   class="rounded-lg w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center transition-colors text-white bg-blue-600 hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50 disabled:bg-gray-400 flex-shrink-0">

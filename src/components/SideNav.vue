@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import type { Chat } from '@/types'
-import { ref, inject } from 'vue';
+import { ref, inject, computed, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 import ChatDropdown from './Dropdowns/ChatDropdown.vue';
 import type { Ref } from 'vue';
@@ -28,7 +28,9 @@ const props = defineProps<{
     parsedUserDetails: {
       username: string
       email: string
-      sync_enabled: boolean
+      sync_enabled: boolean,
+      plan_name: string,
+      expiry_timestamp?: number
     }
     screenWidth: number,
     syncStatus: any
@@ -48,13 +50,86 @@ const props = defineProps<{
 }>()
 
 const router = useRouter()
-const isRenaming = ref<string | null>(null) // Track which chat is being renamed
+const isRenaming = ref<string | null>(null)
 const renameValue = ref('')
+const now = ref(Date.now())
+
+// Timer for real-time updates
+let timer: number | null = null
+
+onMounted(() => {
+  timer = window.setInterval(() => {
+    now.value = Date.now()
+  }, 1000)
+})
+
+onUnmounted(() => {
+  if (timer) {
+    clearInterval(timer)
+    timer = null
+  }
+})
+
+// Computed properties for plan status
+const planStatus = computed(() => {
+  if (!props.data.parsedUserDetails.expiry_timestamp) {
+    return { status: 'no-plan', timeLeft: '', expiryDate: '', isExpired: false }
+  }
+
+  const expiryMs = props.data.parsedUserDetails.expiry_timestamp < 1e12
+    ? props.data.parsedUserDetails.expiry_timestamp * 1000
+    : props.data.parsedUserDetails.expiry_timestamp
+
+  const diff = expiryMs - now.value
+  const isExpired = diff <= 0
+
+  if (isExpired) {
+    return { status: 'expired', timeLeft: 'Expired', expiryDate: '', isExpired: true }
+  }
+
+  const days = Math.floor(diff / (1000 * 60 * 60 * 24))
+  const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
+  const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
+  const seconds = Math.floor((diff % (1000 * 60)) / 1000)
+
+  let timeLeft = ''
+  if (days > 0) {
+    timeLeft = `${days}d ${hours}h ${minutes}m`
+  } else if (hours > 0) {
+    timeLeft = `${hours}h ${minutes}m ${seconds}s`
+  } else {
+    timeLeft = `${minutes}m ${seconds}s`
+  }
+
+  const expiryDate = new Date(expiryMs).toLocaleString('en-KE', {
+    weekday: 'short',
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+
+  return { status: 'active', timeLeft, expiryDate, isExpired: false }
+})
+
+const planColor = computed(() => {
+  if (planStatus.value.isExpired) return 'text-red-600 bg-red-50'
+  if (planStatus.value.status === 'no-plan') return 'text-gray-600 bg-gray-50'
+  return 'text-green-600 bg-green-50'
+})
 
 const profileOptions = [
   { id: 'settings', label: 'Settings', action: () => router.push('/settings/profile') },
-  { id: 'help', label: 'Get help', action: () => { /* Add your help action */ } },
-  { id: 'upgrade', label: 'Upgrade plan', action: () => router.push('/upgrade') },
+  { id: 'help', label: 'Get help', action: () => { 
+      window.open('mailto:imranmat254@gmail.com', '_blank')
+    } 
+  },
+  { 
+    id: 'upgrade', 
+    label: props.data.parsedUserDetails?.plan_name ? 'Manage Plan' : 'Upgrade Plan', 
+    action: () => router.push('/upgrade')
+  },
   { id: 'learn', label: 'Learn more', action: () => { /* Add your learn more action */ } }
 ];
 
@@ -63,7 +138,6 @@ function startRename(chatId: string, currentTitle: string) {
   renameValue.value = currentTitle
   activeChatMenu.value = null
 
-  // Focus the input after Vue updates the DOM
   setTimeout(() => {
     const input = document.getElementById(`rename-${chatId}`) as HTMLInputElement
     if (input) {
@@ -123,8 +197,54 @@ function handleChatClick(chatId: string) {
         </div>
       </div>
 
+      <!-- Plan Status Card -->
+      <div v-if="props.data.parsedUserDetails.username && (!props.data.isCollapsed || props.data.screenWidth < 720)" 
+           class="mx-3 mb-4 p-3 rounded-lg border" :class="planColor">
+        <div class="flex items-center justify-between mb-2">
+          <div class="flex items-center gap-2">
+            <i class="pi pi-star text-sm"></i>
+            <span class="font-medium text-sm">
+              {{ props.data.parsedUserDetails.plan_name || 'Free Plan' }}
+            </span>
+          </div>
+          <button v-if="!props.data.parsedUserDetails.plan_name" @click="router.push('/upgrade')" 
+                  class="text-xs px-2 py-1 rounded-full border border-current transition-colors">
+            {{ 'Upgrade' }}
+          </button>
+        </div>
+        
+        <div v-if="planStatus.status === 'active'" class="text-xs space-y-1">
+          <div class="flex items-center gap-1">
+            <i class="pi pi-clock text-xs"></i>
+            <span>{{ planStatus.timeLeft }} remaining</span>
+          </div>
+          <div class="text-xs opacity-75">
+            Expires: {{ planStatus.expiryDate }}
+          </div>
+        </div>
+        
+        <div v-else-if="planStatus.status === 'expired'" class="text-xs">
+          <div class="flex items-center gap-1">
+            <i class="pi pi-exclamation-triangle text-xs"></i>
+            <span>Plan expired - Please renew</span>
+          </div>
+        </div>
+        
+        <div v-else class="text-xs">
+          <span>No active plan</span>
+        </div>
+      </div>
+
+      <!-- Collapsed Plan Status (Icon only) -->
+      <div v-if="props.data.parsedUserDetails.username && props.data.isCollapsed && props.data.screenWidth > 720" 
+           class="mx-2 mb-4 p-2 rounded-lg border text-center" :class="planColor"
+           :title="`${props.data.parsedUserDetails.plan_name || 'Free Plan'} - ${planStatus.timeLeft}`">
+        <i class="pi pi-star text-lg" 
+           :class="planStatus.isExpired ? 'text-red-500' : planStatus.status === 'no-plan' ? 'text-gray-500' : 'text-green-500'"></i>
+      </div>
+
       <!-- New Chat & Actions -->
-      <div v-if="props.data.parsedUserDetails.username" class="px-3 my-4  max-md:text-lg  flex flex-col gap-1 font-light text-sm">
+      <div v-if="props.data.parsedUserDetails.username" class="px-3 my-4 max-md:text-lg flex flex-col gap-1 font-light text-sm">
         <button @click="
           () => {
             props.functions.createNewChat()
@@ -152,16 +272,7 @@ function handleChatClick(chatId: string) {
               v-if="props.data.syncStatus.hasUnsyncedChanges && props.data.parsedUserDetails.sync_enabled && (!props.data.isCollapsed || props.data.screenWidth < 720)"
               class="ml-auto w-2 h-2 bg-orange-500 rounded-full"></div>
           </button>
-
-          <!-- Toggle sync -->
-          <!-- <div v-if="!props.data.isCollapsed || props.data.screenWidth < 720"
-            class="flex items-center justify-between mt-2 px-2">
-            <span class="text-sm text-gray-700">Enable Sync</span>
-            <input type="checkbox" v-model="props.data.parsedUserDetails.sync_enabled"
-              class="rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
-          </div> -->
         </div>
-
       </div>
 
       <!-- Recent Chats -->
@@ -175,14 +286,14 @@ function handleChatClick(chatId: string) {
               : 'w-full flex h-[32px] max-md:h-[36px] text-sm items-center hover:bg-gray-100 rounded-lg relative'">
 
             <!-- Chat content area -->
-            <div @click="handleChatClick(chat.id)" class="flex  max-md:text-lg items-center h-full flex-grow px-2 cursor-pointer">
+            <div @click="handleChatClick(chat.id)" class="flex max-md:text-lg items-center h-full flex-grow px-2 cursor-pointer">
               <i class="pi pi-comments mr-2 text-gray-500 mb-[2px]"></i>
 
               <!-- Chat title or rename input -->
               <div v-if="isRenaming === chat.id" class="flex-grow" @click.stop>
                 <input :id="`rename-${chat.id}`" v-model="renameValue" @keyup.enter="submitRename(chat.id)"
                   @keyup.escape="cancelRename" @blur="submitRename(chat.id)"
-                  class="w-full px-1 py-0.5 max-md:text-lg  text-xs bg-white border border-blue-500 rounded focus:outline-none" />
+                  class="w-full px-1 py-0.5 max-md:text-lg text-xs bg-white border border-blue-500 rounded focus:outline-none" />
               </div>
               <p v-else-if="!props.data.isCollapsed || props.data.screenWidth < 720" class="truncate">
                 <span v-if="chat.title.length>20">{{ `${chat.title.slice(0,20)}..` || 'Untitled Chat' }}</span>
@@ -212,7 +323,16 @@ function handleChatClick(chatId: string) {
     </div>
 
     <!-- Fixed Bottom User Profile -->
-    <div class="border-t border-gray-200 p-3 bg-gray-100 sticky bottom-0">
+    <div class="border-t border-gray-200 p-3 sticky bottom-0">
+      <!-- Plan Status Quick View (Above Profile) -->
+      <div v-if="props.data.parsedUserDetails.username && planStatus.status === 'active' && (!props.data.isCollapsed || props.data.screenWidth < 720)" 
+           class="mb-2 px-2 py-1 text-xs rounded" :class="planColor">
+        <div class="flex items-center justify-between">
+          <span class="font-medium">{{ planStatus.timeLeft }}</span>
+          <i class="pi pi-clock"></i>
+        </div>
+      </div>
+
       <div class="flex items-center justify-between cursor-pointer mr-1"
         @click.stop="()=>{
           if (!props.data.isCollapsed || props.data.screenWidth < 720){
@@ -220,15 +340,23 @@ function handleChatClick(chatId: string) {
           }
         }">
         <div class="flex items-center gap-2">
-          <div class="w-[35px] h-[35px] flex justify-center items-center bg-gray-300 rounded-full">
-            <span class="text-sm  max-md:text-lg ">{{ props.data.parsedUserDetails.username.toUpperCase().slice(0, 2) }}</span>
+          <div class="w-[35px] h-[35px] flex justify-center items-center bg-gray-300 rounded-full relative">
+            <span class="text-sm max-md:text-lg">{{ props.data.parsedUserDetails.username.toUpperCase().slice(0, 2) }}</span>
+            <!-- Plan status indicator -->
+            <div v-if="planStatus.isExpired" class="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-white"></div>
+            <div v-else-if="planStatus.status === 'active'" class="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></div>
           </div>
-          <p v-if="!props.data.isCollapsed || props.data.screenWidth < 720" class="text-base  max-md:text-lg  font-light">
-            {{ props.data.parsedUserDetails.username }}
-          </p>
+          <div v-if="!props.data.isCollapsed || props.data.screenWidth < 720">
+            <p class="text-base max-md:text-lg font-light">
+              {{ props.data.parsedUserDetails.username }}
+            </p>
+            <p v-if="props.data.parsedUserDetails.plan_name" class="text-xs text-gray-500">
+              {{ props.data.parsedUserDetails.plan_name }}
+            </p>
+          </div>
         </div>
-        <i class="pi pi-chevron-up text-xs  max-md:text-base" v-if="showProfileMenu&&(!props.data.isCollapsed || props.data.screenWidth < 720)"></i>
-        <i class="pi pi-chevron-down text-xs  max-md:text-base" v-else-if="!props.data.isCollapsed || props.data.screenWidth < 720"></i>
+        <i class="pi pi-chevron-up text-xs max-md:text-base" v-if="showProfileMenu && (!props.data.isCollapsed || props.data.screenWidth < 720)"></i>
+        <i class="pi pi-chevron-down text-xs max-md:text-base" v-else-if="!props.data.isCollapsed || props.data.screenWidth < 720"></i>
       </div>
 
       <!-- Profile Dropdown -->
@@ -236,8 +364,20 @@ function handleChatClick(chatId: string) {
         <div v-if="showProfileMenu"
           class="absolute max-w-[245px] max-md:text-base bottom-full left-3 right-3 mb-2 bg-white border rounded-lg shadow-lg text-sm z-50"
           @click.stop>
-          <p class="px-4 py-2 text-gray-500 border-b" v-if="props.data.parsedUserDetails.email.split('@')[0].length<12">{{ props.data.parsedUserDetails.email || 'No email' }}</p>
-          <p v-else class="px-4 py-2 text-gray-500 border-b">{{ `${props.data.parsedUserDetails.email.split('@')[0].slice(0,12)}...@${props.data.parsedUserDetails.email.split('@')[1]}` || 'No email' }}</p>
+          <div class="px-4 py-2 border-b">
+            <p class="text-gray-500" v-if="props.data.parsedUserDetails.email.split('@')[0].length < 12">
+              {{ props.data.parsedUserDetails.email || 'No email' }}
+            </p>
+            <p v-else class="text-gray-500">
+              {{ `${props.data.parsedUserDetails.email.split('@')[0].slice(0,12)}...@${props.data.parsedUserDetails.email.split('@')[1]}` || 'No email' }}
+            </p>
+            <!-- Plan info in dropdown -->
+            <div v-if="props.data.parsedUserDetails.plan_name" class="mt-1 text-xs" :class="planStatus.isExpired ? 'text-red-600' : 'text-green-600'">
+              {{ props.data.parsedUserDetails.plan_name }} 
+              <span v-if="planStatus.status === 'active'">- {{ planStatus.timeLeft }}</span>
+              <span v-else-if="planStatus.isExpired">- Expired</span>
+            </div>
+          </div>
           <button v-for="option in profileOptions" :key="option.id" @click="()=>{
             option.action()
             if (props.data.screenWidth < 720) props.functions.hideSidebar()

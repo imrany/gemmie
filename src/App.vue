@@ -954,6 +954,12 @@ onMounted(async () => {
 
   // sync info from server if authenticated and sync enabled
   if (isAuthenticated.value) {
+    const localExt = localStorage.getItem("external_reference")
+    if(localExt){
+      const ext=JSON.parse(localExt)
+      await getTransaction(ext);
+    }
+
     await syncFromServer()
   }
 
