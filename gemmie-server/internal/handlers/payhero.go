@@ -208,7 +208,7 @@ func StoreTransactionHandler(w http.ResponseWriter, r *http.Request) {
 
 	transaction := reqBody.Response
 
-	slog.Info("Received transaction", "transaction", transaction, "req body", reqBody)
+	slog.Info("Received transaction", "transaction", transaction, "req body", reqBody, "raw", r.Body)
 	if strings.TrimSpace(transaction.ExternalReference) == "" {
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
