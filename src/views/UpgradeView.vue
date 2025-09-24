@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { API_BASE_URL, getTransaction } from '@/utils/globals';
+import { API_BASE_URL, getTransaction, plans } from '@/utils/globals';
 import type { Ref } from 'vue';
 import { onMounted, ref, watch, computed, inject, onUnmounted, reactive } from 'vue';
 import { useRoute } from 'vue-router';
@@ -14,57 +14,68 @@ const globalState = inject("globalState") as {
   parsedUserDetails: Ref<any>,
 }
 const parsedUserDetails = globalState.parsedUserDetails
-
-const plans = ref([
-  {
-    name: "Student",
-    id: "student",
-    // price: 50,
-    price: 1,
-    duration: "per 5 hours",
-    description: "Perfect for quick sessions and light academic use.",
-    features: [
-      "Strong privacy",
-      "Good for light work",
-      "Analyze and summarize text",
-      "Write, edit and create content",
-      "Get web results and insights",
-    ],
-    popular: false,
-  },
-  {
-    name: "Pro",
-    id: "pro",
-    price: 100,
-    duration: "per 24 hours",
-    description: "Great for professionals needing reliable AI help all day.",
-    features: [
-      "Everything in Student Plan",
-      "Handles heavy workloads",
-      "Downloadable content e.g PDFs",
-      "Full privacy",
-      "Data sync across all devices",
-    ],
-    popular: true,
-  },
-  {
-    name: "Hobbyist",
-    id: "hobbyist",
-    price: 500,
-    duration: "per week",
-    description: "Best for hobbyists and regular users exploring AI deeply.",
-    features: [
-      "Everything in Pro Plan",
-      "More usage time",
-      "Persistent sync",
-      "Extended access for projects",
-    ],
-    popular: false,
-  },
-])
-
 const showCheckout = ref(false)
 const isProcessing = ref(false)
+
+const planDuration = ref<number | null>(null) // duration in ms
+const expiryTimestamp = ref<number | null>(null) // absolute expiry time in ms
+const now = ref(Date.now())
+let timer: number | null = null
+
+// Expiry date (absolute)
+const expiryDate = computed(() => {
+  if (!expiryTimestamp.value) return ''
+  return new Date(expiryTimestamp.value).toLocaleString('en-KE', {
+    weekday: 'short',
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+})
+
+setInterval(() => {
+  now.value = Date.now()
+}, 1000)
+
+const timeLeft = computed(() => {
+  if (!parsedUserDetails?.value.expiry_timestamp) return ''
+  const expiryMs =
+    parsedUserDetails.value.expiry_timestamp < 1e12
+      ? parsedUserDetails.value.expiry_timestamp * 1000
+      : parsedUserDetails.value.expiry_timestamp
+
+  const diff = expiryMs - now.value
+  if (diff <= 0) return 'Expired'
+
+  const days = Math.floor(diff / (1000 * 60 * 60 * 24))
+  const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
+  const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
+  const seconds = Math.floor((diff % (1000 * 60)) / 1000)
+
+  if (days > 0) {
+    return `${days}d ${hours}h ${minutes}m`
+  }
+  return `${hours}h ${minutes}m ${seconds}s`
+})
+
+// Plan duration (local only)
+function setDuration(planId: string) {
+  switch (planId) {
+    case 'student':
+      planDuration.value = 5 * 60 * 60 * 1000 // 5h
+      break
+    case 'pro':
+      planDuration.value = 24 * 60 * 60 * 1000 // 24h
+      break
+    case 'hobbyist':
+      planDuration.value = 7 * 24 * 60 * 60 * 1000 // 1 week
+      break
+  }
+  expiryTimestamp.value = now.value + (planDuration.value || 0)
+}
+
 
 // Payment form data - create local reactive references
 const paymentForm = reactive({
@@ -90,57 +101,6 @@ const isFormValid = computed(() => {
   return hasValidUsername && hasValidEmail && hasValidPhone
 })
 
-const expiryTimestamp = ref<number | null>(null)
-const now = ref(Date.now())
-let timer: number | null = null
-
-// Compute expiry date string - updates in real-time
-const expiryDate = computed(() => {
-  if (!expiryTimestamp.value) return ''
-  const futureTime = now.value + expiryTimestamp.value
-  return new Date(futureTime).toLocaleString('en-KE', {
-    weekday: 'short',
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  })
-})
-
-// Reactive remaining time
-const timeLeft = computed(() => {
-  if (!expiryTimestamp.value) return ''
-  const diff = expiryTimestamp.value
-  if (diff <= 0) return 'Expired'
-
-  const days = Math.floor(diff / (1000 * 60 * 60 * 24))
-  const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
-  const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
-  const seconds = Math.floor((diff % (1000 * 60)) / 1000)
-
-  if (days > 0) {
-    return `${days}d ${hours}h ${minutes}m`
-  }
-  return `${hours}h ${minutes}m ${seconds}s`
-})
-
-// Set expiry timestamp based on selected plan - updates in real-time
-function setExpiry(planId: string) {
-  // This will be recalculated reactively based on current time
-  switch (planId) {
-    case 'student':
-      expiryTimestamp.value = 5 * 60 * 60 * 1000 // 5 hours in milliseconds
-      break
-    case 'pro':
-      expiryTimestamp.value = 24 * 60 * 60 * 1000 // 24 hours in milliseconds
-      break
-    case 'hobbyist':
-      expiryTimestamp.value = 7 * 24 * 60 * 60 * 1000 // 1 week in milliseconds
-      break
-  }
-}
-
 // Computed property to get selected plan details
 const selectedPlan = computed(() => {
   return plans.value.find(plan => plan.id === selectPlanName.value)
@@ -164,12 +124,12 @@ function selectPlan(planId: string) {
   plans.value.forEach((plan) => {
     plan.popular = plan.id === planId;
   });
-  setExpiry(planId) // set expiry whenever plan changes
+  setDuration(planId) // set expiry whenever plan changes
 }
 
 function proceedToCheckout(planId: string) {
   selectPlanName.value = planId as 'student' | 'pro' | 'hobbyist'
-  setExpiry(planId) // Ensure expiry is set when proceeding to checkout
+  setDuration(planId) // Ensure expiry is set when proceeding to checkout
   showCheckout.value = true
   // Update URL without navigation
   router.replace({ name: 'upgrade', params: { plan: planId } })
@@ -193,11 +153,12 @@ async function handlePayment() {
 
   try {
     // Get the actual expiry timestamp for submission
-    const actualExpiryTimestamp = now.value + (expiryTimestamp.value || 0)
+    const actualExpiryTimestamp = now.value + (planDuration.value || 0)
 
-    // Simulate M-Pesa payment API call
     const paymentData = {
-     external_reference: `${parsedUserDetails.value?.username}-${Date.now()}`,
+      expiry_timestamp: actualExpiryTimestamp,
+      expire_duration: planDuration.value,
+      external_reference: `${parsedUserDetails.value?.username}-${Date.now()}`,
       plan: selectPlanName.value,
       plan_name: selectedPlan.value?.name,
       amount: selectedPlan.value?.price,
@@ -205,8 +166,6 @@ async function handlePayment() {
       phone_number: paymentForm.phone,
       email: paymentForm.email,
       username: paymentForm.username,
-      expiry_timestamp: actualExpiryTimestamp,
-      expire_duration: expiryTimestamp.value, // Duration in milliseconds
       price: `${selectedPlan.value?.price} Ksh`
     }
 
@@ -216,28 +175,31 @@ async function handlePayment() {
       isProcessing.value = false
       return
     }
+    console.log(stkResults)
     toast.success(`M-Pesa prompt sent to ${paymentForm.phone}. Please check your phone and enter your M-Pesa PIN to complete the payment.`, { duration: 5000 })
-    localStorage.setItem("external_reference", JSON.stringify(stkResults.external_reference))
+    localStorage.setItem("external_reference", JSON.stringify(stkResults.data.external_reference))
 
-    // confirm payment after 20sec, retry up to 10 times
+    // confirm payment after  every 5sec, retry up to 5 times
     let attempts = 0;
     const interval = setInterval(async () => {
       attempts++;
-      const transResults = await getTransaction(localStorage.getItem("external_reference") || "");
-      if (transResults?.data?.status === "success") {
+      const ext=JSON.parse(localStorage.getItem("external_reference") || '')
+      const transResults = await getTransaction(ext);
+      if (transResults?.Status === "success") {
         clearInterval(interval);
-        toast.success(`Payment successful! Your ${selectedPlan.value?.name} plan is active until ${expiryDate.value}.`, { duration: 5000 });
+        toast.success(`Payment successful! Your ${selectedPlan.value?.name} plan is active until ${expiryDate.value}.`, 
+        { 
+          duration: Infinity 
+        });
         isProcessing.value = false
-        setTimeout(() => {
-          router.push('/settings/profile')
-        }, 3000);
+        router.push('/')
       }
-      if (attempts >= 10) { 
+      if (attempts >= 5) { 
         clearInterval(interval);
-        toast.error("Payment not confirmed. Please check M-Pesa SMS.", { duration: 6000 });
+        toast.error("Payment not confirmed. Please check M-Pesa SMS and Refresh this page.", { duration: 6000 });
         isProcessing.value = false
       }
-    }, 1000 * 20);
+    }, 1000 * 5);
   } catch (error) {
     isProcessing.value = false
     toast.error('Payment failed. Please try again.', {
@@ -272,7 +234,7 @@ watch(selectPlanName, (newVal) => {
   if (!showCheckout.value) {
     router.replace({ name: 'upgrade', params: { plan: newVal } })
   }
-  setExpiry(newVal) // Update expiry when plan changes
+  setDuration(newVal) // Update expiry when plan changes
 })
 
 onUnmounted(() => {
@@ -283,32 +245,42 @@ onUnmounted(() => {
 })
 
 onMounted(() => {
-  if (parsedUserDetails.value === undefined || parsedUserDetails.value === null) {
+  if (!parsedUserDetails.value) {
     router.push("/")
+    return
   }
 
-  // Start ticking every second for reactive time updates
+  // 🔑 Use server expiry if available
+  const expiry = parsedUserDetails.value.expiry_timestamp
+  if (expiry && expiry * 1000 > Date.now()) {
+    toast.success(`Your ${parsedUserDetails.value.plan_name} is still active.`, {
+      duration: Infinity,
+      important: true,
+      description: `Remaining: ${timeLeft.value}`
+    })
+    router.push("/")
+    return
+  }
+
+  // Keep ticking every second
   timer = window.setInterval(() => {
     now.value = Date.now()
   }, 1000)
 
-  // Pre-fill form data from user details
-  paymentForm.username = parsedUserDetails.value?.username || '',
-    paymentForm.email = parsedUserDetails.value?.email || '',
-    paymentForm.phone = parsedUserDetails.value?.phone_number || ''
+  // Pre-fill user info
+  paymentForm.username = parsedUserDetails.value?.username || ''
+  paymentForm.email = parsedUserDetails.value?.email || ''
+  paymentForm.phone = parsedUserDetails.value?.phone_number || ''
 
+  // Select plan from URL or default
   if (planName) {
-    // Find and select the plan from URL
-    const foundPlan = plans.value.find(p => p.id === planName)
-    if (foundPlan) {
-      selectPlan(planName)
-      showCheckout.value = true
-    }
+    selectPlan(planName)
+    showCheckout.value = true
   } else {
-    // Set initial expiry for default plan
-    setExpiry(selectPlanName.value)
+    setDuration(selectPlanName.value)
   }
 })
+
 </script>
 
 <template>

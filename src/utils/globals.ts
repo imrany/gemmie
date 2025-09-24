@@ -1,3 +1,4 @@
+import { ref } from "vue"
 import { toast } from "vue-sonner"
 
 function getBaseURL() {
@@ -96,6 +97,54 @@ export async function getTransaction(external_reference: string){
     })
   }
 }
+
+export const plans = ref([
+  {
+    name: "Student",
+    id: "student",
+    // price: 50,
+    price: 1,
+    duration: "per 5 hours",
+    description: "Perfect for quick sessions and light academic use.",
+    features: [
+      "Strong privacy",
+      "Good for light work",
+      "Analyze and summarize text",
+      "Write, edit and create content",
+      "Get web results and insights",
+    ],
+    popular: false,
+  },
+  {
+    name: "Pro",
+    id: "pro",
+    price: 100,
+    duration: "per 24 hours",
+    description: "Great for professionals needing reliable AI help all day.",
+    features: [
+      "Everything in Student Plan",
+      "Handles heavy workloads",
+      "Downloadable content e.g PDFs",
+      "Full privacy",
+      "Data sync across all devices",
+    ],
+    popular: true,
+  },
+  {
+    name: "Hobbyist",
+    id: "hobbyist",
+    price: 500,
+    duration: "per week",
+    description: "Best for hobbyists and regular users exploring AI deeply.",
+    features: [
+      "Everything in Pro Plan",
+      "More usage time",
+      "Persistent sync",
+      "Extended access for projects",
+    ],
+    popular: false,
+  },
+])
 
 export let API_BASE_URL = getBaseURL() + '/api'
 export let SOCKET_URL = getBaseURL().replace(/^http/, 'ws') + '/ws'
