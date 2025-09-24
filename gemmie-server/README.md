@@ -45,11 +45,8 @@ go build -o gemmie-server
 sudo mkdir -p ~/.gemmie-server
 sudo touch ~/.gemmie-server/gemmie_data.json
 sudo chmod 666 ~/.gemmie-server/gemmie_data.json
-# you need to fix permissions so the container’s gemmie user can write
-sudo chown -R 1000:1000 ~/.gemmie-server
 
-
-docker run -d  --name gemmie-server  -p 8081:8081 -v ~/.gemmie-server:/var/opt/gemmie-server -e PORT=8081   -e DATA_FILE=/var/opt/gemmie-server/gemmie_data.json ghcr.io/imrany/gemmie-server:latest
+docker run -d --name gemmie-server --env-file .env -p 8081:8081  -v ~/.gemmie-server:/var/opt/gemmie-server ghcr.io/imrany/gemmie-server:latest
 ```
 
 The server will start on `http://localhost:8081`
