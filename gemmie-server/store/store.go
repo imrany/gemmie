@@ -54,17 +54,17 @@ type UserData struct {
 // Transaction represents a payment transaction
 type Transaction struct {
 	ID                 string    `json:"id"`
-	ExternalReference  string    `json:"external_reference"`
-	MpesaReceiptNumber string    `json:"mpesa_receipt_number"`
-	CheckoutRequestID  string    `json:"checkout_request_id"`
-	MerchantRequestID  string    `json:"merchant_request_id"`
-	Amount             int       `json:"amount"`
-	PhoneNumber        string    `json:"phone_number"`
-	ResultCode         string    `json:"result_code"`
-	ResultDescription  string    `json:"result_description"`
-	Status             string    `json:"status"`
-	CreatedAt          time.Time `json:"created_at"`
-	UpdatedAt          time.Time `json:"updated_at"`
+	ExternalReference  string    `json:"ExternalReference"`
+	MpesaReceiptNumber string    `json:"MpesaReceiptNumber"`
+	CheckoutRequestID  string    `json:"CheckoutRequestID"`
+	MerchantRequestID  string    `json:"MerchantRequestID"`
+	Amount             int       `json:"Amount"`
+	PhoneNumber        string    `json:"Phone"`
+	ResultCode         string    `json:"ResultCode"`
+	ResultDescription  string    `json:"ResultDesc"`
+	Status             string    `json:"Status"`
+	CreatedAt          time.Time `json:"CreatedAt"`
+	UpdatedAt          time.Time `json:"UpdatedAt"`
 }
 
 
