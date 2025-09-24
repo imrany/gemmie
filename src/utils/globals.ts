@@ -76,25 +76,10 @@ export async function getTransaction(external_reference: string){
       method:"GET"
     })
     const res=await parseRes.json()
-    if(res.success){
-      return res.data
-    }else{
-      toast.error(res.message,{ 
-        duration:5000,
-        action:{
-          label:"Try again",
-          onClick:()=>toast.dismiss()
-        }
-      })
-    }
+    return res
   }catch(err:any){
-    toast.error(`Transaction failed, Try again`,{
-      duration:5000,
-        action:{
-          label:"Try again",
-          onClick:()=>toast.dismiss()
-        }
-    })
+    console.error("Error fetching transaction:", err)
+    return {success:false,message:"Error fetching transaction"}
   }
 }
 
