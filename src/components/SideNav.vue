@@ -214,7 +214,11 @@ function handleChatClick(chatId: string) {
     <!-- Fixed Bottom User Profile -->
     <div class="border-t border-gray-200 p-3 bg-gray-100 sticky bottom-0">
       <div class="flex items-center justify-between cursor-pointer mr-1"
-        @click.stop="showProfileMenu = !showProfileMenu">
+        @click.stop="()=>{
+          if (!props.data.isCollapsed || props.data.screenWidth < 720){
+            showProfileMenu = !showProfileMenu
+          }
+        }">
         <div class="flex items-center gap-2">
           <div class="w-[35px] h-[35px] flex justify-center items-center bg-gray-300 rounded-full">
             <span class="text-sm  max-md:text-lg ">{{ props.data.parsedUserDetails.username.toUpperCase().slice(0, 2) }}</span>
@@ -223,8 +227,8 @@ function handleChatClick(chatId: string) {
             {{ props.data.parsedUserDetails.username }}
           </p>
         </div>
-        <i class="pi pi-chevron-up text-xs  max-md:text-base" v-if="showProfileMenu"></i>
-        <i class="pi pi-chevron-down text-xs  max-md:text-base" v-else></i>
+        <i class="pi pi-chevron-up text-xs  max-md:text-base" v-if="showProfileMenu&&(!props.data.isCollapsed || props.data.screenWidth < 720)"></i>
+        <i class="pi pi-chevron-down text-xs  max-md:text-base" v-else-if="!props.data.isCollapsed || props.data.screenWidth < 720"></i>
       </div>
 
       <!-- Profile Dropdown -->

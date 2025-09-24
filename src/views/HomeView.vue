@@ -15,7 +15,7 @@ import CreateSessView from "./CreateSessView.vue"
 
 // Inject global state
 const globalState = inject('globalState') as {
-  handleAuth: (data:{
+  handleAuth: (data: {
     username: string;
     email: string;
     password: string;
@@ -63,6 +63,7 @@ const globalState = inject('globalState') as {
   toggleSidebar: () => void,
   setupAutoSync: () => void,
   autoSyncInterval: any,
+  isFreeUser: Ref<boolean>,
 }
 
 const {
@@ -109,6 +110,7 @@ const {
   setupAutoSync,
   autoSyncInterval,
   handleAuth,
+  isFreeUser,
 } = globalState
 let parsedUserDetails = globalState.parsedUserDetails
 
@@ -116,8 +118,70 @@ let parsedUserDetails = globalState.parsedUserDetails
 const authStep = ref(1)
 const showCreateSession = ref(false) //  removed 'let' declaration
 const copiedIndex = ref<number | null>(null) //  Track copied state
+const requestCount = ref(0)
+const FREE_REQUEST_LIMIT = 5
 
-// ---------- Chat Management Functions ----------
+const requestsRemaining = computed(() => {
+  if (!isFreeUser.value) return Infinity
+  return Math.max(0, FREE_REQUEST_LIMIT - requestCount.value)
+})
+
+const isRequestLimitExceeded = computed(() => {
+  return isFreeUser.value && requestCount.value >= FREE_REQUEST_LIMIT
+})
+
+const shouldShowUpgradePrompt = computed(() => {
+  return isFreeUser.value && requestCount.value >= 3 // Show when 2 requests left
+})
+
+// ---------- Request Limit Functions ----------
+function loadRequestCount() {
+  // Only load for free users
+  if (!isFreeUser.value) {
+    requestCount.value = 0
+    return
+  }
+
+  try {
+    const saved = localStorage.getItem('requestCount')
+    if (saved) {
+      const data = JSON.parse(saved)
+      const now = new Date().getTime()
+
+      // Reset count if it's been more than 24 hours
+      if (now - data.timestamp > 24 * 60 * 60 * 1000) {
+        requestCount.value = 0
+        saveRequestCount()
+      } else {
+        requestCount.value = Math.max(0, Math.min(data.count || 0, FREE_REQUEST_LIMIT))
+      }
+    } else {
+      requestCount.value = 0
+    }
+  } catch (error) {
+    console.error('Failed to load request count:', error)
+    requestCount.value = 0
+  }
+}
+
+function saveRequestCount() {
+  try {
+    const data = {
+      count: requestCount.value,
+      timestamp: new Date().getTime()
+    }
+    localStorage.setItem('requestCount', JSON.stringify(data))
+  } catch (error) {
+    console.error('Failed to save request count:', error)
+  }
+}
+
+function incrementRequestCount() {
+  if (isFreeUser.value) {
+    requestCount.value++
+    saveRequestCount()
+  }
+}
 
 // Load chats from localStorage
 function loadChats() {
@@ -404,27 +468,27 @@ async function handleStepSubmit(e: Event) {
   if (authStep.value < 3) {
     nextAuthStep()
   } else {
-    try{
+    try {
       // Final step - create session
       const response = await handleAuth(authData.value)
-  
-      if(response.error){
+
+      if (response.error) {
         throw new Error(response.error)
       }
-      if(response.data && response.success) {
+      if (response.data && response.success) {
         setShowCreateSession(false)
-        isAuthenticated.value=true // Update auth status
-  
+        isAuthenticated.value = true // Update auth status
+
         // Reset form
         authStep.value = 1
         authData.value = { username: '', email: '', password: '' }
-  
+
         nextTick(() => {
           const textarea = document.getElementById("prompt") as HTMLTextAreaElement
           if (textarea) textarea.focus()
         })
       }
-    }catch(err:any){
+    } catch (err: any) {
       throw new Error(err.message || 'Authentication failed')
     }
   }
@@ -499,7 +563,6 @@ function isJustLinks(prompt: string): boolean {
   return promptWithoutUrls.split(/\s+/).filter(Boolean).length <= 3
 }
 
-// Modified handleSubmit function (around line 420)
 async function handleSubmit(e?: any, retryPrompt?: string) {
   e?.preventDefault?.()
 
@@ -515,6 +578,15 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
     return
   }
 
+  // Check request limit for free users
+  if (isFreeUser.value && requestCount.value >= FREE_REQUEST_LIMIT) {
+    toast.warning('Free requests exhausted', {
+      duration: 4000,
+      description: 'Please upgrade to continue chatting.'
+    })
+    return // Just return, the banner is already showing
+  }
+
   // handling for link-only prompts
   if (isJustLinks(promptValue)) {
     const urls = extractUrls(promptValue)
@@ -525,6 +597,9 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
     }
 
     isLoading.value = true
+
+    // Increment request count for free users
+    incrementRequestCount()
 
     if (!retryPrompt && e?.target?.prompt) {
       e.target.prompt.value = ""
@@ -576,7 +651,6 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
     return // ✅ Exit early for link-only prompts
   }
 
-
   // Merge with only the latest message if prompt is short
   if (isPromptTooShort(promptValue) && currentMessages.value.length > 0) {
     const lastMessage = currentMessages.value[currentMessages.value.length - 1]
@@ -589,6 +663,9 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
   }
 
   isLoading.value = true
+
+  // Increment request count for free users
+  incrementRequestCount()
 
   if (!retryPrompt && e?.target?.prompt) {
     e.target.prompt.value = ""
@@ -889,6 +966,11 @@ onMounted(() => {
 
   // Load chats if logged in
   if (isAuthenticated) {
+    // Load request count for free users
+    if (isFreeUser.value) {
+      loadRequestCount()
+    }
+
     loadChats();
 
     // Setup auto-sync
@@ -1023,9 +1105,26 @@ function setShowCreateSession(value: boolean) {
   showCreateSession.value = value
 }
 
-watch(isAuthenticated,(newVal) => {
+watch(isAuthenticated, (newVal) => {
   if (newVal) {
     showCreateSession.value = false
+  }
+})
+
+//  watch to reset count when user upgrades
+watch(() => isFreeUser.value, (newValue, oldValue) => {
+  // If user was free and now is paid, reset the counter
+  if (oldValue === true && newValue === false) {
+    requestCount.value = 0
+    localStorage.removeItem('requestCount')
+    toast.success('Welcome to your upgraded plan!', {
+      duration: 3000,
+      description: 'You now have unlimited requests.'
+    })
+  }
+  // If user was paid and now is free, load the counter
+  else if (oldValue === false && newValue === true) {
+    loadRequestCount()
   }
 })
 </script>
@@ -1077,9 +1176,9 @@ watch(isAuthenticated,(newVal) => {
       <div
         :class="(screenWidth > 720 && isAuthenticated) ? 'h-screen flex flex-col items-center justify-center w-[85%]' : 'h-screen flex flex-col items-center justify-center'">
         <!-- Empty State -->
-        <CreateSessView v-if="!isAuthenticated" :chats="chats" :current-chat-id="currentChatId" :is-collapsed="isCollapsed"
-          :parsed-user-details="parsedUserDetails" :screen-width="screenWidth" :sync-status="syncStatus"
-          :is-loading="isLoading" :auth-step="authStep"
+        <CreateSessView v-if="!isAuthenticated" :chats="chats" :current-chat-id="currentChatId"
+          :is-collapsed="isCollapsed" :parsed-user-details="parsedUserDetails" :screen-width="screenWidth"
+          :sync-status="syncStatus" :is-loading="isLoading" :auth-step="authStep"
           :show-create-session="showCreateSession" :auth-data="authData" :current-messages="currentMessages"
           :validate-current-step="validateCurrentStep()" :set-show-input="setShowInput" :hide-sidebar="hideSidebar"
           :clear-all-chats="clearAllChats" :toggle-sidebar="toggleSidebar" :logout="logout"
@@ -1135,20 +1234,23 @@ watch(isAuthenticated,(newVal) => {
           </div>
         </div>
 
-        <!-- Chat Messages -->
+        <!-- Update your chat messages container -->
         <div ref="scrollableElem" v-else-if="currentMessages.length !== 0 && isAuthenticated"
-          class="flex-grow no-scrollbar overflow-y-auto px-4 space-y-4 mt-[90px] mb-[120px]">
+          class="flex-grow no-scrollbar overflow-y-auto px-2 sm:px-4 space-y-3 sm:space-y-4 mt-[90px]" 
+          :class="isRequestLimitExceeded || shouldShowUpgradePrompt ? 'pb-[160px] sm:pb-[150px]' :
+            showScrollDownButton ? 'pb-[140px] sm:pb-[120px]' :
+              'pb-[110px] sm:pb-[120px]'">
           <div v-if="currentMessages.length !== 0" v-for="(item, i) in currentMessages" :key="`chat-${i}`"
             class="flex flex-col gap-2">
             <!-- User Bubble -->
             <div class="flex justify-end chat-message">
               <div :class="screenWidth > 720 ? 'max-w-[70%]' : 'max-w-[95%]'"
-                class="bg-gray-50 text-black p-3 rounded-2xl prose prose-sm max-w-none chat-bubble">
+                class="bg-gray-50 text-black p-2 sm:p-3 rounded-2xl prose prose-sm max-w-none chat-bubble">
                 <p class="text-xs opacity-80 text-right mb-1">{{ parsedUserDetails?.username || "You" }}</p>
                 <div v-html="renderMarkdown(item.prompt || '')"></div>
 
                 <!-- Link Previews Section for User Messages -->
-                <div v-if="extractUrls(item.prompt || '').length > 0" class="mt-3">
+                <div v-if="extractUrls(item.prompt || '').length > 0" class="mt-2 sm:mt-3">
                   <div v-for="url in extractUrls(item.prompt || '').slice(0, 3)" :key="`user-${i}-${url}`">
                     <div v-if="linkPreviewCache.get(url)"
                       v-html="LinkPreviewComponent({ preview: linkPreviewCache.get(url)! })"></div>
@@ -1160,16 +1262,16 @@ watch(isAuthenticated,(newVal) => {
             <!-- Bot Bubble -->
             <div class="flex justify-start relative">
               <div :class="screenWidth > 720 ? 'max-w-[70%]' : 'max-w-[95%]'"
-                class="bg-none chat-message leading-relaxed text-black p-3 rounded-2xl prose prose-sm max-w-none">
+                class="bg-none chat-message leading-relaxed text-black p-2 sm:p-3 rounded-2xl prose prose-sm max-w-none">
 
                 <!-- Loading state -->
                 <div v-if="item.response === '...'" class="flex items-center gap-2 text-gray-500">
                   <i class="pi pi-spin pi-spinner"></i>
-                  <span>Thinking...</span>
+                  <span class="text-sm">Thinking...</span>
                 </div>
                 <div v-else-if="item.response === 'refreshing...'" class="flex items-center gap-2 text-gray-500">
                   <i class="pi pi-spin pi-spinner"></i>
-                  <span>Refreshing...</span>
+                  <span class="text-sm">Refreshing...</span>
                 </div>
 
                 <!-- Regular response with enhanced link handling -->
@@ -1177,7 +1279,7 @@ watch(isAuthenticated,(newVal) => {
                   <div v-html="renderMarkdown(item.response || '')"></div>
 
                   <!-- Link Previews Section -->
-                  <div v-if="extractUrls(item.response || '').length > 0" class="mt-3">
+                  <div v-if="extractUrls(item.response || '').length > 0" class="mt-2 sm:mt-3">
                     <div v-for="url in extractUrls(item.response || '').slice(0, 3)" :key="url">
                       <div v-if="linkPreviewCache.get(url)"
                         v-html="LinkPreviewComponent({ preview: linkPreviewCache.get(url)! })"></div>
@@ -1185,26 +1287,31 @@ watch(isAuthenticated,(newVal) => {
                   </div>
                 </div>
 
-                <!-- Actions (hidden during loading and refreshing) -->
+                <!-- Actions - Responsive with fewer labels on mobile -->
                 <div v-if="item.response !== '...' && item.response !== 'refreshing...'"
-                  class="flex gap-3 mt-2 text-gray-500 text-sm">
+                  class="flex flex-wrap gap-2 sm:gap-3 mt-2 text-gray-500 text-xs sm:text-sm">
                   <button @click="copyResponse(item.response, i)"
-                    class="flex items-center gap-1 hover:text-blue-600 transition-colors">
+                    class="flex items-center gap-1 hover:text-blue-600 transition-colors min-h-[32px] sm:min-h-0">
                     <i class="pi pi-copy"></i>
-                    {{ copiedIndex === i ? 'Copied!' : 'Copy' }}
+                    <span class="hidden xs:inline">{{ copiedIndex === i ? 'Copied!' : 'Copy' }}</span>
                   </button>
 
                   <button @click="shareResponse(item.response, item.prompt)"
-                    class="flex items-center gap-1 hover:text-green-600 transition-colors">
-                    <i class="pi pi-share-alt"></i> Share
+                    class="flex items-center gap-1 hover:text-green-600 transition-colors min-h-[32px] sm:min-h-0">
+                    <i class="pi pi-share-alt"></i>
+                    <span class="hidden xs:inline">Share</span>
                   </button>
+
                   <button @click="refreshResponse(item.prompt)" :disabled="isLoading"
-                    class="flex items-center gap-1 hover:text-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                    <i class="pi pi-refresh"></i> Refresh
+                    class="flex items-center gap-1 hover:text-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-h-[32px] sm:min-h-0">
+                    <i class="pi pi-refresh"></i>
+                    <span class="hidden xs:inline">Refresh</span>
                   </button>
+
                   <button @click="deleteMessage(i)" :disabled="isLoading"
-                    class="flex items-center gap-1 hover:text-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                    <i class="pi pi-trash"></i> Delete
+                    class="flex items-center gap-1 hover:text-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-h-[32px] sm:min-h-0">
+                    <i class="pi pi-trash"></i>
+                    <span class="hidden xs:inline">Delete</span>
                   </button>
                 </div>
               </div>
@@ -1212,36 +1319,134 @@ watch(isAuthenticated,(newVal) => {
           </div>
         </div>
 
-        <!-- Scroll to Bottom Button -->
+        <!-- Responsive Scroll to Bottom Button -->
         <button v-if="showScrollDownButton && currentMessages.length !== 0 && isAuthenticated" @click="scrollToBottom"
-          class="fixed bottom-24 bg-gray-50 text-gray-500 border px-3 h-[34px] rounded-full shadow-lg hover:bg-gray-100 transition-colors z-20">
-          <div class="flex gap-2 items-center justify-center w-full font-semibold h-full">
-            <i class="pi pi-arrow-down text-center"></i>
-            <p>Scroll To Bottom</p>
+          :class="isRequestLimitExceeded || shouldShowUpgradePrompt ? 'bottom-[160px]' : 'bottom-[90px] sm:bottom-[100px]'"
+          class="fixed bg-gray-50 text-gray-500 border px-2 sm:px-3 h-[30px] sm:h-[34px] rounded-full shadow-lg hover:bg-gray-100 transition-colors z-20 left-1/2 transform -translate-x-1/2">
+          <div class="flex gap-1 sm:gap-2 items-center justify-center w-full font-semibold h-full">
+            <i class="pi pi-arrow-down text-center text-xs sm:text-sm"></i>
+            <p class="text-xs sm:text-sm whitespace-nowrap">Scroll Down</p>
           </div>
         </button>
 
-        <!-- Input -->
+        <!-- Update the Input section -->
         <div v-if="(currentMessages.length !== 0 || showInput === true) && isAuthenticated" :style="screenWidth > 720 && !isCollapsed ? 'left:270px;' :
           screenWidth > 720 && isCollapsed ? 'left:60px;' : 'left:0px;'"
-          class="bg-white z-20 bottom-0 right-0 fixed pb-5 px-5">
+          class="bg-white z-20 bottom-0 right-0 fixed pb-3 sm:pb-5 px-2 sm:px-5">
+
           <div class="flex items-center justify-center w-full">
             <form @submit="handleSubmit"
-              :class="screenWidth > 720 ? 'relative flex px-3 py-2 border-2 shadow rounded-2xl items-center gap-2 w-[85%]' : 'relative flex px-3 py-2 border-2 shadow rounded-2xl w-full items-center gap-2'">
-              <textarea required id="prompt" name="prompt" @keydown="onEnter" @input="autoGrow" :disabled="isLoading"
-                rows="1" class="flex-grow py-2 bg-white text-sm 
-                      outline-none resize-none border-none
-                      max-h-[200px] overflow-auto leading-relaxed
-                      disabled:opacity-50 disabled:cursor-not-allowed"
-                :placeholder="isLoading ? 'Please wait...' : 'Ask me a question...'"></textarea>
-              <button type="submit" :disabled="isLoading" class="rounded-lg w-[26px] h-[26px] flex items-center justify-center transition-colors
-                      text-white bg-blue-600 hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50
-                      disabled:bg-gray-400 flex-shrink-0">
-                <i v-if="!isLoading" class="pi pi-arrow-up text-sm"></i>
-                <i v-else class="pi pi-spin pi-spinner text-sm"></i>
-              </button>
+              :class="screenWidth > 720 ? 'relative flex bg-gray-50 flex-col border-2 shadow rounded-2xl items-center w-[85%] max-w-4xl' : 'relative flex flex-col border-2 bg-gray-50 shadow rounded-2xl w-full max-w-full items-center'">
+
+              <!-- Request Limit Exceeded Banner -->
+              <div v-if="isRequestLimitExceeded" class="py-2 sm:py-3 w-full px-2 sm:px-3">
+                <div class="flex items-center justify-center w-full">
+                  <!-- Mobile: Stacked Layout -->
+                  <div class="flex sm:hidden w-full flex-col gap-2">
+                    <div class="flex items-center gap-2">
+                      <div
+                        class="w-6 h-6 sm:w-8 sm:h-8 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
+                        <i class="pi pi-ban text-red-600 text-xs sm:text-sm"></i>
+                      </div>
+                      <div class="min-w-0 flex-1">
+                        <h3 class="text-xs sm:text-sm font-semibold text-red-800 leading-tight">Free Requests Exhausted
+                        </h3>
+                        <p class="text-xs text-red-600 leading-tight mt-0.5">
+                          Used all {{ FREE_REQUEST_LIMIT }} requests
+                        </p>
+                      </div>
+                    </div>
+                    <button @click="$router.push('/upgrade')"
+                      class="w-full bg-red-500 hover:bg-red-600 text-white py-2 rounded-md text-xs font-medium transition-colors">
+                      Upgrade Plan
+                    </button>
+                  </div>
+
+                  <!-- Desktop: Horizontal Layout -->
+                  <div class="hidden sm:flex w-full items-center gap-3">
+                    <div class="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
+                      <i class="pi pi-ban text-red-600 text-sm"></i>
+                    </div>
+                    <div class="min-w-0 flex-1">
+                      <h3 class="text-sm font-semibold text-red-800 mb-1">Free Requests Exhausted</h3>
+                      <p class="text-xs text-red-600">
+                        You've used all {{ FREE_REQUEST_LIMIT }} free requests. Upgrade to continue chatting.
+                      </p>
+                    </div>
+                    <button @click="$router.push('/upgrade')"
+                      class="bg-red-500 px-3 hover:bg-red-600 text-white py-2 rounded-md text-sm font-medium transition-colors flex-shrink-0 whitespace-nowrap">
+                      Upgrade Plan
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Upgrade Warning Banner -->
+              <div v-else-if="shouldShowUpgradePrompt" class="py-2 sm:py-3 w-full px-2 sm:px-3">
+                <div class="flex items-center justify-center w-full">
+                  <!-- Mobile: Stacked Layout -->
+                  <div class="flex sm:hidden w-full flex-col gap-2">
+                    <div class="flex items-center gap-2">
+                      <div
+                        class="w-6 h-6 sm:w-8 sm:h-8 bg-yellow-100 rounded-full flex items-center justify-center flex-shrink-0">
+                        <i class="pi pi-exclamation-triangle text-yellow-600 text-xs sm:text-sm"></i>
+                      </div>
+                      <div class="min-w-0 flex-1">
+                        <h3 class="text-xs sm:text-sm font-semibold text-yellow-800 leading-tight">
+                          {{ requestsRemaining }} requests left
+                        </h3>
+                        <p class="text-xs text-yellow-600 leading-tight mt-0.5">
+                          Upgrade for unlimited access
+                        </p>
+                      </div>
+                    </div>
+                    <button @click="$router.push('/upgrade')"
+                      class="w-full bg-orange-500 hover:bg-orange-600 text-white py-2 rounded-md text-xs font-medium transition-colors">
+                      Upgrade Plan
+                    </button>
+                  </div>
+
+                  <!-- Desktop: Horizontal Layout -->
+                  <div class="hidden sm:flex w-full items-center gap-3">
+                    <div class="w-8 h-8 bg-yellow-100 rounded-full flex items-center justify-center flex-shrink-0">
+                      <i class="pi pi-exclamation-triangle text-yellow-600 text-sm"></i>
+                    </div>
+                    <div class="min-w-0 flex-1">
+                      <h3 class="text-sm font-semibold text-yellow-800 mb-1">
+                        {{ requestsRemaining }} free requests remaining
+                      </h3>
+                      <p class="text-xs text-yellow-600">
+                        Upgrade to continue chatting without limits
+                      </p>
+                    </div>
+                    <button @click="$router.push('/upgrade')"
+                      class="bg-orange-500 px-3 hover:bg-orange-600 text-white py-2 rounded-md text-sm font-medium transition-colors flex-shrink-0 whitespace-nowrap">
+                      Upgrade Plan
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Input Area -->
+              <div class="flex w-full bg-white rounded-2xl px-2 sm:px-3 py-1 sm:py-2 items-center gap-2 sm:gap-3"
+                :class="isRequestLimitExceeded ? 'opacity-50 border border-t pointer-events-none' :
+                  shouldShowUpgradePrompt ? 'border border-t' : ''">
+                <textarea required id="prompt" name="prompt" @keydown="onEnter" @input="autoGrow"
+                  :disabled="isLoading || isRequestLimitExceeded" rows="1"
+                  class="flex-grow py-2 placeholder:text-gray-500 rounded-t-2xl bg-white text-sm outline-none resize-none border-none max-h-[150px] sm:max-h-[200px] overflow-auto leading-relaxed disabled:opacity-50 disabled:cursor-not-allowed"
+                  :placeholder="isRequestLimitExceeded ? (screenWidth > 640 ? 'Upgrade to continue chatting...' : 'Upgrade to continue...') :
+                    isLoading ? 'Please wait...' :
+                      isFreeUser ? (screenWidth > 640 ? `Ask me a question... (${requestsRemaining} requests left)` : `Ask... (${requestsRemaining} left)`) :
+                        'Ask me a question...'"></textarea>
+                <button type="submit" :disabled="isLoading || isRequestLimitExceeded"
+                  class="rounded-lg w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center transition-colors text-white bg-blue-600 hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50 disabled:bg-gray-400 flex-shrink-0">
+                  <i v-if="!isLoading" class="pi pi-arrow-up text-xs sm:text-sm"></i>
+                  <i v-else class="pi pi-spin pi-spinner text-xs sm:text-sm"></i>
+                </button>
+              </div>
             </form>
           </div>
+
         </div>
       </div>
     </div>

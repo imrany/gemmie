@@ -97,6 +97,11 @@ const showInput = ref(false)
 const activeChatMenu = ref<string | null>(null)
 const showProfileMenu = ref(false)
 
+// ---------- Computed Properties ----------
+const isFreeUser = computed(() => {
+  return !parsedUserDetails.value?.plan || parsedUserDetails.value.plan === 'free' || parsedUserDetails.value.plan === ''
+})
+
 function showConfirmDialog(options: ConfirmDialogOptions) {
   confirmDialog.value = {
     visible: true,
@@ -435,7 +440,7 @@ function deleteMessage(messageIndex: number) {
   showConfirmDialog({
     visible: true,
     title: 'Delete Message',
-    message: `Are you sure you want to delete this message?\n\n"${preview}"\n\nThis action cannot be undone.`,
+    message: `Are you sure you want to delete this message?\n"${preview}"\n\nThis action cannot be undone.`,
     type: 'danger',
     confirmText: 'Delete',
     onConfirm: () => {
@@ -976,6 +981,7 @@ const globalState = {
   isLoading,
   expanded,
   showInput,
+  isFreeUser,
   showConfirmDialog,
   hideSidebar,
   setShowInput,
