@@ -417,7 +417,7 @@ watch(isAuthenticated, (val) => {
                                 <div class="flex items-center justify-between">
                                     <div>
                                         <h3 class="text-sm font-medium text-gray-800">Auto Sync</h3>
-                                        <p class="text-xs text-gray-500">
+                                        <p class="text-xs max-w-[150px] text-gray-500">
                                             {{ syncEnabled ? 'Data is synced across all your devices automatically' :
                                             'Data is only stored locally on this device' }}
                                         </p>
@@ -432,7 +432,7 @@ watch(isAuthenticated, (val) => {
                                 </div>
 
                                 <!-- Manual Sync Button (only show if sync is enabled) -->
-                                <div v-if="syncEnabled" class="flex items-center justify-between">
+                                <div v-if="syncEnabled" class="flex flex-wrap gap-3 items-center justify-between">
                                     <div>
                                         <h3 class="text-sm font-medium text-gray-800">Manual Sync</h3>
                                         <p class="text-xs text-gray-500">Force sync your data now</p>
@@ -446,19 +446,19 @@ watch(isAuthenticated, (val) => {
                                 </div>
 
                                 <!-- Logout -->
-                                <div class="flex items-center justify-between">
+                                <div class="flex flex-wrap gap-3 items-center justify-between">
                                     <div>
                                         <h3 class="text-sm font-medium text-gray-800">Log out of all devices</h3>
                                         <p class="text-xs text-gray-500">This will sign you out everywhere</p>
                                     </div>
                                     <button @click="logout"
-                                        class="px-4 py-2 border font-medium border-gray-300 hover:bg-gray-50 rounded-lg transition-all">
+                                        class="px-4 py-2 font-medium text-white bg-yellow-500 hover:bg-yellow-600 rounded-lg transition-all">
                                         Log out
                                     </button>
                                 </div>
 
                                 <!-- Delete account -->
-                                <div class="flex items-center justify-between">
+                                <div class="flex flex-wrap gap-3 items-center justify-between">
                                     <div>
                                         <h3 class="text-sm font-medium text-gray-800">Delete your account</h3>
                                         <p class="text-xs text-gray-500">Permanently delete your account and all data

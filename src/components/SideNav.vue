@@ -109,7 +109,9 @@ function handleChatClick(chatId: string) {
     <!-- Scrollable area -->
     <div class="flex-1 overflow-y-auto">
       <!-- Top Header -->
-      <div class="flex items-center justify-between p-3">
+      <div @click="()=>{
+        if (props.data.screenWidth < 720) props.functions.hideSidebar()
+      }" class="flex items-center justify-between p-3">
         <p v-if="!props.data.isCollapsed" class="font-semibold text-xl text-black">
           Gemmie
         </p>
@@ -122,7 +124,7 @@ function handleChatClick(chatId: string) {
       </div>
 
       <!-- New Chat & Actions -->
-      <div v-if="props.data.parsedUserDetails.username" class="px-3 my-4 flex flex-col gap-1 font-light text-sm">
+      <div v-if="props.data.parsedUserDetails.username" class="px-3 my-4  max-md:text-lg  flex flex-col gap-1 font-light text-sm">
         <button @click="
           () => {
             props.functions.createNewChat()
@@ -169,18 +171,18 @@ function handleChatClick(chatId: string) {
         <div class="flex flex-col gap-2">
           <div v-for="chat in !props.data.isCollapsed ? props.data.chats : props.data.chats.slice(0, 1)" :key="chat.id"
             :class="chat.id === props.data.currentChatId
-              ? 'w-full flex h-[32px] text-sm items-center bg-gray-300 rounded-lg relative'
-              : 'w-full flex h-[32px] text-sm items-center hover:bg-gray-100 rounded-lg relative'">
+              ? 'w-full flex h-[32px] max-md:h-[36px] text-sm items-center bg-gray-300 rounded-lg relative'
+              : 'w-full flex h-[32px] max-md:h-[36px] text-sm items-center hover:bg-gray-100 rounded-lg relative'">
 
             <!-- Chat content area -->
-            <div @click="handleChatClick(chat.id)" class="flex items-center h-full flex-grow px-2 cursor-pointer">
+            <div @click="handleChatClick(chat.id)" class="flex  max-md:text-lg items-center h-full flex-grow px-2 cursor-pointer">
               <i class="pi pi-comments mr-2 text-gray-500 mb-[2px]"></i>
 
               <!-- Chat title or rename input -->
               <div v-if="isRenaming === chat.id" class="flex-grow" @click.stop>
                 <input :id="`rename-${chat.id}`" v-model="renameValue" @keyup.enter="submitRename(chat.id)"
                   @keyup.escape="cancelRename" @blur="submitRename(chat.id)"
-                  class="w-full px-1 py-0.5 text-xs bg-white border border-blue-500 rounded focus:outline-none" />
+                  class="w-full px-1 py-0.5 max-md:text-lg  text-xs bg-white border border-blue-500 rounded focus:outline-none" />
               </div>
               <p v-else-if="!props.data.isCollapsed || props.data.screenWidth < 720" class="truncate">
                 <span v-if="chat.title.length>20">{{ `${chat.title.slice(0,20)}..` || 'Untitled Chat' }}</span>
@@ -197,9 +199,12 @@ function handleChatClick(chatId: string) {
             <ChatDropdown :data="{
               activeChatMenu,
               chat,
-            }" :functions="{
+              screenWidth: props.data.screenWidth,
+            }" 
+            :functions="{
               deleteChat: props.functions.deleteChat,
-              startRename
+              startRename,
+              hideSidebar:props.functions.hideSidebar
             }" />
           </div>
         </div>
@@ -212,27 +217,34 @@ function handleChatClick(chatId: string) {
         @click.stop="showProfileMenu = !showProfileMenu">
         <div class="flex items-center gap-2">
           <div class="w-[35px] h-[35px] flex justify-center items-center bg-gray-300 rounded-full">
-            <span class="text-sm">{{ props.data.parsedUserDetails.username.toUpperCase().slice(0, 2) }}</span>
+            <span class="text-sm  max-md:text-lg ">{{ props.data.parsedUserDetails.username.toUpperCase().slice(0, 2) }}</span>
           </div>
-          <p v-if="!props.data.isCollapsed || props.data.screenWidth < 720" class="text-base font-light">
+          <p v-if="!props.data.isCollapsed || props.data.screenWidth < 720" class="text-base  max-md:text-lg  font-light">
             {{ props.data.parsedUserDetails.username }}
           </p>
         </div>
-        <i class="pi pi-chevron-up text-xs" v-if="showProfileMenu"></i>
-        <i class="pi pi-chevron-down text-xs" v-else></i>
+        <i class="pi pi-chevron-up text-xs  max-md:text-base" v-if="showProfileMenu"></i>
+        <i class="pi pi-chevron-down text-xs  max-md:text-base" v-else></i>
       </div>
 
       <!-- Profile Dropdown -->
       <transition name="fade">
         <div v-if="showProfileMenu"
-          class="absolute max-w-[245px] bottom-full left-3 right-3 mb-2 bg-white border rounded-lg shadow-lg text-sm z-50"
+          class="absolute max-w-[245px] max-md:text-base bottom-full left-3 right-3 mb-2 bg-white border rounded-lg shadow-lg text-sm z-50"
           @click.stop>
-          <p class="px-4 py-2 text-gray-500 border-b">{{ props.data.parsedUserDetails.email || 'No email' }}</p>
-          <button v-for="option in profileOptions" :key="option.id" @click="option.action"
+          <p class="px-4 py-2 text-gray-500 border-b" v-if="props.data.parsedUserDetails.email.split('@')[0].length<12">{{ props.data.parsedUserDetails.email || 'No email' }}</p>
+          <p v-else class="px-4 py-2 text-gray-500 border-b">{{ `${props.data.parsedUserDetails.email.split('@')[0].slice(0,12)}...@${props.data.parsedUserDetails.email.split('@')[1]}` || 'No email' }}</p>
+          <button v-for="option in profileOptions" :key="option.id" @click="()=>{
+            option.action()
+            if (props.data.screenWidth < 720) props.functions.hideSidebar()
+          }"
             class="w-full text-left px-4 py-2 hover:bg-gray-100">
             {{ option.label }}
           </button>
-          <button @click="props.functions.logout"
+          <button @click="()=>{
+            props.functions.logout(); 
+            if (props.data.screenWidth < 720) props.functions.hideSidebar()
+          }"
             class="w-full text-left px-4 py-2 text-red-600 hover:bg-red-100 rounded-b-lg">
             Log Out
           </button>

@@ -37,7 +37,7 @@ let props = defineProps<{
         <span v-if="props.data.currentChat.title.length>20">{{ props.data.currentChat.title.slice(0,20) }}...</span>
         <span v-else>{{ props.data.currentChat.title }}</span>
       </p>
-      <p v-else class="text-black text-xl font-semibold tracking-wide select-none">
+      <p v-else class="text-black text-xl max-md:text-2xl  font-semibold tracking-wide select-none">
         Gemmie
       </p>
 
