@@ -21,6 +21,7 @@ const planDuration = ref<number | null>(null) // duration in ms
 const expiryTimestamp = ref<number | null>(null) // absolute expiry time in ms
 const now = ref(Date.now())
 let timer: number | null = null
+let paymentCheckInterval: number | null = null
 
 // Expiry date (absolute)
 const expiryDate = computed(() => {
@@ -35,11 +36,8 @@ const expiryDate = computed(() => {
   })
 })
 
-setInterval(() => {
-  now.value = Date.now()
-}, 1000)
-
-const timeLeft = computed(() => {
+// Current plan time left (for existing active plan)
+const currentPlanTimeLeft = computed(() => {
   if (!parsedUserDetails?.value.expiry_timestamp) return ''
   const expiryMs =
     parsedUserDetails.value.expiry_timestamp < 1e12
@@ -75,7 +73,6 @@ function setDuration(planId: string) {
   }
   expiryTimestamp.value = now.value + (planDuration.value || 0)
 }
-
 
 // Payment form data - create local reactive references
 const paymentForm = reactive({
@@ -119,6 +116,15 @@ const isPhonePrefilled = computed(() => {
   return !!(parsedUserDetails.value?.phone_number && parsedUserDetails.value?.phone_number.trim() !== '')
 })
 
+// Check if user has an active plan
+const hasActivePlan = computed(() => {
+  if (!parsedUserDetails.value?.expiry_timestamp) return false
+  const expiryMs = parsedUserDetails.value.expiry_timestamp < 1e12
+    ? parsedUserDetails.value.expiry_timestamp * 1000
+    : parsedUserDetails.value.expiry_timestamp
+  return expiryMs > now.value
+})
+
 function selectPlan(planId: string) {
   selectPlanName.value = planId as 'student' | 'pro' | 'hobbyist'
   plans.value.forEach((plan) => {
@@ -142,6 +148,14 @@ function goBackToPlans() {
   router.replace({ name: 'upgrade' })
 }
 
+// Clean up intervals
+function clearIntervals() {
+  if (paymentCheckInterval) {
+    clearInterval(paymentCheckInterval)
+    paymentCheckInterval = null
+  }
+}
+
 // Handle M-Pesa payment
 async function handlePayment() {
   if (!isFormValid.value) {
@@ -150,6 +164,7 @@ async function handlePayment() {
   }
 
   isProcessing.value = true
+  clearIntervals() // Clear any existing intervals
 
   try {
     // Get the actual expiry timestamp for submission
@@ -171,36 +186,101 @@ async function handlePayment() {
 
     console.log('Initiating M-Pesa payment')
     const stkResults = await sendSTK(paymentData)
-    if (stkResults === undefined || stkResults.data.success === false) {
+    
+    if (!stkResults || !stkResults.data || stkResults.data.success === false) {
       isProcessing.value = false
+      toast.error('Failed to initiate payment. Please try again.', { duration: 5000 })
       return
     }
-    console.log(stkResults)
-    toast.success(`M-Pesa prompt sent to ${paymentForm.phone}. Please check your phone and enter your M-Pesa PIN to complete the payment.`, { duration: 5000 })
-    localStorage.setItem("external_reference", JSON.stringify(stkResults.data.external_reference))
 
-    // confirm payment after  every 5sec, retry up to 5 times
+    console.log('STK Push sent successfully:', stkResults)
+    toast.success(`M-Pesa prompt sent to ${paymentForm.phone}. Please check your phone and enter your M-Pesa PIN to complete the payment.`, { duration: 8000 })
+    
+    // Store external reference safely
+    const externalRef = stkResults.data.external_reference
+    if (externalRef) {
+      localStorage.setItem("external_reference", JSON.stringify(externalRef))
+    }
+
+    // Payment confirmation logic with better error handling
     let attempts = 0;
-    const interval = setInterval(async () => {
+    const maxAttempts = 10; // Check for up to 10 attempts (about 3.5 minutes)
+    
+    paymentCheckInterval = window.setInterval(async () => {
       attempts++;
-      const ext=JSON.parse(localStorage.getItem("external_reference") || '')
-      const transResults = await getTransaction(ext);
-      if (transResults?.Status === "success") {
-        clearInterval(interval);
-        toast.success(`Payment successful! Your ${selectedPlan.value?.name} plan is active until ${expiryDate.value}.`, 
-        { 
-          duration: Infinity 
-        });
-        isProcessing.value = false
-        router.push('/')
+      console.log(`Payment check attempt ${attempts}/${maxAttempts}`)
+      
+      try {
+        const ext = JSON.parse(localStorage.getItem("external_reference") || '""')
+        if (!ext) {
+          console.error('No external reference found')
+          clearIntervals()
+          isProcessing.value = false
+          toast.error("Payment reference lost. Please try again.", { duration: 6000 })
+          return
+        }
+
+        const transResults = await getTransaction(ext)
+        console.log('Transaction check result:', transResults)
+        
+        // Check for successful payment
+        if (transResults?.data?.Status === "Success" || transResults?.success === true) {
+          clearIntervals()
+          // localStorage.removeItem("external_reference") // Clean up
+          
+          toast.success(`Payment successful! Your ${selectedPlan.value?.name} plan is now active until ${expiryDate.value}.`, { 
+            duration: 10000,
+            important: true
+          })
+          
+          isProcessing.value = false
+          
+          // Navigate back to home after a short delay
+          setTimeout(() => {
+            router.push('/')
+          }, 2000)
+          return
+        }
+        
+        // Check for failed payment
+        if (transResults?.data?.Status === "Failed" || transResults?.success === false) {
+          clearIntervals()
+          localStorage.removeItem("external_reference")
+          
+          toast.error("Payment failed. Please try again or contact support.", { duration: 8000 })
+          isProcessing.value = false
+          return
+        }
+        
+        // Still pending - show progress
+        if (attempts <= 3) {
+          toast.info(`Waiting for payment confirmation... (${attempts}/${maxAttempts})`, { 
+            duration: 3000,
+            description: "Please complete the payment on your phone"
+          })
+        }
+        
+      } catch (error) {
+        console.error('Error checking transaction:', error)
       }
-      if (attempts >= 5) { 
-        clearInterval(interval);
-        toast.error("Payment not confirmed. Please check M-Pesa SMS and Refresh this page.", { duration: 6000 });
+      
+      // Max attempts reached
+      if (attempts >= maxAttempts) { 
+        clearIntervals()
+        toast.error("Payment confirmation timeout. If you completed the payment, please refresh this page or contact support.", { 
+          duration: 10000,
+          action: {
+            label: "Refresh Page",
+            onClick: () => window.location.reload()
+          }
+        })
         isProcessing.value = false
       }
-    }, 1000 * 5);
+    }, 20000) // Check every 20 seconds
+
   } catch (error) {
+    console.error('Payment error:', error)
+    clearIntervals()
     isProcessing.value = false
     toast.error('Payment failed. Please try again.', {
       duration: 5000,
@@ -223,12 +303,18 @@ async function sendSTK(paymentData: any) {
         amount: paymentData.amount,
       }),
     });
+    
+    if (!res.ok) {
+      throw new Error(`HTTP error! status: ${res.status}`)
+    }
+    
     return await res.json();
-  } catch {
-    toast.error("Failed to send STK push", { duration: 5000 });
+  } catch (error) {
+    console.error('STK Push error:', error)
+    toast.error("Failed to send M-Pesa prompt. Please check your connection and try again.", { duration: 5000 })
+    throw error
   }
 }
-
 
 watch(selectPlanName, (newVal) => {
   if (!showCheckout.value) {
@@ -242,6 +328,7 @@ onUnmounted(() => {
     clearInterval(timer)
     timer = null
   }
+  clearIntervals()
 })
 
 onMounted(() => {
@@ -250,16 +337,17 @@ onMounted(() => {
     return
   }
 
-  // 🔑 Use server expiry if available
+  // Check if user has an active plan
   const expiry = parsedUserDetails.value.expiry_timestamp
   if (expiry && expiry * 1000 > Date.now()) {
-    toast.success(`Your ${parsedUserDetails.value.plan_name} is still active.`, {
+    toast.info(`You currently have an active ${parsedUserDetails.value.plan_name} plan.`, {
       duration: Infinity,
-      important: true,
-      description: `Remaining: ${timeLeft.value}`
+      description: `Time remaining: ${currentPlanTimeLeft.value}`,
+      action: {
+        label: "Go Back",
+        onClick: () => router.back()
+      }
     })
-    router.push("/")
-    return
   }
 
   // Keep ticking every second
@@ -294,6 +382,22 @@ onMounted(() => {
       </button>
     </div>
 
+    <!-- Active Plan Notice -->
+    <div v-if="hasActivePlan && !showCheckout" class="max-w-7xl mx-auto mb-8">
+      <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <div class="flex items-center">
+          <i class="pi pi-info-circle text-blue-600 mr-3"></i>
+          <div>
+            <h3 class="text-blue-900 font-medium">Current Active Plan</h3>
+            <p class="text-blue-700 text-sm">
+              You have an active {{ parsedUserDetails.plan_name }} plan with {{ currentPlanTimeLeft }} remaining.
+              Purchasing a new plan will replace your current one.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Plans Selection View -->
     <div v-if="!showCheckout">
       <div class="max-w-7xl mx-auto text-center mb-12">
@@ -314,6 +418,12 @@ onMounted(() => {
           <div v-if="plan.popular"
             class="absolute top-0 right-0 bg-blue-600 text-white px-3 py-1 text-xs font-semibold rounded-bl-lg">
             SELECTED
+          </div>
+
+          <!-- Current Plan Badge -->
+          <div v-if="hasActivePlan && parsedUserDetails.plan_name?.toLowerCase().includes(plan.name.toLowerCase())"
+            class="absolute top-0 left-0 bg-green-600 text-white px-3 py-1 text-xs font-semibold rounded-br-lg">
+            CURRENT
           </div>
 
           <div class="p-6 flex-grow flex flex-col">
@@ -340,7 +450,9 @@ onMounted(() => {
                 ? 'bg-blue-600 hover:bg-blue-700 shadow-md'
                 : 'bg-gray-800 hover:bg-gray-900 shadow-md'
                 ">
-              Get {{ plan.name }} Plan
+              {{ hasActivePlan && parsedUserDetails.plan_name?.toLowerCase().includes(plan.name.toLowerCase()) 
+                ? `Renew ${plan.name} Plan` 
+                : `Get ${plan.name} Plan` }}
             </button>
           </div>
         </div>
@@ -353,7 +465,22 @@ onMounted(() => {
         <!-- Header -->
         <div class="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-8 text-white">
           <h2 class="text-2xl font-bold mb-2">Complete Your Purchase</h2>
-          <p class="text-blue-100">You're upgrading to the {{ selectedPlan?.name }} plan</p>
+          <p class="text-blue-100">
+            {{ hasActivePlan ? `Upgrading to the ${selectedPlan?.name} plan` : `You're purchasing the ${selectedPlan?.name} plan` }}
+          </p>
+        </div>
+
+        <!-- Current Plan Notice in Checkout -->
+        <div v-if="hasActivePlan" class="bg-yellow-50 border-b border-yellow-200 px-6 py-4">
+          <div class="flex items-center">
+            <i class="pi pi-exclamation-triangle text-yellow-600 mr-3"></i>
+            <div>
+              <p class="text-yellow-800 text-sm">
+                <strong>Note:</strong> You currently have {{ currentPlanTimeLeft }} remaining on your {{ parsedUserDetails.plan_name }} plan. 
+                This purchase will replace your current plan immediately.
+              </p>
+            </div>
+          </div>
         </div>
 
         <!-- Plan Summary -->
@@ -424,16 +551,15 @@ onMounted(() => {
                 pattern="^(\+254|0)[17][0-9]{8}$"
                 class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors"
                 placeholder="0712345678 or +254712345678" />
-              <!-- if isPhonePrefilled ask if user want to change phone -->
-              <div class="flex items-center gap-2 mt-1" v-if="isPhonePrefilled">
+              <div class="flex items-center gap-2 mt-1" v-if="isPhonePrefilled && !paymentForm.phone">
                 <p class="text-xs text-gray-500">
-                  Using your account phone number
+                  Using your account phone number: {{ parsedUserDetails.phone_number }}
                 </p>
-                <button type="button" class="text-blue-600 hover:underline text-xs" @click="() => {
-                  paymentForm.phone = ''
-                }">Change</button>
+                <button type="button" class="text-blue-600 hover:underline text-xs" @click="paymentForm.phone = parsedUserDetails.phone_number">
+                  Use Account Phone
+                </button>
               </div>
-              <p v-else class="text-xs text-gray-500 mt-1">
+              <p v-if="!isPhonePrefilled" class="text-xs text-gray-500 mt-1">
                 Enter your Safaricom M-Pesa number
               </p>
             </div>
@@ -444,19 +570,12 @@ onMounted(() => {
                 <div>
                   <h5 class="font-medium text-blue-900 mb-1">Plan Duration</h5>
                   <p class="text-sm text-blue-700">
-                    Your {{ selectedPlan?.name }} plan will be active {{ selectedPlan?.duration }}
+                    Your {{ selectedPlan?.name }} plan will be active for {{ selectedPlan?.duration }}
                   </p>
                 </div>
                 <div class="text-right">
                   <p class="text-xs text-blue-600 uppercase font-semibold">Expires</p>
                   <p class="text-sm font-medium text-blue-900">{{ expiryDate }}</p>
-                </div>
-              </div>
-              <div v-if="timeLeft && timeLeft !== 'Expired'" class="text-center">
-                <div
-                  class="inline-flex items-center bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
-                  <i class="pi pi-clock mr-1"></i>
-                  {{ timeLeft }} remaining after purchase
                 </div>
               </div>
             </div>
@@ -475,12 +594,13 @@ onMounted(() => {
               <div class="text-sm text-green-800">
                 <p class="mb-1">• You'll receive an M-Pesa prompt on your phone</p>
                 <p class="mb-1">• Enter your M-Pesa PIN to complete payment</p>
-                <p>• Payment confirmation will be sent via SMS</p>
+                <p>• Payment confirmation will be automatic</p>
               </div>
             </div>
 
             <!-- Form Validation Message -->
-            <div v-if="!isFormValid && paymentForm.phone" class="bg-red-50 border border-red-200 rounded-lg p-3">
+            <div v-if="!isFormValid && (paymentForm.phone || paymentForm.username || paymentForm.email)" 
+                 class="bg-red-50 border border-red-200 rounded-lg p-3">
               <div class="flex items-center">
                 <i class="pi pi-exclamation-triangle text-red-600 mr-2"></i>
                 <p class="text-sm text-red-800">
@@ -489,16 +609,15 @@ onMounted(() => {
               </div>
               <ul class="text-xs text-red-700 mt-2 ml-6">
                 <li v-if="!paymentForm.username.trim()">Username is required</li>
-                <li v-if="!paymentForm.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(paymentForm.email)">Valid email is
-                  required</li>
+                <li v-if="!paymentForm.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(paymentForm.email)">Valid email is required</li>
                 <li v-if="!/^(\+254|0)[17][0-9]{8}$/.test(paymentForm.phone)">Valid Kenyan phone number is required</li>
               </ul>
             </div>
 
             <!-- Action Buttons -->
             <div class="flex gap-4 pt-4">
-              <button @click="goBackToPlans" type="button"
-                class="flex-1 py-3 px-4 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors duration-200">
+              <button @click="goBackToPlans" type="button" :disabled="isProcessing"
+                class="flex-1 py-3 px-4 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed">
                 Back to Plans
               </button>
               <button type="submit" :disabled="!isFormValid || isProcessing"
