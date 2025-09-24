@@ -60,7 +60,7 @@ type Transaction struct {
 	MerchantRequestID  string    `json:"MerchantRequestID"`
 	Amount             int       `json:"Amount"`
 	PhoneNumber        string    `json:"Phone"`
-	ResultCode         string    `json:"ResultCode"`
+	ResultCode         int    `json:"ResultCode"`
 	ResultDescription  string    `json:"ResultDesc"`
 	Status             string    `json:"Status"`
 	CreatedAt          time.Time `json:"CreatedAt"`
