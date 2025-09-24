@@ -12,6 +12,7 @@ import { destroyVideoLazyLoading, initializeVideoLazyLoading, observeNewVideoCon
 import { onUpdated } from "vue"
 import { extractUrls, generateChatTitle, copyCode, isPromptTooShort, WRAPPER_URL } from "@/utils/globals"
 import CreateSessView from "./CreateSessView.vue"
+import router from "@/router"
 
 // Inject global state
 const globalState = inject('globalState') as {
@@ -28,6 +29,7 @@ const globalState = inject('globalState') as {
   syncStatus: Ref<{ lastSync: Date | null; syncing: boolean; hasUnsyncedChanges: boolean; }>,
   isAuthenticated: Ref<boolean>,
   parsedUserDetails: any,
+  planStatus: Ref<{ status: string; timeLeft: string; expiryDate: string; isExpired: boolean; }>,
   currentChatId: Ref<string>,
   chats: Ref<Chat[]>
   logout: () => void,
@@ -76,6 +78,7 @@ const {
   isAuthenticated,
   currentChatId,
   chats,
+  planStatus,
   logout,
   isLoading,
   expanded,
@@ -128,7 +131,8 @@ const requestsRemaining = computed(() => {
 })
 
 const isRequestLimitExceeded = computed(() => {
-  return isFreeUser.value && requestCount.value >= FREE_REQUEST_LIMIT
+  return (isFreeUser.value && requestCount.value >= FREE_REQUEST_LIMIT && planStatus.value.status === 'no-plan') ||
+    planStatus.value.isExpired
 })
 
 const shouldShowUpgradePrompt = computed(() => {
@@ -580,12 +584,20 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
   }
 
   // Check request limit for free users
-  if (isFreeUser.value && requestCount.value >= FREE_REQUEST_LIMIT) {
+  if (isFreeUser.value && requestCount.value >= FREE_REQUEST_LIMIT && planStatus.value.status === 'no-plan') {
     toast.warning('Free requests exhausted', {
       duration: 4000,
       description: 'Please upgrade to continue chatting.'
     })
     return // Just return, the banner is already showing
+  }
+
+  if(planStatus.value.isExpired){
+    toast.error('Your plan has expired', {
+      duration: 5000,
+      description: 'Please renew your plan to continue using the service.'
+    })
+    return
   }
 
   // handling for link-only prompts
@@ -1151,6 +1163,27 @@ watch(() => isFreeUser.value, (newValue, oldValue) => {
   }
   // If user was paid and now is free, load the counter
   else if (oldValue === false && newValue === true) {
+    loadRequestCount()
+  }
+})
+
+watch(planStatus.value, (newStatus, oldStatus) => {
+  if (oldStatus.isExpired===false && newStatus.isExpired===true) {
+    toast.error('Your plan has expired', {
+      duration: Infinity,
+      description: 'Please renew your plan to continue using the service.',
+      action: {
+        label: 'Renew Now',
+        onClick: () => {
+          router.push('/upgrade')
+        }
+      }
+    })
+  }
+})
+
+onMounted(() => {
+  if (isAuthenticated && isFreeUser.value) {
     loadRequestCount()
   }
 })
