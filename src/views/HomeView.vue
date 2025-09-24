@@ -1315,7 +1315,7 @@ watch(() => isFreeUser.value, (newValue, oldValue) => {
 
                 <!-- Actions - Responsive with fewer labels on mobile -->
                 <div v-if="item.response !== '...' && item.response !== 'refreshing...'"
-                  class="flex flex-wrap gap-2 sm:gap-3 mt-2 text-gray-500 text-xs sm:text-sm">
+                  class="flex flex-wrap gap-2 sm:gap-3 mt-2 text-gray-500 text-sm">
                   <button @click="copyResponse(item.response, i)"
                     class="flex items-center gap-1 hover:text-blue-600 transition-colors min-h-[32px]">
                     <i class="pi pi-copy"></i>

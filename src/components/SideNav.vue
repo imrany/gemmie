@@ -207,8 +207,11 @@ function handleChatClick(chatId: string) {
               {{ props.data.parsedUserDetails.plan_name || 'Free Plan' }}
             </span>
           </div>
-          <button v-if="!props.data.parsedUserDetails.plan_name" @click="router.push('/upgrade')" 
-                  class="text-xs px-2 py-1 rounded-full border border-current transition-colors">
+          <button v-if="!props.data.parsedUserDetails.plan_name" @click="()=>{
+            if (props.data.screenWidth < 720) props.functions.hideSidebar()
+            router.push('/upgrade')
+          }" 
+              class="text-xs px-2 py-1 rounded-full border border-current transition-colors">
             {{ 'Upgrade' }}
           </button>
         </div>
