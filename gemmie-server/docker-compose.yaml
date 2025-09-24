@@ -1,24 +1,20 @@
-version: "3.9"
-
 services:
   gemmie-server:
     image: ghcr.io/imrany/gemmie-server:latest
     container_name: gemmie-server
     restart: unless-stopped
-    
-    # Persist app data outside container
+
+    # Map host directory to container
     volumes:
       - ~/.gemmie-server:/var/opt/gemmie-server
-    
-    # Expose the service port
+
     ports:
       - "8081:8081"
-    
-    # Use environment variables for config
+
     environment:
       PORT: "8081"
       DATA_FILE: "/var/opt/gemmie-server/gemmie_data.json"
       PAYHERO_USERNAME: ""
       PAYHERO_PASSWORD: ""
       PAYHERO_CHANNEL_ID: ""
-      CALLBACK_URL: ""
+      CALLBACK_URL: "http://localhost:8081/api/callback"
