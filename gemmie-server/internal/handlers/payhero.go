@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -207,6 +208,7 @@ func StoreTransactionHandler(w http.ResponseWriter, r *http.Request) {
 
 	transaction := reqBody.Response
 
+	slog.Info("Received transaction", "transaction", transaction, "req body", reqBody)
 	if strings.TrimSpace(transaction.ExternalReference) == "" {
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
