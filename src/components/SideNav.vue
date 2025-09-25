@@ -10,14 +10,16 @@ const globalState = inject('globalState') as {
   toggleChatMenu: (chatId: string, event: Event) => void
   showProfileMenu: Ref<boolean>,
   handleClickOutside: () => void,
-  isAuthenticated: Ref<boolean>
+  isAuthenticated: Ref<boolean>,
+  planStatus: Ref<{ status: string; timeLeft: string; expiryDate: string; isExpired: boolean; }>,
 }
 const {
   activeChatMenu,
   toggleChatMenu,
   showProfileMenu,
   handleClickOutside,
-  isAuthenticated
+  isAuthenticated,
+  planStatus,
 } = globalState
 
 const props = defineProps<{
@@ -68,49 +70,6 @@ onUnmounted(() => {
     clearInterval(timer)
     timer = null
   }
-})
-
-// Computed properties for plan status
-const planStatus = computed(() => {
-  if (!props.data.parsedUserDetails.expiry_timestamp) {
-    return { status: 'no-plan', timeLeft: '', expiryDate: '', isExpired: false }
-  }
-
-  const expiryMs = props.data.parsedUserDetails.expiry_timestamp < 1e12
-    ? props.data.parsedUserDetails.expiry_timestamp * 1000
-    : props.data.parsedUserDetails.expiry_timestamp
-
-  const diff = expiryMs - now.value
-  const isExpired = diff <= 0
-
-  if (isExpired) {
-    return { status: 'expired', timeLeft: 'Expired', expiryDate: '', isExpired: true }
-  }
-
-  const days = Math.floor(diff / (1000 * 60 * 60 * 24))
-  const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
-  const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
-  const seconds = Math.floor((diff % (1000 * 60)) / 1000)
-
-  let timeLeft = ''
-  if (days > 0) {
-    timeLeft = `${days}d ${hours}h ${minutes}m`
-  } else if (hours > 0) {
-    timeLeft = `${hours}h ${minutes}m ${seconds}s`
-  } else {
-    timeLeft = `${minutes}m ${seconds}s`
-  }
-
-  const expiryDate = new Date(expiryMs).toLocaleString('en-KE', {
-    weekday: 'short',
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  })
-
-  return { status: 'active', timeLeft, expiryDate, isExpired: false }
 })
 
 const planColor = computed(() => {
