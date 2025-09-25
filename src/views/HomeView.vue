@@ -1024,44 +1024,6 @@ async function refreshResponse(oldPrompt?: string) {
   }
 }
 
-
-// Add function to manually clear link preview cache
-function clearLinkPreviewCache() {
-  const cacheSize = linkPreviewCache.value.size
-
-  if (cacheSize === 0) {
-    toast.info('Link preview cache is already empty', {
-      duration: 3000,
-      description: ''
-    })
-    return
-  }
-
-  showConfirmDialog({
-    visible: true,
-    title: 'Clear Link Preview Cache',
-    message: `Clear all link preview cache? This will remove ${cacheSize} cached preview(s) and require refetching previews for existing links.`,
-    type: 'warning',
-    confirmText: 'Clear Cache',
-    onConfirm: () => {
-      try {
-        localStorage.removeItem('linkPreviews')
-        linkPreviewCache.value.clear()
-        confirmDialog.value.visible = false
-      } catch (err) {
-        console.error('Failed to clear link preview cache:', err)
-        toast.error('Failed to clear link preview cache.', {
-          duration: 3000,
-          description: ''
-        })
-      }
-    },
-    onCancel: () => {
-      confirmDialog.value.visible = false // Close dialog on cancel
-    }
-  })
-}
-
 let resizeTimeout: any
 window.onresize = () => {
   clearTimeout(resizeTimeout)
@@ -1250,28 +1212,6 @@ watch(isAuthenticated, (newVal) => {
   if (newVal) {
     showCreateSession.value = false
   }
-})
-
-const timeLeft = computed(() => {
-  // Add proper null checking
-  if (!parsedUserDetails?.value || !parsedUserDetails.value.expiry_timestamp) {
-    return ''
-  }
-  
-  const expiry = parsedUserDetails.value.expiry_timestamp
-  const diff = expiry * 1000 - now.value
-
-  if (diff <= 0) return 'Expired'
-
-  const days = Math.floor(diff / (1000 * 60 * 60 * 24))
-  const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
-  const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
-  const seconds = Math.floor((diff % (1000 * 60)) / 1000)
-
-  if (days > 0) {
-    return `${days}d ${hours}h ${minutes}m`
-  }
-  return `${hours}h ${minutes}m ${seconds}s`
 })
 
 onMounted(() => {
