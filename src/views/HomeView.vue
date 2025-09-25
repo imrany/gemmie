@@ -25,7 +25,7 @@ const globalState = inject('globalState') as {
   confirmDialog: Ref<ConfirmDialogOptions>,
   isCollapsed: Ref<boolean>,
   isSidebarHidden: Ref<boolean>,
-  authData: Ref<{ username: string; email: string; password: string; }>,
+  authData: Ref<{ username: string; email: string; password: string; agreeToTerms: boolean; }>,
   syncStatus: Ref<{ lastSync: Date | null; syncing: boolean; hasUnsyncedChanges: boolean; }>,
   isAuthenticated: Ref<boolean>,
   parsedUserDetails: any,
@@ -119,11 +119,18 @@ let parsedUserDetails: Ref<any> = globalState.parsedUserDetails
 
 // ---------- State ----------
 const authStep = ref(1)
-const showCreateSession = ref(false) //  removed 'let' declaration
-const copiedIndex = ref<number | null>(null) //  Track copied state
+const showCreateSession = ref(false)
+const copiedIndex = ref<number | null>(null)
 const requestCount = ref(0)
 const FREE_REQUEST_LIMIT = 5
 const now = ref(Date.now())
+
+const pastePreview = ref<{
+  content: string;
+  wordCount: number;
+  charCount: number;
+  show: boolean;
+} | null>(null)
 
 const requestsRemaining = computed(() => {
   if (!isFreeUser.value) return Infinity
@@ -136,22 +143,19 @@ const isRequestLimitExceeded = computed(() => {
 })
 
 const shouldShowUpgradePrompt = computed(() => {
-  return isFreeUser.value && requestCount.value >= 3 // Show when 2 requests left
+  return isFreeUser.value && requestCount.value >= 3
 })
 
 // ---------- Request Limit Functions ----------
 function loadRequestCount() {
   try {
     if (!parsedUserDetails.value) {
-      // If no user data, assume free user and load count
       requestCount.value = 0
       return
     }
 
-    // For paid users with active plans, reset count
     if (!isFreeUser.value) {
       requestCount.value = 0
-      // Clear any existing saved count for paid users
       try {
         localStorage.removeItem('requestCount')
       } catch (error) {
@@ -160,14 +164,12 @@ function loadRequestCount() {
       return
     }
 
-    // For free users or expired plans, load the saved count
     const saved = localStorage.getItem('requestCount')
     if (saved) {
       try {
         const data = JSON.parse(saved)
         const now = new Date().getTime()
 
-        // Validate saved data structure
         if (typeof data !== 'object' || typeof data.timestamp !== 'number' || typeof data.count !== 'number') {
           console.warn('Invalid request count data format, resetting')
           requestCount.value = 0
@@ -175,18 +177,15 @@ function loadRequestCount() {
           return
         }
 
-        // Reset count if it's been more than 24 hours
         if (now - data.timestamp > 24 * 60 * 60 * 1000) {
           requestCount.value = 0
           saveRequestCount()
         } else {
-          // Ensure count is within valid range
           requestCount.value = Math.max(0, Math.min(data.count, FREE_REQUEST_LIMIT))
         }
       } catch (parseError) {
         console.error('Failed to parse request count data:', parseError)
         requestCount.value = 0
-        // Clear corrupted data
         localStorage.removeItem('requestCount')
       }
     } else {
@@ -201,7 +200,6 @@ function loadRequestCount() {
 
 function saveRequestCount() {
   try {
-    // Only save for free users
     if (!isFreeUser.value) {
       return
     }
@@ -210,7 +208,7 @@ function saveRequestCount() {
       count: Math.max(0, Math.min(requestCount.value, FREE_REQUEST_LIMIT)),
       timestamp: new Date().getTime()
     }
-    
+
     localStorage.setItem('requestCount', JSON.stringify(data))
   } catch (error) {
     console.error('Failed to save request count:', error)
@@ -232,7 +230,6 @@ function incrementRequestCount() {
   }
 }
 
-// reset request count when user upgrades
 function resetRequestCount() {
   try {
     requestCount.value = 0
@@ -250,7 +247,6 @@ function loadChats() {
       const parsedChats = JSON.parse(stored)
       if (Array.isArray(parsedChats)) {
         chats.value = parsedChats
-        // Set current chat to the most recent one if none is set
         if (chats.value.length > 0 && !currentChatId.value) {
           currentChatId.value = chats.value[0].id
         }
@@ -428,9 +424,9 @@ function LinkPreviewComponent({ preview }: { preview: LinkPreview }) {
   const videoPreview = renderVideoPreview()
 
   return `
-    <div class="link-preview border border-gray-200 rounded-lg overflow-hidden my-2 bg-white hover:shadow-md transition-shadow w-fit">
+    <div class="link-preview border border-gray-200 rounded-lg overflow-hidden my-2 bg-white hover:shadow-md transition-shadow w-fit max-w-full">
       ${hasVideo ? `
-        <div class="w-full md:w-[500px]">
+        <div class="w-full max-w-[500px]">
           ${videoPreview}
           <div class="p-3 sm:p-4 min-w-0">
             <div class="flex items-start justify-between gap-2 min-w-0">
@@ -460,7 +456,7 @@ function LinkPreviewComponent({ preview }: { preview: LinkPreview }) {
         </div>
       ` : `
         <!-- Regular link preview -->
-        <a href="${preview.url}" class="w-full md:w-[300px]" target="_blank" rel="noopener noreferrer" class="block">
+        <a href="${preview.url}" class="block w-full max-w-[400px]" target="_blank" rel="noopener noreferrer">
           ${preview.previewImage ? `
             <div class="aspect-video overflow-hidden bg-gray-100">
               <img src="${preview.previewImage}" alt="${preview.title}" 
@@ -490,9 +486,48 @@ function LinkPreviewComponent({ preview }: { preview: LinkPreview }) {
   `
 }
 
+// Create paste preview component
+function PastePreviewComponent(content: string, wordCount: number, charCount: number) {
+  // Properly escape HTML and preserve formatting
+  const preview = content.length > 200 ? content.substring(0, 200) + '...' : content
+  const escapedPreview = preview
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+
+  return `
+    <div class="paste-preview border border-gray-300 rounded-lg overflow-hidden my-2 bg-gray-100 hover:shadow-md transition-shadow w-full">
+      <div class="w-full">
+        <div class="bg-gray-600 px-3 py-1 text-white text-xs font-medium flex items-center gap-2">
+          <i class="pi pi-clipboard"></i>
+          <span>PASTED</span>
+          <span class="ml-auto text-gray-200 hidden sm:inline">${wordCount} words • ${charCount} chars</span>
+          <span class="ml-auto text-gray-200 sm:hidden">${charCount} chars</span>
+        </div>
+        <div class="pb-3 px-3">
+          <div class="relative">
+            <div class="text-sm text-gray-800 leading-relaxed break-words whitespace-pre-wrap font-mono h-20 sm:h-24 overflow-hidden">
+${escapedPreview}
+            </div>
+            <!-- Fade overlay -->
+            <div class="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-gray-50 via-gray-50/80 to-transparent pointer-events-none"></div>
+          </div>
+          <div class="flex items-center justify-between mt-2 text-xs text-gray-600">
+            <span class="hidden sm:inline">Large content detected</span>
+            <span class="sm:hidden">Large content</span>
+            <button onclick="removePastePreview()" class="text-gray-700 hover:text-gray-900 underline font-medium">Remove</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `
+}
+
 // ---------- Authentication Functions ----------
 function nextAuthStep() {
-  if (authStep.value < 3) {
+  if (authStep.value < 4) {
     authStep.value++
   }
 }
@@ -511,13 +546,16 @@ function validateCurrentStep(): boolean {
         return !!(username && username.length >= 2 && username.length <= 50)
       case 2:
         const email = authData.value.email?.trim()
-        return !!(email && 
-          email.length > 0 && 
+        return !!(email &&
+          email.length > 0 &&
           email.length <= 100 &&
           /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
       case 3:
         const password = authData.value.password
         return !!(password && password.length > 7 && password.length < 25)
+      case 4:
+        const agreeToTerms = authData.value.agreeToTerms
+        return agreeToTerms
       default:
         return false
     }
@@ -567,7 +605,7 @@ function renderMarkdown(text?: string) {
   }
 }
 
-//  Debounced scroll handler to improve performance
+// Debounced scroll handler to improve performance
 let scrollTimeout: any = null
 function debouncedHandleScroll() {
   if (scrollTimeout) {
@@ -596,10 +634,53 @@ function isJustLinks(prompt: string): boolean {
   return promptWithoutUrls.split(/\s+/).filter(Boolean).length <= 3
 }
 
+// paste detection function
+function detectLargePaste(text: string): boolean {
+  const wordCount = text.trim().split(/\s+/).length
+  const charCount = text.length
+  return wordCount > 100 || charCount > 800
+}
+
+function handlePaste(e: ClipboardEvent) {
+  const pastedText = e.clipboardData?.getData('text') || ''
+
+  if (detectLargePaste(pastedText)) {
+    e.preventDefault()
+
+    const wordCount = pastedText.trim().split(/\s+/).length
+    const charCount = pastedText.length
+
+    // Show paste preview
+    pastePreview.value = {
+      content: wordCount > 100? `#pastedText#${pastedText}` : pastedText,
+      wordCount,
+      charCount,
+      show: true
+    }
+
+    toast.info('Large content detected', {
+      duration: 4000,
+      description: `${wordCount} words, ${charCount} characters. Preview shown below.`
+    })
+  }
+}
+
+function removePastePreview() {
+  pastePreview.value = null
+}
+
 async function handleSubmit(e?: any, retryPrompt?: string) {
   e?.preventDefault?.()
 
   let promptValue = retryPrompt || e?.target?.prompt?.value?.trim()
+
+  // If we have a paste preview, use that content instead
+  if (pastePreview.value && pastePreview.value.show && !retryPrompt) {
+    promptValue += pastePreview.value.content
+    // Clear the paste preview
+    pastePreview.value = null
+  }
+
   let fabricatedPrompt = promptValue
   if (!promptValue || isLoading.value) return
 
@@ -617,10 +698,10 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
       duration: 4000,
       description: 'Please upgrade to continue chatting.'
     })
-    return // Just return, the banner is already showing
+    return
   }
 
-  if(planStatus.value.isExpired){
+  if (planStatus.value.isExpired) {
     toast.error('Your plan has expired', {
       duration: 5000,
       description: 'Please renew your plan to continue using the service.'
@@ -805,8 +886,11 @@ async function handleStepSubmit(e: Event) {
       case 3:
         errorMsg = 'Password must be at least 7 characters'
         break
+      case 4:
+        errorMsg = 'Please accept the terms of service and privacy policy'
+        break
     }
-    
+
     if (errorMsg) {
       toast.warning(errorMsg, {
         duration: 3000,
@@ -816,16 +900,16 @@ async function handleStepSubmit(e: Event) {
     return
   }
 
-  if (authStep.value < 3) {
+  if (authStep.value < 4) {
     nextAuthStep()
   } else {
     // Check connection before attempting authentication
     toast.info('Connecting...', { duration: 2000 })
-    
+
     try {
       // Show loading state
       isLoading.value = true
-      
+
       // Final step - create session
       const response = await handleAuth(authData.value)
 
@@ -837,13 +921,13 @@ async function handleStepSubmit(e: Event) {
       if (response.error) {
         throw new Error(response.error)
       }
-      
+
       if (response.data && response.success) {
         setShowCreateSession(false)
-        
+
         // Reset form
         authStep.value = 1
-        authData.value = { username: '', email: '', password: '' }
+        authData.value = { username: '', email: '', password: '', agreeToTerms: false }
         loadRequestCount() // Load request count after successful auth
         nextTick(() => {
           const textarea = document.getElementById("prompt") as HTMLTextAreaElement
@@ -854,11 +938,11 @@ async function handleStepSubmit(e: Event) {
       }
     } catch (err: any) {
       console.error('Authentication error in handleStepSubmit:', err)
-      
+
       // Show user-friendly error messages
       let errorMessage = 'Authentication Failed'
       let errorDescription = 'Please try again'
-      
+
       if (err.message?.includes('timeout')) {
         errorMessage = 'Connection Timeout'
         errorDescription = 'Server took too long to respond. Please try again.'
@@ -874,12 +958,12 @@ async function handleStepSubmit(e: Event) {
       } else if (err.message) {
         errorDescription = err.message
       }
-      
+
       toast.error(errorMessage, {
         duration: 5000,
         description: errorDescription
       })
-      
+
       // Don't reset the form on error - let user try again
     } finally {
       isLoading.value = false
@@ -1066,6 +1150,11 @@ onMounted(() => {
   // Load cached previews
   loadLinkPreviewCache();
 
+  // Make removePastePreview globally available
+  if (typeof window !== 'undefined') {
+    (window as any).removePastePreview = removePastePreview
+  }
+
   // Load chats if logged in
   if (isAuthenticated) {
     // Load request count for free users
@@ -1221,13 +1310,13 @@ onMounted(() => {
 })
 
 // watch for user plan changes
-watch(() => ({ 
-  isFree: isFreeUser.value, 
+watch(() => ({
+  isFree: isFreeUser.value,
   planName: parsedUserDetails.value?.plan_name,
-  planStatus: planStatus.value.status 
+  planStatus: planStatus.value.status
 }), (newValue, oldValue) => {
   if (!oldValue) return // Skip initial call
-  
+
   // If user upgraded from free to paid
   if (oldValue.isFree === true && newValue.isFree === false) {
     resetRequestCount()
@@ -1239,7 +1328,7 @@ watch(() => ({
   // If user downgraded from paid to free (plan expired)
   else if (oldValue.isFree === false && newValue.isFree === true) {
     loadRequestCount()
-    
+
     if (newValue.planStatus === 'expired') {
       toast.warning('Your plan has expired', {
         duration: Infinity,
@@ -1335,7 +1424,7 @@ onMounted(() => {
       }" />
 
       <div
-        :class="(screenWidth > 720 && isAuthenticated) ? 'h-screen flex flex-col items-center justify-center w-[85%]' : 'h-screen flex flex-col items-center justify-center'">
+        :class="(screenWidth > 720 && isAuthenticated) ? 'h-screen flex flex-col items-center justify-center w-[85%]' : 'h-screen w-full flex flex-col items-center justify-center'">
         <!-- Empty State -->
         <CreateSessView v-if="!isAuthenticated" :chats="chats" :current-chat-id="currentChatId"
           :is-collapsed="isCollapsed" :parsed-user-details="parsedUserDetails" :screen-width="screenWidth"
@@ -1397,39 +1486,51 @@ onMounted(() => {
 
         <!-- Update your chat messages container -->
         <div ref="scrollableElem" v-else-if="currentMessages.length !== 0 && isAuthenticated"
-          class="flex-grow no-scrollbar overflow-y-auto px-2 sm:px-4 space-y-3 sm:space-y-4 mt-[90px]" :class="isRequestLimitExceeded || shouldShowUpgradePrompt ? 'pb-[160px] sm:pb-[150px]' :
+          class="flex-grow no-scrollbar overflow-y-auto px-2 sm:px-4 w-full space-y-3 sm:space-y-4 mt-[90px]" :class="isRequestLimitExceeded || shouldShowUpgradePrompt ? 'pb-[160px] sm:pb-[150px]' :
             showScrollDownButton ? 'pb-[140px] sm:pb-[120px]' :
               'pb-[110px] sm:pb-[120px]'">
           <div v-if="currentMessages.length !== 0" v-for="(item, i) in currentMessages" :key="`chat-${i}`"
             class="flex flex-col gap-2">
             <!-- User Bubble -->
-            <div class="flex justify-end chat-message">
-              <div :class="screenWidth > 720 ? 'max-w-[70%]' : 'max-w-[95%]'"
-                class="bg-gray-50 text-black p-2 sm:p-3 rounded-2xl prose prose-sm max-w-none chat-bubble">
-                <p class="text-xs opacity-80 text-right mb-1">{{ parsedUserDetails?.username || "You" }}</p>
-                <div v-html="renderMarkdown(item.prompt || '')"></div>
-
-                <!-- Link Previews Section for User Messages -->
-                <div v-if="extractUrls(item.prompt || '').length > 0" class="mt-2 sm:mt-3">
-                  <div v-for="url in extractUrls(item.prompt || '').slice(0, 3)" :key="`user-${i}-${url}`">
-                    <div v-if="linkPreviewCache.get(url)"
-                      v-html="LinkPreviewComponent({ preview: linkPreviewCache.get(url)! })"></div>
+            <div class="flex w-full justify-end chat-message">
+              <div class="flex flex-col items-end max-w-[85%] sm:max-w-[75%] md:max-w-[70%]">
+                <!-- User message bubble -->
+                <div class="bg-gray-50 text-black p-3 rounded-2xl prose prose-sm max-w-none chat-bubble w-fit">
+                  <p class="text-xs opacity-80 text-right mb-1">{{ parsedUserDetails?.username || "You" }}</p>
+                  <div class="break-words" v-html="renderMarkdown((item && item?.prompt && item?.prompt?.length>800) ? item?.prompt?.trim().split('#pastedText#')[0] : item.prompt || '')"></div>
+                </div>
+                <div class="flex flex-col gap-3 mt-2">
+                  <!-- Link Previews for User Messages -->
+                  <div v-if="extractUrls(item.prompt || '').length > 0" class="w-full">
+                    <div v-for="url in extractUrls(item.prompt || '').slice(0, 3)" :key="`user-${i}-${url}`">
+                      <div v-if="linkPreviewCache.get(url)"
+                        v-html="LinkPreviewComponent({ preview: linkPreviewCache.get(url)! })"></div>
+                    </div>
+                  </div>
+                  
+                  <div v-if="item&&item.prompt&&(item?.prompt?.trim().split(/\s+/).length>100 || item?.prompt?.length>800)" class="mb-3">
+                    <div class="flex justify-center">
+                      <div class="ml-auto sm:w-[80%] md:w-[70%] lg:w-[60%] xl:w-[50%]"
+                        v-html="PastePreviewComponent( item?.prompt?.trim()?.split('#pastedText#')[1] || '', item?.prompt?.trim().split('#pastedText#')[1]?.split(/\s+/)?.length || 0, item?.prompt?.trim()?.split('#pastedText#')[1]?.length||0)">
+                      </div>
+                    </div>
                   </div>
                 </div>
+
               </div>
             </div>
 
             <!-- Bot Bubble -->
-            <div class="flex justify-start relative">
-              <div :class="screenWidth > 720 ? 'max-w-[70%]' : 'max-w-[95%]'"
-                class="bg-none chat-message leading-relaxed text-black p-2 sm:p-3 rounded-2xl prose prose-sm max-w-none">
+            <div class="flex w-full justify-start relative">
+              <div
+                class="bg-none chat-message leading-relaxed text-black p-3 rounded-2xl prose prose-sm w-fit max-w-[95%] sm:max-w-[85%] md:max-w-[80%]">
 
                 <!-- Loading state -->
-                <div v-if="item.response === '...'" class="flex items-center gap-2 text-gray-500">
+                <div v-if="item.response === '...'" class="flex w-full items-center gap-2 text-gray-500">
                   <i class="pi pi-spin pi-spinner"></i>
                   <span class="text-sm">Thinking...</span>
                 </div>
-                <div v-else-if="item.response === 'refreshing...'" class="flex items-center gap-2 text-gray-500">
+                <div v-else-if="item.response === 'refreshing...'" class="flex w-full items-center gap-2 text-gray-500">
                   <i class="pi pi-spin pi-spinner"></i>
                   <span class="text-sm">Refreshing...</span>
                 </div>
@@ -1489,14 +1590,25 @@ onMounted(() => {
           </div>
         </button>
 
-        <!-- Update the Input section -->
+
+
+        <!-- Update the input section -->
         <div v-if="(currentMessages.length !== 0 || showInput === true) && isAuthenticated" :style="screenWidth > 720 && !isCollapsed ? 'left:270px;' :
           screenWidth > 720 && isCollapsed ? 'left:60px;' : 'left:0px;'"
           class="bg-white z-20 bottom-0 right-0 fixed pb-3 sm:pb-5 px-2 sm:px-5">
 
           <div class="flex items-center justify-center w-full">
-            <form @submit="handleSubmit"
-              :class="screenWidth > 720 ? 'relative flex bg-gray-50 flex-col border-2 shadow rounded-2xl items-center w-[85%] max-w-4xl' : 'relative flex flex-col border-2 bg-gray-50 shadow rounded-2xl w-full max-w-full items-center'">
+            <form @submit="handleSubmit" :class="screenWidth > 720 ? isCollapsed ?
+              'relative flex bg-gray-50 flex-col border-2 shadow rounded-2xl items-center w-[85%] max-w-6xl' :
+              'relative flex bg-gray-50 flex-col border-2 shadow rounded-2xl items-center w-[85%] max-w-4xl' :
+              'relative flex flex-col border-2 bg-gray-50 shadow rounded-2xl w-full max-w-full items-center'">
+
+              <!-- Paste Preview inside form - above other content -->
+              <div v-if="pastePreview && pastePreview.show" class="w-full p-3 border-b">
+                <div
+                  v-html="PastePreviewComponent(pastePreview.content, pastePreview.wordCount, pastePreview.charCount)">
+                </div>
+              </div>
 
               <!-- Request Limit Exceeded Banner -->
               <div v-if="isRequestLimitExceeded" class="py-2 sm:py-3 w-full px-2 sm:px-3">
@@ -1591,13 +1703,14 @@ onMounted(() => {
               <div class="flex w-full bg-white rounded-2xl px-2 sm:px-3 py-1 sm:py-2 items-center gap-2 sm:gap-3"
                 :class="isRequestLimitExceeded ? 'opacity-50 border border-t pointer-events-none' :
                   shouldShowUpgradePrompt ? 'border border-t' : ''">
-                <textarea required id="prompt" name="prompt" @keydown="onEnter" @input="autoGrow"
+                <textarea required id="prompt" name="prompt" @keydown="onEnter" @input="autoGrow" @paste="handlePaste"
                   :disabled="isLoading || isRequestLimitExceeded" rows="1"
-                  class="flex-grow py-2 placeholder:text-gray-500 rounded-t-2xl bg-white text-sm outline-none resize-none border-none max-h-[150px] sm:max-h-[200px] overflow-auto leading-relaxed disabled:opacity-50 disabled:cursor-not-allowed"
-                  :placeholder="isRequestLimitExceeded ? (screenWidth > 640 ? 'Upgrade to continue chatting...' : 'Upgrade to continue...') :
-                    isLoading ? 'Please wait...' :
-                      isFreeUser ? `Ask me a question... (${requestsRemaining} requests left)` :
-                        'Ask me a question...'"></textarea>
+                  class="flex-grow py-3 px-1 placeholder:text-gray-500 rounded-t-2xl bg-white text-sm outline-none resize-none border-none max-h-[120px] sm:max-h-[150px] md:max-h-[200px] overflow-auto leading-relaxed disabled:opacity-50 disabled:cursor-not-allowed w-full min-w-0"
+                  :placeholder="pastePreview && pastePreview.show ? 'Large content ready to send...' :
+                    isRequestLimitExceeded ? (screenWidth > 640 ? 'Upgrade to continue chatting...' : 'Upgrade to continue...') :
+                      isLoading ? 'Please wait...' :
+                        isFreeUser ? `Ask me a question... (${requestsRemaining} requests left)` :
+                          'Ask me a question...'"></textarea>
                 <button type="submit" :disabled="isLoading || isRequestLimitExceeded"
                   class="rounded-lg w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center transition-colors text-white bg-blue-600 hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50 disabled:bg-gray-400 flex-shrink-0">
                   <i v-if="!isLoading" class="pi pi-arrow-up text-xs sm:text-sm"></i>
@@ -1606,7 +1719,6 @@ onMounted(() => {
               </div>
             </form>
           </div>
-
         </div>
       </div>
     </div>

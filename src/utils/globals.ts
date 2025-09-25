@@ -50,7 +50,7 @@ export function copyCode(text: string, button?: HTMLElement) {
 }
 
 // Enhanced validateCredentials function
-export function validateCredentials(username: string, email: string, password: string): string | null {
+export function validateCredentials(username: string, email: string, password: string, agreeToTerms: boolean): string | null {
   if (!username || username.trim().length < 2) {
     return 'Username must be at least 2 characters long'
   }
@@ -69,6 +69,10 @@ export function validateCredentials(username: string, email: string, password: s
   
   if (password.length > 25) {
     return 'Password must be less than 24 characters'
+  }
+
+  if(!agreeToTerms){
+    return 'Must accept our terms of service and privacy policy'
   }
   
   return null
@@ -91,8 +95,7 @@ export const plans = ref([
   {
     name: "Student",
     id: "student",
-    // price: 50,
-    price: 1,
+    price: 50,
     duration: "per 5 hours",
     description: "Perfect for quick sessions and light academic use.",
     features: [

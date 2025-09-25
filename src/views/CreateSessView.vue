@@ -151,6 +151,7 @@ const props = defineProps<{
     username: string
     email: string
     password: string
+    agreeToTerms: boolean
   }
   currentMessages: any[]
   validateCurrentStep: boolean
@@ -166,7 +167,7 @@ const props = defineProps<{
   manualSync: () => void
   handleStepSubmit: (e: Event) => void
   prevAuthStep: () => void
-  updateAuthData: (data: Partial<{ username: string; email: string; password: string }>) => void
+  updateAuthData: (data: Partial<{ username: string; email: string; password: string; agreeToTerms: boolean }>) => void
   setShowCreateSession: (value: boolean) => void
 }>()
 
@@ -215,6 +216,11 @@ const handleEmailInput = (event: Event) => {
 const handlePasswordInput = (event: Event) => {
   const value = (event.target as HTMLInputElement).value.trim()
   props.updateAuthData({ password: value })
+}
+
+const handleTermsToggle = (event: Event) => {
+  const checked = (event.target as HTMLInputElement).checked
+  props.updateAuthData({ agreeToTerms: checked })
 }
 
 // Layout logic
@@ -378,7 +384,7 @@ onUnmounted(() => {
           <!-- Progress indicator -->
           <div class="flex justify-center mb-8">
             <div class="flex items-center space-x-2">
-              <div v-for="step in 3" :key="step" :class="step <= authStep ? 'bg-blue-600' : 'bg-gray-300'"
+              <div v-for="step in 4" :key="step" :class="step <= authStep ? 'bg-blue-600' : 'bg-gray-300'"
                 class="w-3 h-3 rounded-full transition-colors duration-300">
               </div>
             </div>
@@ -448,7 +454,8 @@ onUnmounted(() => {
             </div>
 
             <!-- Step 3: Password -->
-            <div :class="authStep === 3 ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0'"
+            <div :class="authStep === 3 ? 'translate-x-0 opacity-100' : 
+              authStep > 3 ? '-translate-x-full opacity-0' : 'translate-x-full opacity-0'"
               class="absolute inset-0 transition-all duration-500 ease-in-out transform">
               <div class="text-center mb-8">
                 <h2 class="text-2xl font-semibold text-gray-900 mb-3">Almost there!</h2>
@@ -481,7 +488,74 @@ onUnmounted(() => {
                     class="flex-1 flex gap-2 items-center justify-center bg-gray-100 backdrop-blur-sm text-gray-700 rounded-xl px-4 py-3 font-medium hover:bg-gray-200 transition-all duration-200">
                     <i class="pi pi-arrow-left"></i> Back
                   </button>
-                  <button type="submit" :disabled="!validateCurrentStep || isLoading"
+                  <button type="submit" :disabled="!validateCurrentStep"
+                    class="bg-gradient-to-r from-blue-500 to-purple-600 flex-1 flex gap-2 items-center justify-center hover:from-blue-600 hover:to-purple-700 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed transform hover:scale-[1.02] shadow-lg rounded-xl px-4 py-3 font-medium text-white transition-all duration-200">
+                    Continue
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            <!-- Step 4: Terms & Conditions -->
+            <div :class="authStep === 4 ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0'"
+              class="absolute inset-0 transition-all duration-500 ease-in-out transform">
+              <div class="text-center mb-8">
+                <h2 class="text-2xl font-semibold text-gray-900 mb-3">One last step</h2>
+                <p class="text-gray-600">Please review and accept our terms</p>
+              </div>
+
+              <form @submit.prevent="handleStepSubmit" class="space-y-6">
+                <!-- Terms and Conditions Checkboxes -->
+                <div class="space-y-4">
+                  <div class="border border-gray-200 rounded-xl p-4 bg-gray-50">
+                    <div class="flex items-start gap-3">
+                      <input
+                        id="agree-terms"
+                        v-model="authData.agreeToTerms"
+                        type="checkbox"
+                        required
+                        class="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                        @change="handleTermsToggle"
+                      />
+                      <label for="agree-terms" class="text-sm text-gray-700 leading-relaxed cursor-pointer">
+                        I agree to the 
+                        <a href="/terms" target="_blank" class="text-blue-600 hover:text-blue-800 underline font-medium">
+                          Terms of Service
+                        </a> 
+                        and 
+                        <a href="/privacy" target="_blank" class="text-blue-600 hover:text-blue-800 underline font-medium">
+                          Privacy Policy
+                        </a>
+                        <span class="text-red-500">*</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  <!-- Key points about terms -->
+                  <div class="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                    <div class="flex items-start gap-3">
+                      <div class="flex-shrink-0 w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center">
+                        <i class="pi pi-info-circle text-blue-600 text-xs"></i>
+                      </div>
+                      <div class="text-xs text-blue-800 space-y-2">
+                        <p><strong>Key highlights:</strong></p>
+                        <ul class="list-disc list-inside space-y-1 ml-2">
+                          <li>Your data remains private and encrypted</li>
+                          <li>We don't sell your personal information</li>
+                          <li>You can delete your account and data anytime</li>
+                          <li>Local storage with optional cloud sync</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="flex gap-4">
+                  <button type="button" @click="prevAuthStep"
+                    class="flex-1 flex gap-2 items-center justify-center bg-gray-100 backdrop-blur-sm text-gray-700 rounded-xl px-4 py-3 font-medium hover:bg-gray-200 transition-all duration-200">
+                    <i class="pi pi-arrow-left"></i> Back
+                  </button>
+                  <button type="submit" :disabled="!authData.agreeToTerms || isLoading"
                     class="bg-gradient-to-r from-blue-500 to-purple-600 flex-1 flex gap-2 items-center justify-center hover:from-blue-600 hover:to-purple-700 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed transform hover:scale-[1.02] shadow-lg rounded-xl px-4 py-3 font-medium text-white transition-all duration-200">
                     <i v-if="isLoading" class="pi pi-spin pi-spinner" :class="isLoading ? '' : 'pi pi-check'"></i>
                     <span>{{ isLoading ? 'Creating...' : 'Create Session' }}</span>
@@ -503,7 +577,7 @@ onUnmounted(() => {
     </div>
 
     <!-- Mobile Layout: Vertical stack with carousel -->
-    <div v-if="isMobile" class="flex flex-col gap-8 items-center  justify-center h-full w-full px-2">
+    <div v-if="isMobile" class="flex flex-col gap-8 items-center justify-center h-full w-full px-2">
       <!-- Mobile Carousel (always shown) -->
       <div v-if="!showCreateSession" class="w-full max-w-sm" @touchstart="stopAutoSlide" @touchend="startAutoSlide">
         <div class="relative h-[440px] overflow-hidden backdrop-blur-sm rounded-2xl bg-white/80 border border-white/50">
@@ -634,14 +708,14 @@ onUnmounted(() => {
           <!-- Progress indicator -->
           <div class="flex justify-center mb-6">
             <div class="flex items-center space-x-2">
-              <div v-for="step in 3" :key="step" :class="step <= authStep ? 'bg-blue-600' : 'bg-gray-300'"
+              <div v-for="step in 4" :key="step" :class="step <= authStep ? 'bg-blue-600' : 'bg-gray-300'"
                 class="w-2.5 h-2.5 rounded-full transition-colors duration-300">
               </div>
             </div>
           </div>
 
           <!-- Mobile Multi-step form container -->
-          <div class="relative h-72">
+          <div class="relative h-80">
             <!-- Mobile Step 1: Username -->
             <div :class="authStep === 1 ? 'translate-x-0 opacity-100' :
               authStep > 1 ? '-translate-x-full opacity-0' : 'translate-x-full opacity-0'"
@@ -704,7 +778,8 @@ onUnmounted(() => {
             </div>
 
             <!-- Mobile Step 3: Password -->
-            <div :class="authStep === 3 ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0'"
+            <div :class="authStep === 3 ? 'translate-x-0 opacity-100' : 
+              authStep > 3 ? '-translate-x-full opacity-0' : 'translate-x-full opacity-0'"
               class="absolute inset-0 transition-all duration-500 ease-in-out transform">
               <div class="text-center mb-6">
                 <h2 class="text-xl font-semibold text-gray-900 mb-2">Almost there!</h2>
@@ -737,7 +812,74 @@ onUnmounted(() => {
                     class="flex-1 flex gap-2 items-center justify-center bg-gray-100 backdrop-blur-sm text-gray-700 rounded-lg px-4 py-2.5 font-medium hover:bg-gray-200 transition-all duration-200">
                     <i class="pi pi-arrow-left"></i> Back
                   </button>
-                  <button type="submit" :disabled="!validateCurrentStep || isLoading"
+                  <button type="submit" :disabled="!validateCurrentStep"
+                    class="bg-gradient-to-r from-blue-500 to-purple-600 flex-1 flex gap-2 items-center justify-center hover:from-blue-600 hover:to-purple-700 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed transform hover:scale-[1.02] shadow-lg rounded-lg px-4 py-2.5 font-medium text-white transition-all duration-200">
+                    Continue
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            <!-- Mobile Step 4: Terms & Conditions -->
+            <div :class="authStep === 4 ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0'"
+              class="absolute inset-0 transition-all duration-500 ease-in-out transform">
+              <div class="text-center mb-4">
+                <h2 class="text-xl font-semibold text-gray-900 mb-2">One last step</h2>
+                <p class="text-gray-600 text-sm">Please review and accept our terms</p>
+              </div>
+
+              <form @submit.prevent="handleStepSubmit" class="space-y-4">
+                <!-- Terms and Conditions Checkbox -->
+                <div class="space-y-3">
+                  <div class="border border-gray-200 rounded-lg p-3 bg-gray-50">
+                    <div class="flex items-start gap-2">
+                      <input
+                        id="mobile-agree-terms"
+                        v-model="authData.agreeToTerms"
+                        type="checkbox"
+                        required
+                        class="mt-0.5 h-3.5 w-3.5 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                        @change="handleTermsToggle"
+                      />
+                      <label for="mobile-agree-terms" class="text-xs text-gray-700 leading-relaxed cursor-pointer">
+                        I agree to the 
+                        <a href="/terms" target="_blank" class="text-blue-600 hover:text-blue-800 underline font-medium">
+                          Terms of Service
+                        </a> 
+                        and 
+                        <a href="/privacy" target="_blank" class="text-blue-600 hover:text-blue-800 underline font-medium">
+                          Privacy Policy
+                        </a>
+                        <span class="text-red-500">*</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  <!-- Key points about terms (mobile version) -->
+                  <div class="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                    <div class="flex items-start gap-2">
+                      <div class="flex-shrink-0 w-5 h-5 bg-blue-100 rounded-full flex items-center justify-center">
+                        <i class="pi pi-info-circle text-blue-600 text-xs"></i>
+                      </div>
+                      <div class="text-xs text-blue-800 space-y-1">
+                        <p><strong>Key highlights:</strong></p>
+                        <ul class="list-disc list-inside space-y-0.5 ml-1 text-xs">
+                          <li>Your data remains private and encrypted</li>
+                          <li>We don't sell your personal information</li>
+                          <li>You can delete your account anytime</li>
+                          <li>Local storage with optional cloud sync</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="flex gap-3">
+                  <button type="button" @click="prevAuthStep"
+                    class="flex-1 flex gap-2 items-center justify-center bg-gray-100 backdrop-blur-sm text-gray-700 rounded-lg px-4 py-2.5 font-medium hover:bg-gray-200 transition-all duration-200">
+                    <i class="pi pi-arrow-left"></i> Back
+                  </button>
+                  <button type="submit" :disabled="!authData.agreeToTerms || isLoading"
                     class="bg-gradient-to-r from-blue-500 to-purple-600 flex-1 flex gap-2 items-center justify-center hover:from-blue-600 hover:to-purple-700 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed transform hover:scale-[1.02] shadow-lg rounded-lg px-4 py-2.5 font-medium text-white transition-all duration-200">
                     <i v-if="isLoading" class="pi pi-spin pi-spinner" :class="isLoading ? '' : 'pi pi-check'"></i>
                     <span>{{ isLoading ? 'Creating...' : 'Create Session' }}</span>
@@ -776,23 +918,3 @@ onUnmounted(() => {
     </div>
   </div>
 </template>
-
-<style scoped>
-.custom-scrollbar::-webkit-scrollbar {
-  width: 6px;
-}
-
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 3px;
-}
-
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.3);
-  border-radius: 3px;
-}
-
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.5);
-}
-</style>
