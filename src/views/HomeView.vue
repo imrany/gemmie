@@ -527,7 +527,6 @@ function validateCurrentStep(): boolean {
   }
 }
 
-
 // Enhanced marked configuration with link handling
 marked.use({
   renderer: {
