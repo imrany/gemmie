@@ -26,6 +26,8 @@ const globalState = inject('globalState') as {
   logout: () => void,
   isLoading: Ref<boolean>,
   showInput: Ref<boolean>,
+  planStatus: Ref<{ status: string; timeLeft: string; expiryDate: string; isExpired: boolean; }>,
+
   hideSidebar: () => void,
   setShowInput: () => void,
   clearAllChats: () => void,
@@ -42,6 +44,7 @@ const {
   screenWidth,
   isCollapsed,
   authData,
+  planStatus,
   isAuthenticated,
   currentChatId,
   chats,
@@ -73,11 +76,10 @@ const profileData = reactive({
 
 // Get sync setting from user details or localStorage, default to true
 const syncEnabled = ref(
-  parsedUserDetails.value?.sync_enabled ?? 
+  parsedUserDetails.value?.sync_enabled ??
   (localStorage.getItem('syncEnabled') !== 'false')
 )
 
-const showDropdown = ref(false)
 const activeTab = ref<'profile' | 'account' | 'billing'>(tabParam ?? 'profile')
 const isSaving = ref(false)
 
@@ -133,12 +135,12 @@ async function saveProfile() {
 // Toggle auto-sync - this affects all future sync operations
 async function toggleSync() {
   const newSyncValue = !syncEnabled.value
-  
+
   try {
     // Update local state first
     syncEnabled.value = newSyncValue
     parsedUserDetails.value.sync_enabled = newSyncValue
-    
+
     // Save to localStorage
     localStorage.setItem('syncEnabled', String(newSyncValue))
     localStorage.setItem("userdetails", JSON.stringify(parsedUserDetails.value))
@@ -256,273 +258,343 @@ watch(isAuthenticated, (val) => {
 </script>
 
 <template>
-    <div class="flex h-[100vh]">
-        <!-- Sidebar -->
-        <SideNav v-if="isAuthenticated" :data="{
-            chats,
-            currentChatId,
-            parsedUserDetails,
-            screenWidth,
-            isCollapsed,
-            syncStatus,
-        }" :functions="{
-            setShowInput,
-            hideSidebar,
-            clearAllChats,
-            toggleSidebar,
-            logout,
-            createNewChat,
-            switchToChat,
-            deleteChat,
-            renameChat,
-            manualSync
-        }" />
+  <div class="flex h-[100vh]">
+    <!-- Sidebar -->
+    <SideNav v-if="isAuthenticated" :data="{
+      chats,
+      currentChatId,
+      parsedUserDetails,
+      screenWidth,
+      isCollapsed,
+      syncStatus,
+    }" :functions="{
+      setShowInput,
+      hideSidebar,
+      clearAllChats,
+      toggleSidebar,
+      logout,
+      createNewChat,
+      switchToChat,
+      deleteChat,
+      renameChat,
+      manualSync
+    }" />
 
-        <!-- Main Content -->
-        <div :class="screenWidth > 720 && isAuthenticated
-            ? (!isCollapsed
-                ? 'flex-grow flex flex-col ml-[270px] font-light text-sm transition-all duration-300 ease-in-out'
-                : 'flex-grow flex flex-col ml-[60px] font-light text-sm transition-all duration-300 ease-in-out')
-            : 'text-sm font-light flex-grow flex flex-col transition-all duration-300 ease-in-out'">
+    <!-- Main Content -->
+    <div :class="screenWidth > 720 && isAuthenticated
+      ? (!isCollapsed
+        ? 'flex-grow flex flex-col ml-[270px] font-light text-sm transition-all duration-300 ease-in-out'
+        : 'flex-grow flex flex-col ml-[60px] font-light text-sm transition-all duration-300 ease-in-out')
+      : 'text-sm font-light flex-grow flex flex-col transition-all duration-300 ease-in-out'">
 
-            <div class="h-screen flex flex-col p-6 overflow-y-auto">
-                <div class="flex items-center justify-between mb-5">
-                    <h1 class="text-2xl font-semibold">Settings</h1>
-                    <button @click="router.back()" title="Go Back"
-                        class="md:hidden flex items-center justify-center w-8 h-8 hover:bg-gray-100 rounded-full cursor-pointer transition-colors">
-                        <span class="pi pi-times text-lg text-gray-700"></span>
-                    </button>
-                </div>
-
-                <!-- Mobile Dropdown Toggle -->
-                <div class="relative mb-4 md:hidden">
-                    <button @click="showDropdown = !showDropdown"
-                        class="w-full flex justify-between font-medium items-center px-4 py-2 border border-gray-300 rounded-md bg-gray-50 shadow-sm text-sm focus:outline-none">
-                        <span>
-                            {{ activeTab === 'profile' ? 'Profile' : activeTab === 'account' ? 'Account' : 'Billing' }}
-                        </span>
-                        <i :class="showDropdown ? 'pi pi-chevron-up' : 'pi pi-chevron-down'" class="text-gray-500"></i>
-                    </button>
-
-                    <!-- Dropdown Menu -->
-                    <div v-if="showDropdown" class="absolute mt-1 w-full bg-white border rounded-md shadow-lg z-10">
-                        <button v-for="tab in ['profile', 'account', 'billing']" :key="tab"
-                            @click="activeTab = tab as 'profile' | 'account' | 'billing'; showDropdown = false" :class="activeTab === tab
-                                ? 'w-full text-left px-4 py-2 bg-blue-50 text-blue-600 font-medium'
-                                : 'w-full text-left px-4 py-2 hover:bg-gray-100'">
-                            {{ tab.charAt(0).toUpperCase() + tab.slice(1) }}
-                        </button>
-                    </div>
-                </div>
-
-                <div class="flex flex-grow gap-8">
-                    <!-- Tabs Sidebar (hidden on mobile) -->
-                    <div class="w-48 flex-col gap-2 hidden md:flex flex-shrink-0">
-                        <button @click="activeTab = 'profile'" :class="activeTab === 'profile'
-                            ? 'bg-blue-50 text-blue-600 border-l-4 border-blue-600 font-medium'
-                            : 'text-gray-700 hover:bg-gray-100'" class="text-left px-4 py-2 rounded-md transition-all">
-                            Profile
-                        </button>
-                        <button @click="activeTab = 'account'" :class="activeTab === 'account'
-                            ? 'bg-blue-50 text-blue-600 border-l-4 border-blue-600 font-medium'
-                            : 'text-gray-700 hover:bg-gray-100'" class="text-left px-4 py-2 rounded-md transition-all">
-                            Account
-                        </button>
-                        <button @click="activeTab = 'billing'" :class="activeTab === 'billing'
-                            ? 'bg-blue-50 text-blue-600 border-l-4 border-blue-600 font-medium'
-                            : 'text-gray-700 hover:bg-gray-100'" class="text-left px-4 py-2 rounded-md transition-all">
-                            Billing
-                        </button>
-                    </div>
-
-                    <!-- Content Area -->
-                    <div class="flex-grow">
-                        <!-- Profile -->
-                        <div v-if="activeTab === 'profile'"
-                            class="bg-white p-6 rounded-lg shadow-sm border w-full max-w-2xl">
-                            <h2 class="text-xl font-medium mb-6">Profile</h2>
-
-                            <form @submit.prevent="saveProfile" class="flex flex-col gap-6">
-                                <!-- Username -->
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">
-                                        Your username
-                                    </label>
-                                     <input v-model="profileData.username" type="text" disabled
-                                        class="border border-gray-300 rounded-lg px-4 py-2 w-full text-sm bg-gray-50 text-gray-600 cursor-not-allowed" />
-                                    <p class="text-xs text-gray-500 mt-1">Username cannot be changed</p>
-                                </div>
-
-                                <!-- Email -->
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">Your email</label>
-                                    <input v-model="profileData.email" type="email" disabled
-                                        class="border border-gray-300 rounded-lg px-4 py-2 w-full text-sm bg-gray-50 text-gray-600 cursor-not-allowed" />
-                                    <p class="text-xs text-gray-500 mt-1">Email cannot be changed</p>
-                                </div>
-
-                                <!-- Work Function -->
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">
-                                        What best describes your work?
-                                    </label>
-                                    <select v-model="profileData.workFunction"
-                                        class="border border-gray-300 rounded-lg px-4 py-2 w-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200">
-                                        <option value="">Select your work function</option>
-                                        <option value="software-developer">Software Developer</option>
-                                        <option value="designer">Designer</option>
-                                        <option value="researcher">Researcher</option>
-                                        <option value="student">Student</option>
-                                        <option value="writer">Writer</option>
-                                        <option value="teacher">Teacher/Educator</option>
-                                        <option value="business">Business Professional</option>
-                                        <option value="healthcare">Healthcare</option>
-                                        <option value="other">Other</option>
-                                    </select>
-                                </div>
-
-                                <!-- Preferences -->
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-1">
-                                        What personal preferences should Gemmie consider in responses?
-                                        <span
-                                            class="ml-1 text-xs text-orange-600 bg-orange-100 px-2 py-0.5 rounded">Beta</span>
-                                    </label>
-                                    <textarea v-model="profileData.preferences" rows="3"
-                                        class="border border-gray-300 rounded-lg px-4 py-2 w-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                                        placeholder="e.g., Be concise, use technical explanations, avoid jargon" />
-                                    <p class="text-xs text-gray-500 mt-1">
-                                        Your preferences will apply to all conversations, within guidelines.
-                                    </p>
-                                </div>
-
-                                <!-- Save Button -->
-                                <div class="flex justify-end">
-                                    <button type="submit" :disabled="isSaving || !hasUnsavedChanges"
-                                        class="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg shadow-sm transition-all flex items-center gap-2">
-                                        <i v-if="isSaving" class="pi pi-spin pi-spinner"></i>
-                                        <span>{{ isSaving ? 'Saving...' : 'Save changes' }}</span>
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
-
-                        <!-- Account -->
-                        <div v-if="activeTab === 'account'"
-                            class="bg-white p-6 rounded-lg shadow-sm border w-full max-w-2xl">
-                            <h2 class="text-xl font-medium mb-6">Account</h2>
-
-                            <div class="space-y-6">
-                                <!-- Sync Toggle -->
-                                <div class="flex items-center justify-between">
-                                    <div>
-                                        <h3 class="text-sm font-medium text-gray-800">Auto Sync</h3>
-                                        <p class="text-xs max-w-[150px] text-gray-500">
-                                            {{ syncEnabled ? 'Data is synced across all your devices automatically' :
-                                            'Data is only stored locally on this device' }}
-                                        </p>
-                                    </div>
-                                    <button @click="toggleSync"
-                                        class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors"
-                                        :class="syncEnabled ? 'bg-blue-600' : 'bg-gray-300'">
-                                        <span
-                                            class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform"
-                                            :class="syncEnabled ? 'translate-x-6' : 'translate-x-1'" />
-                                    </button>
-                                </div>
-
-                                <!-- Manual Sync Button (only show if sync is enabled) -->
-                                <div v-if="syncEnabled" class="flex flex-wrap gap-3 items-center justify-between">
-                                    <div>
-                                        <h3 class="text-sm font-medium text-gray-800">Manual Sync</h3>
-                                        <p class="text-xs text-gray-500">Force sync your data now</p>
-                                    </div>
-                                    <button @click="manualSync"
-                                        :disabled="syncStatus.syncing"
-                                        class="px-4 py-2 border font-medium border-gray-300 hover:bg-gray-50 disabled:bg-gray-100 disabled:cursor-not-allowed rounded-lg transition-all flex items-center gap-2">
-                                        <i v-if="syncStatus.syncing" class="pi pi-spin pi-spinner text-sm"></i>
-                                        <span>{{ syncStatus.syncing ? 'Syncing...' : 'Sync Now' }}</span>
-                                    </button>
-                                </div>
-
-                                <!-- Logout -->
-                                <div class="flex flex-wrap gap-3 items-center justify-between">
-                                    <div>
-                                        <h3 class="text-sm font-medium text-gray-800">Log out of all devices</h3>
-                                        <p class="text-xs text-gray-500">This will sign you out everywhere</p>
-                                    </div>
-                                    <button @click="logout"
-                                        class="px-4 py-2 font-medium text-white bg-yellow-500 hover:bg-yellow-600 rounded-lg transition-all">
-                                        Log out
-                                    </button>
-                                </div>
-
-                                <!-- Delete account -->
-                                <div class="flex flex-wrap gap-3 items-center justify-between">
-                                    <div>
-                                        <h3 class="text-sm font-medium text-gray-800">Delete your account</h3>
-                                        <p class="text-xs text-gray-500">Permanently delete your account and all data
-                                        </p>
-                                    </div>
-                                    <button @click="router.push('/auth/delete_account')"
-                                        class="px-4 py-2 bg-red-600 font-medium hover:bg-red-700 text-white rounded-lg transition-all">
-                                        Delete account
-                                    </button>
-                                </div>
-
-                                <!-- Session ID -->
-                                <div class="space-y-2">
-                                    <label class="block text-sm font-medium text-gray-700">Session ID</label>
-                                    <input type="text" :value="parsedUserDetails?.sessionId" readonly
-                                        class="w-full px-4 py-2 text-sm border border-gray-300 rounded-lg bg-gray-50 text-gray-600 font-mono" />
-                                </div>
-
-                                <!-- Sync Status -->
-                                <div v-if="syncEnabled" class="space-y-2">
-                                    <label class="block text-sm font-medium text-gray-700">Sync Status</label>
-                                    <div class="text-sm text-gray-600">
-                                        <div class="flex items-center gap-2">
-                                            <div :class="syncStatus.syncing ? 'bg-yellow-500' : 
-                                                         syncStatus.hasUnsyncedChanges ? 'bg-orange-500' : 'bg-green-500'" 
-                                                 class="w-2 h-2 rounded-full"></div>
-                                            <span>
-                                                {{ syncStatus.syncing ? 'Syncing...' : 
-                                                   syncStatus.hasUnsyncedChanges ? 'Unsynced changes' : 'Synced' }}
-                                            </span>
-                                        </div>
-                                        <div v-if="syncStatus.lastSync" class="text-xs text-gray-500 mt-1">
-                                            Last sync: {{ new Date(syncStatus.lastSync).toLocaleString() }}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Billing -->
-                        <div v-if="activeTab === 'billing'"
-                            class="bg-white p-6 rounded-lg shadow-sm border w-full max-w-2xl">
-                            <h2 class="text-xl font-medium mb-6">Billing</h2>
-                            <div class="text-center py-12">
-                                <i class="pi pi-credit-card text-4xl text-gray-300 mb-4"></i>
-                                <p class="text-gray-600 mb-2">No billing information available</p>
-                                <p class="text-sm text-gray-500">Your billing details will appear here when you upgrade
-                                    to a paid plan</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+      <div class="h-screen flex flex-col p-6 overflow-y-auto">
+        <div class="flex items-center justify-between mb-4">
+          <button @click="router.push('/')" title="Go Back"
+            class="md:hidden flex items-center justify-center w-8 h-8 hover:bg-gray-100 rounded-full cursor-pointer transition-colors">
+            <span class="pi pi-chevron-left text-lg text-gray-700"></span>
+          </button>
+          <h1 class="text-2xl font-semibold">Settings</h1>
         </div>
+
+        <!-- Horizontal Tabs -->
+        <div class="border-b border-gray-200 mb-2 md:hidden">
+          <nav class="flex space-x-8" aria-label="Tabs">
+            <button @click="activeTab = 'profile'"
+              :class="activeTab === 'profile'
+                ? 'border-blue-500 text-blue-600 whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm transition-colors'">
+              Profile
+            </button>
+            <button @click="activeTab = 'account'"
+              :class="activeTab === 'account'
+                ? 'border-blue-500 text-blue-600 whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm transition-colors'">
+              Account
+            </button>
+            <button @click="activeTab = 'billing'"
+              :class="activeTab === 'billing'
+                ? 'border-blue-500 text-blue-600 whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm transition-colors'">
+              Billing
+            </button>
+          </nav>
+        </div>
+
+
+        <div class="flex flex-grow gap-8">
+          <!-- Tabs Sidebar (hidden on mobile) -->
+          <div class="w-48 flex-col gap-2 hidden md:flex flex-shrink-0">
+            <button @click="activeTab = 'profile'" :class="activeTab === 'profile'
+              ? 'bg-blue-50 text-blue-600 border-l-4 border-blue-600 font-medium'
+              : 'text-gray-700 hover:bg-gray-100'" class="text-left px-4 py-2 rounded-md transition-all">
+              Profile
+            </button>
+            <button @click="activeTab = 'account'" :class="activeTab === 'account'
+              ? 'bg-blue-50 text-blue-600 border-l-4 border-blue-600 font-medium'
+              : 'text-gray-700 hover:bg-gray-100'" class="text-left px-4 py-2 rounded-md transition-all">
+              Account
+            </button>
+            <button @click="activeTab = 'billing'" :class="activeTab === 'billing'
+              ? 'bg-blue-50 text-blue-600 border-l-4 border-blue-600 font-medium'
+              : 'text-gray-700 hover:bg-gray-100'" class="text-left px-4 py-2 rounded-md transition-all">
+              Billing
+            </button>
+          </div>
+
+          <!-- Content Area -->
+          <div class="flex-grow">
+            <!-- Profile -->
+            <div v-if="activeTab === 'profile'" class="bg-white p-6 rounded-lg shadow-sm border w-full max-w-2xl">
+              <h2 class="text-xl font-medium mb-6">Profile</h2>
+
+              <form @submit.prevent="saveProfile" class="flex flex-col gap-6">
+                <!-- Username -->
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">
+                    Your username
+                  </label>
+                  <input v-model="profileData.username" type="text" disabled
+                    class="border border-gray-300 rounded-lg px-4 py-2 w-full text-sm bg-gray-50 text-gray-600 cursor-not-allowed" />
+                  <p class="text-xs text-gray-500 mt-1">Username cannot be changed</p>
+                </div>
+
+                <!-- Email -->
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">Your email</label>
+                  <input v-model="profileData.email" type="email" disabled
+                    class="border border-gray-300 rounded-lg px-4 py-2 w-full text-sm bg-gray-50 text-gray-600 cursor-not-allowed" />
+                  <p class="text-xs text-gray-500 mt-1">Email cannot be changed</p>
+                </div>
+
+                <!-- Work Function -->
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">
+                    What best describes your work?
+                  </label>
+                  <select v-model="profileData.workFunction"
+                    class="border border-gray-300 rounded-lg px-4 py-2 w-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200">
+                    <option value="">Select your work function</option>
+                    <option value="software-developer">Software Developer</option>
+                    <option value="designer">Designer</option>
+                    <option value="researcher">Researcher</option>
+                    <option value="student">Student</option>
+                    <option value="writer">Writer</option>
+                    <option value="teacher">Teacher/Educator</option>
+                    <option value="business">Business Professional</option>
+                    <option value="healthcare">Healthcare</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+
+                <!-- Preferences -->
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">
+                    What personal preferences should Gemmie consider in responses?
+                    <span class="ml-1 text-xs text-orange-600 bg-orange-100 px-2 py-0.5 rounded">Beta</span>
+                  </label>
+                  <textarea v-model="profileData.preferences" rows="3"
+                    class="border border-gray-300 rounded-lg px-4 py-2 w-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                    placeholder="e.g., Be concise, use technical explanations, avoid jargon" />
+                  <p class="text-xs text-gray-500 mt-1">
+                    Your preferences will apply to all conversations, within guidelines.
+                  </p>
+                </div>
+
+                <!-- Save Button -->
+                <div class="flex justify-end">
+                  <button type="submit" :disabled="isSaving || !hasUnsavedChanges"
+                    class="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg shadow-sm transition-all flex items-center gap-2">
+                    <i v-if="isSaving" class="pi pi-spin pi-spinner"></i>
+                    <span>{{ isSaving ? 'Saving...' : 'Save changes' }}</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            <!-- Account -->
+            <div v-if="activeTab === 'account'" class="bg-white p-6 rounded-lg shadow-sm border w-full max-w-2xl">
+              <h2 class="text-xl font-medium mb-6">Account</h2>
+
+              <div class="space-y-6">
+                <!-- Sync Toggle -->
+                <div class="flex items-center justify-between">
+                  <div>
+                    <h3 class="text-sm font-medium text-gray-800">Auto Sync</h3>
+                    <p class="text-xs max-w-[150px] text-gray-500">
+                      {{ syncEnabled ? 'Data is synced across all your devices automatically' :
+                        'Data is only stored locally on this device' }}
+                    </p>
+                  </div>
+                  <button @click="toggleSync"
+                    class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors"
+                    :class="syncEnabled ? 'bg-blue-600' : 'bg-gray-300'">
+                    <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform"
+                      :class="syncEnabled ? 'translate-x-6' : 'translate-x-1'" />
+                  </button>
+                </div>
+
+                <!-- Manual Sync Button (only show if sync is enabled) -->
+                <div v-if="syncEnabled" class="flex flex-wrap gap-3 items-center justify-between">
+                  <div>
+                    <h3 class="text-sm font-medium text-gray-800">Manual Sync</h3>
+                    <p class="text-xs text-gray-500">Force sync your data now</p>
+                  </div>
+                  <button @click="manualSync" :disabled="syncStatus.syncing"
+                    class="px-4 py-2 border font-medium border-gray-300 hover:bg-gray-50 disabled:bg-gray-100 disabled:cursor-not-allowed rounded-lg transition-all flex items-center gap-2">
+                    <i v-if="syncStatus.syncing" class="pi pi-spin pi-spinner text-sm"></i>
+                    <span>{{ syncStatus.syncing ? 'Syncing...' : 'Sync Now' }}</span>
+                  </button>
+                </div>
+
+                <!-- Logout -->
+                <div class="flex flex-wrap gap-3 items-center justify-between">
+                  <div>
+                    <h3 class="text-sm font-medium text-gray-800">Log out of all devices</h3>
+                    <p class="text-xs text-gray-500">This will sign you out everywhere</p>
+                  </div>
+                  <button @click="logout"
+                    class="px-4 py-2 font-medium text-white bg-yellow-500 hover:bg-yellow-600 rounded-lg transition-all">
+                    Log out
+                  </button>
+                </div>
+
+                <!-- Delete account -->
+                <div class="flex flex-wrap gap-3 items-center justify-between">
+                  <div>
+                    <h3 class="text-sm font-medium text-gray-800">Delete your account</h3>
+                    <p class="text-xs text-gray-500">Permanently delete your account and all data
+                    </p>
+                  </div>
+                  <button @click="router.push('/auth/delete_account')"
+                    class="px-4 py-2 bg-red-600 font-medium hover:bg-red-700 text-white rounded-lg transition-all">
+                    Delete account
+                  </button>
+                </div>
+
+                <!-- Session ID -->
+                <div class="space-y-2">
+                  <label class="block text-sm font-medium text-gray-700">Session ID</label>
+                  <input type="text" :value="parsedUserDetails?.sessionId" readonly
+                    class="w-full px-4 py-2 text-sm border border-gray-300 rounded-lg bg-gray-50 text-gray-600 font-mono" />
+                </div>
+
+                <!-- Sync Status -->
+                <div v-if="syncEnabled" class="space-y-2">
+                  <label class="block text-sm font-medium text-gray-700">Sync Status</label>
+                  <div class="text-sm text-gray-600">
+                    <div class="flex items-center gap-2">
+                      <div :class="syncStatus.syncing ? 'bg-yellow-500' :
+                        syncStatus.hasUnsyncedChanges ? 'bg-orange-500' : 'bg-green-500'" class="w-2 h-2 rounded-full">
+                      </div>
+                      <span>
+                        {{ syncStatus.syncing ? 'Syncing...' :
+                          syncStatus.hasUnsyncedChanges ? 'Unsynced changes' : 'Synced' }}
+                      </span>
+                    </div>
+                    <div v-if="syncStatus.lastSync" class="text-xs text-gray-500 mt-1">
+                      Last sync: {{ new Date(syncStatus.lastSync).toLocaleString() }}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Billing -->
+            <div v-if="activeTab === 'billing'" class="bg-white p-6 rounded-lg shadow-sm border w-full max-w-2xl">
+              <h2 class="text-xl font-medium mb-6">Billing</h2>
+
+              <!-- Show M-Pesa number if available -->
+              <div v-if="parsedUserDetails?.phone_number" class="mb-6">
+                <div class="flex items-center justify-between p-4 bg-green-50 border border-green-200 rounded-lg">
+                  <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                      <i class="pi pi-mobile text-green-600"></i>
+                    </div>
+                    <div>
+                      <h3 class="text-sm font-medium text-gray-900">M-Pesa Number</h3>
+                      <p class="text-sm text-gray-600">{{ parsedUserDetails.phone_number }}</p>
+                    </div>
+                  </div>
+                  <div class="flex items-center gap-1 text-xs text-green-700 bg-green-100 px-2 py-1 rounded">
+                    <i class="pi pi-check-circle"></i>
+                    <span>Verified</span>
+                  </div>
+                </div>
+              </div>
+              <div v-if="!parsedUserDetails?.phone_number" class="text-center py-12">
+                <i class="pi pi-credit-card text-4xl text-gray-300 mb-4"></i>
+                <p class="text-gray-600 mb-2">No billing information available</p>
+                <p class="text-sm text-gray-500">Your billing details will appear here when you upgrade to a paid plan
+                </p>
+              </div>
+
+              <!-- If phone number exists but no other billing info -->
+              <div v-else class="space-y-6">
+                <!-- Current Plan -->
+                <div class="border border-gray-200 rounded-lg p-4">
+                  <div class="flex items-center justify-between">
+                    <div>
+                      <h3 class="font-medium text-gray-900">
+                        Current Plan
+                      </h3>
+                      <p class="text-sm text-gray-600 capitalize">{{ parsedUserDetails?.plan || 'Free' }} Plan</p>
+                      <h3
+                        :class="planStatus?.isExpired ? 'font-medium text-red-900 capitalize' : 'font-medium text-green-500 capitalize'">
+                        {{ planStatus?.status }}</h3>
+                    </div>
+                    <button v-if="planStatus?.isExpired||parsedUserDetails?.plan===''" @click="router.push('/upgrade')"
+                      class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors">
+                      Manage Plan
+                    </button>
+                    <div v-else class="text-sm text-gray-600">
+                      Expires on {{ new Date(planStatus?.expiryDate || '').toLocaleDateString() }}
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Payment History (placeholder) -->
+                <div class="border border-gray-200 rounded-lg p-4">
+                  <h3 class="font-medium text-gray-900 mb-3">Payment History</h3>
+                  <div class="text-center py-8">
+                    <i class="pi pi-history text-2xl text-gray-300 mb-2"></i>
+                    <p class="text-sm text-gray-500">No payment history available</p>
+                  </div>
+                </div>
+
+                <!-- Billing Information -->
+                <div class="border border-gray-200 rounded-lg p-4">
+                  <h3 class="font-medium text-gray-900 mb-3">Billing Information</h3>
+                  <div class="space-y-3">
+                    <div class="flex justify-between text-sm">
+                      <span class="text-gray-600">Payment Method</span>
+                      <span class="font-medium">M-Pesa</span>
+                    </div>
+                    <div class="flex justify-between text-sm">
+                      <span class="text-gray-600">Phone Number</span>
+                      <span class="font-medium">{{ parsedUserDetails.phone_number }}</span>
+                    </div>
+                    <div class="flex justify-between text-sm">
+                      <span class="text-gray-600">Currency</span>
+                      <span class="font-medium">KES</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
+  </div>
 </template>
 
 <style scoped>
 /* Ensure proper scrolling on mobile */
 @media (max-width: 768px) {
-    .h-screen {
-        height: 100vh;
-        height: 100dvh;
-        /* Better mobile support */
-    }
+  .h-screen {
+    height: 100vh;
+    height: 100dvh;
+    /* Better mobile support */
+  }
 }
 </style>
