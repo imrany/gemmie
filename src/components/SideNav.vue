@@ -140,7 +140,7 @@ function handleChatClick(chatId: string) {
     " @click="handleClickOutside">
 
     <!-- Scrollable area -->
-    <div class="flex-1 overflow-y-auto">
+    <div class="flex-1 overflow-y-auto custom-scrollbar">
       <!-- Top Header -->
       <div @click="()=>{
         if (props.data.screenWidth < 720) props.functions.hideSidebar()

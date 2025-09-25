@@ -517,7 +517,7 @@ function validateCurrentStep(): boolean {
           /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
       case 3:
         const password = authData.value.password
-        return !!(password && password.length >= 7 && password.length <= 100)
+        return !!(password && password.length > 7 && password.length < 25)
       default:
         return false
     }

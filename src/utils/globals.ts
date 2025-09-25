@@ -63,8 +63,8 @@ export function validateCredentials(username: string, email: string, password: s
     return 'Please enter a valid email address'
   }
   
-  if (!password || password.length < 7) {
-    return 'Password must be at least 7 characters long'
+  if (!password || password.length < 8) {
+    return 'Password must be at least 8 characters long'
   }
   
   if (password.length > 25) {
