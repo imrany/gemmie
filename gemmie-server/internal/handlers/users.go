@@ -23,6 +23,7 @@ type DeleteAccountRequest struct {
 type LoginRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
+	AgreeToTerms bool		`json:"agree_to_terms"`
 	Username string `json:"username"`
 }
 
@@ -31,6 +32,7 @@ type RegisterRequest struct {
 	Username string `json:"username"`
 	Email    string `json:"email"`
 	Password string `json:"password"`
+	AgreeToTerms bool		`json:"agree_to_terms"`
 }
 
 // SyncRequest represents data sync request - FIXED field naming consistency
@@ -189,6 +191,15 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !req.AgreeToTerms{
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(store.Response{
+			Success: false,
+			Message: "Accept our terms of service and privacy policy",
+		})
+		return
+	}
+
 	// Check if user already exists
 	if _, exists := FindUserByEmail(req.Email); exists {
 		w.WriteHeader(http.StatusConflict)
@@ -231,6 +242,7 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		ExpiryTimestamp: 0,
 		ExpireDuration:  0,
 		Price:           "",
+		AgreeToTerms: req.AgreeToTerms,
 	}
 
 	// Create empty user data record
@@ -315,6 +327,15 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !req.AgreeToTerms{
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(store.Response{
+			Success: false,
+			Message: "Accept our terms of service and privacy policy",
+		})
+		return
+	}
+
 	// Find user by email
 	user, exists := FindUserByEmail(req.Email)
 	if !exists {
@@ -340,7 +361,17 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	// Get user data
 	store.Storage.Mu.RLock()
 	userData, hasData := store.Storage.UserData[user.ID]
+	existingUser :=store.Storage.Users[user.ID]
 	store.Storage.Mu.RUnlock()
+
+	if !existingUser.AgreeToTerms {
+		store.Storage.Mu.Lock()
+		existingUser.AgreeToTerms = req.AgreeToTerms
+		store.Storage.Mu.Unlock()
+		
+		store.SaveStorage()
+	}
+
 
 	if !hasData {
 		// Create empty user data if doesn't exist
