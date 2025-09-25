@@ -112,7 +112,7 @@ const parsedUserDetails = ref<any>(
 const isAuthenticated = computed(() => {
   const user = parsedUserDetails.value
   if (!user || typeof user !== 'object') return false
-  
+
   return !!(
     user.email &&
     user.username &&
@@ -133,13 +133,13 @@ const showProfileMenu = ref(false)
 const now = ref(Date.now())
 
 const planStatus = computed(() => {
-  if (!parsedUserDetails?.value.expiry_timestamp) {
+  if (!parsedUserDetails.value || !parsedUserDetails.value.expiry_timestamp) {
     return { status: 'no-plan', timeLeft: '', expiryDate: '', isExpired: false }
   }
 
-  const expiryMs = parsedUserDetails?.value.expiry_timestamp < 1e12
-    ? parsedUserDetails?.value.expiry_timestamp * 1000
-    : parsedUserDetails?.value.expiry_timestamp
+  const expiryMs = parsedUserDetails.value.expiry_timestamp < 1e12
+    ? parsedUserDetails.value.expiry_timestamp * 1000
+    : parsedUserDetails.value.expiry_timestamp
 
   const diff = expiryMs - now.value
   const isExpired = diff <= 0
@@ -174,12 +174,24 @@ const planStatus = computed(() => {
   return { status: 'active', timeLeft, expiryDate, isExpired: false }
 })
 
-// Enhanced computed properties with error handling
 const isFreeUser = computed(() => {
   try {
-    return !parsedUserDetails.value?.plan || 
-           parsedUserDetails.value.plan === 'free' || 
-           parsedUserDetails.value.plan === '' || planStatus.value.status === 'no-plan'
+    if (!parsedUserDetails.value) {
+      return true // Not authenticated, consider as free user
+    }
+    
+    // Check if user has no plan or free plan
+    const hasFreePlan = !parsedUserDetails.value.plan || 
+                       parsedUserDetails.value.plan === 'free' || 
+                       parsedUserDetails.value.plan === '' || 
+                       planStatus.value.status === 'no-plan'
+    
+    // Check if user's plan has expired
+    const planExpired = planStatus.value.isExpired
+    
+    // User is considered "free" if they have a free plan OR their paid plan has expired
+    return hasFreePlan || planExpired
+    
   } catch (error) {
     console.error('Error checking user plan:', error)
     return true // Default to free user on error
@@ -218,7 +230,7 @@ function showConfirmDialog(options: ConfirmDialogOptions) {
 async function apiCall(endpoint: string, options: RequestInit = {}, retryCount = 0): Promise<any> {
   const maxRetries = 3
   const retryDelay = Math.pow(2, retryCount) * 1000 // Exponential backoff
-  
+
   try {
     // Validate user authentication for protected endpoints
     if (!parsedUserDetails.value?.user_id && !endpoint.includes('/login') && !endpoint.includes('/register')) {
@@ -255,10 +267,10 @@ async function apiCall(endpoint: string, options: RequestInit = {}, retryCount =
     console.error(`API Error on ${endpoint}:`, error)
 
     // Handle network errors with retry logic
-    if ((error.name === 'NetworkError' || error.name === 'TypeError' || error.name === 'TimeoutError') && 
-        retryCount < maxRetries) {
+    if ((error.name === 'NetworkError' || error.name === 'TypeError' || error.name === 'TimeoutError') &&
+      retryCount < maxRetries) {
       console.log(`Retrying ${endpoint} in ${retryDelay}ms (attempt ${retryCount + 1}/${maxRetries})`)
-      
+
       await new Promise(resolve => setTimeout(resolve, retryDelay))
       return apiCall(endpoint, options, retryCount + 1)
     }
@@ -269,35 +281,6 @@ async function apiCall(endpoint: string, options: RequestInit = {}, retryCount =
       syncStatus.value.retryCount = retryCount
     }
 
-    throw error
-  }
-}
-
-// Enhanced unsecure API call with similar improvements
-async function unsecureApiCall(endpoint: string, options: RequestInit = {}): Promise<any> {
-  try {
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
-      signal: AbortSignal.timeout(30000)
-    })
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-    }
-
-    const data = await response.json()
-
-    if (!data.success) {
-      throw new Error(data.message || 'API request failed')
-    }
-
-    return data
-  } catch (error: any) {
-    console.error(`Unsecure API Error on ${endpoint}:`, error)
     throw error
   }
 }
@@ -320,7 +303,7 @@ function mergeChats(serverChats: Chat[], localChats: Chat[]): Chat[] {
     // Validate and add server chats (will overwrite local if same ID and server is newer)
     serverChats.forEach(serverChat => {
       if (!serverChat || !serverChat.id || typeof serverChat.id !== 'string') return
-      
+
       const localChat = merged.get(serverChat.id)
       if (!localChat || new Date(serverChat.updatedAt) > new Date(localChat.updatedAt)) {
         merged.set(serverChat.id, serverChat)
@@ -556,7 +539,7 @@ function switchToChat(chatId: string) {
 
     currentChatId.value = chatId
     updateExpandedArray()
-    
+
     try {
       localStorage.setItem('currentChatId', currentChatId.value)
     } catch (error) {
@@ -605,7 +588,7 @@ function deleteChat(chatId: string) {
                 const responseUrls = extractUrls(message.response || '')
                 const promptUrls = extractUrls(message.prompt || '')
                 const urls = [...new Set([...responseUrls, ...promptUrls])]
-                
+
                 urls.forEach(url => {
                   linkPreviewCache.value.delete(url)
                 })
@@ -669,7 +652,7 @@ function renameChat(chatId: string, newTitle: string) {
     chat.title = trimmedTitle
     chat.updatedAt = new Date().toISOString()
     saveChats()
-    
+
     toast.success('Chat renamed successfully')
   } catch (error) {
     console.error('Error renaming chat:', error)
@@ -839,7 +822,7 @@ async function fetchLinkPreview(url: string): Promise<LinkPreview> {
     const response = await fetch(proxyUrl, {
       signal: AbortSignal.timeout(15000) // 15 second timeout for link previews
     })
-    
+
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`)
     }
@@ -848,7 +831,7 @@ async function fetchLinkPreview(url: string): Promise<LinkPreview> {
     const domain = new URL(url).hostname
 
     // Enhanced video detection and processing with error handling
-    let videoInfo: any = { }
+    let videoInfo: any = {}
     try {
       videoInfo = await detectAndProcessVideo(url, results)
     } catch (videoError) {
@@ -925,7 +908,7 @@ function saveChats() {
     // Save to localStorage with size validation
     const chatsJson = JSON.stringify(chats.value)
     const currentChatJson = JSON.stringify(currentChatId.value)
-    
+
     // Check if data is too large (localStorage typically has ~5-10MB limit)
     if (chatsJson.length > 5000000) { // ~5MB
       toast.warning('Chat data is getting large', {
@@ -989,11 +972,11 @@ async function syncFromServer(serverData?: any) {
     if (data.chats && data.chats !== '[]') {
       try {
         const serverChatsData = typeof data.chats === 'string' ? JSON.parse(data.chats) : data.chats
-        
+
         if (Array.isArray(serverChatsData)) {
           const localChats = chats.value
           const mergedChats = mergeChats(serverChatsData, localChats)
-          
+
           chats.value = mergedChats
           localStorage.setItem('chats', JSON.stringify(mergedChats))
           console.log(`Synced ${mergedChats.length} chats from server`)
@@ -1012,10 +995,10 @@ async function syncFromServer(serverData?: any) {
     // Parse and validate server link previews
     if (data.link_previews && data.link_previews !== '{}') {
       try {
-        const serverPreviewsData = typeof data.link_previews === 'string' 
-          ? JSON.parse(data.link_previews) 
+        const serverPreviewsData = typeof data.link_previews === 'string'
+          ? JSON.parse(data.link_previews)
           : data.link_previews
-        
+
         if (typeof serverPreviewsData === 'object' && serverPreviewsData !== null) {
           const localPreviews = Object.fromEntries(linkPreviewCache.value)
           const mergedPreviews = { ...localPreviews, ...serverPreviewsData }
@@ -1043,8 +1026,8 @@ async function syncFromServer(serverData?: any) {
     }
 
     // Update user preferences and settings
-    if (data.sync_enabled !== undefined || data.preferences || data.theme || 
-        data.work_function || data.phone_number || data.plan) {
+    if (data.sync_enabled !== undefined || data.preferences || data.theme ||
+      data.work_function || data.phone_number || data.plan) {
       try {
         parsedUserDetails.value = {
           ...parsedUserDetails.value,
@@ -1078,7 +1061,7 @@ async function syncFromServer(serverData?: any) {
   } catch (error: any) {
     console.error('Sync from server failed:', error)
     syncStatus.value.lastError = error.message
-    
+
     // Only show toast for non-network errors or after multiple retries
     if (!error.message.includes('NetworkError') && !error.message.includes('TypeError')) {
       toast.warning('Failed to sync data from server', {
@@ -1086,7 +1069,7 @@ async function syncFromServer(serverData?: any) {
         description: 'Using local data instead'
       })
     }
-    
+
     throw error
   } finally {
     syncStatus.value.syncing = false
@@ -1151,10 +1134,10 @@ async function syncToServer() {
     console.error('Sync to server failed:', error)
     syncStatus.value.lastError = error.message
     syncStatus.value.hasUnsyncedChanges = true
-    
+
     // Increment retry count for exponential backoff
     syncStatus.value.retryCount = Math.min(syncStatus.value.retryCount + 1, syncStatus.value.maxRetries)
-    
+
     // Only show error toast for certain types of errors
     if (error.message.includes('too large')) {
       toast.error('Data too large to sync', {
@@ -1167,14 +1150,71 @@ async function syncToServer() {
         description: 'Your data is saved locally'
       })
     }
-    
+
     throw error
   } finally {
     syncStatus.value.syncing = false
   }
 }
 
-// Enhanced authentication with comprehensive error handling
+// Enhanced unsecureApiCall with better error handling and retry logic
+async function unsecureApiCall(endpoint: string, options: RequestInit = {}, retryCount = 0): Promise<any> {
+  const maxRetries = 2
+  const retryDelay = Math.pow(2, retryCount) * 1000 // Exponential backoff
+  
+  try {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 15000) // 15 second timeout
+    
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+      signal: controller.signal
+    })
+
+    clearTimeout(timeoutId)
+
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => 'Unknown error')
+      throw new Error(`HTTP ${response.status}: ${response.statusText} - ${errorText}`)
+    }
+
+    const data = await response.json()
+
+    if (!data.success) {
+      throw new Error(data.message || 'API request failed')
+    }
+
+    return data
+    
+  } catch (error: any) {
+    console.error(`Unsecure API Error on ${endpoint} (attempt ${retryCount + 1}):`, error)
+    
+    // Handle different types of errors
+    if (error.name === 'AbortError') {
+      throw new Error('Request timeout - please try again')
+    }
+    
+    // Retry for network errors
+    if ((error.name === 'NetworkError' || 
+         error.name === 'TypeError' || 
+         error.message?.includes('Failed to fetch')) && 
+        retryCount < maxRetries) {
+      
+      console.log(`Retrying ${endpoint} in ${retryDelay}ms (attempt ${retryCount + 1}/${maxRetries})`)
+      
+      await new Promise(resolve => setTimeout(resolve, retryDelay))
+      return unsecureApiCall(endpoint, options, retryCount + 1)
+    }
+    
+    throw error
+  }
+}
+
+// Enhanced handleAuth with better error handling
 async function handleAuth(data: {
   username: string
   email: string
@@ -1186,11 +1226,8 @@ async function handleAuth(data: {
     // Custom validation
     const validationError = validateCredentials(username, email, password)
     if (validationError) {
-      toast.error(validationError, { duration: 4000 })
-      return
+      throw new Error(validationError)
     }
-
-    isLoading.value = true
 
     let response
     let isLogin = false
@@ -1223,7 +1260,12 @@ async function handleAuth(data: {
           description: `Welcome ${response.data.username}!`
         })
       } catch (registerError: any) {
-        throw new Error(registerError.message || loginError.message || 'Authentication failed')
+        // If both fail, throw the more specific error
+        if (loginError.message?.includes('Connection') || loginError.message?.includes('Network')) {
+          throw loginError
+        } else {
+          throw registerError
+        }
       }
     }
 
@@ -1285,13 +1327,9 @@ async function handleAuth(data: {
 
   } catch (error: any) {
     console.error('Authentication error:', error)
-    toast.error('Authentication failed', {
-      duration: 4000,
-      description: error.message || 'Please check your credentials and try again.'
-    })
+    
+    // Don't show toast here - let the calling function handle it
     throw error
-  } finally {
-    isLoading.value = false
   }
 }
 
@@ -1307,10 +1345,10 @@ function loadLocalData() {
         const parsedChats = JSON.parse(storedChats)
         if (Array.isArray(parsedChats)) {
           // Validate each chat object
-          const validChats = parsedChats.filter(chat => 
-            chat && 
-            typeof chat === 'object' && 
-            chat.id && 
+          const validChats = parsedChats.filter(chat =>
+            chat &&
+            typeof chat === 'object' &&
+            chat.id &&
             typeof chat.id === 'string' &&
             Array.isArray(chat.messages)
           )
@@ -1437,9 +1475,9 @@ function setupAutoSync() {
     // Auto sync every 5 minutes if authenticated, sync enabled, and has unsynced changes
     autoSyncInterval = setInterval(async () => {
       if (isAuthenticated.value &&
-          parsedUserDetails.value?.sync_enabled !== false &&
-          syncStatus.value.hasUnsyncedChanges &&
-          !syncStatus.value.syncing) {
+        parsedUserDetails.value?.sync_enabled !== false &&
+        syncStatus.value.hasUnsyncedChanges &&
+        !syncStatus.value.syncing) {
         try {
           console.log('Auto-sync: Syncing unsynced changes...')
           await syncToServer()
@@ -1453,9 +1491,9 @@ function setupAutoSync() {
     // Sync when page becomes visible (only if sync enabled)
     visibilityListener = async () => {
       if (!document.hidden &&
-          isAuthenticated.value &&
-          parsedUserDetails.value?.sync_enabled !== false &&
-          !syncStatus.value.syncing) {
+        isAuthenticated.value &&
+        parsedUserDetails.value?.sync_enabled !== false &&
+        !syncStatus.value.syncing) {
         // Small delay to ensure tab is fully active
         setTimeout(async () => {
           try {
@@ -1472,8 +1510,8 @@ function setupAutoSync() {
     // Sync before page unload (only if sync enabled and has changes)
     beforeUnloadListener = () => {
       if (syncStatus.value.hasUnsyncedChanges &&
-          parsedUserDetails.value?.sync_enabled !== false &&
-          navigator.sendBeacon) {
+        parsedUserDetails.value?.sync_enabled !== false &&
+        navigator.sendBeacon) {
         try {
           const syncData = {
             chats: JSON.stringify(chats.value),
@@ -1550,7 +1588,7 @@ onMounted(async () => {
     // Handle authenticated user initialization
     if (isAuthenticated.value) {
       console.log('User is authenticated, initializing...')
-      
+
       try {
         // Handle external reference if present
         const localExt = localStorage.getItem("external_reference")
@@ -1659,7 +1697,7 @@ const globalState = {
   renameChat,
   deleteMessage,
   clearAllChats,
-  
+
   // UI functions
   scrollToBottom,
   handleScroll,
@@ -1667,26 +1705,26 @@ const globalState = {
   toggleSidebar,
   toggleChatMenu,
   handleClickOutside,
-  
+
   // Data persistence functions
   saveChats,
   loadLocalData,
-  
+
   // Link preview functions
   fetchLinkPreview,
   loadLinkPreviewCache,
   saveLinkPreviewCache,
-  
+
   // Sync functions
   syncFromServer,
   syncToServer,
   manualSync,
   setupAutoSync,
   cleanupAutoSync,
-  
+
   // Authentication
   handleAuth,
-  
+
   // Legacy compatibility
   autoSyncInterval // Keep for backward compatibility
 }

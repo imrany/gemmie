@@ -49,24 +49,28 @@ export function copyCode(text: string, button?: HTMLElement) {
     })
 }
 
+// Enhanced validateCredentials function
 export function validateCredentials(username: string, email: string, password: string): string | null {
-  // Username: 3–12 chars, no spaces, only letters, numbers, underscores, hyphens
-  const usernameRegex = /^[a-zA-Z0-9_-]{3,12}$/
-  if (!usernameRegex.test(username)) {
-    return "Username must be 3–12 characters, no spaces, only letters, numbers, _ or -"
+  if (!username || username.trim().length < 2) {
+    return 'Username must be at least 2 characters long'
   }
-
-  // Email: basic check
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-  if (!emailRegex.test(email)) {
-    return "Invalid email format"
+  
+  if (username.trim().length > 50) {
+    return 'Username must be less than 50 characters'
   }
-
-  // Password: at least 8 chars
-  if (password.length < 8) {
-    return "Password must be at least 8 characters"
+  
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return 'Please enter a valid email address'
   }
-
+  
+  if (!password || password.length < 7) {
+    return 'Password must be at least 7 characters long'
+  }
+  
+  if (password.length > 25) {
+    return 'Password must be less than 24 characters'
+  }
+  
   return null
 }
 
@@ -134,3 +138,16 @@ export const plans = ref([
 export let API_BASE_URL = getBaseURL() + '/api'
 export let SOCKET_URL = getBaseURL().replace(/^http/, 'ws') + '/ws'
 export const WRAPPER_URL = 'https://wrapper.villebiz.com/v1/genai'
+
+// connection status checking
+export function checkConnectionStatus(): Promise<boolean> {
+  return new Promise((resolve) => {
+    // Try to fetch a simple endpoint or ping
+    fetch(`${API_BASE_URL}/health`, { 
+      method: 'GET', 
+      signal: AbortSignal.timeout(5000) 
+    })
+    .then(response => resolve(response.ok))
+    .catch(() => resolve(false))
+  })
+}
