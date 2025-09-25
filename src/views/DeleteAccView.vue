@@ -1,7 +1,8 @@
 <script lang="ts" setup>
-import { ref } from "vue";
+import { inject, onMounted, ref, watch, type Ref } from "vue";
 import { toast } from "vue-sonner";
 import { API_BASE_URL } from "../utils/globals";
+import { useRouter } from "vue-router";
 
 const username = ref("");
 const email = ref("");
@@ -12,6 +13,16 @@ const errorMsg = ref("");
 const successMsg = ref("");
 const showConfirm = ref(false);
 
+const globalState = inject("globalState");
+const {
+    parsedUserDetails,
+    isAuthenticated
+}=globalState as {
+    parsedUserDetails: Ref<any>,
+    isAuthenticated: Ref<boolean>
+}
+
+const router = useRouter();
 // Read stored credentials
 const storedUser = JSON.parse(localStorage.getItem("userdetails") || "{}");
 
@@ -96,6 +107,26 @@ function cancelDelete() {
     confirmText.value = "";
     errorMsg.value = "";
 }
+
+// Lifecycle hooks
+onMounted(() => {
+  if (parsedUserDetails.value) {
+    username.value = parsedUserDetails.value.username || "";
+    email.value = parsedUserDetails.value.email || "";
+  } else if (isAuthenticated.value) {
+    router.push('/')
+  }
+  if (!isAuthenticated.value) {
+    router.push('/login')
+  }
+})
+
+watch(isAuthenticated, (val) => {
+  if (val === false) {
+    router.push('/')
+  }
+})
+
 </script>
 
 <template>
