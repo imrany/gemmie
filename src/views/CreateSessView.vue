@@ -81,9 +81,9 @@ const shouldShowAuth = computed(() => {
     <div class="max-md:flex-col flex gap-10 items-center justify-center h-full w-full max-md:px-5">
       <!-- Welcome Section -->
       <div v-if="shouldShowWelcome" class="flex flex-col md:flex-grow items-center gap-3 text-gray-600">
-        <div class="rounded-full bg-gray-200 w-[60px] h-[60px] flex justify-center items-center">
-          <span class="pi pi-comment text-lg"></span>
-        </div>
+        <img src="/logo.svg" alt="Gemmie Logo" 
+        class="rounded-full w-[60px] h-[60px]"/>
+          
 
         <p class="text-3xl text-black font-semibold">{{ parsedUserDetails?.username || 'Gemmie' }}</p>
         <div class="text-center max-w-md space-y-2">
