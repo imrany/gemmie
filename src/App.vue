@@ -26,7 +26,8 @@ const isSidebarHidden = ref(true)
 const authData = ref({
   username: '',
   email: '',
-  password: ''
+  password: '',
+  agreeToTerms: false
 })
 
 // Enhanced sync status with retry mechanism
@@ -1219,12 +1220,13 @@ async function handleAuth(data: {
   username: string
   email: string
   password: string
+  agreeToTerms: boolean
 }) {
-  const { username, email, password } = data
+  const { username, email, password, agreeToTerms } = data
   
   try {
     // Custom validation
-    const validationError = validateCredentials(username, email, password)
+    const validationError = validateCredentials(username, email, password, agreeToTerms)
     if (validationError) {
       throw new Error(validationError)
     }
@@ -1237,7 +1239,7 @@ async function handleAuth(data: {
       console.log('Attempting login...')
       response = await unsecureApiCall('/login', {
         method: 'POST',
-        body: JSON.stringify({ username, email, password })
+        body: JSON.stringify({ username, email, password, agree_to_terms:agreeToTerms })
       })
       isLogin = true
 
@@ -1252,7 +1254,7 @@ async function handleAuth(data: {
       try {
         response = await unsecureApiCall('/register', {
           method: 'POST',
-          body: JSON.stringify({ username, email, password })
+          body: JSON.stringify({ username, email, password, agree_to_terms:agreeToTerms })
         })
 
         toast.success('Account created successfully!', {
@@ -1572,6 +1574,7 @@ function cleanupAutoSync() {
 onMounted(async () => {
   try {
     console.log('App mounting...')
+    localStorage.setItem("external_reference",JSON.stringify("imrany-1758712912865"))
 
     // Load initial state from localStorage with validation
     try {
