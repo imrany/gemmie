@@ -141,27 +141,57 @@ const shouldShowUpgradePrompt = computed(() => {
 
 // ---------- Request Limit Functions ----------
 function loadRequestCount() {
-  // Only load for free users
-  if (!isFreeUser.value) {
-    requestCount.value = 0
-    return
-  }
-
   try {
+    if (!parsedUserDetails.value) {
+      // If no user data, assume free user and load count
+      requestCount.value = 0
+      return
+    }
+
+    // For paid users with active plans, reset count
+    if (!isFreeUser.value) {
+      requestCount.value = 0
+      // Clear any existing saved count for paid users
+      try {
+        localStorage.removeItem('requestCount')
+      } catch (error) {
+        console.error('Failed to clear request count for paid user:', error)
+      }
+      return
+    }
+
+    // For free users or expired plans, load the saved count
     const saved = localStorage.getItem('requestCount')
     if (saved) {
-      const data = JSON.parse(saved)
-      const now = new Date().getTime()
+      try {
+        const data = JSON.parse(saved)
+        const now = new Date().getTime()
 
-      // Reset count if it's been more than 24 hours
-      if (now - data.timestamp > 24 * 60 * 60 * 1000) {
+        // Validate saved data structure
+        if (typeof data !== 'object' || typeof data.timestamp !== 'number' || typeof data.count !== 'number') {
+          console.warn('Invalid request count data format, resetting')
+          requestCount.value = 0
+          saveRequestCount()
+          return
+        }
+
+        // Reset count if it's been more than 24 hours
+        if (now - data.timestamp > 24 * 60 * 60 * 1000) {
+          requestCount.value = 0
+          saveRequestCount()
+        } else {
+          // Ensure count is within valid range
+          requestCount.value = Math.max(0, Math.min(data.count, FREE_REQUEST_LIMIT))
+        }
+      } catch (parseError) {
+        console.error('Failed to parse request count data:', parseError)
         requestCount.value = 0
-        saveRequestCount()
-      } else {
-        requestCount.value = Math.max(0, Math.min(data.count || 0, FREE_REQUEST_LIMIT))
+        // Clear corrupted data
+        localStorage.removeItem('requestCount')
       }
     } else {
       requestCount.value = 0
+      saveRequestCount()
     }
   } catch (error) {
     console.error('Failed to load request count:', error)
@@ -171,10 +201,16 @@ function loadRequestCount() {
 
 function saveRequestCount() {
   try {
+    // Only save for free users
+    if (!isFreeUser.value) {
+      return
+    }
+
     const data = {
-      count: requestCount.value,
+      count: Math.max(0, Math.min(requestCount.value, FREE_REQUEST_LIMIT)),
       timestamp: new Date().getTime()
     }
+    
     localStorage.setItem('requestCount', JSON.stringify(data))
   } catch (error) {
     console.error('Failed to save request count:', error)
@@ -182,9 +218,27 @@ function saveRequestCount() {
 }
 
 function incrementRequestCount() {
-  if (isFreeUser.value) {
-    requestCount.value++
-    saveRequestCount()
+  try {
+    if (!isFreeUser.value) {
+      return
+    }
+
+    if (requestCount.value < FREE_REQUEST_LIMIT) {
+      requestCount.value++
+      saveRequestCount()
+    }
+  } catch (error) {
+    console.error('Failed to increment request count:', error)
+  }
+}
+
+// reset request count when user upgrades
+function resetRequestCount() {
+  try {
+    requestCount.value = 0
+    localStorage.removeItem('requestCount')
+  } catch (error) {
+    console.error('Failed to reset request count:', error)
   }
 }
 
@@ -450,54 +504,29 @@ function prevAuthStep() {
 }
 
 function validateCurrentStep(): boolean {
-  switch (authStep.value) {
-    case 1:
-      return authData.value.username.trim().length > 0
-    case 2:
-      return authData.value.email.trim().length > 0 &&
-        /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(authData.value.email)
-    case 3:
-      return authData.value.password.length >= 6
-    default:
-      return false
-  }
-}
-
-async function handleStepSubmit(e: Event) {
-  e.preventDefault()
-
-  if (!validateCurrentStep()) {
-    return
-  }
-
-  if (authStep.value < 3) {
-    nextAuthStep()
-  } else {
-    try {
-      // Final step - create session
-      const response = await handleAuth(authData.value)
-
-      if (response.error) {
-        throw new Error(response.error)
-      }
-      if (response.data && response.success) {
-        setShowCreateSession(false)
-        isAuthenticated.value = true // Update auth status
-
-        // Reset form
-        authStep.value = 1
-        authData.value = { username: '', email: '', password: '' }
-
-        nextTick(() => {
-          const textarea = document.getElementById("prompt") as HTMLTextAreaElement
-          if (textarea) textarea.focus()
-        })
-      }
-    } catch (err: any) {
-      throw new Error(err.message || 'Authentication failed')
+  try {
+    switch (authStep.value) {
+      case 1:
+        const username = authData.value.username?.trim()
+        return !!(username && username.length >= 2 && username.length <= 50)
+      case 2:
+        const email = authData.value.email?.trim()
+        return !!(email && 
+          email.length > 0 && 
+          email.length <= 100 &&
+          /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+      case 3:
+        const password = authData.value.password
+        return !!(password && password.length >= 7 && password.length <= 100)
+      default:
+        return false
     }
+  } catch (error) {
+    console.error('Error validating current step:', error)
+    return false
   }
 }
+
 
 // Enhanced marked configuration with link handling
 marked.use({
@@ -757,6 +786,105 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
     // Scroll to bottom after response is complete
     await nextTick()
     scrollToBottom()
+  }
+}
+
+// Add connection checking before authentication
+async function handleStepSubmit(e: Event) {
+  e.preventDefault()
+
+  if (!validateCurrentStep()) {
+    // Show specific validation error
+    let errorMsg = ''
+    switch (authStep.value) {
+      case 1:
+        errorMsg = 'Username must be 2-50 characters'
+        break
+      case 2:
+        errorMsg = 'Please enter a valid email address'
+        break
+      case 3:
+        errorMsg = 'Password must be at least 7 characters'
+        break
+    }
+    
+    if (errorMsg) {
+      toast.warning(errorMsg, {
+        duration: 3000,
+        description: 'Please correct the error and try again'
+      })
+    }
+    return
+  }
+
+  if (authStep.value < 3) {
+    nextAuthStep()
+  } else {
+    // Check connection before attempting authentication
+    toast.info('Connecting...', { duration: 2000 })
+    
+    try {
+      // Show loading state
+      isLoading.value = true
+      
+      // Final step - create session
+      const response = await handleAuth(authData.value)
+
+      // Check if response exists and has expected structure
+      if (!response) {
+        throw new Error('No response received from server')
+      }
+
+      if (response.error) {
+        throw new Error(response.error)
+      }
+      
+      if (response.data && response.success) {
+        setShowCreateSession(false)
+        
+        // Reset form
+        authStep.value = 1
+        authData.value = { username: '', email: '', password: '' }
+        loadRequestCount() // Load request count after successful auth
+        nextTick(() => {
+          const textarea = document.getElementById("prompt") as HTMLTextAreaElement
+          if (textarea) textarea.focus()
+        })
+      } else {
+        throw new Error('Authentication failed - invalid response')
+      }
+    } catch (err: any) {
+      console.error('Authentication error in handleStepSubmit:', err)
+      
+      // Show user-friendly error messages
+      let errorMessage = 'Authentication Failed'
+      let errorDescription = 'Please try again'
+      
+      if (err.message?.includes('timeout')) {
+        errorMessage = 'Connection Timeout'
+        errorDescription = 'Server took too long to respond. Please try again.'
+      } else if (err.message?.includes('Failed to fetch') || err.message?.includes('NetworkError')) {
+        errorMessage = 'Connection Error'
+        errorDescription = 'Unable to reach server. Check your internet connection.'
+      } else if (err.message?.includes('HTTP 4')) {
+        errorMessage = 'Invalid Credentials'
+        errorDescription = 'Please check your username, email, and password.'
+      } else if (err.message?.includes('HTTP 5')) {
+        errorMessage = 'Server Error'
+        errorDescription = 'Server is experiencing issues. Please try again later.'
+      } else if (err.message) {
+        errorDescription = err.message
+      }
+      
+      toast.error(errorMessage, {
+        duration: 5000,
+        description: errorDescription
+      })
+      
+      // Don't reset the form on error - let user try again
+    } finally {
+      isLoading.value = false
+    }
   }
 }
 
@@ -1125,11 +1253,14 @@ watch(isAuthenticated, (newVal) => {
 })
 
 const timeLeft = computed(() => {
-  const expiry = parsedUserDetails?.value.expiry_timestamp
-  if (!expiry) return ''
+  // Add proper null checking
+  if (!parsedUserDetails?.value || !parsedUserDetails.value.expiry_timestamp) {
+    return ''
+  }
+  
+  const expiry = parsedUserDetails.value.expiry_timestamp
   const diff = expiry * 1000 - now.value
 
-  // convert seconds → ms
   if (diff <= 0) return 'Expired'
 
   const days = Math.floor(diff / (1000 * 60 * 60 * 24))
@@ -1150,25 +1281,56 @@ onMounted(() => {
   onUnmounted(() => clearInterval(interval))
 })
 
-//  watch to reset count when user upgrades
-watch(() => isFreeUser.value, (newValue, oldValue) => {
-  // If user was free and now is paid, reset the counter
-  if (oldValue === true && newValue === false) {
-    requestCount.value = 0
-    localStorage.removeItem('requestCount')
-    toast.success(`Welcome to ${parsedUserDetails?.value.plan_name}!`, {
-      duration: Infinity,
-      description: `You now have unlimited requests for the next ${timeLeft.value}`
+// watch for user plan changes
+watch(() => ({ 
+  isFree: isFreeUser.value, 
+  planName: parsedUserDetails.value?.plan_name,
+  planStatus: planStatus.value.status 
+}), (newValue, oldValue) => {
+  if (!oldValue) return // Skip initial call
+  
+  // If user upgraded from free to paid
+  if (oldValue.isFree === true && newValue.isFree === false) {
+    resetRequestCount()
+    toast.success(`Welcome to ${newValue.planName || 'Premium'}!`, {
+      duration: 5000,
+      description: 'You now have unlimited requests!'
     })
   }
-  // If user was paid and now is free, load the counter
-  else if (oldValue === false && newValue === true) {
+  // If user downgraded from paid to free (plan expired)
+  else if (oldValue.isFree === false && newValue.isFree === true) {
     loadRequestCount()
+    
+    if (newValue.planStatus === 'expired') {
+      toast.warning('Your plan has expired', {
+        duration: Infinity,
+        description: `You're now limited to ${FREE_REQUEST_LIMIT} requests per day`,
+        action: {
+          label: 'Upgrade',
+          onClick: () => {
+            router.push('/upgrade')
+          }
+        }
+      })
+    }
   }
-})
+}, { deep: true })
 
-watch(planStatus.value, (newStatus, oldStatus) => {
-  if (oldStatus.isExpired===false && newStatus.isExpired===true) {
+// Call loadRequestCount after user details are fully loaded
+watch(() => parsedUserDetails.value, (newUserDetails) => {
+  if (newUserDetails) {
+    // Small delay to ensure all computed properties are updated
+    nextTick(() => {
+      setTimeout(() => {
+        loadRequestCount()
+      }, 100)
+    })
+  }
+}, { immediate: true })
+
+// planStatus to handle reactive objects properly
+watch(() => ({ ...planStatus.value }), (newStatus, oldStatus) => {
+  if (oldStatus && oldStatus.isExpired === false && newStatus.isExpired === true) {
     toast.error('Your plan has expired', {
       duration: Infinity,
       description: 'Please renew your plan to continue using the service.',
@@ -1180,7 +1342,7 @@ watch(planStatus.value, (newStatus, oldStatus) => {
       }
     })
   }
-})
+}, { deep: true })
 
 onMounted(() => {
   if (isAuthenticated && isFreeUser.value) {
