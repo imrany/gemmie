@@ -41,6 +41,7 @@ type User struct {
 	ExpiryTimestamp int64  `json:"expiry_timestamp,omitempty"`
 	ExpireDuration int64   `json:"expire_duration,omitempty"`
 	Price        string    `json:"price,omitempty"`
+	AgreeToTerms bool		`json:"agree_to_terms"`
 }
 
 type UserData struct {

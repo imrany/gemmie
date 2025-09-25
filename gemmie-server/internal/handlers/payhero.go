@@ -42,9 +42,9 @@ type PlanConfig struct {
 }
 
 var planConfigs = map[int]PlanConfig{
-	1: {
+	50: {
 		Name:           "Student Plan",
-		Price:          "1 Ksh",
+		Price:          "50 Ksh",
 		Duration:       "5 hours",
 		ExpireDuration: 5 * time.Hour,
 	},
@@ -170,7 +170,7 @@ func updateUserPlan(userID string, transaction store.Transaction) error {
 
 func getPlanKey(amount int) string {
 	switch amount {
-	case 1:
+	case 50:
 		return "student"
 	case 100:
 		return "hobbyist"
