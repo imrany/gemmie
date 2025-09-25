@@ -1422,8 +1422,6 @@ async function manualSync() {
 
   try {
     console.log('Starting manual sync...')
-    toast.info('Syncing data...', { duration: 2000 })
-
     // First sync to server (upload local changes)
     if (syncStatus.value.hasUnsyncedChanges) {
       console.log('Syncing local changes to server...')
