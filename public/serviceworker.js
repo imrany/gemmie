@@ -1,15 +1,13 @@
-const CACHE_VERSION = 'v0.3.16';
+const CACHE_VERSION = 'v0.3.17';
 const staticCacheName = `site-static-${CACHE_VERSION}`;
 const dynamicCache = `site-dynamic-${CACHE_VERSION}`;
 
 const assets = [
   '/index.html',
   '/manifest.json',
-  '/full-logo.png',
   '/logo.svg',
   '/sounds/bell-notification.wav',
   // Add other critical assets here
-  '/assets',
 ];
 
 // Installing service worker
@@ -139,6 +137,11 @@ self.addEventListener('fetch', (evt) => {
         return caches.match('/index.html');
       }
 
+      // For images, return a placeholder
+      if (evt.request.destination === 'image') {
+        return caches.match('/logo.svg');
+      }
+
       // For other resources, you could return a default image, etc.
       return new Response('Network error occurred', {
         status: 503,
@@ -153,16 +156,21 @@ self.addEventListener("push", event => {
   console.log("Push event received:", event);
   const data = event.data.json();
 
-  self.registration.showNotification(data.title, {
+  const notificationOptions = {
     body: data.body,
-    icon: data.icon || '/full-logo.png',
+    icon: data.icon || '/favicon.svg',
     badge: data.badge || '/logo.svg',
     // Enable sound
     silent: false,
-    // Custom sound (limited browser support)
-    sound: '/sounds/bell-notification.wav',
-    data: { link: data.url } // Ensure the link is stored within the data
-  });
+    data: { link: data.url }
+  }
+
+  // Only add sound if browser supports it
+  if ('sound' in Notification.prototype) {
+    notificationOptions.sound = '/sounds/bell-notification.wav';
+  }
+
+  self.registration.showNotification(data.title, notificationOptions);
 });
 
 self.addEventListener("notificationclick", (event) => {
