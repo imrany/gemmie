@@ -180,19 +180,19 @@ const isFreeUser = computed(() => {
     if (!parsedUserDetails.value) {
       return true // Not authenticated, consider as free user
     }
-    
+
     // Check if user has no plan or free plan
-    const hasFreePlan = !parsedUserDetails.value.plan || 
-                       parsedUserDetails.value.plan === 'free' || 
-                       parsedUserDetails.value.plan === '' || 
-                       planStatus.value.status === 'no-plan'
-    
+    const hasFreePlan = !parsedUserDetails.value.plan ||
+      parsedUserDetails.value.plan === 'free' ||
+      parsedUserDetails.value.plan === '' ||
+      planStatus.value.status === 'no-plan'
+
     // Check if user's plan has expired
     const planExpired = planStatus.value.isExpired
-    
+
     // User is considered "free" if they have a free plan OR their paid plan has expired
     return hasFreePlan || planExpired
-    
+
   } catch (error) {
     console.error('Error checking user plan:', error)
     return true // Default to free user on error
@@ -238,6 +238,10 @@ async function apiCall(endpoint: string, options: RequestInit = {}, retryCount =
       throw new Error('User not authenticated')
     }
 
+    // Create AbortController for timeout
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 30000)
+
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       ...options,
       headers: {
@@ -246,8 +250,10 @@ async function apiCall(endpoint: string, options: RequestInit = {}, retryCount =
         ...options.headers,
       },
       // Add timeout
-      signal: AbortSignal.timeout(30000) // 30 second timeout
+      signal: controller.signal // 30 second timeout
     })
+
+    clearTimeout(timeoutId)
 
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`)
@@ -266,6 +272,11 @@ async function apiCall(endpoint: string, options: RequestInit = {}, retryCount =
     return data
   } catch (error: any) {
     console.error(`API Error on ${endpoint}:`, error)
+
+    // Handle abort/timeout errors
+    if (error.name === 'AbortError') {
+      throw new Error('Request timeout - please try again')
+    }
 
     // Handle network errors with retry logic
     if ((error.name === 'NetworkError' || error.name === 'TypeError' || error.name === 'TimeoutError') &&
@@ -287,6 +298,24 @@ async function apiCall(endpoint: string, options: RequestInit = {}, retryCount =
 }
 
 // Enhanced merge chats function with better validation
+function isValidChat(chat: any): chat is Chat {
+  return chat &&
+    typeof chat === 'object' &&
+    chat.id &&
+    typeof chat.id === 'string' &&
+    Array.isArray(chat.messages) &&
+    chat.updatedAt &&
+    typeof chat.updatedAt === 'string'
+}
+
+function isNewerChat(serverChat: Chat, localChat: Chat): boolean {
+  try {
+    return new Date(serverChat.updatedAt).getTime() > new Date(localChat.updatedAt).getTime()
+  } catch (error) {
+    return false
+  }
+}
+
 function mergeChats(serverChats: Chat[], localChats: Chat[]): Chat[] {
   try {
     if (!Array.isArray(serverChats)) serverChats = []
@@ -296,17 +325,17 @@ function mergeChats(serverChats: Chat[], localChats: Chat[]): Chat[] {
 
     // Validate and add local chats first
     localChats.forEach(chat => {
-      if (chat && chat.id && typeof chat.id === 'string') {
+      if (isValidChat(chat)) {
         merged.set(chat.id, chat)
       }
     })
 
     // Validate and add server chats (will overwrite local if same ID and server is newer)
     serverChats.forEach(serverChat => {
-      if (!serverChat || !serverChat.id || typeof serverChat.id !== 'string') return
+      if (!isValidChat(serverChat)) return
 
       const localChat = merged.get(serverChat.id)
-      if (!localChat || new Date(serverChat.updatedAt) > new Date(localChat.updatedAt)) {
+      if (!localChat || isNewerChat(serverChat, localChat)) {
         merged.set(serverChat.id, serverChat)
       }
     })
@@ -946,13 +975,22 @@ function saveChats() {
 }
 
 // Enhanced sync from server with comprehensive error handling
+let syncLock = false
+
 async function syncFromServer(serverData?: any) {
+  if (syncLock) {
+    console.log('Sync already in progress, skipping')
+    return
+  }
+
   // Only sync from server if sync is enabled or if it's initial data during auth
   const shouldSync = parsedUserDetails.value?.sync_enabled !== false || serverData
 
   if (!parsedUserDetails.value?.user_id || !shouldSync) {
     return
   }
+
+  syncLock = true
 
   try {
     syncStatus.value.syncing = true
@@ -1074,16 +1112,24 @@ async function syncFromServer(serverData?: any) {
     throw error
   } finally {
     syncStatus.value.syncing = false
+    syncLock = false
   }
 }
 
 // Enhanced sync to server with comprehensive error handling and validation
 async function syncToServer() {
+  if (syncLock) {
+    console.log('Sync already in progress, skipping')
+    return
+  }
+
   // Only sync if user has sync enabled
   if (!parsedUserDetails.value?.user_id || parsedUserDetails.value.sync_enabled === false) {
     console.log('Sync to server skipped - user not authenticated or sync disabled')
     return
   }
+
+  syncLock = true
 
   try {
     syncStatus.value.syncing = true
@@ -1155,6 +1201,7 @@ async function syncToServer() {
     throw error
   } finally {
     syncStatus.value.syncing = false
+    syncLock = false
   }
 }
 
@@ -1162,11 +1209,11 @@ async function syncToServer() {
 async function unsecureApiCall(endpoint: string, options: RequestInit = {}, retryCount = 0): Promise<any> {
   const maxRetries = 2
   const retryDelay = Math.pow(2, retryCount) * 1000 // Exponential backoff
-  
+
   try {
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 15000) // 15 second timeout
-    
+
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       ...options,
       headers: {
@@ -1190,27 +1237,27 @@ async function unsecureApiCall(endpoint: string, options: RequestInit = {}, retr
     }
 
     return data
-    
+
   } catch (error: any) {
     console.error(`Unsecure API Error on ${endpoint} (attempt ${retryCount + 1}):`, error)
-    
+
     // Handle different types of errors
     if (error.name === 'AbortError') {
       throw new Error('Request timeout - please try again')
     }
-    
+
     // Retry for network errors
-    if ((error.name === 'NetworkError' || 
-         error.name === 'TypeError' || 
-         error.message?.includes('Failed to fetch')) && 
-        retryCount < maxRetries) {
-      
+    if ((error.name === 'NetworkError' ||
+      error.name === 'TypeError' ||
+      error.message?.includes('Failed to fetch')) &&
+      retryCount < maxRetries) {
+
       console.log(`Retrying ${endpoint} in ${retryDelay}ms (attempt ${retryCount + 1}/${maxRetries})`)
-      
+
       await new Promise(resolve => setTimeout(resolve, retryDelay))
       return unsecureApiCall(endpoint, options, retryCount + 1)
     }
-    
+
     throw error
   }
 }
@@ -1223,7 +1270,7 @@ async function handleAuth(data: {
   agreeToTerms: boolean
 }) {
   const { username, email, password, agreeToTerms } = data
-  
+
   try {
     // Custom validation
     const validationError = validateCredentials(username, email, password, agreeToTerms)
@@ -1239,7 +1286,7 @@ async function handleAuth(data: {
       console.log('Attempting login...')
       response = await unsecureApiCall('/login', {
         method: 'POST',
-        body: JSON.stringify({ username, email, password, agree_to_terms:agreeToTerms })
+        body: JSON.stringify({ username, email, password, agree_to_terms: agreeToTerms })
       })
       isLogin = true
 
@@ -1249,12 +1296,12 @@ async function handleAuth(data: {
       })
     } catch (loginError: any) {
       console.log('Login failed, attempting registration...')
-      
+
       // Try register if login fails
       try {
         response = await unsecureApiCall('/register', {
           method: 'POST',
-          body: JSON.stringify({ username, email, password, agree_to_terms:agreeToTerms })
+          body: JSON.stringify({ username, email, password, agree_to_terms: agreeToTerms })
         })
 
         toast.success('Account created successfully!', {
@@ -1329,7 +1376,7 @@ async function handleAuth(data: {
 
   } catch (error: any) {
     console.error('Authentication error:', error)
-    
+
     // Don't show toast here - let the calling function handle it
     throw error
   }
@@ -1525,13 +1572,13 @@ function setupAutoSync() {
           }
 
           console.log('Page unload: Sending data via beacon...')
-          navigator.sendBeacon(
-            `${API_BASE_URL}/sync`,
-            JSON.stringify({
-              ...syncData,
-              headers: { 'Content-Type': 'application/json' }
-            })
-          )
+
+          const formData = new FormData()
+          Object.entries(syncData).forEach(([key, value]) => {
+            formData.append(key, value.toString())
+          })
+
+          navigator.sendBeacon(`${API_BASE_URL}/sync`, formData)
         } catch (error) {
           console.error('Failed to send beacon:', error)
         }
@@ -1564,6 +1611,7 @@ function cleanupAutoSync() {
       beforeUnloadListener = null
     }
 
+    syncLock = false
     console.log('Auto-sync cleanup completed')
   } catch (error) {
     console.error('Error cleaning up auto-sync:', error)
@@ -1574,7 +1622,7 @@ function cleanupAutoSync() {
 onMounted(async () => {
   try {
     console.log('App mounting...')
-    localStorage.setItem("external_reference",JSON.stringify("imrany-1758712912865"))
+    localStorage.setItem("external_reference", JSON.stringify("imrany-1758712912865"))
 
     // Load initial state from localStorage with validation
     try {
@@ -1596,7 +1644,14 @@ onMounted(async () => {
         if (localExt) {
           try {
             const ext = JSON.parse(localExt)
-            await getTransaction(ext)
+            // Add timeout to prevent blocking initialization
+            Promise.race([
+              getTransaction(ext),
+              new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000))
+            ]).catch(extError => {
+              console.error('Error processing external reference:', extError)
+              localStorage.removeItem("external_reference")
+            })
           } catch (extError) {
             console.error('Error processing external reference:', extError)
             localStorage.removeItem("external_reference") // Remove invalid data
