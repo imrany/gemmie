@@ -125,6 +125,16 @@ const requestCount = ref(0)
 const FREE_REQUEST_LIMIT = 5
 const now = ref(Date.now())
 
+const isRecording = ref(false)
+const isTranscribing = ref(false)
+const transcribedText = ref('')
+const voiceRecognition = ref<any | null>(null)
+const microphonePermission = ref<'granted' | 'denied' | 'prompt'>('prompt')
+const transcriptionDuration = ref(0)
+let transcriptionTimer: number | null = null
+let updateTimeout: number | null = null
+
+
 const pastePreview = ref<{
   content: string;
   wordCount: number;
@@ -652,7 +662,7 @@ function handlePaste(e: ClipboardEvent) {
 
     // Show paste preview
     pastePreview.value = {
-      content: wordCount > 100? `#pastedText#${pastedText}` : pastedText,
+      content: wordCount > 100 ? `#pastedText#${pastedText}` : pastedText,
       wordCount,
       charCount,
       show: true
@@ -1296,6 +1306,144 @@ function setShowCreateSession(value: boolean) {
   showCreateSession.value = value
 }
 
+// Initialize Speech Recognition (add this in the onMounted hook)
+function initializeSpeechRecognition() {
+  const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+  if (!SpeechRecognition) {
+    console.warn('Speech recognition not supported')
+    return
+  }
+
+  const recognition = new SpeechRecognition()
+  recognition.continuous = true
+  recognition.interimResults = true
+  recognition.lang = 'en-US'
+  recognition.maxAlternatives = 1
+
+  recognition.onresult = (event: any) => {
+    let interimTranscript = ''
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      const transcript = event.results[i][0].transcript
+      if (event.results[i].isFinal) {
+        transcribedText.value += transcript + ' '
+      } else {
+        interimTranscript += transcript
+      }
+    }
+    updateTextarea(interimTranscript)
+  }
+
+  recognition.onerror = (event: any) => {
+    console.error('Speech recognition error:', event.error)
+    isRecording.value = false
+    isTranscribing.value = false
+    microphonePermission.value = event.error === 'not-allowed' ? 'denied' : microphonePermission.value
+    toast.error('Voice Input Error', {
+      duration: 4000,
+      description: event.error
+    })
+  }
+
+  recognition.onend = () => {
+    if (isRecording.value) {
+      setTimeout(() => recognition.start(), 500)
+    } else {
+      isTranscribing.value = false
+    }
+  }
+
+  recognition.onstart = () => {
+    isTranscribing.value = true
+  }
+
+  voiceRecognition.value = recognition
+}
+
+function updateTextarea(interim: string) {
+  if (updateTimeout) clearTimeout(updateTimeout)
+  updateTimeout = window.setTimeout(() => {
+    const textarea = document.getElementById('prompt') as HTMLTextAreaElement
+    if (textarea) {
+      textarea.value = transcribedText.value + interim
+      autoGrow({ target: textarea } as any)
+    }
+  }, 100)
+}
+
+// Toggle voice recording
+async function toggleVoiceRecording() {
+  if (!voiceRecognition.value) {
+    toast.error('Speech recognition not available', {
+      duration: 3000,
+      description: 'Your browser may not support speech recognition.'
+    })
+    return
+  }
+
+  if (isRecording.value) {
+    // Stop recording
+    stopVoiceRecording()
+  } else {
+    // Start recording
+    await startVoiceRecording()
+  }
+}
+
+// Start voice recording
+async function startVoiceRecording() {
+  try {
+    await navigator.mediaDevices.getUserMedia({ audio: true })
+    microphonePermission.value = 'granted'
+    isRecording.value = true
+    transcribedText.value = ''
+    transcriptionDuration.value = 0
+    startTimer()
+
+    const textarea = document.getElementById('prompt') as HTMLTextAreaElement
+    if (textarea) {
+      textarea.value = ''
+      autoGrow({ target: textarea } as any)
+    }
+
+    voiceRecognition.value?.start()
+  } catch (error) {
+    microphonePermission.value = 'denied'
+    isRecording.value = false
+    toast.error('Microphone Access Denied', {
+      duration: 5000,
+      description: 'Please allow microphone access.'
+    })
+  }
+}
+
+// Stop voice recording
+function stopVoiceRecording() {
+  isRecording.value = false
+  isTranscribing.value = false
+  stopTimer()
+  voiceRecognition.value?.stop()
+}
+
+function startTimer() {
+  transcriptionTimer = window.setInterval(() => {
+    transcriptionDuration.value += 1
+  }, 1000)
+}
+
+function stopTimer() {
+  if (transcriptionTimer) clearInterval(transcriptionTimer)
+}
+
+// Clear voice transcription
+function clearVoiceTranscription() {
+  transcribedText.value = ''
+  const textarea = document.getElementById('prompt') as HTMLTextAreaElement
+  if (textarea) {
+    textarea.value = ''
+    autoGrow({ target: textarea } as any)
+  }
+}
+
 watch(isAuthenticated, (newVal) => {
   if (newVal) {
     showCreateSession.value = false
@@ -1303,6 +1451,9 @@ watch(isAuthenticated, (newVal) => {
 })
 
 onMounted(() => {
+  // Initialize speech recognition
+  initializeSpeechRecognition()
+
   const interval = setInterval(() => {
     now.value = Date.now()
   }, 1000)
@@ -1375,6 +1526,13 @@ watch(() => ({ ...planStatus.value }), (newStatus, oldStatus) => {
 onMounted(() => {
   if (isAuthenticated && isFreeUser.value) {
     loadRequestCount()
+  }
+})
+
+onBeforeUnmount(() => {
+  // Clean up speech recognition
+  if (isRecording.value) {
+    stopVoiceRecording()
   }
 })
 </script>
@@ -1497,7 +1655,9 @@ onMounted(() => {
                 <!-- User message bubble -->
                 <div class="bg-gray-50 text-black p-3 rounded-2xl prose prose-sm max-w-none chat-bubble w-fit">
                   <p class="text-xs opacity-80 text-right mb-1">{{ parsedUserDetails?.username || "You" }}</p>
-                  <div class="break-words" v-html="renderMarkdown((item && item?.prompt && item?.prompt?.length>800) ? item?.prompt?.trim().split('#pastedText#')[0] : item.prompt || '')"></div>
+                  <div class="break-words"
+                    v-html="renderMarkdown((item && item?.prompt && item?.prompt?.length > 800) ? item?.prompt?.trim().split('#pastedText#')[0] : item.prompt || '')">
+                  </div>
                 </div>
                 <div class="flex flex-col gap-3 mt-2">
                   <!-- Link Previews for User Messages -->
@@ -1507,11 +1667,13 @@ onMounted(() => {
                         v-html="LinkPreviewComponent({ preview: linkPreviewCache.get(url)! })"></div>
                     </div>
                   </div>
-                  
-                  <div v-if="item&&item.prompt&&(item?.prompt?.trim().split(/\s+/).length>100 || item?.prompt?.length>800)" class="mb-3">
+
+                  <div
+                    v-if="item && item.prompt && (item?.prompt?.trim().split(/\s+/).length > 100 || item?.prompt?.length > 800)"
+                    class="mb-3">
                     <div class="flex justify-center">
                       <div class="ml-auto sm:w-[80%] md:w-[70%] lg:w-[60%] xl:w-[50%]"
-                        v-html="PastePreviewComponent( item?.prompt?.trim()?.split('#pastedText#')[1] || '', item?.prompt?.trim().split('#pastedText#')[1]?.split(/\s+/)?.length || 0, item?.prompt?.trim()?.split('#pastedText#')[1]?.length||0)">
+                        v-html="PastePreviewComponent(item?.prompt?.trim()?.split('#pastedText#')[1] || '', item?.prompt?.trim().split('#pastedText#')[1]?.split(/\s+/)?.length || 0, item?.prompt?.trim()?.split('#pastedText#')[1]?.length || 0)">
                       </div>
                     </div>
                   </div>
@@ -1699,18 +1861,87 @@ onMounted(() => {
                 </div>
               </div>
 
-              <!-- Input Area -->
+              <!-- Input Area with Voice Recording -->
               <div class="flex w-full bg-white rounded-2xl px-2 sm:px-3 py-1 sm:py-2 items-center gap-2 sm:gap-3"
                 :class="isRequestLimitExceeded ? 'opacity-50 border border-t pointer-events-none' :
                   shouldShowUpgradePrompt ? 'border border-t' : ''">
+
+                <!-- Voice Recording Indicator (when active) -->
+                <div v-if="isRecording || isTranscribing"
+                  class="flex items-center gap-1 sm:gap-2 px-2 py-1 bg-red-50 rounded-lg border border-red-200 text-red-600 text-xs sm:text-sm flex-shrink-0">
+                  <div class="flex items-center gap-1">
+                    <div class="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+                    <span class="hidden sm:inline">{{ isTranscribing ? 'Listening...' : 'Starting...' }}</span>
+                    <span class="sm:hidden">{{ isTranscribing ? '🎤' : '⏳' }}</span>
+                  </div>
+                </div>
+
+                <!-- Microphone Toggle Button -->
+                <button type="button" @click="toggleVoiceRecording" :disabled="isLoading || isRequestLimitExceeded"
+                  :class="[
+                    'rounded-lg w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center transition-all duration-200 flex-shrink-0',
+                    isRecording
+                      ? 'bg-red-500 hover:bg-red-600 text-white shadow-lg transform scale-105 animate-pulse'
+                      : 'bg-gray-100 hover:bg-gray-200 text-gray-600 hover:text-gray-700',
+                    'disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none'
+                  ]" :title="microphonePermission === 'denied'
+    ? 'Microphone access denied'
+    : isRecording
+      ? 'Stop voice input'
+      : 'Start voice input'" :aria-label="isRecording ? 'Stop voice input' : 'Start voice input'">
+                  <!-- Microphone Icon -->
+                   <svg v-if="microphonePermission === 'prompt'" class="w-4 h-4 sm:w-5 sm:h-5" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+                    <path d="M19 10v1a7 7 0 0 1-14 0v-1a1 1 0 0 1 2 0v1a5 5 0 0 0 10 0v-1a1 1 0 0 1 2 0Z" />
+                    <path d="M12 18.5a1 1 0 0 1 1 1v1a1 1 0 0 1-2 0v-1a1 1 0 0 1 1-1Z" />
+                  </svg>
+
+                  <svg v-if="!isRecording && microphonePermission === 'granted'" class="w-4 h-4 sm:w-5 sm:h-5" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+                    <path d="M19 10v1a7 7 0 0 1-14 0v-1a1 1 0 0 1 2 0v1a5 5 0 0 0 10 0v-1a1 1 0 0 1 2 0Z" />
+                    <path d="M12 18.5a1 1 0 0 1 1 1v1a1 1 0 0 1-2 0v-1a1 1 0 0 1 1-1Z" />
+                  </svg>
+
+                  <!-- Stop Icon -->
+                  <svg v-else-if="microphonePermission === 'granted' && isRecording" class="w-4 h-4 sm:w-5 sm:h-5" fill="currentColor" viewBox="0 0 24 24">
+                    <rect x="6" y="6" width="12" height="12" rx="2" />
+                  </svg>
+
+                  <!-- Microphone Denied Icon -->
+                  <svg v-else-if="microphonePermission === 'denied' && !isRecording" class="w-4 h-4 sm:w-5 sm:h-5 text-red-500" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+                    <path d="M19 10v1a7 7 0 0 1-14 0v-1a1 1 0 0 1 2 0v1a5 5 0 0 0 10 0v-1a1 1 0 0 1 2 0Z" />
+                    <path d="M12 18.5a1 1 0 0 1 1 1v1a1 1 0 0 1-2 0v-1a1 1 0 0 1 1-1Z" />
+                    <line x1="4" y1="4" x2="20" y2="20" stroke="currentColor" stroke-width="2" />
+                  </svg>
+                </button>
+
+
+                <!-- Clear Voice Button (when transcribed text exists) -->
+                <button v-if="transcribedText && !isRecording" type="button" @click="clearVoiceTranscription"
+                  class="rounded-lg w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center transition-colors text-gray-400 hover:text-gray-600 hover:bg-gray-50 flex-shrink-0"
+                  title="Clear voice transcription">
+                  <svg class="w-3 h-3 sm:w-4 sm:h-4" fill="currentColor" viewBox="0 0 24 24">
+                    <path
+                      d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
+                  </svg>
+                </button>
+
+                <!-- Textarea -->
                 <textarea required id="prompt" name="prompt" @keydown="onEnter" @input="autoGrow" @paste="handlePaste"
-                  :disabled="isLoading || isRequestLimitExceeded" rows="1"
-                  class="flex-grow py-3 px-1 placeholder:text-gray-500 rounded-t-2xl bg-white text-sm outline-none resize-none border-none max-h-[120px] sm:max-h-[150px] md:max-h-[200px] overflow-auto leading-relaxed disabled:opacity-50 disabled:cursor-not-allowed w-full min-w-0"
-                  :placeholder="pastePreview && pastePreview.show ? 'Large content ready to send...' :
-                    isRequestLimitExceeded ? (screenWidth > 640 ? 'Upgrade to continue chatting...' : 'Upgrade to continue...') :
-                      isLoading ? 'Please wait...' :
-                        isFreeUser ? `Ask me a question... (${requestsRemaining} requests left)` :
-                          'Ask me a question...'"></textarea>
+                  :disabled="isLoading || isRequestLimitExceeded" rows="1" :class="[
+                    'flex-grow py-3 px-1 placeholder:text-gray-500 rounded-t-2xl bg-white text-sm outline-none resize-none border-none max-h-[120px] sm:max-h-[150px] md:max-h-[200px] overflow-auto leading-relaxed w-full min-w-0',
+                    'disabled:opacity-50 disabled:cursor-not-allowed',
+                    isRecording ? 'bg-red-50 border border-red-100' : ''
+                  ]" :placeholder="pastePreview && pastePreview.show ? 'Large content ready to send...' :
+                    isRecording ? (screenWidth > 640 ? 'Speak now... (Click mic to stop)' : 'Speak now...') :
+                      isRequestLimitExceeded ? (screenWidth > 640 ? 'Upgrade to continue chatting...' : 'Upgrade to continue...') :
+                        isLoading ? 'Please wait...' :
+                          isFreeUser ? `Ask me a question... (${requestsRemaining} requests left)` :
+                            'Ask me a question...'">
+                </textarea>
+
+                <!-- Submit Button -->
                 <button type="submit" :disabled="isLoading || isRequestLimitExceeded"
                   class="rounded-lg w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center transition-colors text-white bg-blue-600 hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50 disabled:bg-gray-400 flex-shrink-0">
                   <i v-if="!isLoading" class="pi pi-arrow-up text-xs sm:text-sm"></i>
