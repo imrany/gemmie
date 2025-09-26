@@ -148,8 +148,8 @@ const requestsRemaining = computed(() => {
 })
 
 const isRequestLimitExceeded = computed(() => {
-  return (isFreeUser.value && requestCount.value >= FREE_REQUEST_LIMIT && planStatus.value.status === 'no-plan') ||
-    planStatus.value.isExpired
+  return (isFreeUser.value && requestCount.value >= FREE_REQUEST_LIMIT) ||
+    (planStatus.value.isExpired && requestCount.value >= FREE_REQUEST_LIMIT)
 })
 
 const shouldShowUpgradePrompt = computed(() => {
@@ -164,12 +164,18 @@ function loadRequestCount() {
       return
     }
 
-    if (!isFreeUser.value) {
+    // Check if user should have request limits
+    const shouldHaveLimit = isFreeUser.value || 
+                           planStatus.value.isExpired || 
+                           planStatus.value.status === 'no-plan' || 
+                           planStatus.value.status === 'expired'
+
+    if (!shouldHaveLimit) {
       requestCount.value = 0
       try {
         localStorage.removeItem('requestCount')
       } catch (error) {
-        console.error('Failed to clear request count for paid user:', error)
+        console.error('Failed to clear request count for unlimited user:', error)
       }
       return
     }
@@ -187,9 +193,14 @@ function loadRequestCount() {
           return
         }
 
-        if (now - data.timestamp > 24 * 60 * 60 * 1000) {
+        // Check if 24 hours have passed since last timestamp
+        const timeDiff = now - data.timestamp
+        const twentyFourHours = 24 * 60 * 60 * 1000
+
+        if (timeDiff > twentyFourHours) {
+          // Reset count after 24 hours
           requestCount.value = 0
-          saveRequestCount()
+          saveRequestCount() // Save with new timestamp
         } else {
           requestCount.value = Math.max(0, Math.min(data.count, FREE_REQUEST_LIMIT))
         }
@@ -197,8 +208,10 @@ function loadRequestCount() {
         console.error('Failed to parse request count data:', parseError)
         requestCount.value = 0
         localStorage.removeItem('requestCount')
+        saveRequestCount() // Initialize with current timestamp
       }
     } else {
+      // No saved data, initialize
       requestCount.value = 0
       saveRequestCount()
     }
@@ -208,27 +221,41 @@ function loadRequestCount() {
   }
 }
 
+// Updated saveRequestCount function for better logic
 function saveRequestCount() {
   try {
-    if (!isFreeUser.value) {
-      return
-    }
+    // Save if user has limitations (free, expired, or no plan)
+    const shouldHaveLimit = isFreeUser.value || 
+                           planStatus.value?.isExpired || 
+                           planStatus.value?.status === 'expired' || 
+                           planStatus.value?.status === 'no-plan'
+    
+    if (shouldHaveLimit) {
+      const data = {
+        count: Math.max(0, Math.min(requestCount.value, FREE_REQUEST_LIMIT)),
+        timestamp: Date.now() // Always update timestamp when saving
+      }
 
-    const data = {
-      count: Math.max(0, Math.min(requestCount.value, FREE_REQUEST_LIMIT)),
-      timestamp: new Date().getTime()
+      localStorage.setItem('requestCount', JSON.stringify(data))
+    } else {
+      // Remove limits for unlimited users
+      localStorage.removeItem('requestCount')
     }
-
-    localStorage.setItem('requestCount', JSON.stringify(data))
   } catch (error) {
     console.error('Failed to save request count:', error)
   }
 }
 
+// Updated incrementRequestCount function
 function incrementRequestCount() {
   try {
-    if (!isFreeUser.value) {
-      return
+    const shouldHaveLimit = isFreeUser.value || 
+                           planStatus.value?.isExpired || 
+                           planStatus.value?.status === 'expired' || 
+                           planStatus.value?.status === 'no-plan'
+
+    if (!shouldHaveLimit) {
+      return // No limits for unlimited users
     }
 
     if (requestCount.value < FREE_REQUEST_LIMIT) {
@@ -237,6 +264,32 @@ function incrementRequestCount() {
     }
   } catch (error) {
     console.error('Failed to increment request count:', error)
+  }
+}
+
+// Add a function to check and reset count if needed (call this periodically)
+function checkAndResetDailyCount() {
+  try {
+    const saved = localStorage.getItem('requestCount')
+    if (!saved) return
+
+    const data = JSON.parse(saved)
+    const now = new Date().getTime()
+    const timeDiff = now - data.timestamp
+    const twentyFourHours = 24 * 60 * 60 * 1000
+
+    if (timeDiff > twentyFourHours) {
+      requestCount.value = 0
+      saveRequestCount()
+      
+      // Optionally notify user
+      toast.success('Daily request limit reset!', {
+        duration: 4000,
+        description: `You have ${FREE_REQUEST_LIMIT} new requests available.`
+      })
+    }
+  } catch (error) {
+    console.error('Failed to check daily reset:', error)
   }
 }
 
@@ -1292,6 +1345,18 @@ onMounted(() => {
   });
 });
 
+onMounted(() => {
+  // Check for daily reset on app start
+  checkAndResetDailyCount()
+
+  // Set up periodic checking (every 5 minutes)
+  const resetCheckInterval = setInterval(checkAndResetDailyCount, 5 * 60 * 1000)
+
+  onBeforeUnmount(() => {
+    clearInterval(resetCheckInterval)
+  })
+})
+
 // Move onUpdated outside of onMounted
 onUpdated(() => {
   // Check for new video containers after DOM updates
@@ -1885,30 +1950,34 @@ onBeforeUnmount(() => {
                       : 'bg-gray-100 hover:bg-gray-200 text-gray-600 hover:text-gray-700',
                     'disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none'
                   ]" :title="microphonePermission === 'denied'
-    ? 'Microphone access denied'
-    : isRecording
-      ? 'Stop voice input'
-      : 'Start voice input'" :aria-label="isRecording ? 'Stop voice input' : 'Start voice input'">
+                    ? 'Microphone access denied'
+                    : isRecording
+                      ? 'Stop voice input'
+                      : 'Start voice input'" :aria-label="isRecording ? 'Stop voice input' : 'Start voice input'">
                   <!-- Microphone Icon -->
-                   <svg v-if="microphonePermission === 'prompt'" class="w-4 h-4 sm:w-5 sm:h-5" fill="currentColor" viewBox="0 0 24 24">
+                  <svg v-if="microphonePermission === 'prompt'" class="w-4 h-4 sm:w-5 sm:h-5" fill="currentColor"
+                    viewBox="0 0 24 24">
                     <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
                     <path d="M19 10v1a7 7 0 0 1-14 0v-1a1 1 0 0 1 2 0v1a5 5 0 0 0 10 0v-1a1 1 0 0 1 2 0Z" />
                     <path d="M12 18.5a1 1 0 0 1 1 1v1a1 1 0 0 1-2 0v-1a1 1 0 0 1 1-1Z" />
                   </svg>
 
-                  <svg v-if="!isRecording && microphonePermission === 'granted'" class="w-4 h-4 sm:w-5 sm:h-5" fill="currentColor" viewBox="0 0 24 24">
+                  <svg v-if="!isRecording && microphonePermission === 'granted'" class="w-4 h-4 sm:w-5 sm:h-5"
+                    fill="currentColor" viewBox="0 0 24 24">
                     <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
                     <path d="M19 10v1a7 7 0 0 1-14 0v-1a1 1 0 0 1 2 0v1a5 5 0 0 0 10 0v-1a1 1 0 0 1 2 0Z" />
                     <path d="M12 18.5a1 1 0 0 1 1 1v1a1 1 0 0 1-2 0v-1a1 1 0 0 1 1-1Z" />
                   </svg>
 
                   <!-- Stop Icon -->
-                  <svg v-else-if="microphonePermission === 'granted' && isRecording" class="w-4 h-4 sm:w-5 sm:h-5" fill="currentColor" viewBox="0 0 24 24">
+                  <svg v-else-if="microphonePermission === 'granted' && isRecording" class="w-4 h-4 sm:w-5 sm:h-5"
+                    fill="currentColor" viewBox="0 0 24 24">
                     <rect x="6" y="6" width="12" height="12" rx="2" />
                   </svg>
 
                   <!-- Microphone Denied Icon -->
-                  <svg v-else-if="microphonePermission === 'denied' && !isRecording" class="w-4 h-4 sm:w-5 sm:h-5 text-red-500" fill="currentColor" viewBox="0 0 24 24">
+                  <svg v-else-if="microphonePermission === 'denied' && !isRecording"
+                    class="w-4 h-4 sm:w-5 sm:h-5 text-red-500" fill="currentColor" viewBox="0 0 24 24">
                     <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
                     <path d="M19 10v1a7 7 0 0 1-14 0v-1a1 1 0 0 1 2 0v1a5 5 0 0 0 10 0v-1a1 1 0 0 1 2 0Z" />
                     <path d="M12 18.5a1 1 0 0 1 1 1v1a1 1 0 0 1-2 0v-1a1 1 0 0 1 1-1Z" />
