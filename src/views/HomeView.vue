@@ -663,25 +663,25 @@ function detectLargePaste(text: string): boolean {
 function handlePaste(e: ClipboardEvent) {
   try {
     const pastedText = e.clipboardData?.getData('text') || ''
-    
+
     if (!pastedText.trim()) return
-    
+
     if (detectLargePaste(pastedText)) {
       e.preventDefault()
-      
+
       const wordCount = pastedText.trim().split(/\s+/).filter(word => word.length > 0).length
       const charCount = pastedText.length
-      
+
       // Enhanced paste preview with proper content handling
       const processedContent = wordCount > 100 ? `#pastedText#${pastedText}` : pastedText
-      
+
       pastePreview.value = {
         content: processedContent,
         wordCount,
         charCount,
         show: true
       }
-      
+
       toast.info('Large content detected', {
         duration: 4000,
         description: `${wordCount} words, ${charCount} characters. Preview shown below.`
@@ -696,7 +696,7 @@ function handlePaste(e: ClipboardEvent) {
 
 function removePastePreview() {
   pastePreview.value = null
-  
+
   // Also clear the textarea if it contains the preview content
   nextTick(() => {
     const textarea = document.getElementById("prompt") as HTMLTextAreaElement
@@ -1258,7 +1258,7 @@ function onEnter(e: KeyboardEvent) {
 function closePasteModal() {
   showPasteModal.value = false
   currentPasteContent.value = null
-  
+
   // Restore body scroll
   document.body.style.overflow = 'auto'
 }
@@ -1272,7 +1272,7 @@ function handleModalKeydown(e: KeyboardEvent) {
 
 function PastePreviewComponent(content: string, wordCount: number, charCount: number, isClickable: boolean = false) {
   const preview = content.length > 200 ? content.substring(0, 200) + '...' : content
-  
+
   // Proper HTML escaping
   const escapedPreview = preview
     .replace(/&/g, '&amp;')
@@ -1285,11 +1285,11 @@ function PastePreviewComponent(content: string, wordCount: number, charCount: nu
 
   // Generate unique ID for this component
   const componentId = `paste-${Math.random().toString(36).substr(2, 9)}`
-  
+
   // For clickable elements, add the data attributes and class to the main container
-  const clickableAttributes = isClickable ? 
+  const clickableAttributes = isClickable ?
     `data-paste-content="${encodeURIComponent(content)}" data-word-count="${wordCount}" data-char-count="${charCount}"` : ''
-  
+
   const clickableClass = isClickable ? 'paste-preview-clickable cursor-pointer hover:bg-gray-200' : ''
 
   return `
@@ -1323,25 +1323,25 @@ function PastePreviewComponent(content: string, wordCount: number, charCount: nu
 
 function handlePastePreviewClick(e: Event) {
   const target = e.target as HTMLElement
-  
+
   // Check if the clicked element itself or any parent has the clickable class
   const clickableElement = target.closest('.paste-preview-clickable')
-  
+
   if (clickableElement) {
     // Prevent event bubbling to avoid conflicts
     e.preventDefault()
     e.stopPropagation()
-    
+
     const content = clickableElement.getAttribute('data-paste-content')
     const wordCount = clickableElement.getAttribute('data-word-count')
     const charCount = clickableElement.getAttribute('data-char-count')
-    
+
     if (content && wordCount && charCount) {
       try {
         const decodedContent = decodeURIComponent(content)
         const parsedWordCount = parseInt(wordCount, 10)
         const parsedCharCount = parseInt(charCount, 10)
-        
+
         openPasteModal(decodedContent, parsedWordCount, parsedCharCount)
       } catch (error) {
         console.error('Error parsing paste preview data:', error)
@@ -1356,7 +1356,7 @@ function handlePastePreviewClick(e: Event) {
 
 function handleRemovePastePreview(e: Event) {
   const target = e.target as HTMLElement
-  
+
   if (target.classList.contains('remove-paste-preview')) {
     e.preventDefault()
     e.stopPropagation()
@@ -1368,11 +1368,11 @@ function setupPastePreviewHandlers() {
   // Remove existing listeners to avoid duplicates
   document.removeEventListener('click', handlePastePreviewClick, true)
   document.removeEventListener('click', handleRemovePastePreview, true)
-  
+
   // Add event delegation with capture phase for better reliability
   document.addEventListener('click', handlePastePreviewClick, true)
   document.addEventListener('click', handleRemovePastePreview, true)
-  
+
   console.log('Paste preview handlers setup complete') // Debug log
 }
 
@@ -1381,10 +1381,10 @@ function openPasteModal(content: string, wordCount: number, charCount: number) {
   try {
     // Handle the #pastedText# prefix if present
     const actualContent = content.startsWith('#pastedText#') ? content.substring(12) : content
-    
+
     // Detect content type - provide fallback if function not available
     let contentType: 'text' | 'code' | 'json' | 'markdown' | 'xml' | 'html' = 'text'
-    
+
     if (typeof detectContentType === 'function') {
       contentType = detectContentType(actualContent)
     } else {
@@ -1399,21 +1399,21 @@ function openPasteModal(content: string, wordCount: number, charCount: number) {
         contentType = 'html'
       }
     }
-    
+
     currentPasteContent.value = {
       content: actualContent,
       wordCount,
       charCount,
       type: contentType
     }
-    
+
     showPasteModal.value = true
-    
+
     // Prevent body scroll
     document.body.style.overflow = 'hidden'
-    
+
     console.log('Paste modal opened successfully', { wordCount, charCount, type: contentType }) // Debug log
-    
+
   } catch (error) {
     console.error('Error opening paste modal:', error)
     toast.error('Error opening preview', {
@@ -1674,10 +1674,10 @@ onBeforeUnmount(() => {
 
   // Remove keyboard listener
   document.removeEventListener('keydown', handleModalKeydown)
- 
+
   // Clean up paste preview handlers (use the enhanced cleanup function)
   cleanupPastePreviewHandlers()
-  
+
   // Restore body scroll if modal is open
   if (showPasteModal.value) {
     document.body.style.overflow = 'auto'
@@ -1724,7 +1724,7 @@ onMounted(() => {
     (window as any).openPasteModal = safeGlobalFunction(openPasteModal, 'openPasteModal');
     (window as any).copyPasteContent = safeGlobalFunction(copyPasteContent, 'copyPasteContent');
     (window as any).removePastePreview = safeGlobalFunction(removePastePreview, 'removePastePreview');
-    
+
     // Video functions
     (window as any).playEmbeddedVideo = safeGlobalFunction(playEmbeddedVideo, 'playEmbeddedVideo');
     (window as any).pauseVideo = safeGlobalFunction(pauseVideo, 'pauseVideo');
@@ -1855,7 +1855,7 @@ onMounted(() => {
     // Clean up intervals
     clearInterval(interval);
     clearInterval(resetCheckInterval);
-    
+
     if (autoSyncInterval) {
       clearInterval(autoSyncInterval);
     }
@@ -1893,7 +1893,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="flex h-[100vh]">
+  <div class="flex h-[100vh] bg-background text-[var(--foreground)]">
     <!-- Sidebar -->
     <SideNav v-if="isAuthenticated" :data="{
       chats,
@@ -1918,26 +1918,27 @@ onMounted(() => {
     <!-- Main Chat Window -->
     <div
       :class="screenWidth > 720 && isAuthenticated ? (!isCollapsed ?
-        'flex-grow flex flex-col items-center justify-center ml-[270px] font-light text-sm transition-all duration-300 ease-in-out'
+        'flex-grow flex flex-col items-center justify-center ml-[270px] font-light text-sm transition-all duration-300 ease-in-out bg-inherit'
         :
-        'flex-grow flex flex-col items-center justify-center ml-[60px] font-light text-sm transition-all duration-300 ease-in-out'
+        'flex-grow flex flex-col items-center justify-center ml-[60px] font-light text-sm transition-all duration-300 ease-in-out bg-inherit'
       )
-        : 'text-sm font-light flex-grow items-center justify-center flex flex-col transition-all duration-300 ease-in-out'">
-
-      <TopNav v-if="isAuthenticated" :data="{
-        currentChat,
-        parsedUserDetails,
-        screenWidth,
-        isCollapsed,
-        isSidebarHidden,
-        syncStatus,
-      }" :functions="{
-        hideSidebar,
-        manualSync,
-      }" />
+        : 'text-sm font-light flex-grow items-center justify-center flex flex-col transition-all duration-300 ease-in-out bg-inherit'">
 
       <div
-        :class="(screenWidth > 720 && isAuthenticated) ? 'h-screen flex flex-col items-center justify-center w-[85%]' : 'h-screen w-full flex flex-col items-center justify-center'">
+        :class="(screenWidth > 720 && isAuthenticated) ? 'h-screen bg-inherit flex flex-col items-center justify-center w-[85%]' : 'bg-inherit h-screen w-full flex flex-col items-center justify-center'">
+        <TopNav v-if="isAuthenticated" :data="{
+          currentChat,
+          parsedUserDetails,
+          screenWidth,
+          isCollapsed,
+          isSidebarHidden,
+          syncStatus,
+          }" 
+          :functions="{
+            hideSidebar,
+            manualSync,
+          }" 
+        />
         <!-- Empty State -->
         <CreateSessView v-if="!isAuthenticated" :chats="chats" :current-chat-id="currentChatId"
           :is-collapsed="isCollapsed" :parsed-user-details="parsedUserDetails" :screen-width="screenWidth"
@@ -1999,7 +2000,7 @@ onMounted(() => {
 
         <!-- Update your chat messages container -->
         <div ref="scrollableElem" v-else-if="currentMessages.length !== 0 && isAuthenticated"
-          class="flex-grow no-scrollbar overflow-y-auto px-2 sm:px-4 w-full space-y-3 sm:space-y-4 mt-[90px]" :class="isRequestLimitExceeded || shouldShowUpgradePrompt ? 'pb-[160px] sm:pb-[150px]' :
+          class="flex-grow no-scrollbar overflow-y-auto px-2 sm:px-4 w-full space-y-3 sm:space-y-4 mt-[55px]" :class="isRequestLimitExceeded || shouldShowUpgradePrompt ? 'pb-[160px] sm:pb-[150px]' :
             showScrollDownButton ? 'pb-[140px] sm:pb-[120px]' :
               'pb-[110px] sm:pb-[120px]'">
           <div v-if="currentMessages.length !== 0" v-for="(item, i) in currentMessages" :key="`chat-${i}`"
@@ -2110,7 +2111,6 @@ onMounted(() => {
             <p class="whitespace-nowrap">Scroll Down</p>
           </div>
         </button>
-
 
 
         <!-- Input Area -->
@@ -2301,11 +2301,11 @@ onMounted(() => {
                     'disabled:opacity-50 disabled:cursor-not-allowed',
                     isRecording ? 'bg-red-50 border border-red-100' : ''
                   ]" :placeholder="inputPlaceholderText">
-        </textarea>
+                </textarea>
 
                 <!-- Submit Button -->
                 <button type="submit" :disabled="inputDisabled"
-                  class="rounded-lg w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center transition-colors text-white bg-blue-600 hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50 disabled:bg-gray-400 flex-shrink-0">
+                  class="rounded-lg w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center transition-colors text-white bg-[var(--primary)] text-[var(--primary-foreground)] hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50 disabled:bg-gray-400 flex-shrink-0">
                   <i v-if="!isLoading" class="pi pi-arrow-up text-xs sm:text-sm"></i>
                   <i v-else class="pi pi-spin pi-spinner text-xs sm:text-sm"></i>
                 </button>
@@ -2315,12 +2315,9 @@ onMounted(() => {
         </div>
       </div>
     </div>
-    <PastePreviewModal
-      :data="{
-        showPasteModal,
-        currentPasteContent,
-      }"
-      :closePasteModal="closePasteModal"
-    />
+    <PastePreviewModal :data="{
+      showPasteModal,
+      currentPasteContent,
+    }" :closePasteModal="closePasteModal" />
   </div>
 </template>

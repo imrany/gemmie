@@ -217,7 +217,7 @@ function handleChatClick(chatId: string) {
             if (props.data.screenWidth < 720) props.functions.hideSidebar()
           }
         " title="New Chat" class="w-full flex items-center gap-2 h-[40px] hover:bg-gray-100 rounded-lg px-2">
-          <i class="pi pi-pencil text-gray-500 mb-[2px]"></i>
+          <i class="pi pi-plus text-gray-500 mb-[2px]"></i>
           <p v-if="!props.data.isCollapsed || props.data.screenWidth < 720">New Chat</p>
         </button>
 
@@ -233,6 +233,18 @@ function handleChatClick(chatId: string) {
             <div
               v-if="props.data.syncStatus.hasUnsyncedChanges && props.data.parsedUserDetails.sync_enabled && (!props.data.isCollapsed || props.data.screenWidth < 720)"
               class="ml-auto w-2 h-2 bg-orange-500 rounded-full"></div>
+          </button>
+
+          <button @click="
+            () => {
+              if (router.currentRoute.value.path !== '/editor') {
+                router.push('/editor')
+              }
+              if (props.data.screenWidth < 720) props.functions.hideSidebar()
+            }
+          " title="Open Editor" class="w-full flex items-center gap-2 h-[40px] hover:bg-gray-100 rounded-lg px-2">
+            <i class="pi pi-pencil text-gray-500 mb-[2px]"></i>
+            <p v-if="!props.data.isCollapsed || props.data.screenWidth < 720">Editor</p>
           </button>
         </div>
       </div>
