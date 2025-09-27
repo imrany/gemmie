@@ -142,20 +142,6 @@ const pastePreview = ref<{
   show: boolean;
 } | null>(null)
 
-const requestsRemaining = computed(() => {
-  if (!isFreeUser.value) return Infinity
-  return Math.max(0, FREE_REQUEST_LIMIT - requestCount.value)
-})
-
-const isRequestLimitExceeded = computed(() => {
-  return (isFreeUser.value && requestCount.value >= FREE_REQUEST_LIMIT) ||
-    (planStatus.value.isExpired && requestCount.value >= FREE_REQUEST_LIMIT)
-})
-
-const shouldShowUpgradePrompt = computed(() => {
-  return isFreeUser.value && requestCount.value >= 3
-})
-
 // ---------- Request Limit Functions ----------
 function loadRequestCount() {
   try {
@@ -165,10 +151,10 @@ function loadRequestCount() {
     }
 
     // Check if user should have request limits
-    const shouldHaveLimit = isFreeUser.value || 
-                           planStatus.value.isExpired || 
-                           planStatus.value.status === 'no-plan' || 
-                           planStatus.value.status === 'expired'
+    const shouldHaveLimit = isFreeUser.value ||
+      planStatus.value.isExpired ||
+      planStatus.value.status === 'no-plan' ||
+      planStatus.value.status === 'expired'
 
     if (!shouldHaveLimit) {
       requestCount.value = 0
@@ -225,11 +211,11 @@ function loadRequestCount() {
 function saveRequestCount() {
   try {
     // Save if user has limitations (free, expired, or no plan)
-    const shouldHaveLimit = isFreeUser.value || 
-                           planStatus.value?.isExpired || 
-                           planStatus.value?.status === 'expired' || 
-                           planStatus.value?.status === 'no-plan'
-    
+    const shouldHaveLimit = isFreeUser.value ||
+      planStatus.value?.isExpired ||
+      planStatus.value?.status === 'expired' ||
+      planStatus.value?.status === 'no-plan'
+
     if (shouldHaveLimit) {
       const data = {
         count: Math.max(0, Math.min(requestCount.value, FREE_REQUEST_LIMIT)),
@@ -249,10 +235,10 @@ function saveRequestCount() {
 // Updated incrementRequestCount function
 function incrementRequestCount() {
   try {
-    const shouldHaveLimit = isFreeUser.value || 
-                           planStatus.value?.isExpired || 
-                           planStatus.value?.status === 'expired' || 
-                           planStatus.value?.status === 'no-plan'
+    const shouldHaveLimit = isFreeUser.value ||
+      planStatus.value?.isExpired ||
+      planStatus.value?.status === 'expired' ||
+      planStatus.value?.status === 'no-plan'
 
     if (!shouldHaveLimit) {
       return // No limits for unlimited users
@@ -281,7 +267,7 @@ function checkAndResetDailyCount() {
     if (timeDiff > twentyFourHours) {
       requestCount.value = 0
       saveRequestCount()
-      
+
       // Optionally notify user
       toast.success('Daily request limit reset!', {
         duration: 4000,
@@ -732,6 +718,7 @@ function removePastePreview() {
   pastePreview.value = null
 }
 
+// Fixed handleSubmit function
 async function handleSubmit(e?: any, retryPrompt?: string) {
   e?.preventDefault?.()
 
@@ -755,20 +742,27 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
     return
   }
 
-  // Check request limit for free users
-  if (isFreeUser.value && requestCount.value >= FREE_REQUEST_LIMIT && planStatus.value.status === 'no-plan') {
-    toast.warning('Free requests exhausted', {
-      duration: 4000,
-      description: 'Please upgrade to continue chatting.'
-    })
-    return
-  }
+  // Check for daily reset before checking limits
+  checkAndResetDailyCount()
 
-  if (planStatus.value.isExpired) {
-    toast.error('Your plan has expired', {
-      duration: 5000,
-      description: 'Please renew your plan to continue using the service.'
-    })
+  // Fixed: Check request limit for ALL users who should have limits
+  const shouldHaveLimit = isFreeUser.value ||
+    planStatus.value.isExpired ||
+    planStatus.value.status === 'no-plan' ||
+    planStatus.value.status === 'expired'
+
+  if (shouldHaveLimit && requestCount.value >= FREE_REQUEST_LIMIT) {
+    if (planStatus.value.isExpired) {
+      toast.error('Your plan has expired', {
+        duration: 5000,
+        description: 'Please renew your plan to continue using the service.'
+      })
+    } else {
+      toast.warning('Free requests exhausted', {
+        duration: 4000,
+        description: 'Please upgrade to continue chatting.'
+      })
+    }
     return
   }
 
@@ -783,7 +777,7 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
 
     isLoading.value = true
 
-    // Increment request count for free users
+    // Increment request count for limited users
     incrementRequestCount()
 
     if (!retryPrompt && e?.target?.prompt) {
@@ -849,7 +843,7 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
 
   isLoading.value = true
 
-  // Increment request count for free users
+  // Increment request count for limited users
   incrementRequestCount()
 
   if (!retryPrompt && e?.target?.prompt) {
@@ -931,6 +925,80 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
     scrollToBottom()
   }
 }
+
+// Fixed computed properties for better logic
+const isRequestLimitExceeded = computed(() => {
+  const shouldHaveLimit = isFreeUser.value ||
+    planStatus.value.isExpired ||
+    planStatus.value.status === 'no-plan' ||
+    planStatus.value.status === 'expired'
+
+  return shouldHaveLimit && requestCount.value >= FREE_REQUEST_LIMIT
+})
+
+const shouldShowUpgradePrompt = computed(() => {
+  const shouldHaveLimit = isFreeUser.value ||
+    planStatus.value.isExpired ||
+    planStatus.value.status === 'no-plan' ||
+    planStatus.value.status === 'expired'
+
+  return shouldHaveLimit && requestCount.value >= 3 && requestCount.value < FREE_REQUEST_LIMIT
+})
+
+const requestsRemaining = computed(() => {
+  const shouldHaveLimit = isFreeUser.value ||
+    planStatus.value.isExpired ||
+    planStatus.value.status === 'no-plan' ||
+    planStatus.value.status === 'expired'
+
+  if (!shouldHaveLimit) return Infinity
+  return Math.max(0, FREE_REQUEST_LIMIT - requestCount.value)
+})
+
+// Fixed input area template logic
+const inputPlaceholderText = computed(() => {
+  if (pastePreview.value && pastePreview.value.show) {
+    return 'Large content ready to send...'
+  }
+
+  if (isRecording.value) {
+    return screenWidth.value > 640 ? 'Speak now... (Click mic to stop)' : 'Speak now...'
+  }
+
+  if (isRequestLimitExceeded.value) {
+    if (planStatus.value.isExpired) {
+      return screenWidth.value > 640 ? 'Plan expired - renew to continue...' : 'Plan expired...'
+    }
+    return screenWidth.value > 640 ? 'Upgrade to continue chatting...' : 'Upgrade to continue...'
+  }
+
+  if (isLoading.value) {
+    return 'Please wait...'
+  }
+
+  const shouldHaveLimit = isFreeUser.value ||
+    planStatus.value.isExpired ||
+    planStatus.value.status === 'no-plan' ||
+    planStatus.value.status === 'expired'
+
+  if (shouldHaveLimit) {
+    return `Ask me a question... (${requestsRemaining.value} requests left)`
+  }
+
+  return 'Ask me a question...'
+})
+
+const inputDisabled = computed(() => {
+  return isLoading.value || isRequestLimitExceeded.value
+})
+
+const showLimitExceededBanner = computed(() => {
+  return isRequestLimitExceeded.value
+})
+
+const showUpgradeBanner = computed(() => {
+  return shouldShowUpgradePrompt.value && !isRequestLimitExceeded.value
+})
 
 // Add connection checking before authentication
 async function handleStepSubmit(e: Event) {
@@ -1429,8 +1497,11 @@ function updateTextarea(interim: string) {
   updateTimeout = window.setTimeout(() => {
     const textarea = document.getElementById('prompt') as HTMLTextAreaElement
     if (textarea) {
-      textarea.value = transcribedText.value + interim
-      autoGrow({ target: textarea } as any)
+      // Only update if we're actually recording or have transcribed text
+      if (isRecording.value || transcribedText.value) {
+        textarea.value = transcribedText.value + interim
+        autoGrow({ target: textarea } as any)
+      }
     }
   }, 100)
 }
@@ -1506,8 +1577,19 @@ function clearVoiceTranscription() {
   if (textarea) {
     textarea.value = ''
     autoGrow({ target: textarea } as any)
+    textarea.focus() // Refocus after clearing
   }
 }
+
+watch([isRecording, isTranscribing], ([recording, transcribing]) => {
+  if (!recording && !transcribing && !transcribedText.value) {
+    const textarea = document.getElementById('prompt') as HTMLTextAreaElement
+    if (textarea && textarea.value && !pastePreview.value) {
+      textarea.value = ''
+      autoGrow({ target: textarea } as any)
+    }
+  }
+})
 
 watch(isAuthenticated, (newVal) => {
   if (newVal) {
@@ -1518,6 +1600,16 @@ watch(isAuthenticated, (newVal) => {
 onMounted(() => {
   // Initialize speech recognition
   initializeSpeechRecognition()
+
+  // Clear any initial content in textarea
+  nextTick(() => {
+    const textarea = document.getElementById('prompt') as HTMLTextAreaElement
+    if (textarea && textarea.value) {
+      console.log('Initial textarea content found:', textarea.value) // Debug line
+      textarea.value = '' // Clear it
+      transcribedText.value = '' // Also clear transcribed text
+    }
+  })
 
   const interval = setInterval(() => {
     now.value = Date.now()
@@ -1819,7 +1911,7 @@ onBeforeUnmount(() => {
 
 
 
-        <!-- Update the input section -->
+        <!-- Input Area -->
         <div v-if="(currentMessages.length !== 0 || showInput === true) && isAuthenticated" :style="screenWidth > 720 && !isCollapsed ? 'left:270px;' :
           screenWidth > 720 && isCollapsed ? 'left:60px;' : 'left:0px;'"
           class="bg-white z-20 bottom-0 right-0 fixed pb-3 sm:pb-5 px-2 sm:px-5">
@@ -1838,7 +1930,7 @@ onBeforeUnmount(() => {
               </div>
 
               <!-- Request Limit Exceeded Banner -->
-              <div v-if="isRequestLimitExceeded" class="py-2 sm:py-3 w-full px-2 sm:px-3">
+              <div v-if="showLimitExceededBanner" class="py-2 sm:py-3 w-full px-2 sm:px-3">
                 <div class="flex items-center justify-center w-full">
                   <!-- Mobile: Stacked Layout -->
                   <div class="flex sm:hidden w-full flex-col gap-2">
@@ -1848,16 +1940,17 @@ onBeforeUnmount(() => {
                         <i class="pi pi-ban text-red-600 text-xs sm:text-sm"></i>
                       </div>
                       <div class="min-w-0 flex-1">
-                        <h3 class="text-xs sm:text-sm font-semibold text-red-800 leading-tight">Free Requests Exhausted
+                        <h3 class="text-xs sm:text-sm font-semibold text-red-800 leading-tight">
+                          {{ planStatus.isExpired ? 'Plan Expired' : 'Free Requests Exhausted' }}
                         </h3>
                         <p class="text-xs text-red-600 leading-tight mt-0.5">
-                          Used all {{ FREE_REQUEST_LIMIT }} requests
+                          {{ planStatus.isExpired ? 'Renew your plan' : `Used all ${FREE_REQUEST_LIMIT} requests` }}
                         </p>
                       </div>
                     </div>
                     <button @click="$router.push('/upgrade')"
                       class="w-full bg-red-500 hover:bg-red-600 text-white py-2 rounded-md text-xs font-medium transition-colors">
-                      Upgrade Plan
+                      {{ planStatus.isExpired ? 'Renew Plan' : 'Upgrade Plan' }}
                     </button>
                   </div>
 
@@ -1867,21 +1960,25 @@ onBeforeUnmount(() => {
                       <i class="pi pi-ban text-red-600 text-sm"></i>
                     </div>
                     <div class="min-w-0 flex-1">
-                      <h3 class="text-sm font-semibold text-red-800 mb-1">Free Requests Exhausted</h3>
+                      <h3 class="text-sm font-semibold text-red-800 mb-1">
+                        {{ planStatus.isExpired ? 'Plan Expired' : 'Free Requests Exhausted' }}
+                      </h3>
                       <p class="text-xs text-red-600">
-                        You've used all {{ FREE_REQUEST_LIMIT }} free requests. Upgrade to continue chatting.
+                        {{ planStatus.isExpired ?
+                          'Please renew your plan to continue using the service.' :
+                          `You've used all ${FREE_REQUEST_LIMIT} free requests. Upgrade to continue chatting.` }}
                       </p>
                     </div>
                     <button @click="$router.push('/upgrade')"
                       class="bg-red-500 px-3 hover:bg-red-600 text-white py-2 rounded-md text-sm font-medium transition-colors flex-shrink-0 whitespace-nowrap">
-                      Upgrade Plan
+                      {{ planStatus.isExpired ? 'Renew Plan' : 'Upgrade Plan' }}
                     </button>
                   </div>
                 </div>
               </div>
 
               <!-- Upgrade Warning Banner -->
-              <div v-else-if="shouldShowUpgradePrompt" class="py-2 sm:py-3 w-full px-2 sm:px-3">
+              <div v-if="showUpgradeBanner" class="py-2 sm:py-3 w-full px-2 sm:px-3">
                 <div class="flex items-center justify-center w-full">
                   <!-- Mobile: Stacked Layout -->
                   <div class="flex sm:hidden w-full flex-col gap-2">
@@ -1928,8 +2025,8 @@ onBeforeUnmount(() => {
 
               <!-- Input Area with Voice Recording -->
               <div class="flex w-full bg-white rounded-2xl px-2 sm:px-3 py-1 sm:py-2 items-center gap-2 sm:gap-3"
-                :class="isRequestLimitExceeded ? 'opacity-50 border border-t pointer-events-none' :
-                  shouldShowUpgradePrompt ? 'border border-t' : ''">
+                :class="inputDisabled ? 'opacity-50 border border-t pointer-events-none' :
+                  showUpgradeBanner ? 'border border-t' : ''">
 
                 <!-- Voice Recording Indicator (when active) -->
                 <div v-if="isRecording || isTranscribing"
@@ -1942,18 +2039,18 @@ onBeforeUnmount(() => {
                 </div>
 
                 <!-- Microphone Toggle Button -->
-                <button type="button" @click="toggleVoiceRecording" :disabled="isLoading || isRequestLimitExceeded"
-                  :class="[
-                    'rounded-lg w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center transition-all duration-200 flex-shrink-0',
-                    isRecording
-                      ? 'bg-red-500 hover:bg-red-600 text-white shadow-lg transform scale-105 animate-pulse'
-                      : 'bg-gray-100 hover:bg-gray-200 text-gray-600 hover:text-gray-700',
-                    'disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none'
-                  ]" :title="microphonePermission === 'denied'
-                    ? 'Microphone access denied'
-                    : isRecording
-                      ? 'Stop voice input'
-                      : 'Start voice input'" :aria-label="isRecording ? 'Stop voice input' : 'Start voice input'">
+                <button type="button" @click="toggleVoiceRecording" :disabled="inputDisabled" :class="[
+                  'rounded-lg w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center transition-all duration-200 flex-shrink-0',
+                  isRecording
+                    ? 'bg-red-500 hover:bg-red-600 text-white shadow-lg transform scale-105 animate-pulse'
+                    : 'bg-gray-100 hover:bg-gray-200 text-gray-600 hover:text-gray-700',
+                  'disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none'
+                ]" :title="microphonePermission === 'denied'
+                  ? 'Microphone access denied'
+                  : isRecording
+                    ? 'Stop voice input'
+                    : 'Start voice input'" :aria-label="isRecording ? 'Stop voice input' : 'Start voice input'">
+
                   <!-- Microphone Icon -->
                   <svg v-if="microphonePermission === 'prompt'" class="w-4 h-4 sm:w-5 sm:h-5" fill="currentColor"
                     viewBox="0 0 24 24">
@@ -1985,7 +2082,6 @@ onBeforeUnmount(() => {
                   </svg>
                 </button>
 
-
                 <!-- Clear Voice Button (when transcribed text exists) -->
                 <button v-if="transcribedText && !isRecording" type="button" @click="clearVoiceTranscription"
                   class="rounded-lg w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center transition-colors text-gray-400 hover:text-gray-600 hover:bg-gray-50 flex-shrink-0"
@@ -1998,20 +2094,15 @@ onBeforeUnmount(() => {
 
                 <!-- Textarea -->
                 <textarea required id="prompt" name="prompt" @keydown="onEnter" @input="autoGrow" @paste="handlePaste"
-                  :disabled="isLoading || isRequestLimitExceeded" rows="1" :class="[
+                  :disabled="inputDisabled" rows="1" :class="[
                     'flex-grow py-3 px-1 placeholder:text-gray-500 rounded-t-2xl bg-white text-sm outline-none resize-none border-none max-h-[120px] sm:max-h-[150px] md:max-h-[200px] overflow-auto leading-relaxed w-full min-w-0',
                     'disabled:opacity-50 disabled:cursor-not-allowed',
                     isRecording ? 'bg-red-50 border border-red-100' : ''
-                  ]" :placeholder="pastePreview && pastePreview.show ? 'Large content ready to send...' :
-                    isRecording ? (screenWidth > 640 ? 'Speak now... (Click mic to stop)' : 'Speak now...') :
-                      isRequestLimitExceeded ? (screenWidth > 640 ? 'Upgrade to continue chatting...' : 'Upgrade to continue...') :
-                        isLoading ? 'Please wait...' :
-                          isFreeUser ? `Ask me a question... (${requestsRemaining} requests left)` :
-                            'Ask me a question...'">
-                </textarea>
+                  ]" :placeholder="inputPlaceholderText">
+        </textarea>
 
                 <!-- Submit Button -->
-                <button type="submit" :disabled="isLoading || isRequestLimitExceeded"
+                <button type="submit" :disabled="inputDisabled"
                   class="rounded-lg w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center transition-colors text-white bg-blue-600 hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50 disabled:bg-gray-400 flex-shrink-0">
                   <i v-if="!isLoading" class="pi pi-arrow-up text-xs sm:text-sm"></i>
                   <i v-else class="pi pi-spin pi-spinner text-xs sm:text-sm"></i>
