@@ -13,6 +13,8 @@ import { onUpdated } from "vue"
 import { extractUrls, generateChatTitle, copyCode, isPromptTooShort, WRAPPER_URL } from "@/utils/globals"
 import CreateSessView from "./CreateSessView.vue"
 import router from "@/router"
+import { copyPasteContent, detectContentType } from "@/utils/previewPasteContent"
+import PastePreviewModal from "@/components/Modals/PastePreviewModal.vue"
 
 // Inject global state
 const globalState = inject('globalState') as {
@@ -134,6 +136,13 @@ const transcriptionDuration = ref(0)
 let transcriptionTimer: number | null = null
 let updateTimeout: number | null = null
 
+const showPasteModal = ref(false)
+const currentPasteContent = ref<{
+  content: string;
+  wordCount: number;
+  charCount: number;
+  type: 'text' | 'code' | 'json' | 'markdown' | 'xml' | 'html';
+} | null>(null)
 
 const pastePreview = ref<{
   content: string;
@@ -535,45 +544,6 @@ function LinkPreviewComponent({ preview }: { preview: LinkPreview }) {
   `
 }
 
-// Create paste preview component
-function PastePreviewComponent(content: string, wordCount: number, charCount: number) {
-  // Properly escape HTML and preserve formatting
-  const preview = content.length > 200 ? content.substring(0, 200) + '...' : content
-  const escapedPreview = preview
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
-
-  return `
-    <div class="paste-preview border border-gray-300 rounded-lg overflow-hidden my-2 bg-gray-100 hover:shadow-md transition-shadow w-full">
-      <div class="w-full">
-        <div class="bg-gray-600 px-3 py-1 text-white text-xs font-medium flex items-center gap-2">
-          <i class="pi pi-clipboard"></i>
-          <span>PASTED</span>
-          <span class="ml-auto text-gray-200 hidden sm:inline">${wordCount} words • ${charCount} chars</span>
-          <span class="ml-auto text-gray-200 sm:hidden">${charCount} chars</span>
-        </div>
-        <div class="pb-3 px-3">
-          <div class="relative">
-            <div class="text-sm text-gray-800 leading-relaxed break-words whitespace-pre-wrap font-mono h-20 sm:h-24 overflow-hidden">
-${escapedPreview}
-            </div>
-            <!-- Fade overlay -->
-            <div class="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-gray-50 via-gray-50/80 to-transparent pointer-events-none"></div>
-          </div>
-          <div class="flex items-center justify-between mt-2 text-xs text-gray-600">
-            <span class="hidden sm:inline">Large content detected</span>
-            <span class="sm:hidden">Large content</span>
-            <button onclick="removePastePreview()" class="text-gray-700 hover:text-gray-900 underline font-medium">Remove</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  `
-}
-
 // ---------- Authentication Functions ----------
 function nextAuthStep() {
   if (authStep.value < 4) {
@@ -691,31 +661,52 @@ function detectLargePaste(text: string): boolean {
 }
 
 function handlePaste(e: ClipboardEvent) {
-  const pastedText = e.clipboardData?.getData('text') || ''
-
-  if (detectLargePaste(pastedText)) {
-    e.preventDefault()
-
-    const wordCount = pastedText.trim().split(/\s+/).length
-    const charCount = pastedText.length
-
-    // Show paste preview
-    pastePreview.value = {
-      content: wordCount > 100 ? `#pastedText#${pastedText}` : pastedText,
-      wordCount,
-      charCount,
-      show: true
+  try {
+    const pastedText = e.clipboardData?.getData('text') || ''
+    
+    if (!pastedText.trim()) return
+    
+    if (detectLargePaste(pastedText)) {
+      e.preventDefault()
+      
+      const wordCount = pastedText.trim().split(/\s+/).filter(word => word.length > 0).length
+      const charCount = pastedText.length
+      
+      // Enhanced paste preview with proper content handling
+      const processedContent = wordCount > 100 ? `#pastedText#${pastedText}` : pastedText
+      
+      pastePreview.value = {
+        content: processedContent,
+        wordCount,
+        charCount,
+        show: true
+      }
+      
+      toast.info('Large content detected', {
+        duration: 4000,
+        description: `${wordCount} words, ${charCount} characters. Preview shown below.`
+      })
     }
-
-    toast.info('Large content detected', {
-      duration: 4000,
-      description: `${wordCount} words, ${charCount} characters. Preview shown below.`
-    })
+  } catch (error) {
+    console.error('Error handling paste:', error)
+    // Don't prevent default on error - let normal paste proceed
   }
 }
 
+
 function removePastePreview() {
   pastePreview.value = null
+  
+  // Also clear the textarea if it contains the preview content
+  nextTick(() => {
+    const textarea = document.getElementById("prompt") as HTMLTextAreaElement
+    if (textarea && textarea.value.includes('#pastedText#')) {
+      // Extract any non-pasted content
+      const parts = textarea.value.split('#pastedText#')
+      textarea.value = parts[0] || ''
+      autoGrow({ target: textarea } as any)
+    }
+  })
 }
 
 // Fixed handleSubmit function
@@ -1263,167 +1254,181 @@ function onEnter(e: KeyboardEvent) {
   }
 }
 
-onMounted(() => {
-  // Load collapsed state
-  const saved = localStorage.getItem("isCollapsed");
-  if (saved && saved !== "null") {
-    try {
-      isCollapsed.value = JSON.parse(saved);
-    } catch (err) {
-      console.error("Error parsing isCollapsed:", err);
-    }
+// Function to close paste modal
+function closePasteModal() {
+  showPasteModal.value = false
+  currentPasteContent.value = null
+  
+  // Restore body scroll
+  document.body.style.overflow = 'auto'
+}
+
+// Keyboard handler for modal
+function handleModalKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape' && showPasteModal.value) {
+    closePasteModal()
   }
+}
 
-  // Load chat ID
-  const savedChatId = localStorage.getItem("currentChatId");
-  if (savedChatId) currentChatId.value = savedChatId;
+function PastePreviewComponent(content: string, wordCount: number, charCount: number, isClickable: boolean = false) {
+  const preview = content.length > 200 ? content.substring(0, 200) + '...' : content
+  
+  // Proper HTML escaping
+  const escapedPreview = preview
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+    .replace(/\n/g, '<br>')
+    .replace(/\t/g, '&nbsp;&nbsp;&nbsp;&nbsp;')
 
-  // Load cached previews
-  loadLinkPreviewCache();
+  // Generate unique ID for this component
+  const componentId = `paste-${Math.random().toString(36).substr(2, 9)}`
+  
+  // For clickable elements, add the data attributes and class to the main container
+  const clickableAttributes = isClickable ? 
+    `data-paste-content="${encodeURIComponent(content)}" data-word-count="${wordCount}" data-char-count="${charCount}"` : ''
+  
+  const clickableClass = isClickable ? 'paste-preview-clickable cursor-pointer hover:bg-gray-200' : ''
 
-  // Make removePastePreview globally available
-  if (typeof window !== 'undefined') {
-    (window as any).removePastePreview = removePastePreview
-  }
+  return `
+    <div class="paste-preview border border-gray-300 rounded-lg overflow-hidden my-2 bg-gray-100 hover:shadow-md transition-all w-full ${clickableClass}" 
+         id="${componentId}" ${clickableAttributes}>
+      <div class="w-full">
+        <div class="bg-gray-600 px-3 py-1 text-white text-xs font-medium flex items-center gap-2">
+          <i class="pi pi-clipboard"></i>
+          <span>PASTED CONTENT</span>
+          <span class="ml-auto text-gray-200 hidden sm:inline">${wordCount} words • ${charCount} chars</span>
+          <span class="ml-auto text-gray-200 sm:hidden">${charCount} chars</span>
+          ${isClickable ? '<i class="pi pi-external-link ml-1 text-gray-300"></i>' : ''}
+        </div>
+        <div class="pb-3 px-3">
+          <div class="relative">
+            <div class="text-sm text-gray-800 leading-relaxed break-words whitespace-pre-wrap font-mono h-20 sm:h-24 overflow-hidden">
+              ${escapedPreview}
+            </div>
+            <div class="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-gray-100 via-gray-100/80 to-transparent pointer-events-none"></div>
+          </div>
+          <div class="flex items-center justify-between mt-2 text-xs text-gray-600">
+            <span class="hidden sm:inline">${isClickable ? 'Click to view full content' : 'Large content detected'}</span>
+            <span class="sm:hidden">${isClickable ? 'Tap to view' : 'Large content'}</span>
+            ${!isClickable ? '<button class="remove-paste-preview text-gray-700 hover:text-gray-900 underline font-medium" type="button">Remove</button>' : ''}
+          </div>
+        </div>
+      </div>
+    </div>
+  `
+}
 
-  // Load chats if logged in
-  if (isAuthenticated) {
-    // Load request count for free users
-    if (isFreeUser.value) {
-      loadRequestCount()
-    }
-
-    loadChats();
-
-    // Setup auto-sync
-    setupAutoSync()
-
-    // Initial sync from server (delayed to avoid conflicts)
-    setTimeout(() => {
-      syncFromServer()
-    }, 1000)
-
-    // Pre-process links in existing messages
-    currentMessages.value.forEach((item, index) => {
-      [item.prompt, item.response].forEach((text) => {
-        if (text && text !== "...") {
-          extractUrls(text)
-            .slice(0, 3)
-            .forEach((url) => {
-              if (!linkPreviewCache.value.has(url)) {
-                fetchLinkPreview(url).then(() => {
-                  // trigger reactivity
-                  linkPreviewCache.value = new Map(linkPreviewCache.value);
-                });
-              }
-            });
-        }
-      });
-    });
-  }
-
-  // Global copy button handler
-  const copyListener = (e: any) => {
-    if (e.target?.classList.contains("copy-button")) {
-      const code = decodeURIComponent(e.target.getAttribute("data-code"));
-      copyCode(code, e.target);
-    }
-  };
-  document.addEventListener("click", copyListener);
-
-  // Make functions globally available
-  if (typeof window !== 'undefined') {
-    (window as any).playEmbeddedVideo = playEmbeddedVideo;
-    (window as any).pauseVideo = pauseVideo;
-    (window as any).resumeVideo = resumeVideo;
-    (window as any).stopVideo = stopVideo;
-    (window as any).toggleDirectVideo = toggleDirectVideo;
-    (window as any).stopDirectVideo = stopDirectVideo;
-    (window as any).showVideoControls = showVideoControls;
-    (window as any).updateVideoControls = updateVideoControls;
-    (window as any).playSocialVideo = playSocialVideo;
-  }
-
-  // Initialize video lazy loading once
-  initializeVideoLazyLoading();
-
-  nextTick(() => {
-    // Set up scroll listener with proper cleanup
-    if (scrollableElem.value) {
-      scrollableElem.value.addEventListener("scroll", debouncedHandleScroll, { passive: true });
-    }
-
-    // Auto-focus input
-    if (showInput.value || currentMessages.value.length > 0) {
-      const textarea = document.getElementById("prompt") as HTMLTextAreaElement;
-      textarea?.focus();
-    }
-
-    // Process link previews in responses
-    currentMessages.value.forEach((msg: Res, index) => {
-      if (msg.response && msg.response !== "...") {
-        processLinksInResponse(index);
+function handlePastePreviewClick(e: Event) {
+  const target = e.target as HTMLElement
+  
+  // Check if the clicked element itself or any parent has the clickable class
+  const clickableElement = target.closest('.paste-preview-clickable')
+  
+  if (clickableElement) {
+    // Prevent event bubbling to avoid conflicts
+    e.preventDefault()
+    e.stopPropagation()
+    
+    const content = clickableElement.getAttribute('data-paste-content')
+    const wordCount = clickableElement.getAttribute('data-word-count')
+    const charCount = clickableElement.getAttribute('data-char-count')
+    
+    if (content && wordCount && charCount) {
+      try {
+        const decodedContent = decodeURIComponent(content)
+        const parsedWordCount = parseInt(wordCount, 10)
+        const parsedCharCount = parseInt(charCount, 10)
+        
+        openPasteModal(decodedContent, parsedWordCount, parsedCharCount)
+      } catch (error) {
+        console.error('Error parsing paste preview data:', error)
+        toast.error('Error opening paste preview', {
+          duration: 3000,
+          description: 'Could not parse content data'
+        })
       }
-    });
-
-    // Observe existing video containers after processing links
-    observeNewVideoContainers();
-
-    // Initial scroll to bottom with delay to ensure content is rendered
-    setTimeout(() => {
-      scrollToBottom();
-    }, 100);
-  });
-
-  // Store cleanup function for onBeforeUnmount
-  onBeforeUnmount(() => {
-    document.removeEventListener("click", copyListener);
-
-    // Clean up scroll listener
-    if (scrollableElem.value) {
-      scrollableElem.value.removeEventListener("scroll", debouncedHandleScroll);
     }
+  }
+}
 
-    // Clean up video lazy loading observer
-    destroyVideoLazyLoading();
+function handleRemovePastePreview(e: Event) {
+  const target = e.target as HTMLElement
+  
+  if (target.classList.contains('remove-paste-preview')) {
+    e.preventDefault()
+    e.stopPropagation()
+    removePastePreview()
+  }
+}
 
-    // Clean up sync functions
-    if (autoSyncInterval) {
-      clearInterval(autoSyncInterval);
+function setupPastePreviewHandlers() {
+  // Remove existing listeners to avoid duplicates
+  document.removeEventListener('click', handlePastePreviewClick, true)
+  document.removeEventListener('click', handleRemovePastePreview, true)
+  
+  // Add event delegation with capture phase for better reliability
+  document.addEventListener('click', handlePastePreviewClick, true)
+  document.addEventListener('click', handleRemovePastePreview, true)
+  
+  console.log('Paste preview handlers setup complete') // Debug log
+}
+
+// Function to open paste modal
+function openPasteModal(content: string, wordCount: number, charCount: number) {
+  try {
+    // Handle the #pastedText# prefix if present
+    const actualContent = content.startsWith('#pastedText#') ? content.substring(12) : content
+    
+    // Detect content type - provide fallback if function not available
+    let contentType: 'text' | 'code' | 'json' | 'markdown' | 'xml' | 'html' = 'text'
+    
+    if (typeof detectContentType === 'function') {
+      contentType = detectContentType(actualContent)
+    } else {
+      // Simple content type detection as fallback
+      if (actualContent.trim().startsWith('{') && actualContent.trim().endsWith('}')) {
+        contentType = 'json'
+      } else if (actualContent.includes('```') || actualContent.includes('function') || actualContent.includes('class')) {
+        contentType = 'code'
+      } else if (actualContent.includes('#') || actualContent.includes('**')) {
+        contentType = 'markdown'
+      } else if (actualContent.includes('<') && actualContent.includes('>')) {
+        contentType = 'html'
+      }
     }
-
-    // Remove event listeners
-    // if (window.syncCleanupFunctions) {
-    //   window.syncCleanupFunctions.forEach((cleanup: Function) => cleanup())
-    //   window.syncCleanupFunctions = []
-    // }
-
-    // Clear timeouts
-    if (scrollTimeout) {
-      clearTimeout(scrollTimeout);
+    
+    currentPasteContent.value = {
+      content: actualContent,
+      wordCount,
+      charCount,
+      type: contentType
     }
-    if (resizeTimeout) {
-      clearTimeout(resizeTimeout);
-    }
+    
+    showPasteModal.value = true
+    
+    // Prevent body scroll
+    document.body.style.overflow = 'hidden'
+    
+    console.log('Paste modal opened successfully', { wordCount, charCount, type: contentType }) // Debug log
+    
+  } catch (error) {
+    console.error('Error opening paste modal:', error)
+    toast.error('Error opening preview', {
+      duration: 3000,
+      description: 'Could not display content preview'
+    })
+  }
+}
 
-    // Final sync if needed
-    if (syncStatus.value.hasUnsyncedChanges) {
-      syncToServer()
-    }
-  });
-});
+function cleanupPastePreviewHandlers() {
+  document.removeEventListener('click', handlePastePreviewClick, true)
+  document.removeEventListener('click', handleRemovePastePreview, true)
+  console.log('Paste preview handlers cleaned up') // Debug log
+}
 
-onMounted(() => {
-  // Check for daily reset on app start
-  checkAndResetDailyCount()
-
-  // Set up periodic checking (every 5 minutes)
-  const resetCheckInterval = setInterval(checkAndResetDailyCount, 5 * 60 * 1000)
-
-  onBeforeUnmount(() => {
-    clearInterval(resetCheckInterval)
-  })
-})
 
 // Move onUpdated outside of onMounted
 onUpdated(() => {
@@ -1597,26 +1602,6 @@ watch(isAuthenticated, (newVal) => {
   }
 })
 
-onMounted(() => {
-  // Initialize speech recognition
-  initializeSpeechRecognition()
-
-  // Clear any initial content in textarea
-  nextTick(() => {
-    const textarea = document.getElementById('prompt') as HTMLTextAreaElement
-    if (textarea && textarea.value) {
-      console.log('Initial textarea content found:', textarea.value) // Debug line
-      textarea.value = '' // Clear it
-      transcribedText.value = '' // Also clear transcribed text
-    }
-  })
-
-  const interval = setInterval(() => {
-    now.value = Date.now()
-  }, 1000)
-  onUnmounted(() => clearInterval(interval))
-})
-
 // watch for user plan changes
 watch(() => ({
   isFree: isFreeUser.value,
@@ -1680,18 +1665,231 @@ watch(() => ({ ...planStatus.value }), (newStatus, oldStatus) => {
   }
 }, { deep: true })
 
-onMounted(() => {
-  if (isAuthenticated && isFreeUser.value) {
-    loadRequestCount()
-  }
-})
 
 onBeforeUnmount(() => {
   // Clean up speech recognition
   if (isRecording.value) {
     stopVoiceRecording()
   }
+
+  // Remove keyboard listener
+  document.removeEventListener('keydown', handleModalKeydown)
+ 
+  // Clean up paste preview handlers (use the enhanced cleanup function)
+  cleanupPastePreviewHandlers()
+  
+  // Restore body scroll if modal is open
+  if (showPasteModal.value) {
+    document.body.style.overflow = 'auto'
+  }
 })
+
+// Consolidated onMounted hook for better organization
+onMounted(() => {
+  // 1. Load basic state
+  const saved = localStorage.getItem("isCollapsed");
+  if (saved && saved !== "null") {
+    try {
+      isCollapsed.value = JSON.parse(saved);
+    } catch (err) {
+      console.error("Error parsing isCollapsed:", err);
+    }
+  }
+
+  const savedChatId = localStorage.getItem("currentChatId");
+  if (savedChatId) currentChatId.value = savedChatId;
+
+  // 2. Load cached previews
+  loadLinkPreviewCache();
+
+  // 3. Setup paste preview handlers
+  setupPastePreviewHandlers();
+
+  // 4. Make functions globally available with error boundaries
+  if (typeof window !== 'undefined') {
+    const safeGlobalFunction = (fn: Function, name: string) => {
+      return (...args: any[]) => {
+        try {
+          return fn.apply(this, args);
+        } catch (error) {
+          console.error(`Error in ${name}:`, error);
+          toast.error(`Error in ${name}`, {
+            duration: 3000,
+            description: 'An unexpected error occurred'
+          });
+        }
+      };
+    };
+
+    (window as any).openPasteModal = safeGlobalFunction(openPasteModal, 'openPasteModal');
+    (window as any).copyPasteContent = safeGlobalFunction(copyPasteContent, 'copyPasteContent');
+    (window as any).removePastePreview = safeGlobalFunction(removePastePreview, 'removePastePreview');
+    
+    // Video functions
+    (window as any).playEmbeddedVideo = safeGlobalFunction(playEmbeddedVideo, 'playEmbeddedVideo');
+    (window as any).pauseVideo = safeGlobalFunction(pauseVideo, 'pauseVideo');
+    (window as any).resumeVideo = safeGlobalFunction(resumeVideo, 'resumeVideo');
+    (window as any).stopVideo = safeGlobalFunction(stopVideo, 'stopVideo');
+    (window as any).toggleDirectVideo = safeGlobalFunction(toggleDirectVideo, 'toggleDirectVideo');
+    (window as any).stopDirectVideo = safeGlobalFunction(stopDirectVideo, 'stopDirectVideo');
+    (window as any).showVideoControls = safeGlobalFunction(showVideoControls, 'showVideoControls');
+    (window as any).updateVideoControls = safeGlobalFunction(updateVideoControls, 'updateVideoControls');
+    (window as any).playSocialVideo = safeGlobalFunction(playSocialVideo, 'playSocialVideo');
+  }
+
+  // 5. Initialize features based on authentication
+  if (isAuthenticated.value) {
+    // Load request count for limited users
+    const shouldHaveLimit = isFreeUser.value ||
+      planStatus.value.isExpired ||
+      planStatus.value.status === 'no-plan' ||
+      planStatus.value.status === 'expired';
+
+    if (shouldHaveLimit) {
+      loadRequestCount();
+    }
+
+    loadChats();
+    setupAutoSync();
+
+    // Initial sync from server (delayed to avoid conflicts)
+    setTimeout(() => {
+      syncFromServer();
+    }, 1000);
+
+    // Pre-process links in existing messages
+    currentMessages.value.forEach((item, index) => {
+      [item.prompt, item.response].forEach((text) => {
+        if (text && text !== "...") {
+          extractUrls(text)
+            .slice(0, 3)
+            .forEach((url) => {
+              if (!linkPreviewCache.value.has(url)) {
+                fetchLinkPreview(url).then(() => {
+                  linkPreviewCache.value = new Map(linkPreviewCache.value);
+                });
+              }
+            });
+        }
+      });
+    });
+  }
+
+  // 6. Initialize speech recognition
+  initializeSpeechRecognition();
+
+  // 7. Global event listeners
+  const copyListener = (e: any) => {
+    if (e.target?.classList.contains("copy-button")) {
+      const code = decodeURIComponent(e.target.getAttribute("data-code"));
+      copyCode(code, e.target);
+    }
+  };
+  document.addEventListener("click", copyListener);
+  document.addEventListener('keydown', handleModalKeydown);
+
+  // 8. Initialize video lazy loading
+  initializeVideoLazyLoading();
+
+  // 9. Setup periodic tasks
+  const interval = setInterval(() => {
+    now.value = Date.now();
+  }, 1000);
+
+  // Check for daily reset on app start
+  checkAndResetDailyCount();
+  const resetCheckInterval = setInterval(checkAndResetDailyCount, 5 * 60 * 1000);
+
+  // 10. Setup DOM-dependent functionality
+  nextTick(() => {
+    // Clear any initial content in textarea
+    const textarea = document.getElementById('prompt') as HTMLTextAreaElement;
+    if (textarea && textarea.value) {
+      console.log('Initial textarea content found:', textarea.value);
+      textarea.value = '';
+      transcribedText.value = '';
+    }
+
+    // Set up scroll listener with proper cleanup
+    if (scrollableElem.value) {
+      scrollableElem.value.addEventListener("scroll", debouncedHandleScroll, { passive: true });
+    }
+
+    // Auto-focus input
+    if (showInput.value || currentMessages.value.length > 0) {
+      textarea?.focus();
+    }
+
+    // Process link previews in responses
+    currentMessages.value.forEach((msg: Res, index) => {
+      if (msg.response && msg.response !== "...") {
+        processLinksInResponse(index);
+      }
+    });
+
+    // Observe existing video containers after processing links
+    observeNewVideoContainers();
+
+    // Initial scroll to bottom with delay to ensure content is rendered
+    setTimeout(() => {
+      scrollToBottom();
+    }, 100);
+  });
+
+  // 11. Store cleanup functions for onBeforeUnmount
+  onBeforeUnmount(() => {
+    // Clean up event listeners
+    document.removeEventListener("click", copyListener);
+    document.removeEventListener('keydown', handleModalKeydown);
+    document.removeEventListener('click', handlePastePreviewClick);
+    document.removeEventListener('click', handleRemovePastePreview);
+
+    // Clean up scroll listener
+    if (scrollableElem.value) {
+      scrollableElem.value.removeEventListener("scroll", debouncedHandleScroll);
+    }
+
+    // Clean up video lazy loading observer
+    destroyVideoLazyLoading();
+
+    // Clean up intervals
+    clearInterval(interval);
+    clearInterval(resetCheckInterval);
+    
+    if (autoSyncInterval) {
+      clearInterval(autoSyncInterval);
+    }
+
+    // Clear timeouts
+    if (scrollTimeout) {
+      clearTimeout(scrollTimeout);
+    }
+    if (resizeTimeout) {
+      clearTimeout(resizeTimeout);
+    }
+    if (transcriptionTimer) {
+      clearInterval(transcriptionTimer);
+    }
+    if (updateTimeout) {
+      clearTimeout(updateTimeout);
+    }
+
+    // Clean up speech recognition
+    if (isRecording.value) {
+      stopVoiceRecording();
+    }
+
+    // Restore body scroll if modal is open
+    if (showPasteModal.value) {
+      document.body.style.overflow = 'auto';
+    }
+
+    // Final sync if needed
+    if (syncStatus.value.hasUnsyncedChanges) {
+      syncToServer();
+    }
+  });
+});
 </script>
 
 <template>
@@ -1829,11 +2027,15 @@ onBeforeUnmount(() => {
                     v-if="item && item.prompt && (item?.prompt?.trim().split(/\s+/).length > 100 || item?.prompt?.length > 800)"
                     class="mb-3">
                     <div class="flex justify-center">
-                      <div class="ml-auto sm:w-[80%] md:w-[70%] lg:w-[60%] xl:w-[50%]"
-                        v-html="PastePreviewComponent(item?.prompt?.trim()?.split('#pastedText#')[1] || '', item?.prompt?.trim().split('#pastedText#')[1]?.split(/\s+/)?.length || 0, item?.prompt?.trim()?.split('#pastedText#')[1]?.length || 0)">
+                      <div class="ml-auto sm:w-[80%] md:w-[70%] lg:w-[60%] xl:w-[50%]" v-html="PastePreviewComponent(
+                        item?.prompt?.trim()?.split('#pastedText#')[1] || '',
+                        item?.prompt?.trim().split('#pastedText#')[1]?.split(/\s+/)?.length || 0,
+                        item?.prompt?.trim()?.split('#pastedText#')[1]?.length || 0, true
+                      )">
                       </div>
                     </div>
                   </div>
+
                 </div>
 
               </div>
@@ -2113,5 +2315,12 @@ onBeforeUnmount(() => {
         </div>
       </div>
     </div>
+    <PastePreviewModal
+      :data="{
+        showPasteModal,
+        currentPasteContent,
+      }"
+      :closePasteModal="closePasteModal"
+    />
   </div>
 </template>
