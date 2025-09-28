@@ -81,6 +81,10 @@ const selectionEnd = ref(0)
 const showContextMenu = ref(false)
 const contextMenuPosition = ref({ x: 0, y: 0 })
 
+const sidebarWidth = ref(320) // default width
+const isResizingSidebar = ref(false)
+const maxSidebarWidth = 600 // max width constraint
+
 // Search functionality
 const searchQuery = ref('')
 const searchResults = ref<SearchResult[]>([])
@@ -90,6 +94,10 @@ const showAIPopover = ref(false)
 const aiPopoverPosition = ref({ x: 0, y: 0 })
 const aiPopoverContent = ref('')
 const isLoadingAIPopover = ref(false)
+
+const isDraggingAISuggestions = ref(false)
+const isDraggingAIPopover = ref(false)
+const dragOffset = ref({ x: 0, y: 0 })
 
 // History
 const editHistory = ref<Array<{ action: string, pageNum: number, timestamp: Date, preview: string }>>([])
@@ -563,6 +571,117 @@ function closeAIModal() {
   isGeneratingAI.value = false
 }
 
+// Simplified AI Suggestions drag handling
+function startSuggestionsDrag(event: MouseEvent | any) {
+  event.preventDefault()
+  event.stopPropagation()
+
+  isDraggingAISuggestions.value = true
+  
+  const rect = event?.currentTarget?.closest('.ai-suggestions').getBoundingClientRect()
+  dragOffset.value = {
+    x: event.clientX - rect.left,
+    y: event.clientY - rect.top
+  }
+
+  document.addEventListener('mousemove', handleSuggestionsDrag)
+  document.addEventListener('mouseup', stopSuggestionsDrag)
+}
+
+function handleSuggestionsDrag(event: MouseEvent) {
+  if (!isDraggingAISuggestions.value) return
+  
+  event.preventDefault()
+
+  let newX = event.clientX - dragOffset.value.x
+  let newY = event.clientY - dragOffset.value.y
+
+  // Viewport constraints
+  const viewport = {
+    width: window.innerWidth,
+    height: window.innerHeight
+  }
+  
+  // Constrain to viewport
+  newX = Math.max(10, Math.min(newX, viewport.width - 290))
+  newY = Math.max(10, Math.min(newY, viewport.height - 250))
+
+  aiSuggestionsPosition.value = { x: newX, y: newY }
+}
+
+function stopSuggestionsDrag() {
+  isDraggingAISuggestions.value = false
+  document.removeEventListener('mousemove', handleSuggestionsDrag)
+  document.removeEventListener('mouseup', stopSuggestionsDrag)
+}
+
+// Simplified version - remove the complex startDrag function and replace with:
+function startDrag(event:MouseEvent, component:string) {
+  // Only handle popover now, since suggestions has its own handler
+  if (component !== 'popover') return
+  
+  const target:any = event.target
+  const isDragHandle = target.classList.contains('drag-handle') || target.closest('.drag-handle')
+
+  if (!isDragHandle) return
+
+  event.preventDefault()
+  event.stopPropagation()
+
+  isDraggingAIPopover.value = true
+  
+  dragOffset.value = {
+    x: event.clientX - aiPopoverPosition.value.x,
+    y: event.clientY - aiPopoverPosition.value.y
+  }
+
+  const handleMouseMove = (e:MouseEvent) => {
+    if (!isDraggingAIPopover.value) return
+    
+    e.preventDefault()
+    let newX = e.clientX - dragOffset.value.x
+    let newY = e.clientY - dragOffset.value.y
+
+    const viewport = {
+      width: window.innerWidth,
+      height: window.innerHeight
+    }
+    
+    newX = Math.max(10, Math.min(newX, viewport.width - 320 - 10))
+    newY = Math.max(10, Math.min(newY, viewport.height - 200 - 10))
+
+    aiPopoverPosition.value = { x: newX, y: newY }
+  }
+  
+  const handleMouseUp = () => {
+    isDraggingAIPopover.value = false
+    document.removeEventListener('mousemove', handleMouseMove)
+    document.removeEventListener('mouseup', handleMouseUp)
+  }
+  
+  document.addEventListener('mousemove', handleMouseMove)
+  document.addEventListener('mouseup', handleMouseUp)
+}
+
+// Sidebar resize functionality
+function startSidebarResize() {
+  isResizingSidebar.value = true
+  document.addEventListener('mousemove', handleSidebarResize)
+  document.addEventListener('mouseup', stopSidebarResize)
+}
+
+function handleSidebarResize(event: MouseEvent) {
+  if (!isResizingSidebar.value) return
+
+  const newWidth = event.clientX
+  // Constrain between min and max widths
+  sidebarWidth.value = Math.max(200, Math.min(newWidth, maxSidebarWidth))
+}
+
+function stopSidebarResize() {
+  isResizingSidebar.value = false
+}
+
 /**
  * Textarea AI Support
  */
@@ -587,23 +706,40 @@ function handleAIShortcut(action: AIAction) {
 }
 
 function showAIToolbar() {
-  const textarea = document.querySelector('textarea');
+  const textarea = document.querySelector('textarea')
+  if (!textarea) return
 
-  if (!textarea) return;
+  const rect = textarea.getBoundingClientRect()
 
-  const rect = textarea.getBoundingClientRect();
-  const scrollX = window.pageXOffset || document.documentElement.scrollLeft;
-  const scrollY = window.pageYOffset || document.documentElement.scrollTop;
-  console.log(rect)
-
-  // Center position (assuming fixed toolbar dimensions)
+  // Position in center of visible textarea area
   aiSuggestionsPosition.value = {
-    x: rect.left + (rect.width / 2) - 100 + scrollX, // minus half of toolbar width
-    y: (rect.height / 2) - scrollY   // minus half of toolbar height
-  };
+    x: rect.left + (rect.width / 2) - 140, // Half of component width (280px)
+    y: rect.top + (rect.height / 2) - 100  // Rough center
+  }
 
-  showAISuggestions.value = true;
+  // Ensure it stays within viewport
+  const viewport = {
+    width: window.innerWidth,
+    height: window.innerHeight
+  }
+
+  // Adjust horizontal position
+  if (aiSuggestionsPosition.value.x < 10) {
+    aiSuggestionsPosition.value.x = 10
+  } else if (aiSuggestionsPosition.value.x + 280 > viewport.width - 10) {
+    aiSuggestionsPosition.value.x = viewport.width - 290
+  }
+
+  // Adjust vertical position
+  if (aiSuggestionsPosition.value.y < 10) {
+    aiSuggestionsPosition.value.y = 10
+  } else if (aiSuggestionsPosition.value.y + 200 > viewport.height - 10) {
+    aiSuggestionsPosition.value.y = viewport.height - 210
+  }
+
+  showAISuggestions.value = true
 }
+
 
 function hideAISuggestions() {
   showAISuggestions.value = false
@@ -719,11 +855,11 @@ function openTextEditor(doc: UploadedFile) {
   redoHistory.value = []
 }
 
+
 function handleTextSelection(event: Event) {
-  // Only trigger on mouseup events, not keyup for better UX
   if (event.type === 'keyup') return
 
-  setTimeout(() => { // Small delay to ensure selection is complete
+  setTimeout(() => {
     const selection: any = window.getSelection()
     const selectedTextValue = selection?.toString().trim()
 
@@ -734,35 +870,104 @@ function handleTextSelection(event: Event) {
       const scrollX = window.pageXOffset || document.documentElement.scrollLeft
       const scrollY = window.pageYOffset || document.documentElement.scrollTop
 
-      aiSuggestionsPosition.value = {
-        x: rect.left + (rect.width / 2) - 100 + scrollX,
-        y: rect.bottom + 5 + scrollY
+      // Viewport constraints
+      const viewport = {
+        width: window.innerWidth,
+        height: window.innerHeight
+      }
+
+      // Component dimensions
+      const popupWidth = 280
+      const popupHeight = 200
+
+      // Start with position below and centered on selection
+      let x = rect.left + (rect.width / 2) - (popupWidth / 2)
+      let y = rect.bottom + 10
+
+      // Adjust horizontal positioning
+      if (x + popupWidth > viewport.width - 10) {
+        // Too far right - align with right edge of viewport
+        x = viewport.width - popupWidth - 10
+      }
+      if (x < 10) {
+        // Too far left - align with left edge of viewport
+        x = 10
+      }
+
+      // If horizontal positioning is extreme, center in viewport
+      if (x < viewport.width * 0.1 || x > viewport.width * 0.7) {
+        x = (viewport.width / 2) - (popupWidth / 2)
+      }
+
+      // Adjust vertical positioning
+      if (y + popupHeight > viewport.height - 10) {
+        // Too far down - show above selection instead
+        y = rect.top - popupHeight - 10
+      }
+
+      // If still outside viewport vertically, position at vertical center
+      if (y < 10 || y + popupHeight > viewport.height - 10) {
+        y = (viewport.height / 2) - (popupHeight / 2)
+      }
+
+      // Final bounds check
+      x = Math.max(10, Math.min(x, viewport.width - popupWidth - 10))
+      y = Math.max(10, Math.min(y, viewport.height - popupHeight - 10))
+
+      aiSuggestionsPosition.value = { 
+        x: x + scrollX, 
+        y: y + scrollY 
       }
       showAISuggestions.value = true
     } else {
-      // Hide suggestions if no text is selected
       showAISuggestions.value = false
     }
   }, 100)
 }
 
+
 async function performAIAction(action: AIAction, text: string) {
   if (!text.trim()) return
 
-  // Position popover near the selected text
+  // Position popover near the current cursor/selection
   const selection: any = window.getSelection()
-  if (selection?.rangeCount > 0) {
-    const range = selection?.getRangeAt(0)
-    const rect = range.getBoundingClientRect()
-    const scrollX = window.pageXOffset || document.documentElement.scrollLeft
-    const scrollY = window.pageYOffset || document.documentElement.scrollTop
+  let x = window.innerWidth / 2 - 160 // Center horizontally by default
+  let y = window.innerHeight / 2 - 100 // Center vertically by default
 
-    aiPopoverPosition.value = {
-      x: rect.right + 10 + scrollX,
-      y: rect.top + scrollY
+  if (selection?.rangeCount > 0) {
+    const range = selection.getRangeAt(0)
+    const rect = range.getBoundingClientRect()
+
+    // Try to position to the right of selection
+    x = rect.right + 20
+    y = rect.top
+
+    // Viewport constraints
+    const viewport = {
+      width: window.innerWidth,
+      height: window.innerHeight
+    }
+
+    // If too far right, position to the left
+    if (x + 320 > viewport.width - 10) {
+      x = rect.left - 330
+    }
+
+    // If still off-screen, center horizontally
+    if (x < 10) {
+      x = viewport.width / 2 - 160
+    }
+
+    // Vertical adjustments
+    if (y + 300 > viewport.height - 10) {
+      y = viewport.height - 310
+    }
+    if (y < 10) {
+      y = 10
     }
   }
 
+  aiPopoverPosition.value = { x, y }
   showAIPopover.value = true
   isLoadingAIPopover.value = true
   aiPopoverContent.value = ''
@@ -784,126 +989,6 @@ async function performAIAction(action: AIAction, text: string) {
 
 function hideContextMenu() {
   showContextMenu.value = false
-}
-
-function contextMenuAction(action: string) {
-  const selection = window.getSelection()
-  const selectedTextValue = selection?.toString().trim()
-
-  switch (action) {
-    case 'copy':
-      if (selectedTextValue) {
-        navigator.clipboard.writeText(selectedTextValue)
-      }
-      break
-    case 'selectAll':
-      const textarea = document.querySelector('textarea')
-      if (textarea) textarea.select()
-      break
-    case 'paste':
-      navigator.clipboard.readText().then(text => {
-        const textarea = document.querySelector('textarea')
-        if (textarea) {
-          saveToHistory()
-          const start = textarea.selectionStart
-          const end = textarea.selectionEnd
-          const currentContent = textarea.value
-          const newContent = currentContent.substring(0, start) + text + currentContent.substring(end)
-          updatePageContent(newContent)
-        }
-      }).catch(() => {
-        console.warn('Failed to read clipboard')
-      })
-      break
-    case 'highlight':
-      if (selectedTextValue) {
-        highlightText('#ffff00')
-      }
-      break
-    case 'note':
-      if (selectedTextValue) {
-        const note = prompt('Add a note for this text:')
-        if (note) {
-          addAnnotation('note', selectedTextValue, note)
-        }
-      }
-      break
-    case 'summarize':
-    case 'expand':
-    case 'simplify':
-    case 'translate':
-    case 'paraphrase':
-    case 'improve':
-      if (selectedTextValue) {
-        selectedText.value = selectedTextValue
-        performAIAction(action as AIAction, selectedTextValue)
-      }
-      break
-    case 'bold':
-      if (selectedTextValue) {
-        makeBold()
-      }
-      break
-    case 'erase':
-      if (selectedTextValue) {
-        eraseText()
-      }
-      break
-  }
-  hideContextMenu()
-}
-
-/**
- * Text actions
- */
-function eraseText() {
-  if (!selectedText.value) return
-
-  const currentPageData = getCurrentPageContent()
-  if (currentPageData) {
-    saveToHistory()
-    const newContent = currentPageData.content.replace(selectedText.value, '')
-    updatePageContent(newContent)
-    addToHistory('Erased text', `Removed "${selectedText.value.substring(0, 30)}..."`)
-  }
-}
-
-function makeBold() {
-  if (!selectedText.value) return
-
-  const currentPageData = getCurrentPageContent()
-  if (currentPageData) {
-    saveToHistory()
-    const newContent = currentPageData.content.replace(selectedText.value, `**${selectedText.value}**`)
-    updatePageContent(newContent)
-    addToHistory('Made text bold', `Bolded "${selectedText.value.substring(0, 30)}..."`)
-  }
-}
-
-function highlightText(color: string = '#ffff00') {
-  if (!selectedText.value) return
-
-  addAnnotation('highlight', selectedText.value, '', color)
-  addToHistory('Highlighted text', `Highlighted "${selectedText.value.substring(0, 30)}..."`)
-}
-
-function addAnnotation(type: Annotation['type'], text: string, note: string = '', color: string = '#ffff00') {
-  const currentPageData = getCurrentPageContent()
-  if (currentPageData) {
-    const annotation: Annotation = {
-      id: `ann-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-      type,
-      text,
-      startIndex: selectionStart.value,
-      endIndex: selectionEnd.value,
-      color,
-      note,
-      timestamp: new Date()
-    }
-
-    currentPageData.annotations.push(annotation)
-    currentPageData.isModified = true
-  }
 }
 
 /**
@@ -1365,10 +1450,6 @@ function applyAIResult() {
 }
 
 function handleGlobalClick(event: MouseEvent) {
-  if (showContextMenu.value) {
-    hideContextMenu()
-  }
-
   if (showExportDropdown.value) {
     const target = event.target as HTMLElement
     if (!target.closest('.export-dropdown')) {
@@ -1383,12 +1464,12 @@ function handleGlobalClick(event: MouseEvent) {
     }
   }
 
-  if (showAIPopover.value) {
-    const target = event.target as HTMLElement
-    if (!target.closest('.ai-popover')) {
-      showAIPopover.value = false
-    }
-  }
+  // if (showAIPopover.value) {
+  //   const target = event.target as HTMLElement
+  //   if (!target.closest('.ai-popover')) {
+  //     showAIPopover.value = false
+  //   }
+  // }
 }
 
 const toggleExportDropdown = () => {
@@ -1408,11 +1489,16 @@ onMounted(() => {
   loadFromLocalStorage()
   document.addEventListener('mouseup', handleTextSelection)
   document.addEventListener('click', handleGlobalClick)
+  document.addEventListener('mouseup', stopSidebarResize)
 })
 
 onUnmounted(() => {
   document.removeEventListener('mouseup', handleTextSelection)
   document.removeEventListener('click', handleGlobalClick)
+  document.removeEventListener('mouseup', stopSidebarResize)
+  document.removeEventListener('mousemove', handleSuggestionsDrag)
+  document.removeEventListener('mouseup', stopSuggestionsDrag)
+
   if (autoSaveTimer.value) {
     clearTimeout(autoSaveTimer.value)
   }
@@ -1433,9 +1519,15 @@ onBeforeUnmount(() => {
     <div class="bg-white h-screen w-full flex dark:bg-gray-800">
       <!-- Sidebar -->
       <div :class="[
-        'bg-gray-100 border-r border-gray-300 flex flex-col transition-all duration-300 dark:bg-gray-700 dark:border-gray-600',
-        sidebarOpen ? 'w-80' : 'w-12'
-      ]">
+        'bg-gray-100 border-r border-gray-300 flex flex-col transition-all duration-300 dark:bg-gray-700 dark:border-gray-600 relative',
+        sidebarOpen ? '' : 'w-12'
+      ]" :style="sidebarOpen ? { width: sidebarWidth + 'px' } : {}">
+
+        <!-- Resize handle -->
+        <div v-if="sidebarOpen"
+          class="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-500 transition-colors z-10"
+          @mousedown="startSidebarResize">
+        </div>
 
         <!-- Sidebar Header -->
         <div class="p-3 border-b border-gray-300 flex items-center justify-between dark:border-gray-600">
@@ -1595,7 +1687,7 @@ onBeforeUnmount(() => {
 
           <div v-if="activeSidebarTab === 'annotations'" class="p-3">
             <h4 class="text-sm font-medium text-gray-800 dark:text-gray-300 mb-3">Annotations ({{ allAnnotations.length
-              }})</h4>
+            }})</h4>
             <div class="space-y-2">
               <div v-for="ann in allAnnotations" :key="ann.id" @click="goToPage(ann.pageNum)"
                 class="p-2 rounded border cursor-pointer hover:bg-gray-50 text-xs dark:hover:bg-gray-600"
@@ -2210,17 +2302,25 @@ Press Ctrl+Z to undo, Ctrl+Y to redo"></textarea>
         left: aiSuggestionsPosition.x + 'px',
         top: aiSuggestionsPosition.y + 'px'
       }">
+      <!-- Drag Handle -->
+      <div
+        class="drag-handle cursor-move px-3 py-2 border-b border-gray-200 dark:border-gray-600 flex justify-between items-center"
+        @mousedown="startSuggestionsDrag">
+        <div class="text-xs font-medium text-gray-500 dark:text-gray-400">AI Assistant</div>
+        
+      </div>
+
       <div class="p-2">
-        <div class="text-xs font-medium text-gray-500 px-2 py-1 dark:text-gray-400">AI Assistant</div>
         <div class="space-y-1">
-          <button v-for="suggestion in aiSuggestions" :key="suggestion.action" @click="selectAISuggestion(suggestion)"
+          <button v-for="suggestion in aiSuggestions" :key="suggestion.action"
+            @click.stop="selectAISuggestion(suggestion)"
             class="w-full px-3 py-2 text-left hover:bg-gray-100 rounded flex items-center gap-3 text-sm text-gray-800 dark:hover:bg-gray-700 dark:text-gray-300 transition-colors">
-            <span class="text-lg">{{ suggestion.icon }}</span>
-            <div class="flex-1">
+            <span class="text-lg flex-shrink-0">{{ suggestion.icon }}</span>
+            <div class="flex-1 min-w-0">
               <div class="font-medium">{{ suggestion.label }}</div>
-              <div class="text-xs text-gray-500 dark:text-gray-400">{{ suggestion.description }}</div>
+              <div class="text-xs text-gray-500 dark:text-gray-400 truncate">{{ suggestion.description }}</div>
             </div>
-            <div class="text-xs text-gray-400 dark:text-gray-500">{{ suggestion.shortcut }}</div>
+            <div class="text-xs text-gray-400 dark:text-gray-500 flex-shrink-0">{{ suggestion.shortcut }}</div>
           </button>
         </div>
       </div>
@@ -2228,30 +2328,51 @@ Press Ctrl+Z to undo, Ctrl+Y to redo"></textarea>
 
     <!-- AI Popover -->
     <div v-if="showAIPopover"
-      class="ai-popover fixed z-50 bg-white border border-gray-300 rounded-lg shadow-xl p-4 max-w-sm w-80 dark:bg-gray-800 dark:border-gray-600"
+      class="ai-popover fixed z-50 bg-white border border-gray-300 rounded-lg shadow-xl max-w-sm w-80 dark:bg-gray-800 dark:border-gray-600"
       :style="{
         left: aiPopoverPosition.x + 'px',
         top: aiPopoverPosition.y + 'px'
       }">
-      <div v-if="isLoadingAIPopover" class="flex items-center gap-2 text-blue-600">
-        <svg class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-          <path class="opacity-75" fill="currentColor"
-            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
-          </path>
-        </svg>
-        <span class="text-sm">Generating {{ currentAIAction }}...</span>
+      <!-- Drag Handle -->
+      <div
+        class="drag-handle cursor-move px-4 py-3 border-b border-gray-200 dark:border-gray-600 flex justify-between items-center"
+        @mousedown="startDrag($event, 'popover')">
+        <div class="text-sm font-medium text-gray-700 dark:text-gray-300 capitalize">
+          {{ currentAIAction }} Result
+        </div>
+        <button @click="showAIPopover = false"
+          class="w-6 h-6 hover:bg-gray-200 rounded flex items-center justify-center transition-colors dark:hover:bg-gray-600 flex-shrink-0"
+          @mousedown.stop>
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
       </div>
-      <div v-else>
-        <div class="text-sm text-gray-800 max-h-[400px] overflow-y-auto dark:text-gray-100 mb-3">{{ aiPopoverContent }}</div>
-        <div class="flex gap-2">
-          <button @click="applyAIResult" class="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700">
-            Apply
-          </button>
-          <button @click="showAIPopover = false"
-            class="px-3 py-1 bg-gray-200 text-gray-800 rounded text-sm hover:bg-gray-300">
-            Dismiss
-          </button>
+
+      <div class="p-4">
+        <div v-if="isLoadingAIPopover" class="flex items-center gap-2 text-blue-600 dark:text-blue-400">
+          <svg class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor"
+              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
+            </path>
+          </svg>
+          <span class="text-sm">Generating {{ currentAIAction }}...</span>
+        </div>
+        <div v-else>
+          <div class="text-sm text-gray-800 max-h-[400px] overflow-y-auto dark:text-gray-100 mb-3">{{ aiPopoverContent
+          }}
+          </div>
+          <div class="flex gap-2">
+            <button @click="applyAIResult" @mousedown.stop
+              class="px-3 py-2 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 transition-colors">
+              Apply
+            </button>
+            <button @click="showAIPopover = false" @mousedown.stop
+              class="px-3 py-2 bg-gray-200 text-gray-800 rounded text-sm hover:bg-gray-300 transition-colors dark:bg-gray-600 dark:text-gray-300 dark:hover:bg-gray-500">
+              Dismiss
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -2405,5 +2526,46 @@ Press Ctrl+Z to undo, Ctrl+Y to redo"></textarea>
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+.cursor-move {
+  cursor: move;
+}
+
+.cursor-col-resize {
+  cursor: col-resize;
+}
+
+.ai-suggestions,
+.ai-popover {
+  user-select: none;
+  /* Prevent text selection while dragging */
+}
+
+/* Ensure AI components stay within viewport */
+.ai-suggestions {
+  max-width: 300px;
+  min-width: 280px;
+}
+
+.ai-popover {
+  max-width: 320px;
+  min-width: 300px;
+}
+
+.ai-suggestions .drag-handle,
+.ai-popover .drag-handle {
+  cursor: move !important;
+}
+
+.ai-suggestions button:not(.drag-handle *),
+.ai-popover button:not(.drag-handle *) {
+  cursor: pointer !important;
+  pointer-events: auto !important;
+}
+
+.drag-handle {
+  touch-action: none;
+  /* Better mobile support */
 }
 </style>
