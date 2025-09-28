@@ -25,7 +25,7 @@ let props = defineProps<{
 </script>
 
 <template>
-  <div class="h-[52px] z-30 fixed top-0 right-0 border-b transition-all duration-300 ease-in-out " :style="props.data.screenWidth > 720 && !props.data.isCollapsed
+  <div class="bg-white h-[52px] z-30 fixed top-0 right-0 border-b transition-all duration-300 ease-in-out " :style="props.data.screenWidth > 720 && !props.data.isCollapsed
       ? 'left:270px'
       : props.data.screenWidth > 720 && props.data.isCollapsed
         ? 'left:60px'

@@ -2305,7 +2305,7 @@ onMounted(() => {
 
                 <!-- Submit Button -->
                 <button type="submit" :disabled="inputDisabled"
-                  class="rounded-lg w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center transition-colors text-white bg-[var(--primary)] text-[var(--primary-foreground)] hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50 disabled:bg-gray-400 flex-shrink-0">
+                  class="rounded-lg w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center transition-colors text-white bg-blue-500 hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-50 disabled:bg-gray-400 flex-shrink-0">
                   <i v-if="!isLoading" class="pi pi-arrow-up text-xs sm:text-sm"></i>
                   <i v-else class="pi pi-spin pi-spinner text-xs sm:text-sm"></i>
                 </button>
