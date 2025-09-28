@@ -3,6 +3,7 @@ import { ref, onBeforeUnmount, nextTick, computed, onMounted, onUnmounted, watch
 import * as pdfjsLib from "pdfjs-dist"
 import pdfjsWorker from "pdfjs-dist/build/pdf.worker?url"
 import type { Ref } from "vue"
+import { WRAPPER_URL } from "@/utils/globals"
 
 // configure worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker
@@ -45,6 +46,14 @@ type SearchResult = {
   index: number
 }
 
+type AIAction = 'summarize' | 'expand' | 'simplify' | 'translate' | 'paraphrase' | 'improve' | 'explain'
+
+type HistoryEntry = {
+  content: string
+  timestamp: number
+  action?: string
+}
+
 const uploadedFiles = ref<UploadedFile[]>([])
 const selectedPdfUrl = ref("")
 const selectedPdfName = ref("")
@@ -59,11 +68,11 @@ const editablePages = ref<EditableContent[]>([])
 const isLoading = ref(false)
 const loadError = ref<string>('')
 const fontSize = ref(14)
-const lineHeight = ref(1.6)
+const lineHeight = ref(1.5)
 
 // Sidebar state
 const sidebarOpen = ref(true)
-const activeSidebarTab = ref<'outline' | 'search' | 'annotations' | 'history' | 'documents'>('documents')
+const activeSidebarTab = ref<'outline' | 'search' | 'annotations' | 'history' | 'documents'| any>('documents')
 
 // Text selection state
 const selectedText = ref('')
@@ -80,6 +89,11 @@ const currentSearchIndex = ref(0)
 // History
 const editHistory = ref<Array<{ action: string, pageNum: number, timestamp: Date, preview: string }>>([])
 
+// Undo/Redo functionality
+const undoHistory = ref<HistoryEntry[]>([])
+const redoHistory = ref<HistoryEntry[]>([])
+const maxHistorySize = 100
+
 // Preview state
 const showPreview = ref(false)
 const previewContent = ref('')
@@ -89,15 +103,68 @@ const showCreateModal = ref(false)
 const newDocTitle = ref('')
 const newDocContent = ref('')
 
-// Summary feature state
-const showSummaryModal = ref(false)
-const summaryContent = ref('')
-const originalTextToSummarize = ref('')
-const isGeneratingSummary = ref(false)
+// AI Features state
+const showAIModal = ref(false)
+const aiContent = ref('')
+const originalTextForAI = ref('')
+const isGeneratingAI = ref(false)
+const currentAIAction = ref<AIAction>('summarize')
+const showAISuggestions = ref(false)
+const aiSuggestionsPosition = ref({ x: 0, y: 0 })
 
 // Auto-save state
 const hasUnsavedChanges = ref(false)
 const autoSaveTimer = ref<any | null>(null)
+
+// Editor state
+const editorMode = ref<'edit' | 'preview' | 'split'>('edit')
+const showMarkdownToolbar = ref(true)
+
+// AI Suggestions
+const aiSuggestions = ref([
+  {
+    icon: '📝',
+    label: 'Summarize',
+    action: 'summarize',
+    description: 'Create a concise summary',
+    shortcut: 'Ctrl+Shift+S'
+  },
+  {
+    icon: '🔍',
+    label: 'Expand',
+    action: 'expand',
+    description: 'Elaborate on the selected text',
+    shortcut: 'Ctrl+Shift+E'
+  },
+  {
+    icon: '✨',
+    label: 'Improve',
+    action: 'improve',
+    description: 'Enhance writing quality',
+    shortcut: 'Ctrl+Shift+I'
+  },
+  {
+    icon: '📖',
+    label: 'Simplify',
+    action: 'simplify',
+    description: 'Make text easier to understand',
+    shortcut: 'Ctrl+Shift+P'
+  },
+  {
+    icon: '🔄',
+    label: 'Paraphrase',
+    action: 'paraphrase',
+    description: 'Rewrite in different words',
+    shortcut: 'Ctrl+Shift+R'
+  },
+  {
+    icon: '🌐',
+    label: 'Translate',
+    action: 'translate',
+    description: 'Translate to different language',
+    shortcut: 'Ctrl+Shift+T'
+  }
+])
 
 // Computed properties
 const hasSearchResults = computed(() => searchResults.value.length > 0)
@@ -106,6 +173,15 @@ const allAnnotations = computed(() =>
     page.annotations.map(ann => ({ ...ann, pageNum: page.pageNum }))
   )
 )
+
+const canUndo = computed(() => undoHistory.value.length > 0)
+const canRedo = computed(() => redoHistory.value.length > 0)
+
+const renderedMarkdown = computed(() => {
+  const currentPageData = getCurrentPageContent()
+  if (!currentPageData) return ''
+  return renderMarkdown(currentPageData.content)
+})
 
 // Local storage keys
 const STORAGE_KEY = 'pdf_editor_documents'
@@ -118,6 +194,392 @@ watch([editablePages], () => {
     scheduleAutoSave()
   }
 }, { deep: true })
+
+/**
+ * Markdown Rendering
+ */
+function renderMarkdown(text: string): string {
+  if (!text) return ''
+
+  let html = text
+    // Headers
+    .replace(/^### (.*$)/gm, '<h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2 mt-4">$1</h3>')
+    .replace(/^## (.*$)/gm, '<h2 class="text-xl font-bold text-gray-900 dark:text-gray-100 mb-3 mt-6">$1</h2>')
+    .replace(/^# (.*$)/gm, '<h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4 mt-8">$1</h1>')
+
+    // Bold and italic
+    .replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em class="font-bold italic text-gray-900 dark:text-gray-100">$1</em></strong>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong class="font-bold text-gray-900 dark:text-gray-100">$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em class="italic text-gray-800 dark:text-gray-200">$1</em>')
+
+    // Code
+    .replace(/`([^`]+)`/g, '<code class="bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded text-sm font-mono text-red-600 dark:text-red-400">$1</code>')
+
+    // Links
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" class="text-blue-600 dark:text-blue-400 hover:underline" target="_blank">$1</a>')
+
+    // Strikethrough
+    .replace(/~~(.+?)~~/g, '<del class="line-through text-gray-500 dark:text-gray-400">$1</del>')
+
+    // Lists
+    .replace(/^\* (.+$)/gm, '<li class="ml-4 text-gray-800 dark:text-gray-200">• $1</li>')
+    .replace(/^- (.+$)/gm, '<li class="ml-4 text-gray-800 dark:text-gray-200">• $1</li>')
+    .replace(/^\d+\. (.+$)/gm, '<li class="ml-4 text-gray-800 dark:text-gray-200">$1</li>')
+
+    // Blockquotes
+    .replace(/^> (.+$)/gm, '<blockquote class="border-l-4 border-gray-300 dark:border-gray-600 pl-4 italic text-gray-700 dark:text-gray-300 my-2">$1</blockquote>')
+
+    // Line breaks
+    .replace(/\n/g, '<br>')
+
+    // Wrap lists
+    .replace(/(<li class="ml-4[^>]*>.*?<\/li>)(?:\s*<br>\s*)?(?=<li class="ml-4|$)/gs, '$1')
+    .replace(/(<li class="ml-4[^>]*>.*?<\/li>(?:\s*<li class="ml-4[^>]*>.*?<\/li>)*)/gs, '<ul class="my-2">$1</ul>')
+
+  return html
+}
+
+/**
+ * Undo/Redo functionality
+ */
+function saveToHistory() {
+  const currentPageData = getCurrentPageContent()
+  if (!currentPageData) return
+
+  const historyEntry: HistoryEntry = {
+    content: currentPageData.content,
+    timestamp: Date.now()
+  }
+
+  undoHistory.value.push(historyEntry)
+  redoHistory.value = [] // Clear redo history when new change is made
+
+  // Limit history size
+  if (undoHistory.value.length > maxHistorySize) {
+    undoHistory.value.shift()
+  }
+}
+
+function undo() {
+  if (!canUndo.value) return
+
+  const currentPageData = getCurrentPageContent()
+  if (!currentPageData) return
+
+  // Save current state to redo history
+  redoHistory.value.push({
+    content: currentPageData.content,
+    timestamp: Date.now()
+  })
+
+  // Restore previous state
+  const previousState = undoHistory.value.pop()!
+  updatePageContent(previousState.content, false) // Don't save to history
+
+  addToHistory('Undo', 'Undid last change')
+}
+
+function redo() {
+  if (!canRedo.value) return
+
+  const currentPageData = getCurrentPageContent()
+  if (!currentPageData) return
+
+  // Save current state to undo history
+  undoHistory.value.push({
+    content: currentPageData.content,
+    timestamp: Date.now()
+  })
+
+  // Restore next state
+  const nextState = redoHistory.value.pop()!
+  updatePageContent(nextState.content, false) // Don't save to history
+
+  addToHistory('Redo', 'Redid last change')
+}
+
+/**
+ * Markdown Toolbar Actions
+ */
+function insertMarkdown(before: string, after: string = '', placeholder: string = '') {
+  const textarea = document.querySelector('textarea') as HTMLTextAreaElement
+  if (!textarea) return
+
+  const start = textarea.selectionStart
+  const end = textarea.selectionEnd
+  const selectedText = textarea.value.substring(start, end)
+  const replacement = selectedText || placeholder
+
+  const newText = before + replacement + after
+  const newContent = textarea.value.substring(0, start) + newText + textarea.value.substring(end)
+
+  saveToHistory()
+  updatePageContent(newContent)
+
+  // Restore cursor position
+  nextTick(() => {
+    textarea.focus()
+    if (selectedText) {
+      textarea.setSelectionRange(start + before.length, start + before.length + replacement.length)
+    } else {
+      textarea.setSelectionRange(start + before.length, start + before.length + placeholder.length)
+    }
+  })
+}
+
+function insertBold() {
+  insertMarkdown('**', '**', 'bold text')
+}
+
+function insertItalic() {
+  insertMarkdown('*', '*', 'italic text')
+}
+
+function insertCode() {
+  insertMarkdown('`', '`', 'code')
+}
+
+function insertLink() {
+  insertMarkdown('[', '](url)', 'link text')
+}
+
+function insertHeader(level: number) {
+  const prefix = '#'.repeat(level) + ' '
+  insertMarkdown(prefix, '', `Header ${level}`)
+}
+
+function insertList() {
+  insertMarkdown('- ', '', 'List item')
+}
+
+function insertNumberedList() {
+  insertMarkdown('1. ', '', 'List item')
+}
+
+function insertQuote() {
+  insertMarkdown('> ', '', 'Quote text')
+}
+
+function insertTable() {
+  const tableTemplate = `| Column 1 | Column 2 | Column 3 |
+|----------|----------|----------|
+| Row 1    | Data     | Data     |
+| Row 2    | Data     | Data     |`
+
+  const textarea = document.querySelector('textarea') as HTMLTextAreaElement
+  if (!textarea) return
+
+  const start = textarea.selectionStart
+  saveToHistory()
+  const newContent = textarea.value.substring(0, start) + tableTemplate + textarea.value.substring(start)
+  updatePageContent(newContent)
+}
+
+/**
+ * Keyboard shortcuts
+ */
+function handleEditorKeydown(event: KeyboardEvent) {
+  // Handle undo/redo
+  if (event.ctrlKey || event.metaKey) {
+    switch (event.key) {
+      case 'z':
+        if (event.shiftKey) {
+          event.preventDefault()
+          redo()
+        } else {
+          event.preventDefault()
+          undo()
+        }
+        break
+      case 'y':
+        event.preventDefault()
+        redo()
+        break
+      case 'b':
+        event.preventDefault()
+        insertBold()
+        break
+      case 'i':
+        event.preventDefault()
+        insertItalic()
+        break
+      case 'k':
+        event.preventDefault()
+        insertLink()
+        break
+      case 's':
+        event.preventDefault()
+        saveDocumentChanges()
+        break
+    }
+  }
+
+  // AI Suggestions trigger (Ctrl + /)
+  if (event.key === '/' && event.ctrlKey) {
+    event.preventDefault()
+    showAIToolbar()
+  }
+
+  // AI Shortcuts
+  if (event.ctrlKey && event.shiftKey) {
+    switch (event.key) {
+      case 'S':
+        event.preventDefault()
+        handleAIShortcut('summarize')
+        break
+      case 'E':
+        event.preventDefault()
+        handleAIShortcut('expand')
+        break
+      case 'I':
+        event.preventDefault()
+        handleAIShortcut('improve')
+        break
+      case 'P':
+        event.preventDefault()
+        handleAIShortcut('simplify')
+        break
+      case 'R':
+        event.preventDefault()
+        handleAIShortcut('paraphrase')
+        break
+      case 'T':
+        event.preventDefault()
+        handleAIShortcut('translate')
+        break
+    }
+  }
+}
+
+/**
+ * AI Integration
+ */
+async function handlePrompt(prompt: string) {
+  try {
+    const response = await fetch(WRAPPER_URL, {
+      method: "POST",
+      body: JSON.stringify(prompt),
+      headers: { "content-type": "application/json" }
+    })
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+    }
+
+    const parseRes = await response.json()
+    return parseRes
+  } catch (err: any) {
+    console.error('AI request failed:', err)
+    throw err
+  }
+}
+
+function getAIPrompt(action: AIAction, text: string): string {
+  const prompts = {
+    summarize: `Please provide a concise summary of the following text. Focus on the main points and key ideas:\n\n"${text}"`,
+    expand: `Please expand on the following text by adding more details, examples, and explanations:\n\n"${text}"`,
+    simplify: `Please simplify the following text to make it easier to understand while keeping the core meaning:\n\n"${text}"`,
+    translate: `Please translate the following text to English (if not already) and provide the translation:\n\n"${text}"`,
+    paraphrase: `Please paraphrase the following text using different words and sentence structures while preserving the original meaning:\n\n"${text}"`,
+    improve: `Please improve the following text by enhancing clarity, grammar, and overall writing quality:\n\n"${text}"`,
+    explain: `Please explain the following text in simple terms, breaking down complex concepts:\n\n"${text}"`
+  }
+  return prompts[action]
+}
+
+async function performAIAction(action: AIAction, text: string) {
+  if (!text.trim()) return
+
+  isGeneratingAI.value = true
+  originalTextForAI.value = text
+  currentAIAction.value = action
+
+  try {
+    const prompt = getAIPrompt(action, text)
+    const result = await handlePrompt(prompt)
+    aiContent.value = result.response || result.answer || 'No response generated'
+    showAIModal.value = true
+  } catch (error) {
+    console.error('Error performing AI action:', error)
+    aiContent.value = 'Error generating content. Please try again.'
+    showAIModal.value = true
+  } finally {
+    isGeneratingAI.value = false
+  }
+}
+
+function saveAIContent() {
+  const currentPageData = getCurrentPageContent()
+  if (currentPageData && aiContent.value.trim()) {
+    saveToHistory()
+    const newContent = currentPageData.content.replace(originalTextForAI.value, aiContent.value.trim())
+    updatePageContent(newContent)
+    addToHistory(`AI ${currentAIAction.value}`, `Applied ${currentAIAction.value} to selected text`)
+  }
+  closeAIModal()
+}
+
+function discardAIContent() {
+  closeAIModal()
+}
+
+function closeAIModal() {
+  showAIModal.value = false
+  aiContent.value = ''
+  originalTextForAI.value = ''
+  isGeneratingAI.value = false
+}
+
+/**
+ * Textarea AI Support
+ */
+function handleTextareaKeydown(event: KeyboardEvent) {
+  handleEditorKeydown(event)
+}
+
+function handleAIShortcut(action: AIAction) {
+  const selection = window.getSelection()
+  const selectedTextValue = selection?.toString().trim()
+
+  if (selectedTextValue) {
+    selectedText.value = selectedTextValue
+    performAIAction(action, selectedTextValue)
+  } else {
+    // If no text selected, use the entire content
+    const currentPageData = getCurrentPageContent()
+    if (currentPageData) {
+      performAIAction(action, currentPageData.content)
+    }
+  }
+}
+
+function showAIToolbar() {
+  const textarea = document.querySelector('textarea');
+  
+  if (!textarea) return;
+
+  const rect = textarea.getBoundingClientRect();
+  const scrollX = window.pageXOffset || document.documentElement.scrollLeft;
+  const scrollY = window.pageYOffset || document.documentElement.scrollTop;
+  console.log(rect)
+
+  // Center position (assuming fixed toolbar dimensions)
+  aiSuggestionsPosition.value = {
+    x: rect.left + (rect.width / 2) - 100 + scrollX, // minus half of toolbar width
+    y: (rect.height / 2) - scrollY   // minus half of toolbar height
+  };
+
+  showAISuggestions.value = true;
+}
+
+function hideAISuggestions() {
+  showAISuggestions.value = false
+}
+
+function selectAISuggestion(suggestion: typeof aiSuggestions.value[0]) {
+  hideAISuggestions()
+  handleAIShortcut(suggestion.action as AIAction)
+}
 
 /**
  * Auto-save functionality
@@ -149,85 +611,6 @@ function saveDocumentChanges() {
     page.originalContent = page.content
     page.isModified = false
   })
-}
-
-/**
- * Text Summary Feature
- */
-function generateSummary(text: string): string {
-  const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 10)
-
-  if (sentences.length <= 3) {
-    return text.trim()
-  }
-
-  const words = text.toLowerCase().split(/\W+/).filter(w => w.length > 3)
-  const wordFreq: Record<string, number> = {}
-
-  words.forEach(word => {
-    wordFreq[word] = (wordFreq[word] || 0) + 1
-  })
-
-  const sentenceScores = sentences.map((sentence, index) => {
-    const sentenceWords = sentence.toLowerCase().split(/\W+/).filter(w => w.length > 3)
-    const score = sentenceWords.reduce((sum, word) => sum + (wordFreq[word] || 0), 0)
-    const positionScore = index < sentences.length * 0.3 ? 1.2 : 1
-    return {
-      sentence: sentence.trim(),
-      score: score * positionScore,
-      index
-    }
-  })
-
-  const topSentences = sentenceScores
-    .sort((a, b) => b.score - a.score)
-    .slice(0, Math.max(2, Math.ceil(sentences.length / 3)))
-    .sort((a, b) => a.index - b.index)
-    .map(item => item.sentence)
-
-  return topSentences.join('. ') + (topSentences[topSentences.length - 1]?.endsWith('.') ? '' : '.')
-}
-
-async function summarizeSelectedText() {
-  if (!selectedText.value.trim()) return
-
-  isGeneratingSummary.value = true
-  originalTextToSummarize.value = selectedText.value
-
-  await new Promise(resolve => setTimeout(resolve, 1000))
-
-  try {
-    summaryContent.value = generateSummary(selectedText.value)
-    showSummaryModal.value = true
-  } catch (error) {
-    console.error('Error generating summary:', error)
-    summaryContent.value = 'Error generating summary. Please try again.'
-    showSummaryModal.value = true
-  } finally {
-    isGeneratingSummary.value = false
-  }
-
-  hideContextMenu()
-}
-
-function saveSummary() {
-  const currentPageData = getCurrentPageContent()
-  if (currentPageData && summaryContent.value.trim()) {
-    const newContent = currentPageData.content.replace(originalTextToSummarize.value, summaryContent.value.trim())
-    updatePageContent(newContent)
-    addToHistory('Text summarized', `Replaced "${originalTextToSummarize.value.substring(0, 30)}..." with summary`)
-  }
-  closeSummaryModal()
-}
-
-function discardSummary() {
-  closeSummaryModal()
-}
-
-function closeSummaryModal() {
-  showSummaryModal.value = false
-  summaryContent.value = ''
-  originalTextToSummarize.value = ''
 }
 
 /**
@@ -283,9 +666,9 @@ function createNewDocument() {
 
   const newDoc: UploadedFile = {
     id: `doc-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-    name: newDocTitle.value.trim() + (newDocTitle.value.includes('.') ? '' : '.txt'),
+    name: newDocTitle.value.trim() + (newDocTitle.value.includes('.') ? '' : '.md'),
     url: 'custom',
-    type: 'text/plain',
+    type: 'text/markdown',
     size: new Blob([newDocContent.value]).size,
     uploadedAt: new Date(),
     isCustom: true,
@@ -312,7 +695,7 @@ function openTextEditor(doc: UploadedFile) {
 
   const pageContent: EditableContent = {
     pageNum: 1,
-    content: doc.content || `Welcome to your new document: ${doc.name}\n\nStart writing your content here...`,
+    content: doc.content || `# Welcome to ${doc.name}\n\nStart writing your content here...\n\n## Features\n\n- **Markdown support** with live preview\n- *Italic* and **bold** text\n- \`Code snippets\`\n- > Blockquotes\n- Lists and more!\n\nPress **Ctrl+/** for AI assistance.`,
     originalContent: doc.content || '',
     isModified: false,
     annotations: []
@@ -325,6 +708,8 @@ function openTextEditor(doc: UploadedFile) {
   searchResults.value = []
   searchQuery.value = ''
   hasUnsavedChanges.value = false
+  undoHistory.value = []
+  redoHistory.value = []
 }
 
 /**
@@ -372,6 +757,7 @@ function contextMenuAction(action: string) {
       navigator.clipboard.readText().then(text => {
         const textarea = document.querySelector('textarea')
         if (textarea) {
+          saveToHistory()
           const start = textarea.selectionStart
           const end = textarea.selectionEnd
           const currentContent = textarea.value
@@ -396,9 +782,14 @@ function contextMenuAction(action: string) {
       }
       break
     case 'summarize':
+    case 'expand':
+    case 'simplify':
+    case 'translate':
+    case 'paraphrase':
+    case 'improve':
       if (selectedTextValue) {
         selectedText.value = selectedTextValue
-        summarizeSelectedText()
+        performAIAction(action as AIAction, selectedTextValue)
       }
       break
     case 'bold':
@@ -423,6 +814,7 @@ function eraseText() {
 
   const currentPageData = getCurrentPageContent()
   if (currentPageData) {
+    saveToHistory()
     const newContent = currentPageData.content.replace(selectedText.value, '')
     updatePageContent(newContent)
     addToHistory('Erased text', `Removed "${selectedText.value.substring(0, 30)}..."`)
@@ -434,6 +826,7 @@ function makeBold() {
 
   const currentPageData = getCurrentPageContent()
   if (currentPageData) {
+    saveToHistory()
     const newContent = currentPageData.content.replace(selectedText.value, `**${selectedText.value}**`)
     updatePageContent(newContent)
     addToHistory('Made text bold', `Bolded "${selectedText.value.substring(0, 30)}..."`)
@@ -545,9 +938,14 @@ function nextPage() {
 /**
  * Update page content
  */
-function updatePageContent(content: string) {
+function updatePageContent(content: string, saveHistory: boolean = true) {
   const pageIndex = currentPage.value - 1
   if (pageIndex >= 0 && pageIndex < editablePages.value.length) {
+    if (saveHistory && editablePages.value[pageIndex].content !== content) {
+      // Only save to history if content actually changed
+      saveToHistory()
+    }
+
     editablePages.value[pageIndex].content = content
     editablePages.value[pageIndex].isModified =
       content !== editablePages.value[pageIndex].originalContent
@@ -557,6 +955,7 @@ function updatePageContent(content: string) {
 function resetPageContent() {
   const pageIndex = currentPage.value - 1
   if (pageIndex >= 0 && pageIndex < editablePages.value.length) {
+    saveToHistory()
     editablePages.value[pageIndex].content = editablePages.value[pageIndex].originalContent
     editablePages.value[pageIndex].isModified = false
     editablePages.value[pageIndex].annotations = []
@@ -565,6 +964,7 @@ function resetPageContent() {
 }
 
 function resetAllContent() {
+  saveToHistory()
   editablePages.value.forEach(page => {
     page.content = page.originalContent
     page.isModified = false
@@ -572,6 +972,8 @@ function resetAllContent() {
   })
   editHistory.value = []
   hasUnsavedChanges.value = false
+  undoHistory.value = []
+  redoHistory.value = []
   addToHistory('Reset all', 'Reset all pages to original')
 }
 
@@ -581,7 +983,7 @@ function getCurrentPageContent(): EditableContent {
     ? editablePages.value[pageIndex]
     : {
       annotations: [],
-      content:"",
+      content: "",
       isModified: false,
       originalContent: "",
       pageNum: 0
@@ -705,6 +1107,8 @@ async function extractPdfContent(url: string) {
   loadError.value = ''
   editablePages.value = []
   editHistory.value = []
+  undoHistory.value = []
+  redoHistory.value = []
 
   try {
     const arrayBuffer = await fetch(url).then(response => response.arrayBuffer())
@@ -886,7 +1290,10 @@ function closeEditor() {
   searchQuery.value = ''
   editHistory.value = []
   hasUnsavedChanges.value = false
+  undoHistory.value = []
+  redoHistory.value = []
   hideContextMenu()
+  hideAISuggestions()
 
   if (autoSaveTimer.value) {
     clearTimeout(autoSaveTimer.value)
@@ -925,6 +1332,13 @@ function handleGlobalClick(event: MouseEvent) {
     const target = event.target as HTMLElement
     if (!target.closest('.export-dropdown')) {
       closeExportDropdown()
+    }
+  }
+
+  if (showAISuggestions.value) {
+    const target = event.target as HTMLElement
+    if (!target.closest('.ai-suggestions')) {
+      hideAISuggestions()
     }
   }
 }
@@ -995,7 +1409,7 @@ onBeforeUnmount(() => {
             { key: 'search', label: 'Search' },
             { key: 'annotations', label: 'Notes' },
             { key: 'history', label: 'History' }
-          ]" :key="tab.key" @click="activeSidebarTab = tab.key as any" :class="[
+          ]" :key="tab.key" @click="activeSidebarTab = tab.key" :class="[
             'flex-1 p-2 text-xs font-medium transition-colors border-b-2 text-center',
             activeSidebarTab === tab.key
               ? 'border-blue-500 text-blue-600 bg-blue-50 dark:border-blue-400 dark:text-blue-400 dark:bg-blue-900/20'
@@ -1078,7 +1492,7 @@ onBeforeUnmount(() => {
                   <div class="flex-1 min-w-0">
                     <div class="font-medium truncate text-gray-800 dark:text-gray-300">{{ file.name }}</div>
                     <div class="text-xs text-gray-500 dark:text-gray-400">
-                      {{ file.isCustom ? 'Custom Document' : formatFileSize(file.size) }}
+                      {{ file.isCustom ? 'Markdown Document' : formatFileSize(file.size) }}
                       <span v-if="file.pages"> • {{ file.pages }} pages</span>
                     </div>
                   </div>
@@ -1157,7 +1571,7 @@ onBeforeUnmount(() => {
 
           <div v-if="activeSidebarTab === 'annotations'" class="p-3">
             <h4 class="text-sm font-medium text-gray-800 dark:text-gray-300 mb-3">Annotations ({{ allAnnotations.length
-            }})</h4>
+              }})</h4>
             <div class="space-y-2">
               <div v-for="ann in allAnnotations" :key="ann.id" @click="goToPage(ann.pageNum)"
                 class="p-2 rounded border cursor-pointer hover:bg-gray-50 text-xs dark:hover:bg-gray-600"
@@ -1215,7 +1629,7 @@ onBeforeUnmount(() => {
               <div class="min-w-0 flex-1">
                 <h3 class="font-semibold text-gray-900 truncate dark:text-gray-100">{{ selectedPdfName || 'Document Editor' }}</h3>
                 <p class="text-sm text-gray-600 dark:text-gray-400">
-                  Content Editor
+                  Markdown Editor with Live Preview
                   <span v-if="getModifiedPagesCount() > 0" class="text-orange-600 ml-2 dark:text-orange-400">
                     ({{ getModifiedPagesCount() }} page{{ getModifiedPagesCount() > 1 ? 's' : '' }} modified)
                   </span>
@@ -1225,6 +1639,64 @@ onBeforeUnmount(() => {
             </div>
 
             <div class="flex items-center gap-2 flex-shrink-0">
+              <!-- Undo/Redo buttons -->
+              <div class="flex items-center gap-1 border-r border-gray-300 pr-2 dark:border-gray-500">
+                <button @click="undo" :disabled="!canUndo"
+                  class="w-8 h-8 rounded bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center border border-gray-300 dark:bg-gray-700 dark:border-gray-600 dark:hover:bg-gray-600"
+                  title="Undo (Ctrl+Z)">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                  </svg>
+                </button>
+                <button @click="redo" :disabled="!canRedo"
+                  class="w-8 h-8 rounded bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center border border-gray-300 dark:bg-gray-700 dark:border-gray-600 dark:hover:bg-gray-600"
+                  title="Redo (Ctrl+Y)">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M21 10h-10a8 8 0 00-8 8v2m18-10l-6 6m6-6l-6-6" />
+                  </svg>
+                </button>
+              </div>
+
+              <!-- Editor Mode Toggle -->
+              <div class="flex bg-gray-200 rounded-lg p-1 dark:bg-gray-600">
+                <button @click="editorMode = 'edit'" :class="[
+                  'px-3 py-1 text-sm font-medium rounded transition-colors',
+                  editorMode === 'edit'
+                    ? 'bg-white text-gray-900 shadow-sm dark:bg-gray-700 dark:text-gray-100'
+                    : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200'
+                ]" title="Edit Mode">
+                  Edit
+                </button>
+                <button @click="editorMode = 'preview'" :class="[
+                  'px-3 py-1 text-sm font-medium rounded transition-colors',
+                  editorMode === 'preview'
+                    ? 'bg-white text-gray-900 shadow-sm dark:bg-gray-700 dark:text-gray-100'
+                    : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200'
+                ]" title="Preview Mode">
+                  Preview
+                </button>
+                <button @click="editorMode = 'split'" :class="[
+                  'px-3 py-1 text-sm font-medium rounded transition-colors',
+                  editorMode === 'split'
+                    ? 'bg-white text-gray-900 shadow-sm dark:bg-gray-700 dark:text-gray-100'
+                    : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200'
+                ]" title="Split Mode">
+                  Split
+                </button>
+              </div>
+
+              <!-- AI Assistant Button -->
+              <button @click="showAIToolbar"
+                class="w-10 h-10 rounded-md bg-purple-600 hover:bg-purple-700 transition-colors text-white flex items-center justify-center"
+                title="AI Assistant (Ctrl+/)">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+              </button>
+
               <!-- Export Dropdown Menu -->
               <div class="relative export-dropdown">
                 <button @click="toggleExportDropdown"
@@ -1279,7 +1751,115 @@ onBeforeUnmount(() => {
             </div>
           </div>
 
-          <!-- Toolbar -->
+          <!-- Markdown Toolbar -->
+          <div v-if="selectedPdfName && showMarkdownToolbar && (editorMode === 'edit' || editorMode === 'split')"
+            class="flex items-center gap-1 p-2 bg-gray-100/50 border-b border-gray-300 overflow-x-auto dark:bg-gray-600/50 dark:border-gray-600">
+
+            <!-- Text Formatting -->
+            <div class="flex items-center gap-1 border-r border-gray-300 pr-2 mr-2 dark:border-gray-500">
+              <button @click="insertBold"
+                class="w-8 h-8 rounded bg-white hover:bg-gray-50 flex items-center justify-center border border-gray-300 dark:bg-gray-700 dark:border-gray-600 dark:hover:bg-gray-600"
+                title="Bold (Ctrl+B)">
+                <svg class="w-4 h-4 font-bold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3"
+                    d="M6 4h8a4 4 0 010 8H6zM6 12h9a4 4 0 010 8H6z" />
+                </svg>
+              </button>
+              <button @click="insertItalic"
+                class="w-8 h-8 rounded bg-white hover:bg-gray-50 flex items-center justify-center border border-gray-300 dark:bg-gray-700 dark:border-gray-600 dark:hover:bg-gray-600"
+                title="Italic (Ctrl+I)">
+                <svg class="w-4 h-4 italic" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 4l4 16M6 8h12M4 16h12" />
+                </svg>
+              </button>
+              <button @click="insertCode"
+                class="w-8 h-8 rounded bg-white hover:bg-gray-50 flex items-center justify-center border border-gray-300 dark:bg-gray-700 dark:border-gray-600 dark:hover:bg-gray-600"
+                title="Code">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                </svg>
+              </button>
+            </div>
+
+            <!-- Headers -->
+            <div class="flex items-center gap-1 border-r border-gray-300 pr-2 mr-2 dark:border-gray-500">
+              <button @click="insertHeader(1)"
+                class="w-8 h-8 rounded bg-white hover:bg-gray-50 flex items-center justify-center border border-gray-300 text-xs font-bold dark:bg-gray-700 dark:border-gray-600 dark:hover:bg-gray-600"
+                title="Header 1">
+                H1
+              </button>
+              <button @click="insertHeader(2)"
+                class="w-8 h-8 rounded bg-white hover:bg-gray-50 flex items-center justify-center border border-gray-300 text-xs font-bold dark:bg-gray-700 dark:border-gray-600 dark:hover:bg-gray-600"
+                title="Header 2">
+                H2
+              </button>
+              <button @click="insertHeader(3)"
+                class="w-8 h-8 rounded bg-white hover:bg-gray-50 flex items-center justify-center border border-gray-300 text-xs font-bold dark:bg-gray-700 dark:border-gray-600 dark:hover:bg-gray-600"
+                title="Header 3">
+                H3
+              </button>
+            </div>
+
+            <!-- Lists and Links -->
+            <div class="flex items-center gap-1 border-r border-gray-300 pr-2 mr-2 dark:border-gray-500">
+              <button @click="insertList"
+                class="w-8 h-8 rounded bg-white hover:bg-gray-50 flex items-center justify-center border border-gray-300 dark:bg-gray-700 dark:border-gray-600 dark:hover:bg-gray-600"
+                title="Bullet List">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />
+                </svg>
+              </button>
+              <button @click="insertNumberedList"
+                class="w-8 h-8 rounded bg-white hover:bg-gray-50 flex items-center justify-center border border-gray-300 dark:bg-gray-700 dark:border-gray-600 dark:hover:bg-gray-600"
+                title="Numbered List">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M9 5H7a2 2 0 00-2 2v6a2 2 0 002 2h2m0-8h10m-10 8h10" />
+                </svg>
+              </button>
+              <button @click="insertLink"
+                class="w-8 h-8 rounded bg-white hover:bg-gray-50 flex items-center justify-center border border-gray-300 dark:bg-gray-700 dark:border-gray-600 dark:hover:bg-gray-600"
+                title="Link (Ctrl+K)">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                </svg>
+              </button>
+            </div>
+
+            <!-- Special Elements -->
+            <div class="flex items-center gap-1">
+              <button @click="insertQuote"
+                class="w-8 h-8 rounded bg-white hover:bg-gray-50 flex items-center justify-center border border-gray-300 dark:bg-gray-700 dark:border-gray-600 dark:hover:bg-gray-600"
+                title="Quote">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                </svg>
+              </button>
+              <button @click="insertTable"
+                class="w-8 h-8 rounded bg-white hover:bg-gray-50 flex items-center justify-center border border-gray-300 dark:bg-gray-700 dark:border-gray-600 dark:hover:bg-gray-600"
+                title="Table">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M3 10h18M3 14h18M10 3v18M14 3v18" />
+                </svg>
+              </button>
+            </div>
+
+            <!-- Toolbar Toggle -->
+            <button @click="showMarkdownToolbar = !showMarkdownToolbar"
+              class="ml-auto w-8 h-8 rounded bg-white hover:bg-gray-50 flex items-center justify-center border border-gray-300 dark:bg-gray-700 dark:border-gray-600 dark:hover:bg-gray-600"
+              title="Toggle Toolbar">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+
+          <!-- Page/Document Navigation -->
           <div v-if="selectedPdfName" class="flex flex-wrap items-center gap-3 p-3 bg-gray-100/50 dark:bg-gray-600/50">
             <!-- Page navigation -->
             <div v-if="totalPages > 1"
@@ -1317,6 +1897,7 @@ onBeforeUnmount(() => {
                 class="px-2 py-1 text-sm border border-gray-300 rounded bg-white dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100">
                 <option :value="1.2">1.2</option>
                 <option :value="1.4">1.4</option>
+                <option :value="1.5">1.5</option>
                 <option :value="1.6">1.6</option>
                 <option :value="1.8">1.8</option>
                 <option :value="2.0">2.0</option>
@@ -1346,7 +1927,7 @@ onBeforeUnmount(() => {
         </div>
 
         <!-- Content Area -->
-        <div class="flex-1 overflow-auto bg-gray-50/30 relative dark:bg-gray-800/30">
+        <div class="flex-1 overflow-hidden bg-gray-50/30 relative dark:bg-gray-800/30">
           <!-- Loading state -->
           <div v-if="isLoading" class="flex items-center justify-center h-96">
             <div class="text-center">
@@ -1358,8 +1939,7 @@ onBeforeUnmount(() => {
                 </path>
               </svg>
               <p class="text-gray-900 dark:text-gray-100">Extracting text from PDF...</p>
-              <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">This may take a moment for large documents
-              </p>
+              <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">This may take a moment for large documents</p>
             </div>
           </div>
 
@@ -1391,8 +1971,8 @@ onBeforeUnmount(() => {
                   d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
               <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">No Document Selected</h3>
-              <p class="text-gray-600 dark:text-gray-400 mb-4">Create a new document to get started with writing
-                and editing content.</p>
+              <p class="text-gray-600 dark:text-gray-400 mb-4">Create a new document to get started with markdown
+                editing and live preview.</p>
               <button @click="showCreateModal = true"
                 class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
                 <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1404,46 +1984,111 @@ onBeforeUnmount(() => {
           </div>
 
           <!-- Editor content -->
-          <div v-else-if="editablePages.length > 0" class="p-6">
-            <div
-              class="bg-white rounded shadow-lg max-w-4xl mx-auto border border-gray-300 dark:bg-gray-800 dark:border-gray-600">
+          <div v-else-if="editablePages.length > 0" class="h-full overflow-auto px-5">
+            <!-- Edit Mode -->
+            <div v-if="editorMode === 'edit'"
+              class="bg-white mx-auto dark:bg-gray-800 h-full flex flex-col">
               <!-- Page header -->
-              <div class="border-b border-gray-300 p-4 flex items-center justify-between dark:border-gray-600">
-                <div class="flex items-center gap-2">
-                  <h3 class="font-medium text-gray-900 dark:text-gray-100">
-                    {{ totalPages > 1 ? `Page ${currentPage}` : 'Document' }}
-                  </h3>
-                  <span v-if="getCurrentPageContent()?.isModified"
-                    class="px-2 py-1 bg-orange-100 text-orange-700 text-xs rounded dark:bg-orange-900/20 dark:text-orange-300">
-                    Modified
-                  </span>
-                  <span v-if="getCurrentPageContent()?.annotations?.length > 0"
-                    class="px-2 py-1 bg-blue-100 text-blue-600 text-xs rounded dark:bg-blue-900/20 dark:text-blue-400">
-                    {{ getCurrentPageContent()?.annotations.length }} annotations
-                  </span>
-                </div>
-                <div class="text-sm text-gray-600 dark:text-gray-400">
+              <div class="py-2 w-full flex items-center justify-between dark:border-gray-600">
+                <div class="text-sm justify-end ml-auto flex gap-2 text-gray-600 dark:text-gray-400">
+                  {{ totalPages > 1 ? `Page ${currentPage}` : 'Document' }}
+                  <p v-if="getCurrentPageContent()?.annotations?.length > 0">{{ getCurrentPageContent()?.annotations.length }} annotations</p>
                   {{ getCurrentPageContent()?.content?.length || 0 }} characters
                 </div>
               </div>
 
               <!-- Text editor -->
-              <div class="p-6 relative">
+              <div class="flex-1 py-2 relative">
                 <textarea v-if="getCurrentPageContent()" :value="getCurrentPageContent()?.content"
                   @input="updatePageContent(($event.target as HTMLTextAreaElement).value)"
-                  @contextmenu="handleRightClick"
-                  class="w-full h-96 p-4 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
+                  @contextmenu="handleRightClick" @keydown="handleTextareaKeydown"
+                  class="w-full outline-none h-full resize-none bg-white text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
                   :style="{
                     fontSize: fontSize + 'px',
                     lineHeight: lineHeight.toString(),
                     fontFamily: 'system-ui, -apple-system, sans-serif'
-                  }" placeholder="Start writing your content here..."></textarea>
+                  }" placeholder="Start writing your markdown content here... 
+
+Press Ctrl+/ for AI assistance
+Use Ctrl+B for bold, Ctrl+I for italic
+Press Ctrl+Z to undo, Ctrl+Y to redo"></textarea>
+              </div>
+            </div>
+
+            <!-- Preview Mode -->
+            <div v-else-if="editorMode === 'preview'"
+              class="bg-white mx-auto dark:bg-gray-800 h-full flex flex-col">
+              <!-- Page header -->
+              <div class="py-2 w-full flex items-center justify-between dark:border-gray-600">
+                <div class="text-sm justify-end ml-auto items-center flex gap-4 text-gray-600 dark:text-gray-400">
+                  {{ totalPages > 1 ? `Page ${currentPage} - Preview` : 'Document Preview' }}
+                  <span
+                    class="px-2 py-1 bg-green-100 text-green-700 text-xs rounded dark:bg-green-900/20 dark:text-green-300">
+                    Live Preview
+                  </span>
+                </div>
+              </div>
+
+              <!-- Preview content -->
+              <div class="flex-1 py-2 relative">
+                <div v-if="getCurrentPageContent()" class="prose prose-gray dark:prose-invert max-w-none"
+                  v-html="renderedMarkdown"></div>
                 <div v-else class="text-center py-8 text-gray-500 dark:text-gray-400">
-                  <svg class="w-8 h-8 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                      d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  <p>No content available for this page</p>
+                  <p>No content to preview</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Split Mode -->
+            <div v-else-if="editorMode === 'split'"
+              class="bg-white dark:bg-gray-800 h-full flex flex-col">
+              <!-- Page header -->
+              <div class="border-b border-gray-300 p-4 flex items-center justify-between dark:border-gray-600">
+                <div class="flex items-center gap-2">
+                  <h3 class="font-medium text-gray-900 dark:text-gray-100">
+                    {{ totalPages > 1 ? `Page ${currentPage} - Split View` : 'Document - Split View' }}
+                  </h3>
+                  <span v-if="getCurrentPageContent()?.isModified"
+                    class="px-2 py-1 bg-orange-100 text-orange-700 text-xs rounded dark:bg-orange-900/20 dark:text-orange-300">
+                    Modified
+                  </span>
+                </div>
+                <div class="text-sm text-gray-600 dark:text-gray-400">
+                  Editor & Preview
+                </div>
+              </div>
+
+              <!-- Split content -->
+              <div class="flex-1 flex">
+                <!-- Editor side -->
+                <div class="flex-1 p-4 border-r border-gray-300 dark:border-gray-600">
+                  <div class="mb-2">
+                    <span class="text-sm font-medium text-gray-600 dark:text-gray-400">Editor</span>
+                  </div>
+                  <textarea v-if="getCurrentPageContent()" :value="getCurrentPageContent()?.content"
+                    @input="updatePageContent(($event.target as HTMLTextAreaElement).value)"
+                    @contextmenu="handleRightClick" @keydown="handleTextareaKeydown"
+                    class="w-full h-full p-4 outline-none border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
+                    :style="{
+                      fontSize: fontSize + 'px',
+                      lineHeight: lineHeight.toString(),
+                      fontFamily: 'system-ui, -apple-system, sans-serif'
+                    }" placeholder="Start writing markdown..."></textarea>
+                </div>
+
+                <!-- Preview side -->
+                <div class="flex-1 p-4">
+                  <div class="mb-2">
+                    <span class="text-sm font-medium text-gray-600 dark:text-gray-400">Preview</span>
+                  </div>
+                  <div
+                    class="h-full border border-gray-300 rounded-lg p-4 overflow-auto bg-gray-50 dark:border-gray-600 dark:bg-gray-700/50">
+                    <div v-if="getCurrentPageContent()" class="prose prose-gray dark:prose-invert max-w-none prose-sm"
+                      v-html="renderedMarkdown"></div>
+                    <div v-else class="text-center py-8 text-gray-500 dark:text-gray-400">
+                      <p>Preview will appear here</p>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1461,6 +2106,29 @@ onBeforeUnmount(() => {
                 extractable text.</p>
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- AI Suggestions Popup -->
+    <div v-if="showAISuggestions"
+      class="ai-suggestions fixed z-50 bg-white border border-gray-300 rounded-lg shadow-xl dark:bg-gray-800 dark:border-gray-600"
+      :style="{
+        left: aiSuggestionsPosition.x + 'px',
+        top: aiSuggestionsPosition.y + 'px'
+      }">
+      <div class="p-2">
+        <div class="text-xs font-medium text-gray-500 px-2 py-1 dark:text-gray-400">AI Assistant</div>
+        <div class="space-y-1">
+          <button v-for="suggestion in aiSuggestions" :key="suggestion.action" @click="selectAISuggestion(suggestion)"
+            class="w-full px-3 py-2 text-left hover:bg-gray-100 rounded flex items-center gap-3 text-sm text-gray-800 dark:hover:bg-gray-700 dark:text-gray-300 transition-colors">
+            <span class="text-lg">{{ suggestion.icon }}</span>
+            <div class="flex-1">
+              <div class="font-medium">{{ suggestion.label }}</div>
+              <div class="text-xs text-gray-500 dark:text-gray-400">{{ suggestion.description }}</div>
+            </div>
+            <div class="text-xs text-gray-400 dark:text-gray-500">{{ suggestion.shortcut }}</div>
+          </button>
         </div>
       </div>
     </div>
@@ -1492,7 +2160,7 @@ onBeforeUnmount(() => {
             <label class="block text-sm font-medium text-gray-800 dark:text-gray-300 mb-2">
               Initial Content (Optional)
             </label>
-            <textarea v-model="newDocContent" placeholder="Start with some initial content..." rows="4"
+            <textarea v-model="newDocContent" placeholder="Start with some markdown content..." rows="4"
               class="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 resize-none"></textarea>
           </div>
         </div>
@@ -1509,53 +2177,15 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <!-- Preview Modal -->
-    <div v-if="showPreview" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
-      @click.self="closePreview">
-      <div
-        class="bg-white rounded-lg max-w-4xl max-h-[90vh] w-full flex flex-col border border-gray-300 dark:bg-gray-800 dark:border-gray-600">
-        <div class="p-4 border-b border-gray-300 flex items-center justify-between dark:border-gray-600">
-          <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Document Preview</h3>
-          <button @click="closePreview"
-            class="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors dark:bg-gray-700 dark:hover:bg-gray-600">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-        <div class="flex-1 overflow-auto p-6">
-          <pre
-            class="whitespace-pre-wrap font-sans text-sm text-gray-900 leading-relaxed dark:text-gray-100">{{ previewContent }}</pre>
-        </div>
-        <div
-          class="p-4 border-t border-gray-300 bg-gray-50 flex gap-2 justify-end dark:border-gray-600 dark:bg-gray-700/50">
-          <button @click="downloadAsText"
-            class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors">
-                       <svg class="inline w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            Download as Text
-          </button>
-          <button @click="downloadAsMarkdown"
-            class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors dark:bg-green-700 dark:hover:bg-green-600">
-            <svg class="inline w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            Download as Markdown
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Summary Modal -->
-    <div v-if="showSummaryModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
-      @click.self="closeSummaryModal">
+    <!-- AI Modal -->
+    <div v-if="showAIModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+      @click.self="closeAIModal">
       <div class="bg-white rounded-lg max-w-2xl w-full border border-gray-300 dark:bg-gray-800 dark:border-gray-600">
         <div class="p-4 border-b border-gray-300 flex items-center justify-between dark:border-gray-600">
-          <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Text Summary</h3>
-          <button @click="closeSummaryModal"
+          <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 capitalize">
+            {{ currentAIAction }} Text
+          </h3>
+          <button @click="closeAIModal"
             class="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors dark:bg-gray-700 dark:hover:bg-gray-600">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -1565,13 +2195,15 @@ onBeforeUnmount(() => {
         <div class="p-6">
           <div class="mb-4">
             <h4 class="text-sm font-medium text-gray-800 dark:text-gray-300 mb-2">Original Text:</h4>
-            <div class="p-3 bg-gray-50 rounded text-sm text-gray-700 dark:bg-gray-700 dark:text-gray-300 max-h-32 overflow-y-auto">
-              {{ originalTextToSummarize }}
+            <div
+              class="p-3 bg-gray-50 rounded text-sm text-gray-700 dark:bg-gray-700 dark:text-gray-300 max-h-32 overflow-y-auto">
+              {{ originalTextForAI }}
             </div>
           </div>
           <div class="mb-4">
-            <h4 class="text-sm font-medium text-gray-800 dark:text-gray-300 mb-2">Summary:</h4>
-            <div v-if="isGeneratingSummary" class="p-3 bg-blue-50 rounded text-sm text-blue-700 dark:bg-blue-900/20 dark:text-blue-300">
+            <h4 class="text-sm font-medium text-gray-800 dark:text-gray-300 mb-2">Result:</h4>
+            <div v-if="isGeneratingAI"
+              class="p-3 bg-blue-50 rounded text-sm text-blue-700 dark:bg-blue-900/20 dark:text-blue-300">
               <div class="flex items-center gap-2">
                 <svg class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
                   <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -1579,23 +2211,44 @@ onBeforeUnmount(() => {
                     d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
                   </path>
                 </svg>
-                Generating summary...
+                Generating {{ currentAIAction }}...
               </div>
             </div>
-            <textarea v-else v-model="summaryContent" rows="4"
+            <textarea v-else v-model="aiContent" rows="4"
               class="w-full p-3 border border-gray-300 rounded text-sm resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
-              placeholder="Summary will appear here..."></textarea>
+              :placeholder="`${currentAIAction} result will appear here...`"></textarea>
           </div>
         </div>
         <div class="p-4 border-t border-gray-300 flex gap-2 justify-end dark:border-gray-600">
-          <button @click="discardSummary"
+          <button @click="discardAIContent"
             class="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors dark:text-gray-400 dark:hover:text-gray-300">
             Discard
           </button>
-          <button @click="saveSummary" :disabled="isGeneratingSummary || !summaryContent.trim()"
+          <button @click="saveAIContent" :disabled="isGeneratingAI || !aiContent.trim()"
             class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors disabled:opacity-50">
-            Save Summary
+            Apply Changes
           </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Preview Modal -->
+    <div v-if="showPreview" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+      @click.self="closePreview">
+      <div
+        class="bg-white rounded-lg max-w-4xl w-full h-5/6 border border-gray-300 dark:bg-gray-800 dark:border-gray-600 flex flex-col">
+        <div class="p-4 border-b border-gray-300 flex items-center justify-between dark:border-gray-600">
+          <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Document Preview</h3>
+          <button @click="closePreview"
+            class="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors dark:bg-gray-700 dark:hover:bg-gray-600">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div class="flex-1 p-6 overflow-auto">
+          <pre
+            class="whitespace-pre-wrap text-sm text-gray-800 dark:text-gray-200 font-mono">{{ previewContent }}</pre>
         </div>
       </div>
     </div>
@@ -1606,8 +2259,21 @@ onBeforeUnmount(() => {
       left: contextMenuPosition.x + 'px',
       top: contextMenuPosition.y + 'px',
       zIndex: 1001
-    }" class="bg-white border border-gray-300 rounded-lg shadow-lg py-2 min-w-40 dark:bg-gray-800 dark:border-gray-600"
+    }" class="bg-white border border-gray-300 rounded-lg shadow-lg py-2 min-w-48 dark:bg-gray-800 dark:border-gray-600"
       @click.stop>
+      <div
+        class="px-3 py-2 text-xs font-medium text-gray-500 border-b border-gray-300 dark:text-gray-400 dark:border-gray-600">
+        AI Actions
+      </div>
+      <button v-for="suggestion in aiSuggestions.slice(0, 3)" :key="suggestion.action"
+        @click="contextMenuAction(suggestion.action)"
+        class="w-full px-3 py-2 text-left hover:bg-gray-100 flex items-center gap-2 text-sm text-gray-800 dark:hover:bg-gray-700 dark:text-gray-300">
+        <span class="text-base">{{ suggestion.icon }}</span>
+        <span>{{ suggestion.label }}</span>
+      </button>
+
+      <div class="border-t border-gray-300 my-1 dark:border-gray-600"></div>
+
       <button @click="contextMenuAction('copy')"
         class="w-full px-3 py-2 text-left hover:bg-gray-100 flex items-center gap-2 text-sm text-gray-800 dark:hover:bg-gray-700 dark:text-gray-300">
         <svg class="w-4 h-4 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1617,72 +2283,23 @@ onBeforeUnmount(() => {
         <span>Copy</span>
       </button>
 
-      <button @click="contextMenuAction('paste')"
-        class="w-full px-3 py-2 text-left hover:bg-gray-100 flex items-center gap-2 text-sm text-gray-800 dark:hover:bg-gray-700 dark:text-gray-300">
-        <svg class="w-4 h-4 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-            d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-        </svg>
-        <span>Paste</span>
-      </button>
-
-      <button @click="contextMenuAction('selectAll')"
-        class="w-full px-3 py-2 text-left hover:bg-gray-100 flex items-center gap-2 text-sm text-gray-800 dark:hover:bg-gray-700 dark:text-gray-300">
-        <svg class="w-4 h-4 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-            d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-        <span>Select All</span>
-      </button>
-
-      <div class="border-t border-gray-300 my-1 dark:border-gray-600"></div>
-
       <button @click="contextMenuAction('highlight')"
         class="w-full px-3 py-2 text-left hover:bg-gray-100 flex items-center gap-2 text-sm text-gray-800 dark:hover:bg-gray-700 dark:text-gray-300">
         <svg class="w-4 h-4 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
             d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zM7 3V1m0 20v-2m8-10a4 4 0 00-4-4V3a2 2 0 012-2h4a2 2 0 012 2v2a4 4 0 00-4 4z" />
         </svg>
-        <span>Highlight Selection</span>
+        <span>Highlight</span>
       </button>
 
       <button @click="contextMenuAction('note')"
         class="w-full px-3 py-2 text-left hover:bg-gray-100 flex items-center gap-2 text-sm text-gray-800 dark:hover:bg-gray-700 dark:text-gray-300">
-        <svg class="w-4 h-4 text-orange-600 dark:text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg class="w-4 h-4 text-orange-600 dark:text-orange-400" fill="none" stroke="currentColor"
+          viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
             d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
         </svg>
         <span>Add Note</span>
-      </button>
-
-      <button @click="contextMenuAction('summarize')"
-        class="w-full px-3 py-2 text-left hover:bg-gray-100 flex items-center gap-2 text-sm text-gray-800 dark:hover:bg-gray-700 dark:text-gray-300">
-        <svg class="w-4 h-4 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-        </svg>
-        <span>Summarize</span>
-      </button>
-
-      <div class="border-t border-gray-300 my-1 dark:border-gray-600"></div>
-
-      <button @click="contextMenuAction('bold')"
-        class="w-full px-3 py-2 text-left hover:bg-gray-100 flex items-center gap-2 text-sm text-gray-800 dark:hover:bg-gray-700 dark:text-gray-300">
-        <svg class="w-4 h-4 text-gray-800 dark:text-gray-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"
-          stroke-width="3">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M6 4h8a4 4 0 014 4 4 4 0 01-4 4H6z" />
-          <path stroke-linecap="round" stroke-linejoin="round" d="M6 12h9a4 4 0 014 4 4 4 0 01-4 4H6z" />
-        </svg>
-        <span>Make Bold</span>
-      </button>
-
-      <button @click="contextMenuAction('erase')"
-        class="w-full px-3 py-2 text-left hover:bg-red-50 flex items-center gap-2 text-sm text-red-600 dark:hover:bg-red-900/20 dark:text-red-400">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-        </svg>
-        <span>Delete Text</span>
       </button>
     </div>
   </div>
@@ -1697,8 +2314,60 @@ onBeforeUnmount(() => {
   from {
     transform: rotate(0deg);
   }
+
   to {
     transform: rotate(360deg);
   }
+}
+
+/* Custom scrollbar for webkit browsers */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+.dark ::-webkit-scrollbar-track {
+  background: #374151;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: #6b7280;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
+
+/* Prose styles for better markdown rendering */
+.prose {
+  max-width: none;
+}
+
+.prose h1 {
+  font-size: 2em;
+  line-height: 1.2;
+}
+
+.prose h2 {
+  font-size: 1.5em;
+  line-height: 1.3;
+}
+
+.prose h3 {
+  font-size: 1.25em;
+  line-height: 1.4;
 }
 </style>
