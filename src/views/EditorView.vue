@@ -72,7 +72,7 @@ const lineHeight = ref(1.5)
 
 // Sidebar state
 const sidebarOpen = ref(true)
-const activeSidebarTab = ref<'outline' | 'search' | 'annotations' | 'history' | 'documents'| any>('documents')
+const activeSidebarTab = ref<'outline' | 'search' | 'annotations' | 'history' | 'documents' | any>('documents')
 
 // Text selection state
 const selectedText = ref('')
@@ -85,6 +85,11 @@ const contextMenuPosition = ref({ x: 0, y: 0 })
 const searchQuery = ref('')
 const searchResults = ref<SearchResult[]>([])
 const currentSearchIndex = ref(0)
+
+const showAIPopover = ref(false)
+const aiPopoverPosition = ref({ x: 0, y: 0 })
+const aiPopoverContent = ref('')
+const isLoadingAIPopover = ref(false)
 
 // History
 const editHistory = ref<Array<{ action: string, pageNum: number, timestamp: Date, preview: string }>>([])
@@ -99,7 +104,56 @@ const showPreview = ref(false)
 const previewContent = ref('')
 
 // Create New Document Modal
-const showCreateModal = ref(false)
+const documentTemplates = ref([
+  {
+    id: 'blank',
+    name: 'Blank Document',
+    icon: '📄',
+    content: '# New Document\n\nStart writing here...'
+  },
+  {
+    id: 'meeting-notes',
+    name: 'Meeting Notes',
+    icon: '📝',
+    content: '# Meeting Notes\n\n**Date:** \n**Attendees:** \n\n## Agenda\n- \n\n## Discussion\n\n## Action Items\n- [ ] \n\n## Next Steps\n'
+  },
+  {
+    id: 'project-plan',
+    name: 'Project Plan',
+    icon: '📋',
+    content: '# Project Plan\n\n## Overview\n\n## Objectives\n- \n\n## Timeline\n\n## Resources\n\n## Milestones\n- [ ] \n\n## Risks\n'
+  },
+  {
+    id: 'blog-post',
+    name: 'Blog Post',
+    icon: '✍️',
+    content: '# Blog Post Title\n\n## Introduction\n\n## Main Content\n\n### Section 1\n\n### Section 2\n\n## Conclusion\n\n---\n*Published on [Date]*'
+  },
+  {
+    id: 'research-notes',
+    name: 'Research Notes',
+    icon: '🔬',
+    content: '# Research Notes\n\n**Topic:** \n**Date:** \n**Sources:** \n\n## Key Findings\n\n## Quotes\n> \n\n## Questions\n- \n\n## Next Steps\n'
+  }
+])
+
+function createDocumentFromTemplate(template: any) {
+  const newDoc = {
+    id: `doc-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    name: `${template.name}.md`,
+    url: 'custom',
+    type: 'text/markdown',
+    size: new Blob([template.content]).size,
+    uploadedAt: new Date(),
+    isCustom: true,
+    content: template.content
+  }
+
+  uploadedFiles.value.push(newDoc)
+  saveToLocalStorage()
+  openTextEditor(newDoc)
+}
+
 const newDocTitle = ref('')
 const newDocContent = ref('')
 
@@ -487,27 +541,6 @@ function getAIPrompt(action: AIAction, text: string): string {
   return prompts[action]
 }
 
-async function performAIAction(action: AIAction, text: string) {
-  if (!text.trim()) return
-
-  isGeneratingAI.value = true
-  originalTextForAI.value = text
-  currentAIAction.value = action
-
-  try {
-    const prompt = getAIPrompt(action, text)
-    const result = await handlePrompt(prompt)
-    aiContent.value = result.response || result.answer || 'No response generated'
-    showAIModal.value = true
-  } catch (error) {
-    console.error('Error performing AI action:', error)
-    aiContent.value = 'Error generating content. Please try again.'
-    showAIModal.value = true
-  } finally {
-    isGeneratingAI.value = false
-  }
-}
-
 function saveAIContent() {
   const currentPageData = getCurrentPageContent()
   if (currentPageData && aiContent.value.trim()) {
@@ -555,7 +588,7 @@ function handleAIShortcut(action: AIAction) {
 
 function showAIToolbar() {
   const textarea = document.querySelector('textarea');
-  
+
   if (!textarea) return;
 
   const rect = textarea.getBoundingClientRect();
@@ -658,32 +691,6 @@ function saveCurrentDocument() {
   }
 }
 
-/**
- * Create New Document
- */
-function createNewDocument() {
-  if (!newDocTitle.value.trim()) return
-
-  const newDoc: UploadedFile = {
-    id: `doc-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-    name: newDocTitle.value.trim() + (newDocTitle.value.includes('.') ? '' : '.md'),
-    url: 'custom',
-    type: 'text/markdown',
-    size: new Blob([newDocContent.value]).size,
-    uploadedAt: new Date(),
-    isCustom: true,
-    content: newDocContent.value
-  }
-
-  uploadedFiles.value.push(newDoc)
-  saveToLocalStorage()
-  openTextEditor(newDoc)
-
-  showCreateModal.value = false
-  newDocTitle.value = ''
-  newDocContent.value = ''
-}
-
 function openTextEditor(doc: UploadedFile) {
   selectedPdfUrl.value = doc.url
   selectedPdfName.value = doc.name
@@ -712,26 +719,66 @@ function openTextEditor(doc: UploadedFile) {
   redoHistory.value = []
 }
 
-/**
- * Context Menu Functionality
- */
-function handleRightClick(event: MouseEvent) {
-  event.preventDefault()
+function handleTextSelection(event: Event) {
+  // Only trigger on mouseup events, not keyup for better UX
+  if (event.type === 'keyup') return
 
-  const selection = window.getSelection()
-  const hasSelection = selection && selection.toString().trim().length > 0
+  setTimeout(() => { // Small delay to ensure selection is complete
+    const selection: any = window.getSelection()
+    const selectedTextValue = selection?.toString().trim()
 
-  if (hasSelection) {
-    selectedText.value = selection.toString().trim()
-    const range = selection.getRangeAt(0)
-    selectionStart.value = range.startOffset
-    selectionEnd.value = range.endOffset
+    if (selectedTextValue && selectedTextValue.length > 3) {
+      selectedText.value = selectedTextValue
+      const range = selection.getRangeAt(0)
+      const rect = range.getBoundingClientRect()
+      const scrollX = window.pageXOffset || document.documentElement.scrollLeft
+      const scrollY = window.pageYOffset || document.documentElement.scrollTop
+
+      aiSuggestionsPosition.value = {
+        x: rect.left + (rect.width / 2) - 100 + scrollX,
+        y: rect.bottom + 5 + scrollY
+      }
+      showAISuggestions.value = true
+    } else {
+      // Hide suggestions if no text is selected
+      showAISuggestions.value = false
+    }
+  }, 100)
+}
+
+async function performAIAction(action: AIAction, text: string) {
+  if (!text.trim()) return
+
+  // Position popover near the selected text
+  const selection: any = window.getSelection()
+  if (selection?.rangeCount > 0) {
+    const range = selection?.getRangeAt(0)
+    const rect = range.getBoundingClientRect()
+    const scrollX = window.pageXOffset || document.documentElement.scrollLeft
+    const scrollY = window.pageYOffset || document.documentElement.scrollTop
+
+    aiPopoverPosition.value = {
+      x: rect.right + 10 + scrollX,
+      y: rect.top + scrollY
+    }
   }
 
-  showContextMenu.value = true
-  contextMenuPosition.value = {
-    x: event.clientX,
-    y: event.clientY
+  showAIPopover.value = true
+  isLoadingAIPopover.value = true
+  aiPopoverContent.value = ''
+  originalTextForAI.value = text
+  currentAIAction.value = action
+  hideAISuggestions()
+
+  try {
+    const prompt = getAIPrompt(action, text)
+    const result = await handlePrompt(prompt)
+    aiPopoverContent.value = result.response || result.answer || 'No response generated'
+  } catch (error) {
+    console.error('Error performing AI action:', error)
+    aiPopoverContent.value = 'Error generating content. Please try again.'
+  } finally {
+    isLoadingAIPopover.value = false
   }
 }
 
@@ -1106,68 +1153,49 @@ async function extractPdfContent(url: string) {
   isLoading.value = true
   loadError.value = ''
   editablePages.value = []
-  editHistory.value = []
-  undoHistory.value = []
-  redoHistory.value = []
 
   try {
     const arrayBuffer = await fetch(url).then(response => response.arrayBuffer())
     const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
-
     totalPages.value = pdf.numPages
     currentPage.value = 1
 
+    let fullContent = ''
+
     for (let pageNum = 1; pageNum <= totalPages.value; pageNum++) {
-      try {
-        const page = await pdf.getPage(pageNum)
-        const textContent = await page.getTextContent()
+      const page = await pdf.getPage(pageNum)
+      const textContent = await page.getTextContent()
 
-        let pageText = ''
-        let currentY = -1
-
-        textContent.items.forEach((item: any) => {
-          if ('str' in item && 'transform' in item) {
-            const y = item.transform[5]
-
-            if (currentY !== -1 && Math.abs(currentY - y) > 5) {
-              pageText += '\n'
-            }
-
-            pageText += item.str + ' '
-            currentY = y
-          }
-        })
-
-        pageText = pageText
-          .replace(/\s+/g, ' ')
-          .replace(/\n\s+/g, '\n')
-          .trim()
-
-        if (!pageText) {
-          pageText = `[Page ${pageNum} - No extractable text content or image-based content]`
+      let pageText = ''
+      textContent.items.forEach((item) => {
+        if ('str' in item) {
+          pageText += item.str + ' '
         }
+      })
 
-        editablePages.value.push({
-          pageNum,
-          content: pageText,
-          originalContent: pageText,
-          isModified: false,
-          annotations: []
-        })
-
-      } catch (error: any) {
-        console.error(`Error extracting text from page ${pageNum}:`, error)
-        editablePages.value.push({
-          pageNum,
-          content: `[Error loading page ${pageNum}: ${error.message}]`,
-          originalContent: '',
-          isModified: false,
-          annotations: []
-        })
+      pageText = pageText.replace(/\s+/g, ' ').trim()
+      if (pageText) {
+        fullContent += `## Page ${pageNum}\n\n${pageText}\n\n`
       }
+
+      editablePages.value.push({
+        pageNum,
+        content: pageText,
+        originalContent: pageText,
+        isModified: false,
+        annotations: []
+      })
     }
+
+    // Save PDF content as a document
+    const fileIndex = uploadedFiles.value.findIndex(f => f.id === selectedFileId.value)
+    if (fileIndex !== -1) {
+      uploadedFiles.value[fileIndex].content = fullContent
+      uploadedFiles.value[fileIndex].isCustom = true
+      saveToLocalStorage()
+    }
+
   } catch (error: any) {
-    console.error('Error extracting PDF content:', error)
     loadError.value = `Failed to extract PDF content: ${error.message}`
   } finally {
     isLoading.value = false
@@ -1323,6 +1351,19 @@ function cleanupFiles() {
   })
 }
 
+function applyAIResult() {
+  const currentPageData = getCurrentPageContent()
+  if (currentPageData && aiPopoverContent.value.trim()) {
+    saveToHistory()
+    const newContent = currentPageData.content.replace(originalTextForAI.value, aiPopoverContent.value.trim())
+    updatePageContent(newContent)
+    addToHistory(`AI ${currentAIAction.value}`, `Applied ${currentAIAction.value} to selected text`)
+  }
+  showAIPopover.value = false
+  aiPopoverContent.value = ''
+  originalTextForAI.value = ''
+}
+
 function handleGlobalClick(event: MouseEvent) {
   if (showContextMenu.value) {
     hideContextMenu()
@@ -1339,6 +1380,13 @@ function handleGlobalClick(event: MouseEvent) {
     const target = event.target as HTMLElement
     if (!target.closest('.ai-suggestions')) {
       hideAISuggestions()
+    }
+  }
+
+  if (showAIPopover.value) {
+    const target = event.target as HTMLElement
+    if (!target.closest('.ai-popover')) {
+      showAIPopover.value = false
     }
   }
 }
@@ -1358,10 +1406,12 @@ const handlePreview = () => {
 
 onMounted(() => {
   loadFromLocalStorage()
+  document.addEventListener('mouseup', handleTextSelection)
   document.addEventListener('click', handleGlobalClick)
 })
 
 onUnmounted(() => {
+  document.removeEventListener('mouseup', handleTextSelection)
   document.removeEventListener('click', handleGlobalClick)
   if (autoSaveTimer.value) {
     clearTimeout(autoSaveTimer.value)
@@ -1424,38 +1474,6 @@ onBeforeUnmount(() => {
 
           <!-- Documents Tab -->
           <div v-if="activeSidebarTab === 'documents'" class="p-3">
-            <!-- Create New Document Button -->
-            <button @click="showCreateModal = true"
-              class="w-full mb-4 p-3 border-2 border-dashed border-blue-500 rounded-lg text-center transition-colors hover:border-blue-600 bg-blue-50 hover:bg-blue-100 dark:border-blue-400 dark:hover:border-blue-300 dark:bg-blue-900/20 dark:hover:bg-blue-900/30">
-              <div class="flex flex-col items-center gap-2 text-blue-600 dark:text-blue-400">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-                </svg>
-                <span class="font-medium text-sm">Create New Document</span>
-              </div>
-            </button>
-
-            <!-- Optional PDF Upload Area -->
-            <div :class="[
-              'border-2 border-dashed rounded-lg p-3 text-center transition-all duration-200 mb-4',
-              isDragOver ? 'border-blue-500 bg-blue-50 dark:border-blue-400 dark:bg-blue-900/20' : 'border-gray-300 hover:border-blue-500 bg-gray-50 dark:border-gray-600 dark:hover:border-blue-400 dark:bg-gray-600/30'
-            ]" @dragover="handleDragOver" @dragleave="handleDragLeave" @drop="handleDrop">
-              <input id="pdfUpload" type="file" accept="application/pdf" class="hidden" multiple
-                @change="handleFileUpload" />
-
-              <div class="flex flex-col items-center gap-2">
-                <svg class="w-5 h-5 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor"
-                  viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                    d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                </svg>
-                <label for="pdfUpload"
-                  class="cursor-pointer text-blue-600 hover:text-blue-700 font-medium text-sm dark:text-blue-400 dark:hover:text-blue-300">
-                  Upload PDF (Optional)
-                </label>
-              </div>
-            </div>
-
             <div class="flex items-center justify-between mb-3">
               <h4 class="text-sm font-medium text-gray-800 dark:text-gray-300">
                 My Documents ({{ uploadedFiles.length }})
@@ -1506,8 +1524,14 @@ onBeforeUnmount(() => {
                   </button>
                 </div>
               </div>
-              <div v-if="uploadedFiles.length === 0" class="text-gray-500 text-center py-4 text-sm dark:text-gray-400">
-                No documents created yet
+
+              <div v-if="uploadedFiles.length === 0" class="text-gray-500 text-center py-8 text-sm dark:text-gray-400">
+                <svg class="w-8 h-8 text-gray-300 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                <p class="mb-2">No documents yet</p>
+                <p class="text-xs">Use the toolbar buttons above to create or upload documents</p>
               </div>
             </div>
           </div>
@@ -1627,7 +1651,9 @@ onBeforeUnmount(() => {
                   d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
               </svg>
               <div class="min-w-0 flex-1">
-                <h3 class="font-semibold text-gray-900 truncate dark:text-gray-100">{{ selectedPdfName || 'Document Editor' }}</h3>
+                <h3 class="font-semibold text-gray-900 truncate dark:text-gray-100">
+                  {{ selectedPdfName || "Gemmie Editor" }}
+                </h3>
                 <p class="text-sm text-gray-600 dark:text-gray-400">
                   Markdown Editor with Live Preview
                   <span v-if="getModifiedPagesCount() > 0" class="text-orange-600 ml-2 dark:text-orange-400">
@@ -1637,6 +1663,7 @@ onBeforeUnmount(() => {
                 </p>
               </div>
             </div>
+
 
             <div class="flex items-center gap-2 flex-shrink-0">
               <!-- Undo/Redo buttons -->
@@ -1685,6 +1712,29 @@ onBeforeUnmount(() => {
                 ]" title="Split Mode">
                   Split
                 </button>
+              </div>
+
+              <!-- Create Document Button -->
+              <button @click="closeEditor"
+                class="w-10 h-10 rounded-md bg-green-600 hover:bg-green-700 transition-colors text-white flex items-center justify-center"
+                title="Create New Document">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                </svg>
+              </button>
+
+              <!-- PDF Upload Button -->
+              <div class="relative">
+                <input id="pdfUploadToolbar" type="file" accept="application/pdf" class="hidden" multiple
+                  @change="handleFileUpload" />
+                <label for="pdfUploadToolbar"
+                  class="w-10 h-10 rounded-md bg-orange-600 hover:bg-orange-700 transition-colors text-white flex items-center justify-center cursor-pointer"
+                  title="Upload PDF">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                  </svg>
+                </label>
               </div>
 
               <!-- AI Assistant Button -->
@@ -1963,36 +2013,81 @@ onBeforeUnmount(() => {
             </div>
           </div>
 
-          <!-- No document selected state -->
-          <div v-else-if="!selectedPdfUrl" class="flex items-center justify-center h-96">
-            <div class="text-center max-w-md mx-auto p-6">
-              <svg class="w-12 h-12 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                  d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-              <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">No Document Selected</h3>
-              <p class="text-gray-600 dark:text-gray-400 mb-4">Create a new document to get started with markdown
-                editing and live preview.</p>
-              <button @click="showCreateModal = true"
-                class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
-                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-                </svg>
-                Create New Document
-              </button>
+          <!-- Template Selection Welcome Screen -->
+          <div v-else-if="!selectedPdfUrl"
+            class="flex font-light text-sm pt-[200px] overflow-y-auto items-center justify-center h-full p-8">
+            <div class="max-w-4xl w-full">
+              <div class="text-center mb-8">
+                <h2 class="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">Welcome to Gemmie Editor</h2>
+                <p class="text-base text-gray-600 dark:text-gray-400 mb-8">Choose a template to get started with your
+                  new
+                  document</p>
+              </div>
+
+              <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+                <button v-for="template in documentTemplates" :key="template.id"
+                  @click="createDocumentFromTemplate(template)"
+                  class="group p-6 bg-white border-2 border-gray-200 rounded-xl hover:border-blue-500 hover:shadow-lg transition-all duration-200 text-left dark:bg-gray-800 dark:border-gray-700 dark:hover:border-blue-400">
+                  <div class="flex items-start gap-4">
+                    <div class="flex-shrink-0">
+                      <span class="text-2xl group-hover:scale-110 transition-transform duration-200">
+                        {{ template.icon }}
+                      </span>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                      <h3
+                        class="text-base font-semibold text-gray-900 dark:text-gray-100 mb-1 group-hover:text-blue-600 dark:group-hover:text-blue-400">
+                        {{ template.name }}
+                      </h3>
+                      <p class="text-sm text-gray-600 dark:text-gray-400 line-clamp-2">
+                        {{ template.content.substring(2, 100).replace(/\n/g, ' ').trim() }}...
+                      </p>
+                      <div
+                        class="mt-3 text-xs text-blue-600 dark:text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                        Click to create →
+                      </div>
+                    </div>
+                  </div>
+                </button>
+              </div>
+
+              <!-- Optional PDF Upload Section -->
+              <div class="pt-2 dark:border-gray-700">
+                <div class="text-center mb-4">
+                  <p class="text-gray-600 dark:text-gray-400">Or upload a PDF to extract and edit its content</p>
+                </div>
+                <div :class="[
+                  'border-2 border-dashed rounded-xl px-8 py-6 text-center transition-all duration-200',
+                  isDragOver ? 'border-blue-500 bg-blue-50 dark:border-blue-400 dark:bg-blue-900/20' : 'border-gray-300 hover:border-blue-400 bg-gray-50 dark:border-gray-600 dark:hover:border-blue-400 dark:bg-gray-700/30'
+                ]" @dragover="handleDragOver" @dragleave="handleDragLeave" @drop="handleDrop">
+                  <input id="pdfUploadWelcome" type="file" accept="application/pdf" class="hidden" multiple
+                    @change="handleFileUpload" />
+                  <svg class="w-8 h-8 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                  </svg>
+                  <label for="pdfUploadWelcome" class="cursor-pointer">
+                    <span
+                      class="text-base font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300">
+                      Upload PDF Files
+                    </span>
+                    <p class="text-gray-500 dark:text-gray-400 mt-1">or drag and drop them here</p>
+                  </label>
+                </div>
+              </div>
             </div>
           </div>
 
           <!-- Editor content -->
           <div v-else-if="editablePages.length > 0" class="h-full overflow-auto px-5">
             <!-- Edit Mode -->
-            <div v-if="editorMode === 'edit'"
-              class="bg-white mx-auto dark:bg-gray-800 h-full flex flex-col">
+            <div v-if="editorMode === 'edit'" class="bg-white mx-auto dark:bg-gray-800 h-full flex flex-col">
               <!-- Page header -->
-              <div class="py-2 w-full flex items-center justify-between dark:border-gray-600">
+              <div class="py-2 w-full flex items-center justify-between">
                 <div class="text-sm justify-end ml-auto flex gap-2 text-gray-600 dark:text-gray-400">
-                  {{ totalPages > 1 ? `Page ${currentPage}` : 'Document' }}
-                  <p v-if="getCurrentPageContent()?.annotations?.length > 0">{{ getCurrentPageContent()?.annotations.length }} annotations</p>
+                  {{ totalPages > 1 ? `Page ${currentPage}` : '' }}
+                  <p v-if="getCurrentPageContent()?.annotations?.length > 0">{{
+                    getCurrentPageContent()?.annotations.length }} annotations</p>
                   {{ getCurrentPageContent()?.content?.length || 0 }} characters
                 </div>
               </div>
@@ -2001,8 +2096,8 @@ onBeforeUnmount(() => {
               <div class="flex-1 py-2 relative">
                 <textarea v-if="getCurrentPageContent()" :value="getCurrentPageContent()?.content"
                   @input="updatePageContent(($event.target as HTMLTextAreaElement).value)"
-                  @contextmenu="handleRightClick" @keydown="handleTextareaKeydown"
-                  class="w-full outline-none h-full resize-none bg-white text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
+                  @keydown="handleTextareaKeydown"
+                  class="w-full outline-none h-full px-6 overflow-y-auto resize-none bg-white dark:bg-inherit text-gray-900 dark:text-gray-100"
                   :style="{
                     fontSize: fontSize + 'px',
                     lineHeight: lineHeight.toString(),
@@ -2016,10 +2111,9 @@ Press Ctrl+Z to undo, Ctrl+Y to redo"></textarea>
             </div>
 
             <!-- Preview Mode -->
-            <div v-else-if="editorMode === 'preview'"
-              class="bg-white mx-auto dark:bg-gray-800 h-full flex flex-col">
+            <div v-else-if="editorMode === 'preview'" class="bg-white mx-auto dark:bg-gray-800 h-full flex flex-col">
               <!-- Page header -->
-              <div class="py-2 w-full flex items-center justify-between dark:border-gray-600">
+              <div class="py-2 w-full flex items-center justify-between">
                 <div class="text-sm justify-end ml-auto items-center flex gap-4 text-gray-600 dark:text-gray-400">
                   {{ totalPages > 1 ? `Page ${currentPage} - Preview` : 'Document Preview' }}
                   <span
@@ -2040,8 +2134,7 @@ Press Ctrl+Z to undo, Ctrl+Y to redo"></textarea>
             </div>
 
             <!-- Split Mode -->
-            <div v-else-if="editorMode === 'split'"
-              class="bg-white dark:bg-gray-800 h-full flex flex-col">
+            <div v-else-if="editorMode === 'split'" class="bg-white dark:bg-gray-800 h-full flex flex-col">
               <!-- Page header -->
               <div class="border-b border-gray-300 p-4 flex items-center justify-between dark:border-gray-600">
                 <div class="flex items-center gap-2">
@@ -2067,7 +2160,7 @@ Press Ctrl+Z to undo, Ctrl+Y to redo"></textarea>
                   </div>
                   <textarea v-if="getCurrentPageContent()" :value="getCurrentPageContent()?.content"
                     @input="updatePageContent(($event.target as HTMLTextAreaElement).value)"
-                    @contextmenu="handleRightClick" @keydown="handleTextareaKeydown"
+                    @keydown="handleTextareaKeydown"
                     class="w-full h-full p-4 outline-none border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
                     :style="{
                       fontSize: fontSize + 'px',
@@ -2133,49 +2226,36 @@ Press Ctrl+Z to undo, Ctrl+Y to redo"></textarea>
       </div>
     </div>
 
-    <!-- Modals -->
-
-    <!-- Create New Document Modal -->
-    <div v-if="showCreateModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
-      @click.self="showCreateModal = false">
-      <div class="bg-white rounded-lg max-w-md w-full border border-gray-300 dark:bg-gray-800 dark:border-gray-600">
-        <div class="p-4 border-b border-gray-300 flex items-center justify-between dark:border-gray-600">
-          <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Create New Document</h3>
-          <button @click="showCreateModal = false"
-            class="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors dark:bg-gray-700 dark:hover:bg-gray-600">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
+    <!-- AI Popover -->
+    <div v-if="showAIPopover"
+      class="ai-popover fixed z-50 bg-white border border-gray-300 rounded-lg shadow-xl p-4 max-w-sm w-80 dark:bg-gray-800 dark:border-gray-600"
+      :style="{
+        left: aiPopoverPosition.x + 'px',
+        top: aiPopoverPosition.y + 'px'
+      }">
+      <div v-if="isLoadingAIPopover" class="flex items-center gap-2 text-blue-600">
+        <svg class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor"
+            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
+          </path>
+        </svg>
+        <span class="text-sm">Generating {{ currentAIAction }}...</span>
+      </div>
+      <div v-else>
+        <div class="text-sm text-gray-800 max-h-[400px] overflow-y-auto dark:text-gray-100 mb-3">{{ aiPopoverContent }}</div>
+        <div class="flex gap-2">
+          <button @click="applyAIResult" class="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700">
+            Apply
           </button>
-        </div>
-        <div class="p-4">
-          <div class="mb-4">
-            <label class="block text-sm font-medium text-gray-800 dark:text-gray-300 mb-2">
-              Document Title
-            </label>
-            <input type="text" v-model="newDocTitle" placeholder="My New Document"
-              class="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100" />
-          </div>
-          <div class="mb-4">
-            <label class="block text-sm font-medium text-gray-800 dark:text-gray-300 mb-2">
-              Initial Content (Optional)
-            </label>
-            <textarea v-model="newDocContent" placeholder="Start with some markdown content..." rows="4"
-              class="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 resize-none"></textarea>
-          </div>
-        </div>
-        <div class="p-4 border-t border-gray-300 flex gap-2 justify-end dark:border-gray-600">
-          <button @click="showCreateModal = false"
-            class="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors dark:text-gray-400 dark:hover:text-gray-300">
-            Cancel
-          </button>
-          <button @click="createNewDocument" :disabled="!newDocTitle.trim()"
-            class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors disabled:opacity-50">
-            Create Document
+          <button @click="showAIPopover = false"
+            class="px-3 py-1 bg-gray-200 text-gray-800 rounded text-sm hover:bg-gray-300">
+            Dismiss
           </button>
         </div>
       </div>
     </div>
+
 
     <!-- AI Modal -->
     <div v-if="showAIModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
@@ -2247,60 +2327,9 @@ Press Ctrl+Z to undo, Ctrl+Y to redo"></textarea>
           </button>
         </div>
         <div class="flex-1 p-6 overflow-auto">
-          <pre
-            class="whitespace-pre-wrap text-sm text-gray-800 dark:text-gray-200 font-mono">{{ previewContent }}</pre>
+          <pre class="whitespace-pre-wrap text-sm text-gray-800 dark:text-gray-200 font-mono">{{ previewContent }}</pre>
         </div>
       </div>
-    </div>
-
-    <!-- Context Menu -->
-    <div v-if="showContextMenu" :style="{
-      position: 'fixed',
-      left: contextMenuPosition.x + 'px',
-      top: contextMenuPosition.y + 'px',
-      zIndex: 1001
-    }" class="bg-white border border-gray-300 rounded-lg shadow-lg py-2 min-w-48 dark:bg-gray-800 dark:border-gray-600"
-      @click.stop>
-      <div
-        class="px-3 py-2 text-xs font-medium text-gray-500 border-b border-gray-300 dark:text-gray-400 dark:border-gray-600">
-        AI Actions
-      </div>
-      <button v-for="suggestion in aiSuggestions.slice(0, 3)" :key="suggestion.action"
-        @click="contextMenuAction(suggestion.action)"
-        class="w-full px-3 py-2 text-left hover:bg-gray-100 flex items-center gap-2 text-sm text-gray-800 dark:hover:bg-gray-700 dark:text-gray-300">
-        <span class="text-base">{{ suggestion.icon }}</span>
-        <span>{{ suggestion.label }}</span>
-      </button>
-
-      <div class="border-t border-gray-300 my-1 dark:border-gray-600"></div>
-
-      <button @click="contextMenuAction('copy')"
-        class="w-full px-3 py-2 text-left hover:bg-gray-100 flex items-center gap-2 text-sm text-gray-800 dark:hover:bg-gray-700 dark:text-gray-300">
-        <svg class="w-4 h-4 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-            d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-        </svg>
-        <span>Copy</span>
-      </button>
-
-      <button @click="contextMenuAction('highlight')"
-        class="w-full px-3 py-2 text-left hover:bg-gray-100 flex items-center gap-2 text-sm text-gray-800 dark:hover:bg-gray-700 dark:text-gray-300">
-        <svg class="w-4 h-4 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-            d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zM7 3V1m0 20v-2m8-10a4 4 0 00-4-4V3a2 2 0 012-2h4a2 2 0 012 2v2a4 4 0 00-4 4z" />
-        </svg>
-        <span>Highlight</span>
-      </button>
-
-      <button @click="contextMenuAction('note')"
-        class="w-full px-3 py-2 text-left hover:bg-gray-100 flex items-center gap-2 text-sm text-gray-800 dark:hover:bg-gray-700 dark:text-gray-300">
-        <svg class="w-4 h-4 text-orange-600 dark:text-orange-400" fill="none" stroke="currentColor"
-          viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-            d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-        </svg>
-        <span>Add Note</span>
-      </button>
     </div>
   </div>
 </template>
@@ -2369,5 +2398,12 @@ Press Ctrl+Z to undo, Ctrl+Y to redo"></textarea>
 .prose h3 {
   font-size: 1.25em;
   line-height: 1.4;
+}
+
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 </style>
