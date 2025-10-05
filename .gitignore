@@ -12,9 +12,6 @@ lerna-debug.log*
 .firebase/
 
 node_modules
-package-lock.json
-yarn.lock
-pnpm-lock.yaml
 .pnp.*
 .DS_Store
 dist
