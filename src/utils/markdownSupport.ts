@@ -233,7 +233,7 @@ function renderMarkdown(text: string): string {
       );
       
       // Build table HTML
-      let tableHtml = '<div class="table-container my-4 overflow-x-auto"><table class="min-w-full border-collapse border border-gray-300 dark:border-gray-600">';
+      let tableHtml = '<div class="table-container my-4 overflow-x-auto"><table class="w-full border-collapse border border-gray-300 dark:border-gray-600">';
       
       // Header
       tableHtml += '<thead class="bg-gray-100 dark:bg-gray-800"><tr>';
