@@ -6,6 +6,7 @@ import type { Ref } from "vue"
 import { WRAPPER_URL } from "@/utils/globals"
 import { inject } from "vue"
 import { useRouter } from "vue-router"
+import { renderMarkdown } from "@/utils/markdownSupport"
 
 // configure worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker
@@ -263,50 +264,6 @@ watch([editablePages], () => {
     scheduleAutoSave()
   }
 }, { deep: true })
-
-/**
- * Markdown Rendering
- */
-function renderMarkdown(text: string): string {
-  if (!text) return ''
-
-  let html = text
-    // Headers
-    .replace(/^### (.*$)/gm, '<h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2 mt-4">$1</h3>')
-    .replace(/^## (.*$)/gm, '<h2 class="text-xl font-bold text-gray-900 dark:text-gray-100 mb-3 mt-6">$1</h2>')
-    .replace(/^# (.*$)/gm, '<h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4 mt-8">$1</h1>')
-
-    // Bold and italic
-    .replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em class="font-bold italic text-gray-900 dark:text-gray-100">$1</em></strong>')
-    .replace(/\*\*(.+?)\*\*/g, '<strong class="font-bold text-gray-900 dark:text-gray-100">$1</strong>')
-    .replace(/\*(.+?)\*/g, '<em class="italic text-gray-800 dark:text-gray-200">$1</em>')
-
-    // Code
-    .replace(/`([^`]+)`/g, '<code class="bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded text-sm font-mono text-red-600 dark:text-red-400">$1</code>')
-
-    // Links
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" class="text-blue-600 dark:text-blue-400 hover:underline" target="_blank">$1</a>')
-
-    // Strikethrough
-    .replace(/~~(.+?)~~/g, '<del class="line-through text-gray-500 dark:text-gray-400">$1</del>')
-
-    // Lists
-    .replace(/^\* (.+$)/gm, '<li class="ml-4 text-gray-800 dark:text-gray-200">• $1</li>')
-    .replace(/^- (.+$)/gm, '<li class="ml-4 text-gray-800 dark:text-gray-200">• $1</li>')
-    .replace(/^\d+\. (.+$)/gm, '<li class="ml-4 text-gray-800 dark:text-gray-200">$1</li>')
-
-    // Blockquotes
-    .replace(/^> (.+$)/gm, '<blockquote class="border-l-4 border-gray-300 dark:border-gray-600 pl-4 italic text-gray-700 dark:text-gray-300 my-2">$1</blockquote>')
-
-    // Line breaks
-    .replace(/\n/g, '<br>')
-
-    // Wrap lists
-    .replace(/(<li class="ml-4[^>]*>.*?<\/li>)(?:\s*<br>\s*)?(?=<li class="ml-4|$)/gs, '$1')
-    .replace(/(<li class="ml-4[^>]*>.*?<\/li>(?:\s*<li class="ml-4[^>]*>.*?<\/li>)*)/gs, '<ul class="my-2">$1</ul>')
-
-  return html
-}
 
 /**
  * Undo/Redo functionality
