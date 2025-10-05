@@ -7,8 +7,11 @@ import { API_BASE_URL, generateChatId, generateChatTitle, extractUrls, validateC
 import { nextTick } from 'vue';
 import { detectAndProcessVideo } from './utils/videoProcessing';
 import ConfirmDialog from './components/ConfirmDialog.vue';
+import type { Theme } from 'vue-sonner/src/packages/types.js';
 
 const screenWidth = ref(screen.width)
+const isDarkMode = ref(false)
+const currentTheme = ref<Theme | any>("system")
 const scrollableElem = ref<HTMLElement | null>(null)
 const showScrollDownButton = ref(false)
 const confirmDialog = ref<ConfirmDialogOptions>({
@@ -1618,11 +1621,75 @@ function cleanupAutoSync() {
   }
 }
 
+function toggleTheme(newTheme?: Theme) {
+  // If a specific theme is provided, use it
+  if (newTheme && ['light', 'dark', 'system'].includes(newTheme)) {
+    currentTheme.value = newTheme
+  } else {
+    // Cycle through themes: system -> light -> dark -> system
+    if (currentTheme.value === 'system') {
+      currentTheme.value = 'light'
+    } else if (currentTheme.value === 'light') {
+      currentTheme.value = 'dark'
+    } else {
+      currentTheme.value = 'system'
+    }
+  }
+
+  // Save the theme preference
+  localStorage.setItem('theme', currentTheme.value)
+
+  // Apply the theme
+  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+  if (currentTheme.value === 'dark' || (currentTheme.value === 'system' && prefersDark)) {
+    isDarkMode.value = true
+    document.documentElement.classList.add('dark')
+  } else {
+    isDarkMode.value = false
+    document.documentElement.classList.remove('dark')
+  }
+
+  // Show theme change notification
+  const themeLabel = currentTheme.value === 'system'
+    ? `System (${prefersDark ? 'Dark' : 'Light'})`
+    : currentTheme.value.charAt(0).toUpperCase() + currentTheme.value.slice(1)
+
+  toast.info(`Theme: ${themeLabel}`, { duration: 1500 })
+}
+
 // Enhanced onMounted with comprehensive error handling
 onMounted(async () => {
   try {
     console.log('App mounting...')
-    localStorage.setItem("external_reference", JSON.stringify("imrany-1758712912865"))
+    // Initialize theme
+    const savedTheme = localStorage.getItem('theme') || 'system'
+    currentTheme.value = savedTheme
+
+    // Apply the theme
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+    if (currentTheme.value === 'dark' || (currentTheme.value === 'system' && prefersDark)) {
+      isDarkMode.value = true
+      document.documentElement.classList.add('dark')
+    } else {
+      isDarkMode.value = false
+      document.documentElement.classList.remove('dark')
+    }
+
+    // Listen for system theme changes when in system mode
+    const systemThemeListener: any = (e: MediaQueryListEvent) => {
+      const currentTheme = localStorage.getItem('theme')
+      if (currentTheme === 'system' || !currentTheme) {
+        isDarkMode.value = e.matches
+        if (e.matches) {
+          document.documentElement.classList.add('dark')
+        } else {
+          document.documentElement.classList.remove('dark')
+        }
+      }
+    }
+
+    const darkModeQuery = window.matchMedia('(prefers-color-scheme: dark)')
+    darkModeQuery.addEventListener('change', systemThemeListener)
 
     // Load initial state from localStorage with validation
     try {
@@ -1704,6 +1771,11 @@ onMounted(async () => {
       console.error('Error setting up resize listener:', error)
     }
 
+    onUnmounted(() => {
+      darkModeQuery.removeEventListener('change', systemThemeListener)
+      cleanupAutoSync()
+    })
+
     console.log('App mounted successfully')
 
   } catch (error) {
@@ -1740,6 +1812,8 @@ const globalState = {
   activeChatMenu,
   showProfileMenu,
   planStatus,
+  isDarkMode,
+  currentTheme,
 
   // Core functions
   showConfirmDialog,
@@ -1755,6 +1829,7 @@ const globalState = {
   clearAllChats,
 
   // UI functions
+  toggleTheme,
   scrollToBottom,
   handleScroll,
   hideSidebar,
@@ -1791,7 +1866,7 @@ provide("globalState", globalState)
 
 <template>
   <div @click="handleClickOutside">
-    <Toaster position="top-right" :closeButton="true" closeButtonPosition="top-left" />
+    <Toaster position="top-right" :closeButton="true" closeButtonPosition="top-left" :theme="currentTheme" />
     <ConfirmDialog v-if="confirmDialog.visible" :confirmDialog="confirmDialog" />
     <RouterView />
   </div>

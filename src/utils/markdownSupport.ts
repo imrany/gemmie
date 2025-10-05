@@ -12,6 +12,63 @@ function renderMarkdown(text: string): string {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
 
+  // Process inline markdown (for non-blockquote content)
+  const processInlineMarkdown = (line: string): string => {
+    let processed = line;
+
+    // Code blocks (must be before inline code)
+    processed = processed.replace(
+      /```(\w+)?\n([\s\S]+?)```/g,
+      (match, lang, code) => {
+        const language = lang ? ` data-lang="${lang}"` : "";
+        return `<pre class="bg-gray-900 dark:bg-gray-950 text-gray-100 p-4 rounded-lg overflow-x-auto my-4"><code${language} class="font-mono text-sm">${code.trim()}</code></pre>`;
+      }
+    );
+
+    // Inline code
+    processed = processed.replace(
+      /`([^`]+)`/g,
+      '<code class="bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded text-sm font-mono text-red-600 dark:text-red-400">$1</code>'
+    );
+
+    // Bold, italic, etc.
+    processed = processed
+      .replace(
+        /\*\*\*(.+?)\*\*\*/g,
+        '<strong><em class="font-bold italic text-gray-900 dark:text-gray-100">$1</em></strong>'
+      )
+      .replace(
+        /___(.+?)___/g,
+        '<strong><em class="font-bold italic text-gray-900 dark:text-gray-100">$1</em></strong>'
+      )
+      .replace(
+        /\*\*(.+?)\*\*/g,
+        '<strong class="font-bold text-gray-900 dark:text-gray-100">$1</strong>'
+      )
+      .replace(
+        /__(.+?)__/g,
+        '<strong class="font-bold text-gray-900 dark:text-gray-100">$1</strong>'
+      )
+      .replace(
+        /\*(.+?)\*/g,
+        '<em class="italic text-gray-800 dark:text-gray-200">$1</em>'
+      )
+      .replace(
+        /_(.+?)_/g,
+        '<em class="italic text-gray-800 dark:text-gray-200">$1</em>'
+      )
+      .replace(
+        /~~(.+?)~~/g,
+        '<del class="line-through text-gray-500 dark:text-gray-400">$1</del>'
+      )
+      .replace(
+        /==(.+?)==/g,
+        '<mark class="bg-yellow-200 dark:bg-yellow-700 px-1">$1</mark>'
+      );
+
+    return processed;
+  };
+
   // Enhanced Blockquotes with nested support
   const processBlockquotes = (content: string): string => {
     const lines = content.split("\n");
@@ -79,166 +136,134 @@ function renderMarkdown(text: string): string {
     return result.join("\n");
   };
 
-  // Process inline markdown (for non-blockquote content)
-  const processInlineMarkdown = (line: string): string => {
-    let processed = line;
-
-    // Code blocks (must be before inline code)
-    processed = processed.replace(
-      /```(\w+)?\n([\s\S]+?)```/g,
-      (match, lang, code) => {
-        const language = lang ? ` data-lang="${lang}"` : "";
-        return `<pre class="bg-gray-900 dark:bg-gray-950 text-gray-100 p-4 rounded-lg overflow-x-auto my-4"><code${language} class="font-mono text-sm">${code.trim()}</code></pre>`;
-      }
-    );
-
-    // Inline code
-    processed = processed.replace(
-      /`([^`]+)`/g,
-      '<code class="bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded text-sm font-mono text-red-600 dark:text-red-400">$1</code>'
-    );
-
-    // Bold, italic, etc. (your existing inline processing)
-    processed = processed
-      .replace(
-        /\*\*\*(.+?)\*\*\*/g,
-        '<strong><em class="font-bold italic text-gray-900 dark:text-gray-100">$1</em></strong>'
-      )
-      .replace(
-        /___(.+?)___/g,
-        '<strong><em class="font-bold italic text-gray-900 dark:text-gray-100">$1</em></strong>'
-      )
-      .replace(
-        /\*\*(.+?)\*\*/g,
-        '<strong class="font-bold text-gray-900 dark:text-gray-100">$1</strong>'
-      )
-      .replace(
-        /__(.+?)__/g,
-        '<strong class="font-bold text-gray-900 dark:text-gray-100">$1</strong>'
-      )
-      .replace(
-        /\*(.+?)\*/g,
-        '<em class="italic text-gray-800 dark:text-gray-200">$1</em>'
-      )
-      .replace(
-        /_(.+?)_/g,
-        '<em class="italic text-gray-800 dark:text-gray-200">$1</em>'
-      )
-      .replace(
-        /~~(.+?)~~/g,
-        '<del class="line-through text-gray-500 dark:text-gray-400">$1</del>'
-      )
-      .replace(
-        /==(.+?)==/g,
-        '<mark class="bg-yellow-200 dark:bg-yellow-700 px-1">$1</mark>'
-      );
-
-    return processed;
-  };
-
-  // Start processing with blockquotes
-  html = processBlockquotes(html);
-
   // Enhanced Image Support with multiple formats and features
   const processImages = (content: string): string => {
-    return content
-      // Standard Markdown images: ![alt](src "title")
-      .replace(
-        /!\[([^\]]*)\]\(([^)"]+)(?:\s+"([^"]+)")?\)/g,
-        (match, alt, url, title) => {
-          const titleAttr = title ? ` title="${title}"` : "";
-          const isSvg = url.toLowerCase().endsWith('.svg');
-          const loadingAttr = isSvg ? '' : ' loading="lazy"';
-          
-          return `
-            <div class="image-container my-4">
-              <img 
-                src="${url}" 
-                alt="${alt || 'Image'}" 
-                ${titleAttr}
-                ${loadingAttr}
-                class="max-w-full h-auto rounded-lg shadow-sm transition-all duration-200 hover:shadow-md cursor-zoom-in"
-                onclick="window.open('${url}', '_blank')"
-              >
-              ${alt ? `<div class="image-caption text-sm text-gray-600 dark:text-gray-400 text-center mt-2">${alt}</div>` : ''}
-            </div>
-          `;
-        }
-      )
-      // Images with width/height specification: ![alt](src =100x200)
-      .replace(
-        /!\[([^\]]*)\]\(([^)\s]+)\s*=(\d+)x(\d+)\)/g,
-        (match, alt, url, width, height) => {
-          return `
-            <div class="image-container my-4">
-              <img 
-                src="${url}" 
-                alt="${alt || 'Image'}" 
-                width="${width}"
-                height="${height}"
-                loading="lazy"
-                class="max-w-full h-auto rounded-lg shadow-sm transition-all duration-200 hover:shadow-md cursor-zoom-in"
-                onclick="window.open('${url}', '_blank')"
-              >
-              ${alt ? `<div class="image-caption text-sm text-gray-600 dark:text-gray-400 text-center mt-2">${alt}</div>` : ''}
-            </div>
-          `;
-        }
-      )
-      // Images with CSS class: ![alt](src){.class-name}
-      .replace(
-        /!\[([^\]]*)\]\(([^)\s]+)\)\{\.([^}]+)\}/g,
-        (match, alt, url, className) => {
-          return `
-            <div class="image-container my-4">
-              <img 
-                src="${url}" 
-                alt="${alt || 'Image'}" 
-                loading="lazy"
-                class="${className} max-w-full h-auto rounded-lg shadow-sm transition-all duration-200 hover:shadow-md cursor-zoom-in"
-                onclick="window.open('${url}', '_blank')"
-              >
-              ${alt ? `<div class="image-caption text-sm text-gray-600 dark:text-gray-400 text-center mt-2">${alt}</div>` : ''}
-            </div>
-          `;
-        }
-      )
-      // Centered images: ![alt](src){.center}
-      .replace(
-        /!\[([^\]]*)\]\(([^)\s]+)\)\{\.center\}/g,
-        (match, alt, url) => {
-          return `
-            <div class="image-container my-4 flex justify-center">
-              <img 
-                src="${url}" 
-                alt="${alt || 'Image'}" 
-                loading="lazy"
-                class="max-w-full h-auto rounded-lg shadow-sm transition-all duration-200 hover:shadow-md cursor-zoom-in"
-                onclick="window.open('${url}', '_blank')"
-              >
-              ${alt ? `<div class="image-caption text-sm text-gray-600 dark:text-gray-400 text-center mt-2">${alt}</div>` : ''}
-            </div>
-          `;
-        }
-      )
-      // Small images: ![alt](src){.small}
-      .replace(
-        /!\[([^\]]*)\]\(([^)\s]+)\)\{\.small\}/g,
-        (match, alt, url) => {
-          return `
-            <div class="image-container my-4">
-              <img 
-                src="${url}" 
-                alt="${alt || 'Image'}" 
-                loading="lazy"
-                class="max-w-48 h-auto rounded-lg shadow-sm transition-all duration-200 hover:shadow-md cursor-zoom-in"
-                onclick="window.open('${url}', '_blank')"
-              >
-              ${alt ? `<div class="image-caption text-sm text-gray-600 dark:text-gray-400 text-center mt-2">${alt}</div>` : ''}
-            </div>
-          `;
-        }
-      );
+    return (
+      content
+        // Clickable images: [![alt](src)](link)
+        .replace(
+          /\[!\[([^\]]*)\]\(([^)\s]+)\)\]\(([^)\s]+)\)/g,
+          (match, alt, imageUrl, linkUrl) => {
+            const escapedImageUrl = imageUrl.replace(/"/g, "&quot;");
+            const escapedLinkUrl = linkUrl.replace(/"/g, "&quot;");
+            const escapedAlt = (alt || "Image").replace(/"/g, "&quot;");
+
+            return `<div class="image-container my-4">
+<a href="${escapedLinkUrl}" target="_blank" rel="noopener noreferrer">
+<img src="${escapedImageUrl}" alt="${escapedAlt}" loading="lazy" class="max-w-full h-auto rounded-lg shadow-sm transition-all duration-200 hover:shadow-md cursor-pointer" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+<div style="display:none;" class="text-gray-600 dark:text-gray-400 p-4 border border-gray-300 dark:border-gray-600 rounded-lg">${escapedAlt}</div>
+</a>
+</div>`;
+          }
+        )
+        // Images with width/height specification: ![alt](src =100x200)
+        .replace(
+          /!\[([^\]]*)\]\(([^)\s]+)\s*=(\d+)x(\d+)\)/g,
+          (match, alt, url, width, height) => {
+            const escapedUrl = url.replace(/"/g, "&quot;");
+            const escapedAlt = (alt || "Image").replace(/"/g, "&quot;");
+
+            return `<div class="image-container my-4">
+<img src="${escapedUrl}" alt="${escapedAlt}" width="${width}" height="${height}" loading="lazy" class="max-w-full h-auto rounded-lg shadow-sm transition-all duration-200 hover:shadow-md cursor-zoom-in" onclick="window.open('${escapedUrl}', '_blank')" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+<div style="display:none;" class="text-gray-600 dark:text-gray-400 p-4 border border-gray-300 dark:border-gray-600 rounded-lg">${escapedAlt}</div>
+</div>`;
+          }
+        )
+        // Float left images: ![alt](src){.float-left}
+        .replace(
+          /!\[([^\]]*)\]\(([^)\s]+)\)\{\.float-left\}/g,
+          (match, alt, url) => {
+            const escapedUrl = url.replace(/"/g, "&quot;");
+            const escapedAlt = (alt || "Image").replace(/"/g, "&quot;");
+
+            return `<div class="image-container my-4 float-left mr-4 mb-4">
+<img src="${escapedUrl}" alt="${escapedAlt}" loading="lazy" class="max-w-48 h-auto rounded-lg shadow-sm transition-all duration-200 hover:shadow-md cursor-zoom-in" onclick="window.open('${escapedUrl}', '_blank')" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+<div style="display:none;" class="text-gray-600 dark:text-gray-400 p-4 border border-gray-300 dark:border-gray-600 rounded-lg">${escapedAlt}</div>
+</div>`;
+          }
+        )
+        // Float right images: ![alt](src){.float-right}
+        .replace(
+          /!\[([^\]]*)\]\(([^)\s]+)\)\{\.float-right\}/g,
+          (match, alt, url) => {
+            const escapedUrl = url.replace(/"/g, "&quot;");
+            const escapedAlt = (alt || "Image").replace(/"/g, "&quot;");
+
+            return `<div class="image-container my-4 float-right ml-4 mb-4">
+<img src="${escapedUrl}" alt="${escapedAlt}" loading="lazy" class="max-w-48 h-auto rounded-lg shadow-sm transition-all duration-200 hover:shadow-md cursor-zoom-in" onclick="window.open('${escapedUrl}', '_blank')" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+<div style="display:none;" class="text-gray-600 dark:text-gray-400 p-4 border border-gray-300 dark:border-gray-600 rounded-lg">${escapedAlt}</div>
+</div>`;
+          }
+        )
+        // Centered images: ![alt](src){.center}
+        .replace(
+          /!\[([^\]]*)\]\(([^)\s]+)\)\{\.center\}/g,
+          (match, alt, url) => {
+            const escapedUrl = url.replace(/"/g, "&quot;");
+            const escapedAlt = (alt || "Image").replace(/"/g, "&quot;");
+
+            return `<div class="image-container my-4 flex justify-center">
+<img src="${escapedUrl}" alt="${escapedAlt}" loading="lazy" class="max-w-full h-auto rounded-lg shadow-sm transition-all duration-200 hover:shadow-md cursor-zoom-in" onclick="window.open('${escapedUrl}', '_blank')" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+<div style="display:none;" class="text-gray-600 dark:text-gray-400 p-4 border border-gray-300 dark:border-gray-600 rounded-lg">${escapedAlt}</div>
+</div>`;
+          }
+        )
+        // Small images: ![alt](src){.small}
+        .replace(
+          /!\[([^\]]*)\]\(([^)\s]+)\)\{\.small\}/g,
+          (match, alt, url) => {
+            const escapedUrl = url.replace(/"/g, "&quot;");
+            const escapedAlt = (alt || "Image").replace(/"/g, "&quot;");
+
+            return `<div class="image-container my-4">
+<img src="${escapedUrl}" alt="${escapedAlt}" loading="lazy" class="max-w-48 h-auto rounded-lg shadow-sm transition-all duration-200 hover:shadow-md cursor-zoom-in" onclick="window.open('${escapedUrl}', '_blank')" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+<div style="display:none;" class="text-gray-600 dark:text-gray-400 p-4 border border-gray-300 dark:border-gray-600 rounded-lg">${escapedAlt}</div>
+</div>`;
+          }
+        )
+        // Border images: ![alt](src){.border}
+        .replace(
+          /!\[([^\]]*)\]\(([^)\s]+)\)\{\.border\}/g,
+          (match, alt, url) => {
+            const escapedUrl = url.replace(/"/g, "&quot;");
+            const escapedAlt = (alt || "Image").replace(/"/g, "&quot;");
+
+            return `<div class="image-container my-4">
+<img src="${escapedUrl}" alt="${escapedAlt}" loading="lazy" class="max-w-full h-auto rounded-lg border-2 border-gray-300 dark:border-gray-600 shadow-sm transition-all duration-200 hover:shadow-md cursor-zoom-in" onclick="window.open('${escapedUrl}', '_blank')" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+<div style="display:none;" class="text-gray-600 dark:text-gray-400 p-4 border border-gray-300 dark:border-gray-600 rounded-lg">${escapedAlt}</div>
+</div>`;
+          }
+        )
+        // Images with CSS class: ![alt](src){.class-name}
+        .replace(
+          /!\[([^\]]*)\]\(([^)\s]+)\)\{\.([^}]+)\}/g,
+          (match, alt, url, className) => {
+            const escapedUrl = url.replace(/"/g, "&quot;");
+            const escapedAlt = (alt || "Image").replace(/"/g, "&quot;");
+
+            return `<div class="image-container my-4">
+<img src="${escapedUrl}" alt="${escapedAlt}" loading="lazy" class="${className} max-w-full h-auto rounded-lg shadow-sm transition-all duration-200 hover:shadow-md cursor-zoom-in" onclick="window.open('${escapedUrl}', '_blank')" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+<div style="display:none;" class="text-gray-600 dark:text-gray-400 p-4 border border-gray-300 dark:border-gray-600 rounded-lg">${escapedAlt}</div>
+</div>`;
+          }
+        )
+        // Standard Markdown images: ![alt](src "title") - must be LAST
+        .replace(
+          /!\[([^\]]*)\]\(([^)"]+)(?:\s+"([^"]+)")?\)/g,
+          (match, alt, url, title) => {
+            const titleAttr = title ? ` title="${title}"` : "";
+            const isSvg = url.toLowerCase().endsWith(".svg");
+            const loadingAttr = isSvg ? "" : ' loading="lazy"';
+            const escapedUrl = url.replace(/"/g, "&quot;");
+            const escapedAlt = (alt || "Image").replace(/"/g, "&quot;");
+
+            return `<div class="image-container my-4">
+<img src="${escapedUrl}" alt="${escapedAlt}"${titleAttr}${loadingAttr} class="max-w-full h-auto rounded-lg shadow-sm transition-all duration-200 hover:shadow-md cursor-zoom-in" onclick="window.open('${escapedUrl}', '_blank')" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+<div style="display:none;" class="text-gray-600 dark:text-gray-400 p-4 border border-gray-300 dark:border-gray-600 rounded-lg">${escapedAlt}</div>
+</div>`;
+          }
+        )
+    );
   };
 
   // Headers (H1-H6)
@@ -274,7 +299,10 @@ function renderMarkdown(text: string): string {
     '<hr class="border-t border-gray-300 dark:border-gray-600 my-6">'
   );
 
-  // Links with title support
+  // Process images FIRST, before links (to handle clickable images)
+  html = processImages(html);
+
+  // Links with title support (after images)
   html = html.replace(
     /\[([^\]]+)\]\(([^)"]+)(?:\s+"([^"]+)")?\)/g,
     (match, text, url, title) => {
@@ -283,8 +311,8 @@ function renderMarkdown(text: string): string {
     }
   );
 
-  // Process images with enhanced features
-  html = processImages(html);
+  // Then process blockquotes
+  html = processBlockquotes(html);
 
   // Task lists
   html = html.replace(/^- \[([ x])\] (.+$)/gm, (match, checked, text) => {
@@ -314,7 +342,7 @@ function renderMarkdown(text: string): string {
       .split("\n")
       .filter((row) => row.trim());
 
-    if (rows.length < 2) return tableBlock; // Not a valid table
+    if (rows.length < 2) return tableBlock;
 
     const processedRows: string[] = [];
     let hasHeader = false;
@@ -328,7 +356,7 @@ function renderMarkdown(text: string): string {
       // Check if this is a separator row
       if (cells.every((cell) => /^:?-+:?$/.test(cell))) {
         hasHeader = true;
-        return; // Skip separator row
+        return;
       }
 
       const isHeaderRow = hasHeader && index === 0;
@@ -344,9 +372,7 @@ function renderMarkdown(text: string): string {
     });
 
     if (processedRows.length > 0) {
-      return `<table class="border-collapse border border-gray-300 dark:border-gray-600 my-4 w-full text-sm">${processedRows.join(
-        ""
-      )}</table>`;
+      return `<table class="border-collapse border border-gray-300 dark:border-gray-600 my-4 w-full text-sm">${processedRows.join("")}</table>`;
     }
 
     return tableBlock;
@@ -386,7 +412,7 @@ function renderMarkdown(text: string): string {
         line.startsWith("<hr") ||
         line.startsWith("<table") ||
         line.startsWith("<img") ||
-        line.startsWith("<div class=\"image-container\"")
+        line.startsWith('<div class="image-container"')
       ) {
         return line;
       }
