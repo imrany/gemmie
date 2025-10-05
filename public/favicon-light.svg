@@ -19,13 +19,13 @@
   <g id="light-icon">
     <svg xmlns="http://www.w3.org/2000/svg" version="1.1" xmlns:xlink="http://www.w3.org/1999/xlink" width="1000" height="1000">
       <g clip-path="url(#SvgjsClipPath1017)">
-        <rect width="1000" height="1000" fill="none"></rect>
+        <rect width="1000" height="1000" fill="#ffffff"></rect>
         <g transform="matrix(31.25,0,0,31.25,0,0)">
           <svg xmlns="http://www.w3.org/2000/svg" version="1.1" xmlns:xlink="http://www.w3.org/1999/xlink" width="32" height="32">
             <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <rect x="0.5" y="0.5" width="31" height="31" rx="1.5" fill="#000001" stroke="black"></rect>
-              <path d="M11.31 4L17.6406 16.1209H4.97935L11.31 4Z" fill="white"></path>
-              <path d="M20.6568 27.9815L14.3512 15.8447L27.0125 15.8766L20.6568 27.9815Z" fill="white"></path>
+              <rect x="0.5" y="0.5" width="31" height="31" rx="1.5" fill="#ffff" stroke="white"></rect>
+              <path d="M11.31 4L17.6406 16.1209H4.97935L11.31 4Z" fill="black"></path>
+              <path d="M20.6568 27.9815L14.3512 15.8447L27.0125 15.8766L20.6568 27.9815Z" fill="black"></path>
             </svg>
           </svg>
         </g>
@@ -40,13 +40,13 @@
   <g id="dark-icon">
     <svg xmlns="http://www.w3.org/2000/svg" version="1.1" xmlns:xlink="http://www.w3.org/1999/xlink" width="1000" height="1000">
       <g clip-path="url(#SvgjsClipPath1018)">
-        <rect width="1000" height="1000" fill="none"></rect>
+        <rect width="1000" height="1000" fill="#ffffff"></rect>
         <g transform="matrix(31.25,0,0,31.25,0,0)">
           <svg xmlns="http://www.w3.org/2000/svg" version="1.1" xmlns:xlink="http://www.w3.org/1999/xlink" width="32" height="32">
             <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <rect x="0.5" y="0.5" width="31" height="31" rx="1.5" fill="#000001" stroke="black"></rect>
-              <path d="M11.31 4L17.6406 16.1209H4.97935L11.31 4Z" fill="white"></path>
-              <path d="M20.6568 27.9815L14.3512 15.8447L27.0125 15.8766L20.6568 27.9815Z" fill="white"></path>
+              <rect x="0.5" y="0.5" width="31" height="31" rx="1.5" fill="#ffff" stroke="white"></rect>
+              <path d="M11.31 4L17.6406 16.1209H4.97935L11.31 4Z" fill="black"></path>
+              <path d="M20.6568 27.9815L14.3512 15.8447L27.0125 15.8766L20.6568 27.9815Z" fill="black"></path>
             </svg>
           </svg>
         </g>

@@ -2104,7 +2104,7 @@ onMounted(() => {
 
         <!-- Responsive Scroll to Bottom Button -->
         <button v-if="showScrollDownButton && currentMessages.length !== 0 && isAuthenticated" @click="scrollToBottom"
-          :class="isRequestLimitExceeded || shouldShowUpgradePrompt ? 'bottom-[160px]' : 'bottom-[90px]'"
+          :class="isRequestLimitExceeded || shouldShowUpgradePrompt ? 'bottom-[180px]' : 'bottom-[90px]'"
           class="fixed bg-gray-50 text-gray-500 border px-5 h-[34px] rounded-full shadow-lg hover:bg-gray-100 transition-colors z-20 left-1/2 transform -translate-x-1/2">
           <div class="flex gap-1 sm:gap-2 items-center justify-center w-full font-semibold h-full">
             <i class="pi pi-arrow-down text-center"></i>

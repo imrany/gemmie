@@ -1,523 +1,297 @@
 <script setup lang="ts">
-import { ref, onBeforeUnmount, nextTick, computed, onMounted, onUnmounted, watch } from "vue"
-import * as pdfjsLib from "pdfjs-dist"
-import pdfjsWorker from "pdfjs-dist/build/pdf.worker?url"
-import type { Ref } from "vue"
-import { WRAPPER_URL } from "@/utils/globals"
-import { inject } from "vue"
-import { useRouter } from "vue-router"
-import { renderMarkdown } from "@/utils/markdownSupport"
+import { ref, computed, onMounted, onUnmounted, watch, type Ref } from 'vue'
+import { useRouter } from 'vue-router'
+import { inject } from 'vue'
+import * as pdfjsLib from 'pdfjs-dist'
+import pdfjsWorker from 'pdfjs-dist/build/pdf.worker?url'
 
-// configure worker
+// Configure PDF.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker
 
-type UploadedFile = {
-  id: string
-  name: string
-  url: string
-  type: string
-  size: number
-  previewUrl?: string
-  pages?: number
-  uploadedAt: Date
-  isCustom?: boolean
-  content?: string
-}
+// Utils and Types
+import { renderMarkdown } from '@/utils/markdownSupport'
+import { formatFileSize } from '@/utils/formatters'
+import type { EditableContent, UploadedFile } from '@/types/document'
 
-type EditableContent = {
-  pageNum: number
-  content: string
-  originalContent: string
-  isModified: boolean
-  annotations: Annotation[]
-}
+// Composables
+import { useDocumentStore } from '@/composables/useDocumentStore'
+import { useMarkdownEditor } from '@/composables/useMarkdownEditor'
+import { useHistory } from '@/composables/useHistory'
+import { useKeyboardShortcuts } from '@/composables/useKeyboardShortcuts'
+import { useAI } from '@/composables/useAI'
+import { useSearch } from '@/composables/useSearch'
+import { useFileUpload } from '@/composables/useFileUpload'
+import { useDocumentTemplates } from '@/composables/useDocumentTemplates'
+import { useExport } from '@/composables/useExport'
+import { extractPdfContent } from '@/utils/pdfHelpers'
+import type { Theme } from 'vue-sonner/src/packages/types.js'
 
-type Annotation = {
-  id: string
-  type: 'highlight' | 'note' | 'bookmark'
-  text: string
-  startIndex: number
-  endIndex: number
-  color: string
-  note?: string
-  timestamp: Date
-}
-
-type SearchResult = {
-  pageNum: number
-  text: string
-  index: number
-}
-
-type AIAction = 'summarize' | 'expand' | 'simplify' | 'translate' | 'paraphrase' | 'improve' | 'explain'
-
-type HistoryEntry = {
-  content: string
-  timestamp: number
-  action?: string
-}
-
+// Global state
 const globalState = inject('globalState') as {
-  screenWidth: number
+  screenWidth: number,
+  toggleTheme: () => void
+  isDarkMode: Ref<boolean>,
+  currentTheme: Ref<Theme>
 }
 const {
-  screenWidth
-}=globalState;
+  screenWidth,
+  isDarkMode,
+  toggleTheme,
+  currentTheme
+} = globalState
+const router = useRouter()
 
-const router=useRouter()
-const uploadedFiles = ref<UploadedFile[]>([])
-const selectedPdfUrl = ref("")
-const selectedPdfName = ref("")
-const selectedFileId = ref("")
-const isDragOver = ref(false)
-const showExportDropdown = ref(false)
+// Window dimensions
+const innerWidth = window.innerWidth
+const innerHeight = window.innerHeight
 
-// PDF Editor state
+// ============================================
+// CORE STATE
+// ============================================
+const selectedPdfUrl = ref('')
+const selectedPdfName = ref('')
 const currentPage = ref(1)
 const totalPages = ref(0)
 const editablePages = ref<EditableContent[]>([])
 const isLoading = ref(false)
 const loadError = ref<string>('')
-const fontSize = ref(14)
-const lineHeight = ref(1.5)
-
-// Sidebar state
-const sidebarOpen = ref(true)
-const activeSidebarTab = ref<'outline' | 'search' | 'annotations' | 'history' | 'documents' | any>('documents')
-
-// Text selection state
-const selectedText = ref('')
-const showContextMenu = ref(false)
-
-const innerWidth=window.innerWidth
-const innerHeight = window.innerHeight
-
-const sidebarWidth = ref(290) // default width
-const isResizingSidebar = ref(false)
-const maxSidebarWidth = 350 // max width constraint
-
-// Search functionality
-const searchQuery = ref('')
-const searchResults = ref<SearchResult[]>([])
-const currentSearchIndex = ref(0)
-
-const showAIPopover = ref(false)
-const aiPopoverPosition = ref({ x: 0, y: 0 })
-const aiPopoverContent = ref('')
-const isLoadingAIPopover = ref(false)
-
-const isDraggingAISuggestions = ref(false)
-const isDraggingAIPopover = ref(false)
-const dragOffset = ref({ x: 0, y: 0 })
-
-// History
-const editHistory = ref<Array<{ action: string, pageNum: number, timestamp: Date, preview: string }>>([])
-
-// Undo/Redo functionality
-const undoHistory = ref<HistoryEntry[]>([])
-const redoHistory = ref<HistoryEntry[]>([])
-const maxHistorySize = 100
-
-// Preview state
-const showPreview = ref(false)
-const previewContent = ref('')
-
-// Create New Document Modal
-const documentTemplates = ref([
-  {
-    id: 'blank',
-    name: 'Blank Document',
-    icon: '📄',
-    content: '# New Document\n\nStart writing here...'
-  },
-  {
-    id: 'meeting-notes',
-    name: 'Meeting Notes',
-    icon: '📝',
-    content: '# Meeting Notes\n\n**Date:** \n**Attendees:** \n\n## Agenda\n- \n\n## Discussion\n\n## Action Items\n- [ ] \n\n## Next Steps\n'
-  },
-  {
-    id: 'project-plan',
-    name: 'Project Plan',
-    icon: '📋',
-    content: '# Project Plan\n\n## Overview\n\n## Objectives\n- \n\n## Timeline\n\n## Resources\n\n## Milestones\n- [ ] \n\n## Risks\n'
-  },
-  {
-    id: 'blog-post',
-    name: 'Blog Post',
-    icon: '✍️',
-    content: '# Blog Post Title\n\n## Introduction\n\n## Main Content\n\n### Section 1\n\n### Section 2\n\n## Conclusion\n\n---\n*Published on [Date]*'
-  },
-  {
-    id: 'research-notes',
-    name: 'Research Notes',
-    icon: '🔬',
-    content: '# Research Notes\n\n**Topic:** \n**Date:** \n**Sources:** \n\n## Key Findings\n\n## Quotes\n> \n\n## Questions\n- \n\n## Next Steps\n'
-  }
-])
-
-function createDocumentFromTemplate(template: any) {
-  const newDoc = {
-    id: `doc-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-    name: `${template.name}.md`,
-    url: 'custom',
-    type: 'text/markdown',
-    size: new Blob([template.content]).size,
-    uploadedAt: new Date(),
-    isCustom: true,
-    content: template.content
-  }
-
-  uploadedFiles.value.push(newDoc)
-  saveToLocalStorage()
-  openTextEditor(newDoc)
-}
-
-// AI Features state
-const showAIModal = ref(false)
-const aiContent = ref('')
-const originalTextForAI = ref('')
-const isGeneratingAI = ref(false)
-const currentAIAction = ref<AIAction>('summarize')
-const showAISuggestions = ref(false)
-const aiSuggestionsPosition = ref({ x: 0, y: 0 })
-
-// Auto-save state
 const hasUnsavedChanges = ref(false)
 const autoSaveTimer = ref<any | null>(null)
 
-// Editor state
+// ============================================
+// UI STATE
+// ============================================
+const activeDocumentMenu = ref<string | null>(null)
+const imageMenuOpen = ref(false)
+const sidebarOpen = ref(true)
+const activeSidebarTab = ref<'outline' | 'search' | 'annotations' | 'history' | 'documents' | string>('documents')
+const sidebarWidth = ref(290)
+const isResizingSidebar = ref(false)
+const maxSidebarWidth = 350
 const editorMode = ref<'edit' | 'preview' | 'split'>('edit')
 const showMarkdownToolbar = ref(true)
+const fontSize = ref(14)
+const lineHeight = ref(1.5)
+const selectedText = ref('')
 
-// AI Suggestions
-const aiSuggestions = ref([
-  {
-    icon: '📝',
-    label: 'Summarize',
-    action: 'summarize',
-    description: 'Create a concise summary',
-    shortcut: 'Ctrl+Shift+S'
-  },
-  {
-    icon: '🔍',
-    label: 'Expand',
-    action: 'expand',
-    description: 'Elaborate on the selected text',
-    shortcut: 'Ctrl+Shift+E'
-  },
-  {
-    icon: '✨',
-    label: 'Improve',
-    action: 'improve',
-    description: 'Enhance writing quality',
-    shortcut: 'Ctrl+Shift+I'
-  },
-  {
-    icon: '📖',
-    label: 'Simplify',
-    action: 'simplify',
-    description: 'Make text easier to understand',
-    shortcut: 'Ctrl+Shift+P'
-  },
-  {
-    icon: '🔄',
-    label: 'Paraphrase',
-    action: 'paraphrase',
-    description: 'Rewrite in different words',
-    shortcut: 'Ctrl+Shift+R'
-  },
-  {
-    icon: '🌐',
-    label: 'Translate',
-    action: 'translate',
-    description: 'Translate to different language',
-    shortcut: 'Ctrl+Shift+T'
+// ============================================
+// INITIALIZE COMPOSABLES
+// ============================================
+
+// Document store
+const documentStore = useDocumentStore()
+const { uploadedFiles, selectedFileId } = documentStore
+
+// Helper function for current page content
+function getCurrentPageContent(): EditableContent {
+  const pageIndex = currentPage.value - 1
+  return pageIndex >= 0 && pageIndex < editablePages.value.length
+    ? editablePages.value[pageIndex]
+    : {
+      annotations: [],
+      content: "",
+      isModified: false,
+      originalContent: "",
+      pageNum: 0
+    }
+}
+
+// History
+const history = useHistory(
+  editablePages,
+  currentPage,
+  getCurrentPageContent,
+  (content: string, saveHistory: boolean) => {
+    const pageIndex = currentPage.value - 1
+    if (pageIndex >= 0 && pageIndex < editablePages.value.length) {
+      if (saveHistory && editablePages.value[pageIndex].content !== content) {
+        history.saveToHistory()
+      }
+      editablePages.value[pageIndex].content = content
+      editablePages.value[pageIndex].isModified =
+        content !== editablePages.value[pageIndex].originalContent
+    }
   }
-])
+)
 
-// Computed properties
-const hasSearchResults = computed(() => searchResults.value.length > 0)
+const {
+  editHistory
+} = history
+
+// Markdown editor
+const markdownEditor = useMarkdownEditor(
+  editablePages,
+  currentPage,
+  history.saveToHistory
+)
+
+// AI features
+const ai = useAI()
+
+// Search
+const search = useSearch(editablePages)
+
+// File upload
+const fileUpload = useFileUpload(
+  uploadedFiles,
+  documentStore.addFile,
+  openPdfEditor
+)
+
+// Templates
+const templates = useDocumentTemplates(
+  documentStore.addFile,
+  openTextEditor
+)
+
+// Export
+const exportUtils = useExport(
+  editablePages,
+  selectedPdfName,
+  totalPages
+)
+
+// ============================================
+// KEYBOARD SHORTCUTS
+// ============================================
+const shortcuts = useKeyboardShortcuts({
+  undo: history.undo,
+  redo: history.redo,
+  insertBold: markdownEditor.insertBold,
+  insertItalic: markdownEditor.insertItalic,
+  insertStrikethrough: markdownEditor.insertStrikethrough,
+  insertCode: markdownEditor.insertCode,
+  insertLink: markdownEditor.insertLink,
+  insertHeader: markdownEditor.insertHeader,
+  insertList: markdownEditor.insertList,
+  insertNumberedList: markdownEditor.insertNumberedList,
+  insertTaskList: markdownEditor.insertTaskList,
+  insertQuote: markdownEditor.insertQuote,
+  insertCodeBlock: markdownEditor.insertCodeBlock,
+  insertImage: markdownEditor.insertImage,
+  insertHighlight: markdownEditor.insertHighlight,
+  insertHorizontalRule: markdownEditor.insertHorizontalRule,
+  insertTable: markdownEditor.insertTable,
+  saveDocument: saveDocumentChanges,
+  showAIToolbar: ai.showAIToolbar,
+  handleAIShortcut: (action: string) => {
+    const selection = window.getSelection()
+    const selectedTextValue = selection?.toString().trim()
+    if (selectedTextValue) {
+      ai.performAIAction(action as any, selectedTextValue)
+    } else {
+      const currentPageData = getCurrentPageContent()
+      if (currentPageData) {
+        ai.performAIAction(action as any, currentPageData.content)
+      }
+    }
+  }
+})
+
+// ============================================
+// COMPUTED PROPERTIES
+// ============================================
+const { canUndo, canRedo } = history
+const { hasSearchResults } = search
+
 const allAnnotations = computed(() =>
   editablePages.value.flatMap(page =>
     page.annotations.map(ann => ({ ...ann, pageNum: page.pageNum }))
   )
 )
 
-const canUndo = computed(() => undoHistory.value.length > 0)
-const canRedo = computed(() => redoHistory.value.length > 0)
-
 const renderedMarkdown = computed(() => {
   const currentPageData = getCurrentPageContent()
   if (!currentPageData) return ''
-  return renderMarkdown(currentPageData.content)
+  
+  const rawHtml = renderMarkdown(currentPageData.content)
+  return rawHtml
 })
 
-// Local storage keys
-const STORAGE_KEY = 'pdf_editor_documents'
-const CURRENT_DOCUMENT_KEY = 'pdf_editor_current_document'
+// ============================================
+// EXPOSED FUNCTIONS (from composables)
+// ============================================
 
-// Watch for changes to trigger auto-save
-watch([editablePages], () => {
-  hasUnsavedChanges.value = editablePages.value.some(page => page.isModified)
-  if (hasUnsavedChanges.value) {
-    scheduleAutoSave()
-  }
-}, { deep: true })
+// Markdown functions
+const {
+  insertBold,
+  insertItalic,
+  insertStrikethrough,
+  insertHighlight,
+  insertCode,
+  insertCodeBlock,
+  insertLink,
+  insertImage,
+  insertHeader,
+  insertList,
+  insertNumberedList,
+  insertTaskList,
+  insertQuote,
+  insertTable,
+  insertHorizontalRule,
+  updatePageContent,
+  insertImageWithTitle,
+  insertImageWithDimensions,
+  insertImageCentered,
+  insertImageSmall,
+  insertImageWithBorder,
+  insertImageLink,
+} = markdownEditor
 
-/**
- * Undo/Redo functionality
- */
-function saveToHistory() {
-  const currentPageData = getCurrentPageContent()
-  if (!currentPageData) return
+// History functions
+const { undo, redo, addToHistory } = history
 
-  const historyEntry: HistoryEntry = {
-    content: currentPageData.content,
-    timestamp: Date.now()
-  }
+// Search functions
+const { searchQuery, searchResults, currentSearchIndex, performSearch } = search
 
-  undoHistory.value.push(historyEntry)
-  redoHistory.value = [] // Clear redo history when new change is made
+// File upload
+const { isDragOver, handleFileUpload, handleDragOver, handleDragLeave, handleDrop } = fileUpload
 
-  // Limit history size
-  if (undoHistory.value.length > maxHistorySize) {
-    undoHistory.value.shift()
-  }
-}
+// Templates
+const { documentTemplates, createDocumentFromTemplate } = templates
 
-function undo() {
-  if (!canUndo.value) return
+// Export
+const {
+  showPreview,
+  previewContent,
+  showExportDropdown,
+  generatePreview,
+  closePreview,
+  downloadAsText,
+  downloadAsMarkdown,
+  toggleExportDropdown,
+  closeExportDropdown
+} = exportUtils
 
-  const currentPageData = getCurrentPageContent()
-  if (!currentPageData) return
+// AI
+const {
+  showAIModal,
+  aiContent,
+  originalTextForAI,
+  isGeneratingAI,
+  currentAIAction,
+  showAISuggestions,
+  aiSuggestionsPosition,
+  showAIPopover,
+  aiPopoverPosition,
+  aiPopoverContent,
+  isLoadingAIPopover,
+  aiSuggestions,
+  performAIAction,
+  hideAISuggestions
+} = ai
 
-  // Save current state to redo history
-  redoHistory.value.push({
-    content: currentPageData.content,
-    timestamp: Date.now()
-  })
-
-  // Restore previous state
-  const previousState = undoHistory.value.pop()!
-  updatePageContent(previousState.content, false) // Don't save to history
-
-  addToHistory('Undo', 'Undid last change')
-}
-
-function redo() {
-  if (!canRedo.value) return
-
-  const currentPageData = getCurrentPageContent()
-  if (!currentPageData) return
-
-  // Save current state to undo history
-  undoHistory.value.push({
-    content: currentPageData.content,
-    timestamp: Date.now()
-  })
-
-  // Restore next state
-  const nextState = redoHistory.value.pop()!
-  updatePageContent(nextState.content, false) // Don't save to history
-
-  addToHistory('Redo', 'Redid last change')
-}
-
-/**
- * Markdown Toolbar Actions
- */
-function insertMarkdown(before: string, after: string = '', placeholder: string = '') {
-  const textarea = document.querySelector('textarea') as HTMLTextAreaElement
-  if (!textarea) return
-
-  const start = textarea.selectionStart
-  const end = textarea.selectionEnd
-  const selectedText = textarea.value.substring(start, end)
-  const replacement = selectedText || placeholder
-
-  const newText = before + replacement + after
-  const newContent = textarea.value.substring(0, start) + newText + textarea.value.substring(end)
-
-  saveToHistory()
-  updatePageContent(newContent)
-
-  // Restore cursor position
-  nextTick(() => {
-    textarea.focus()
-    if (selectedText) {
-      textarea.setSelectionRange(start + before.length, start + before.length + replacement.length)
-    } else {
-      textarea.setSelectionRange(start + before.length, start + before.length + placeholder.length)
-    }
-  })
-}
-
-function insertBold() {
-  insertMarkdown('**', '**', 'bold text')
-}
-
-function insertItalic() {
-  insertMarkdown('*', '*', 'italic text')
-}
-
-function insertCode() {
-  insertMarkdown('`', '`', 'code')
-}
-
-function insertLink() {
-  insertMarkdown('[', '](url)', 'link text')
-}
-
-function insertHeader(level: number) {
-  const prefix = '#'.repeat(level) + ' '
-  insertMarkdown(prefix, '', `Header ${level}`)
-}
-
-function insertList() {
-  insertMarkdown('- ', '', 'List item')
-}
-
-function insertNumberedList() {
-  insertMarkdown('1. ', '', 'List item')
-}
-
-function insertQuote() {
-  insertMarkdown('> ', '', 'Quote text')
-}
-
-function insertTable() {
-  const tableTemplate = `| Column 1 | Column 2 | Column 3 |
-|----------|----------|----------|
-| Row 1    | Data     | Data     |
-| Row 2    | Data     | Data     |`
-
-  const textarea = document.querySelector('textarea') as HTMLTextAreaElement
-  if (!textarea) return
-
-  const start = textarea.selectionStart
-  saveToHistory()
-  const newContent = textarea.value.substring(0, start) + tableTemplate + textarea.value.substring(start)
-  updatePageContent(newContent)
-}
-
-/**
- * Keyboard shortcuts
- */
-function handleEditorKeydown(event: KeyboardEvent) {
-  // Handle undo/redo
-  if (event.ctrlKey || event.metaKey) {
-    switch (event.key) {
-      case 'z':
-        if (event.shiftKey) {
-          event.preventDefault()
-          redo()
-        } else {
-          event.preventDefault()
-          undo()
-        }
-        break
-      case 'y':
-        event.preventDefault()
-        redo()
-        break
-      case 'b':
-        event.preventDefault()
-        insertBold()
-        break
-      case 'i':
-        event.preventDefault()
-        insertItalic()
-        break
-      case 'k':
-        event.preventDefault()
-        insertLink()
-        break
-      case 's':
-        event.preventDefault()
-        saveDocumentChanges()
-        break
-    }
-  }
-
-  // AI Suggestions trigger (Ctrl + /)
-  if (event.key === '/' && event.ctrlKey) {
-    event.preventDefault()
-    showAIToolbar()
-  }
-
-  // AI Shortcuts
-  if (event.ctrlKey && event.shiftKey) {
-    switch (event.key) {
-      case 'S':
-        event.preventDefault()
-        handleAIShortcut('summarize')
-        break
-      case 'E':
-        event.preventDefault()
-        handleAIShortcut('expand')
-        break
-      case 'I':
-        event.preventDefault()
-        handleAIShortcut('improve')
-        break
-      case 'P':
-        event.preventDefault()
-        handleAIShortcut('simplify')
-        break
-      case 'R':
-        event.preventDefault()
-        handleAIShortcut('paraphrase')
-        break
-      case 'T':
-        event.preventDefault()
-        handleAIShortcut('translate')
-        break
-    }
-  }
-}
-
-/**
- * AI Integration
- */
-async function handlePrompt(prompt: string) {
-  try {
-    const response = await fetch(WRAPPER_URL, {
-      method: "POST",
-      body: JSON.stringify(prompt),
-      headers: { "content-type": "application/json" }
-    })
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-    }
-
-    const parseRes = await response.json()
-    return parseRes
-  } catch (err: any) {
-    console.error('AI request failed:', err)
-    throw err
-  }
-}
-
-function getAIPrompt(action: AIAction, text: string): string {
-  const prompts = {
-    summarize: `Please provide a concise summary of the following text. Focus on the main points and key ideas:\n\n"${text}"`,
-    expand: `Please expand on the following text by adding more details, examples, and explanations:\n\n"${text}"`,
-    simplify: `Please simplify the following text to make it easier to understand while keeping the core meaning:\n\n"${text}"`,
-    translate: `Please translate the following text to English (if not already) and provide the translation:\n\n"${text}"`,
-    paraphrase: `Please paraphrase the following text using different words and sentence structures while preserving the original meaning:\n\n"${text}"`,
-    improve: `Please improve the following text by enhancing clarity, grammar, and overall writing quality:\n\n"${text}"`,
-    explain: `Please explain the following text in simple terms, breaking down complex concepts:\n\n"${text}"`
-  }
-  return prompts[action]
-}
-
+// ============================================
+// AI MODAL FUNCTIONS
+// ============================================
 function saveAIContent() {
   const currentPageData = getCurrentPageContent()
   if (currentPageData && aiContent.value.trim()) {
-    saveToHistory()
-    const newContent = currentPageData.content.replace(originalTextForAI.value, aiContent.value.trim())
+    history.saveToHistory()
+    const newContent = currentPageData.content.replace(
+      originalTextForAI.value,
+      aiContent.value.trim()
+    )
     updatePageContent(newContent)
     addToHistory(`AI ${currentAIAction.value}`, `Applied ${currentAIAction.value} to selected text`)
   }
@@ -535,192 +309,144 @@ function closeAIModal() {
   isGeneratingAI.value = false
 }
 
-// Simplified AI Suggestions drag handling
-function startSuggestionsDrag(event: MouseEvent | any) {
-  event.preventDefault()
-  event.stopPropagation()
-
-  isDraggingAISuggestions.value = true
-  
-  const rect = event?.currentTarget?.closest('.ai-suggestions').getBoundingClientRect()
-  dragOffset.value = {
-    x: event.clientX - rect.left,
-    y: event.clientY - rect.top
+// ============================================
+// DOCUMENT MANAGEMENT
+// ============================================
+async function openPdfEditor(file: UploadedFile) {
+  if (file.isCustom) {
+    openTextEditor(file)
+    return
   }
 
-  document.addEventListener('mousemove', handleSuggestionsDrag)
-  document.addEventListener('mouseup', stopSuggestionsDrag)
-}
+  selectedPdfUrl.value = file.url
+  selectedPdfName.value = file.name
+  selectedFileId.value = file.id
+  documentStore.saveCurrentDocument()
 
-function handleSuggestionsDrag(event: MouseEvent) {
-  if (!isDraggingAISuggestions.value) return
-  
-  event.preventDefault()
+  isLoading.value = true
+  loadError.value = ''
 
-  let newX = event.clientX - dragOffset.value.x
-  let newY = event.clientY - dragOffset.value.y
-
-  // Viewport constraints
-  const viewport = {
-    width: window.innerWidth,
-    height: window.innerHeight
-  }
-  
-  // Constrain to viewport
-  newX = Math.max(10, Math.min(newX, viewport.width - 290))
-  newY = Math.max(10, Math.min(newY, viewport.height - 250))
-
-  aiSuggestionsPosition.value = { x: newX, y: newY }
-}
-
-function stopSuggestionsDrag() {
-  isDraggingAISuggestions.value = false
-  document.removeEventListener('mousemove', handleSuggestionsDrag)
-  document.removeEventListener('mouseup', stopSuggestionsDrag)
-}
-
-// Simplified version - remove the complex startDrag function and replace with:
-function startDrag(event:MouseEvent, component:string) {
-  // Only handle popover now, since suggestions has its own handler
-  if (component !== 'popover') return
-  
-  const target:any = event.target
-  const isDragHandle = target.classList.contains('drag-handle') || target.closest('.drag-handle')
-
-  if (!isDragHandle) return
-
-  event.preventDefault()
-  event.stopPropagation()
-
-  isDraggingAIPopover.value = true
-  
-  dragOffset.value = {
-    x: event.clientX - aiPopoverPosition.value.x,
-    y: event.clientY - aiPopoverPosition.value.y
-  }
-
-  const handleMouseMove = (e:MouseEvent) => {
-    if (!isDraggingAIPopover.value) return
-    
-    e.preventDefault()
-    let newX = e.clientX - dragOffset.value.x
-    let newY = e.clientY - dragOffset.value.y
-
-    const viewport = {
-      width: window.innerWidth,
-      height: window.innerHeight
-    }
-    
-    newX = Math.max(10, Math.min(newX, viewport.width - 320 - 10))
-    newY = Math.max(10, Math.min(newY, viewport.height - 200 - 10))
-
-    aiPopoverPosition.value = { x: newX, y: newY }
-  }
-  
-  const handleMouseUp = () => {
-    isDraggingAIPopover.value = false
-    document.removeEventListener('mousemove', handleMouseMove)
-    document.removeEventListener('mouseup', handleMouseUp)
-  }
-  
-  document.addEventListener('mousemove', handleMouseMove)
-  document.addEventListener('mouseup', handleMouseUp)
-}
-
-// Sidebar resize functionality
-function startSidebarResize() {
-  isResizingSidebar.value = true
-  document.addEventListener('mousemove', handleSidebarResize)
-  document.addEventListener('mouseup', stopSidebarResize)
-}
-
-function handleSidebarResize(event: MouseEvent) {
-  if (!isResizingSidebar.value) return
-
-  const newWidth = event.clientX
-  // Constrain between min and max widths
-  sidebarWidth.value = Math.max(290, Math.min(newWidth, maxSidebarWidth))
-}
-
-function stopSidebarResize() {
-  isResizingSidebar.value = false
-}
-
-/**
- * Textarea AI Support
- */
-function handleTextareaKeydown(event: KeyboardEvent) {
-  handleEditorKeydown(event)
-}
-
-function handleAIShortcut(action: AIAction) {
-  const selection = window.getSelection()
-  const selectedTextValue = selection?.toString().trim()
-
-  if (selectedTextValue) {
-    selectedText.value = selectedTextValue
-    performAIAction(action, selectedTextValue)
-  } else {
-    // If no text selected, use the entire content
-    const currentPageData = getCurrentPageContent()
-    if (currentPageData) {
-      performAIAction(action, currentPageData.content)
-    }
+  try {
+    const pages = await extractPdfContent(file.url)
+    editablePages.value = pages
+    totalPages.value = pages.length
+    currentPage.value = 1
+    history.clearHistory()
+    search.clearSearch()
+  } catch (error: any) {
+    loadError.value = `Failed to extract PDF content: ${error.message}`
+  } finally {
+    isLoading.value = false
   }
 }
 
-function showAIToolbar() {
-  const textarea = document.querySelector('textarea')
-  if (!textarea) return
+function openTextEditor(doc: UploadedFile) {
+  selectedPdfUrl.value = doc.url
+  selectedPdfName.value = doc.name
+  selectedFileId.value = doc.id
+  documentStore.saveCurrentDocument()
 
-  const rect = textarea.getBoundingClientRect()
-
-  // Position in center of visible textarea area
-  aiSuggestionsPosition.value = {
-    x: rect.left + (rect.width / 2) - 140, // Half of component width (280px)
-    y: rect.top + (rect.height / 2) - 100  // Rough center
+  const pageContent: EditableContent = {
+    pageNum: 1,
+    content: doc.content || `# Welcome to ${doc.name}\n\nStart writing...`,
+    originalContent: doc.content || '',
+    isModified: false,
+    annotations: []
   }
 
-  // Ensure it stays within viewport
-  const viewport = {
-    width: window.innerWidth,
-    height: window.innerHeight
-  }
-
-  // Adjust horizontal position
-  if (aiSuggestionsPosition.value.x < 10) {
-    aiSuggestionsPosition.value.x = 10
-  } else if (aiSuggestionsPosition.value.x + 280 > viewport.width - 10) {
-    aiSuggestionsPosition.value.x = viewport.width - 290
-  }
-
-  // Adjust vertical position
-  if (aiSuggestionsPosition.value.y < 10) {
-    aiSuggestionsPosition.value.y = 10
-  } else if (aiSuggestionsPosition.value.y + 200 > viewport.height - 10) {
-    aiSuggestionsPosition.value.y = viewport.height - 210
-  }
-
-  showAISuggestions.value = true
+  editablePages.value = [pageContent]
+  currentPage.value = 1
+  totalPages.value = 1
+  history.clearHistory()
+  search.clearSearch()
+  hasUnsavedChanges.value = false
 }
 
-function hideAISuggestions() {
-  showAISuggestions.value = false
-}
+function closeEditor() {
+  if (hasUnsavedChanges.value) {
+    saveDocumentChanges()
+  }
 
-function selectAISuggestion(suggestion: typeof aiSuggestions.value[0]) {
+  selectedPdfUrl.value = ""
+  selectedPdfName.value = ""
+  selectedFileId.value = ""
+  editablePages.value = []
+  currentPage.value = 1
+  totalPages.value = 0
+  history.clearHistory()
+  search.clearSearch()
   hideAISuggestions()
-  handleAIShortcut(suggestion.action as AIAction)
+
+  if (autoSaveTimer.value) {
+    clearTimeout(autoSaveTimer.value)
+    autoSaveTimer.value = null
+  }
+
+  documentStore.clearCurrentDocument()
 }
 
-/**
- * Auto-save functionality
- */
+function removeFile(id: string) {
+  if (selectedFileId.value === id) {
+    closeEditor()
+  }
+  documentStore.removeFile(id)
+}
+
+// ============================================
+// PAGE MANAGEMENT
+// ============================================
+function goToPage(pageNum: number) {
+  if (pageNum >= 1 && pageNum <= totalPages.value) {
+    currentPage.value = pageNum
+  }
+}
+
+function previousPage() {
+  goToPage(currentPage.value - 1)
+}
+
+function nextPage() {
+  goToPage(currentPage.value + 1)
+}
+
+function goToSearchResult(index: number) {
+  search.goToSearchResult(index, goToPage)
+}
+
+function resetPageContent() {
+  const pageIndex = currentPage.value - 1
+  if (pageIndex >= 0 && pageIndex < editablePages.value.length) {
+    history.saveToHistory()
+    editablePages.value[pageIndex].content = editablePages.value[pageIndex].originalContent
+    editablePages.value[pageIndex].isModified = false
+    editablePages.value[pageIndex].annotations = []
+    addToHistory('Reset page', `Reset page ${currentPage.value} to original`)
+  }
+}
+
+function resetAllContent() {
+  history.saveToHistory()
+  editablePages.value.forEach(page => {
+    page.content = page.originalContent
+    page.isModified = false
+    page.annotations = []
+  })
+  hasUnsavedChanges.value = false
+  history.clearHistory()
+  addToHistory('Reset all', 'Reset all pages to original')
+}
+
+function getModifiedPagesCount(): number {
+  return editablePages.value.filter(page => page.isModified).length
+}
+
+// ============================================
+// AUTO-SAVE
+// ============================================
 function scheduleAutoSave() {
   if (autoSaveTimer.value) {
     clearTimeout(autoSaveTimer.value)
   }
-
   autoSaveTimer.value = setTimeout(() => {
     saveDocumentChanges()
   }, 2000)
@@ -736,7 +462,7 @@ function saveDocumentChanges() {
     uploadedFiles.value[fileIndex].size = new Blob([allContent]).size
   }
 
-  saveToLocalStorage()
+  documentStore.saveToLocalStorage()
   hasUnsavedChanges.value = false
 
   editablePages.value.forEach(page => {
@@ -745,671 +471,199 @@ function saveDocumentChanges() {
   })
 }
 
-/**
- * Local Storage Management
- */
-function saveToLocalStorage() {
-  try {
-    const documentsData = uploadedFiles.value.map(file => ({
-      ...file,
-      url: file.url.startsWith('blob:') && !file.isCustom ? '' : file.url,
-      content: file.isCustom ? file.content : undefined
-    }))
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(documentsData))
-  } catch (error) {
-    console.warn('Failed to save to localStorage:', error)
-  }
+// ============================================
+// EVENT HANDLERS
+// ============================================
+function handleTextareaKeydown(event: KeyboardEvent) {
+  shortcuts.handleEditorKeydown(event)
 }
 
-function loadFromLocalStorage() {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY)
-    if (stored) {
-      const documentsData = JSON.parse(stored)
-      uploadedFiles.value = documentsData.map((doc: any) => ({
-        ...doc,
-        uploadedAt: new Date(doc.uploadedAt)
-      }))
-    }
+function handleTextareaContextMenu(event: MouseEvent) {
+  event.preventDefault()
 
-    const currentDocId = localStorage.getItem(CURRENT_DOCUMENT_KEY)
-    if (currentDocId) {
-      const lastOpenedDoc = uploadedFiles.value.find(file => file.id === currentDocId)
-      if (lastOpenedDoc) {
-        setTimeout(() => openPdfEditor(lastOpenedDoc), 100)
-      }
-    }
-  } catch (error) {
-    console.warn('Failed to load from localStorage:', error)
-  }
-}
+  const textarea = event.target as HTMLTextAreaElement
+  const selection = window.getSelection()
+  const selectedTextValue = selection?.toString().trim()
 
-function saveCurrentDocument() {
-  if (selectedFileId.value) {
-    localStorage.setItem(CURRENT_DOCUMENT_KEY, selectedFileId.value)
-  }
-}
+  // Use selected text if available, otherwise use all content
+  const textToUse = selectedTextValue || getCurrentPageContent()?.content || ''
 
-function openTextEditor(doc: UploadedFile) {
-  selectedPdfUrl.value = doc.url
-  selectedPdfName.value = doc.name
-  selectedFileId.value = doc.id
-  isLoading.value = false
-  loadError.value = ''
-
-  saveCurrentDocument()
-
-  const pageContent: EditableContent = {
-    pageNum: 1,
-    content: doc.content || `# Welcome to ${doc.name}\n\nStart writing your content here...\n\n## Features\n\n- **Markdown support** with live preview\n- *Italic* and **bold** text\n- \`Code snippets\`\n- > Blockquotes\n- Lists and more!\n\nPress **Ctrl+/** for AI assistance.`,
-    originalContent: doc.content || '',
-    isModified: false,
-    annotations: []
+  if (!textToUse || textToUse.length < 3) {
+    return // Don't show menu for empty or very short text
   }
 
-  editablePages.value = [pageContent]
-  currentPage.value = 1
-  totalPages.value = 1
-  editHistory.value = []
-  searchResults.value = []
-  searchQuery.value = ''
-  hasUnsavedChanges.value = false
-  undoHistory.value = []
-  redoHistory.value = []
-}
+  selectedText.value = textToUse
 
-
-function handleTextSelection(event: Event) {
-  if (event.type === 'keyup') return
-
-  setTimeout(() => {
-    const selection: any = window.getSelection()
-    const selectedTextValue = selection?.toString().trim()
-
-    if (selectedTextValue && selectedTextValue.length > 3) {
-      selectedText.value = selectedTextValue
-      const range = selection.getRangeAt(0)
-      const rect = range.getBoundingClientRect()
-      const scrollX = window.pageXOffset || document.documentElement.scrollLeft
-      const scrollY = window.pageYOffset || document.documentElement.scrollTop
-
-      // Viewport constraints
-      const viewport = {
-        width: window.innerWidth,
-        height: window.innerHeight
-      }
-
-      // Component dimensions
-      const popupWidth = 280
-      const popupHeight = 200
-
-      // Start with position below and centered on selection
-      let x = rect.left + (rect.width / 2) - (popupWidth / 2)
-      let y = rect.bottom + 10
-
-      // Adjust horizontal positioning
-      if (x + popupWidth > viewport.width - 10) {
-        // Too far right - align with right edge of viewport
-        x = viewport.width - popupWidth - 10
-      }
-      if (x < 10) {
-        // Too far left - align with left edge of viewport
-        x = 10
-      }
-
-      // If horizontal positioning is extreme, center in viewport
-      if (x < viewport.width * 0.1 || x > viewport.width * 0.7) {
-        x = (viewport.width / 2) - (popupWidth / 2)
-      }
-
-      // Adjust vertical positioning
-      if (y + popupHeight > viewport.height - 10) {
-        // Too far down - show above selection instead
-        y = rect.top - popupHeight - 10
-      }
-
-      // If still outside viewport vertically, position at vertical center
-      if (y < 10 || y + popupHeight > viewport.height - 10) {
-        y = (viewport.height / 2) - (popupHeight / 2)
-      }
-
-      // Final bounds check
-      x = Math.max(10, Math.min(x, viewport.width - popupWidth - 10))
-      y = Math.max(10, Math.min(y, viewport.height - popupHeight - 10))
-
-      aiSuggestionsPosition.value = { 
-        x: x + scrollX, 
-        y: y + scrollY 
-      }
-      showAISuggestions.value = true
-    } else {
-      showAISuggestions.value = false
-    }
-  }, 100)
-}
-
-
-async function performAIAction(action: AIAction, text: string) {
-  if (!text.trim()) return
-
-  // Position popover near the current cursor/selection
-  const selection: any = window.getSelection()
-  let x = window.innerWidth / 2 - 160 // Center horizontally by default
-  let y = window.innerHeight / 2 - 100 // Center vertically by default
-
-  if (selection?.rangeCount > 0) {
-    const range = selection.getRangeAt(0)
-    const rect = range.getBoundingClientRect()
-
-    // Try to position to the right of selection
-    x = rect.right + 20
-    y = rect.top
-
-    // Viewport constraints
-    const viewport = {
-      width: window.innerWidth,
-      height: window.innerHeight
-    }
-
-    // If too far right, position to the left
-    if (x + 320 > viewport.width - 10) {
-      x = rect.left - 330
-    }
-
-    // If still off-screen, center horizontally
-    if (x < 10) {
-      x = viewport.width / 2 - 160
-    }
-
-    // Vertical adjustments
-    if (y + 300 > viewport.height - 10) {
-      y = viewport.height - 310
-    }
-    if (y < 10) {
-      y = 10
-    }
+  // Position the popup near the mouse cursor
+  const viewport = {
+    width: window.innerWidth,
+    height: window.innerHeight
   }
 
-  aiPopoverPosition.value = { x, y }
-  showAIPopover.value = true
-  isLoadingAIPopover.value = true
-  aiPopoverContent.value = ''
-  originalTextForAI.value = text
-  currentAIAction.value = action
+  const popupWidth = 280
+  const popupHeight = 350
+
+  let x = event.clientX
+  let y = event.clientY + 10
+
+  // Keep popup within viewport
+  if (x + popupWidth > viewport.width - 10) {
+    x = viewport.width - popupWidth - 10
+  }
+  if (x < 10) {
+    x = 10
+  }
+
+  if (y + popupHeight > viewport.height - 10) {
+    y = event.clientY - popupHeight - 10
+  }
+  if (y < 10) {
+    y = 10
+  }
+
+  x = Math.max(10, Math.min(x, viewport.width - popupWidth - 10))
+  y = Math.max(10, Math.min(y, viewport.height - popupHeight - 10))
+
+  aiSuggestionsPosition.value = { x, y }
+  showAISuggestions.value = true
+}
+
+function selectAISuggestion(suggestion: typeof aiSuggestions[0]) {
   hideAISuggestions()
-
-  try {
-    const prompt = getAIPrompt(action, text)
-    const result = await handlePrompt(prompt)
-    aiPopoverContent.value = result.response || result.answer || 'No response generated'
-  } catch (error) {
-    console.error('Error performing AI action:', error)
-    aiPopoverContent.value = 'Error generating content. Please try again.'
-  } finally {
-    isLoadingAIPopover.value = false
+  if (selectedText.value) {
+    ai.performAIAction(suggestion.action as any, selectedText.value)
   }
-}
-
-function hideContextMenu() {
-  showContextMenu.value = false
-}
-
-/**
- * Search functionality
- */
-function performSearch() {
-  if (!searchQuery.value.trim()) {
-    searchResults.value = []
-    return
-  }
-
-  const results: SearchResult[] = []
-  const query = searchQuery.value.toLowerCase()
-
-  editablePages.value.forEach(page => {
-    const content = page.content.toLowerCase()
-    let index = content.indexOf(query)
-
-    while (index !== -1) {
-      const start = Math.max(0, index - 20)
-      const end = Math.min(content.length, index + query.length + 20)
-      const context = page.content.substring(start, end)
-
-      results.push({
-        pageNum: page.pageNum,
-        text: context,
-        index
-      })
-
-      index = content.indexOf(query, index + 1)
-    }
-  })
-
-  searchResults.value = results
-  currentSearchIndex.value = 0
-}
-
-function goToSearchResult(index: number) {
-  if (index >= 0 && index < searchResults.value.length) {
-    currentSearchIndex.value = index
-    const result = searchResults.value[index]
-    goToPage(result.pageNum)
-  }
-}
-
-/**
- * History management
- */
-function addToHistory(action: string, preview: string) {
-  editHistory.value.unshift({
-    action,
-    pageNum: currentPage.value,
-    timestamp: new Date(),
-    preview
-  })
-
-  if (editHistory.value.length > 50) {
-    editHistory.value = editHistory.value.slice(0, 50)
-  }
-}
-
-/**
- * Navigation functions
- */
-function goToPage(pageNum: number) {
-  if (pageNum >= 1 && pageNum <= totalPages.value) {
-    currentPage.value = pageNum
-  }
-}
-
-function previousPage() {
-  goToPage(currentPage.value - 1)
-}
-
-function nextPage() {
-  goToPage(currentPage.value + 1)
-}
-
-/**
- * Update page content
- */
-function updatePageContent(content: string, saveHistory: boolean = true) {
-  const pageIndex = currentPage.value - 1
-  if (pageIndex >= 0 && pageIndex < editablePages.value.length) {
-    if (saveHistory && editablePages.value[pageIndex].content !== content) {
-      // Only save to history if content actually changed
-      saveToHistory()
-    }
-
-    editablePages.value[pageIndex].content = content
-    editablePages.value[pageIndex].isModified =
-      content !== editablePages.value[pageIndex].originalContent
-  }
-}
-
-function resetPageContent() {
-  const pageIndex = currentPage.value - 1
-  if (pageIndex >= 0 && pageIndex < editablePages.value.length) {
-    saveToHistory()
-    editablePages.value[pageIndex].content = editablePages.value[pageIndex].originalContent
-    editablePages.value[pageIndex].isModified = false
-    editablePages.value[pageIndex].annotations = []
-    addToHistory('Reset page', `Reset page ${currentPage.value} to original`)
-  }
-}
-
-function resetAllContent() {
-  saveToHistory()
-  editablePages.value.forEach(page => {
-    page.content = page.originalContent
-    page.isModified = false
-    page.annotations = []
-  })
-  editHistory.value = []
-  hasUnsavedChanges.value = false
-  undoHistory.value = []
-  redoHistory.value = []
-  addToHistory('Reset all', 'Reset all pages to original')
-}
-
-function getCurrentPageContent(): EditableContent {
-  const pageIndex = currentPage.value - 1
-  return pageIndex >= 0 && pageIndex < editablePages.value.length
-    ? editablePages.value[pageIndex]
-    : {
-      annotations: [],
-      content: "",
-      isModified: false,
-      originalContent: "",
-      pageNum: 0
-    }
-}
-
-/**
- * File handling
- */
-async function handleFileUpload(event: Event) {
-  const target = event.target as HTMLInputElement
-  const files = target.files ? Array.from(target.files) : []
-  for (const file of files) {
-    if (file.type === "application/pdf") {
-      const url = URL.createObjectURL(file)
-      const { previewUrl, pages } = await generatePdfThumbnail(file)
-      const newFile = {
-        id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-        name: file.name,
-        url,
-        type: file.type,
-        size: file.size,
-        previewUrl,
-        pages,
-        uploadedAt: new Date(),
-      }
-      uploadedFiles.value.push(newFile)
-      saveToLocalStorage()
-      openPdfEditor(newFile)
-    }
-  }
-  target.value = ""
-}
-
-function handleDragOver(e: DragEvent) {
-  e.preventDefault()
-  isDragOver.value = true
-}
-
-function handleDragLeave(e: DragEvent) {
-  e.preventDefault()
-  isDragOver.value = false
-}
-
-function handleDrop(e: DragEvent) {
-  e.preventDefault()
-  isDragOver.value = false
-  const files = e.dataTransfer?.files
-  if (files) {
-    const fakeEvent = { target: { files } } as any
-    handleFileUpload(fakeEvent)
-  }
-}
-
-async function generatePdfThumbnail(file: File): Promise<{ previewUrl: string; pages: number }> {
-  try {
-    const arrayBuffer = await file.arrayBuffer()
-    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
-    const page = await pdf.getPage(1)
-    const viewport = page.getViewport({ scale: 0.3 })
-
-    const canvas = document.createElement("canvas")
-    const context = canvas.getContext("2d")
-    if (!context) {
-      return { previewUrl: "", pages: 0 }
-    }
-
-    canvas.width = viewport.width
-    canvas.height = viewport.height
-
-    await page.render({ canvasContext: context, viewport, canvas }).promise
-    return {
-      previewUrl: canvas.toDataURL('image/jpeg', 0.7),
-      pages: pdf.numPages
-    }
-  } catch (err) {
-    console.error("Error generating PDF thumbnail:", err)
-    return { previewUrl: "", pages: 0 }
-  }
-}
-
-function removeFile(id: string) {
-  const index = uploadedFiles.value.findIndex(file => file.id === id)
-  if (index > -1) {
-    if (selectedFileId.value === id) {
-      closeEditor()
-    }
-
-    const file = uploadedFiles.value[index]
-    if (file.url.startsWith("blob:")) {
-      URL.revokeObjectURL(file.url)
-    }
-
-    uploadedFiles.value.splice(index, 1)
-    saveToLocalStorage()
-
-    if (selectedFileId.value === id) {
-      localStorage.removeItem(CURRENT_DOCUMENT_KEY)
-    }
-  }
-}
-
-/**
- * PDF content extraction
- */
-async function openPdfEditor(file: UploadedFile) {
-  if (file.isCustom) {
-    openTextEditor(file)
-    return
-  }
-
-  selectedPdfUrl.value = file.url
-  selectedPdfName.value = file.name
-  selectedFileId.value = file.id
-  saveCurrentDocument()
-  await extractPdfContent(file.url)
-}
-
-async function extractPdfContent(url: string) {
-  isLoading.value = true
-  loadError.value = ''
-  editablePages.value = []
-
-  try {
-    const arrayBuffer = await fetch(url).then(response => response.arrayBuffer())
-    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
-    totalPages.value = pdf.numPages
-    currentPage.value = 1
-
-    let fullContent = ''
-
-    for (let pageNum = 1; pageNum <= totalPages.value; pageNum++) {
-      const page = await pdf.getPage(pageNum)
-      const textContent = await page.getTextContent()
-
-      let pageText = ''
-      textContent.items.forEach((item) => {
-        if ('str' in item) {
-          pageText += item.str + ' '
-        }
-      })
-
-      pageText = pageText.replace(/\s+/g, ' ').trim()
-      if (pageText) {
-        fullContent += `## Page ${pageNum}\n\n${pageText}\n\n`
-      }
-
-      editablePages.value.push({
-        pageNum,
-        content: pageText,
-        originalContent: pageText,
-        isModified: false,
-        annotations: []
-      })
-    }
-
-    // Save PDF content as a document
-    const fileIndex = uploadedFiles.value.findIndex(f => f.id === selectedFileId.value)
-    if (fileIndex !== -1) {
-      uploadedFiles.value[fileIndex].content = fullContent
-      uploadedFiles.value[fileIndex].isCustom = true
-      saveToLocalStorage()
-    }
-
-  } catch (error: any) {
-    loadError.value = `Failed to extract PDF content: ${error.message}`
-  } finally {
-    isLoading.value = false
-  }
-}
-
-/**
- * Export functions
- */
-function generatePreview() {
-  let content = `${selectedPdfName.value} - Final Document\n`
-  content += '='.repeat(60) + '\n\n'
-
-  editablePages.value.forEach(page => {
-    if (totalPages.value > 1) {
-      content += `PAGE ${page.pageNum}\n`
-      content += '-'.repeat(20) + '\n'
-    }
-    content += page.content + '\n\n'
-
-    if (page.annotations.length > 0) {
-      content += `📝 Annotations:\n`
-      page.annotations.forEach(ann => {
-        const icon = ann.type === 'highlight' ? '🔆' : ann.type === 'note' ? '📌' : '🔖'
-        content += `${icon} ${ann.type.toUpperCase()}: "${ann.text}"`
-        if (ann.note) content += ` - ${ann.note}`
-        content += '\n'
-      })
-      content += '\n'
-    }
-    content += '\n'
-  })
-
-  previewContent.value = content
-  showPreview.value = true
-}
-
-function closePreview() {
-  showPreview.value = false
-  previewContent.value = ''
-}
-
-function downloadAsText() {
-  let content = `${selectedPdfName.value} - Content\n`
-  content += '='.repeat(50) + '\n\n'
-
-  editablePages.value.forEach(page => {
-    if (totalPages.value > 1) {
-      content += `--- Page ${page.pageNum} ---\n`
-    }
-    content += page.content + '\n\n'
-
-    if (page.annotations.length > 0) {
-      content += `Annotations:\n`
-      page.annotations.forEach(ann => {
-        content += `- ${ann.type}: "${ann.text}"${ann.note ? ` (${ann.note})` : ''}\n`
-      })
-      content += '\n'
-    }
-  })
-
-  const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = selectedPdfName.value.replace(/\.[^/.]+$/, '') + '_content.txt'
-  document.body.appendChild(link)
-  link.click()
-  document.body.removeChild(link)
-  URL.revokeObjectURL(url)
-  closeExportDropdown()
-}
-
-function downloadAsMarkdown() {
-  let content = `# ${selectedPdfName.value}\n\n`
-
-  editablePages.value.forEach(page => {
-    if (totalPages.value > 1) {
-      content += `## Page ${page.pageNum}\n\n`
-    }
-    content += page.content + '\n\n'
-
-    if (page.annotations.length > 0) {
-      content += `### Annotations\n\n`
-      page.annotations.forEach(ann => {
-        content += `- **${ann.type}**: "${ann.text}"`
-        if (ann.note) content += `\n  - Note: ${ann.note}`
-        content += '\n'
-      })
-      content += '\n'
-    }
-  })
-
-  const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = selectedPdfName.value.replace(/\.[^/.]+$/, '') + '.md'
-  document.body.appendChild(link)
-  link.click()
-  document.body.removeChild(link)
-  URL.revokeObjectURL(url)
-  closeExportDropdown()
-}
-
-function closeEditor() {
-  if (hasUnsavedChanges.value) {
-    saveDocumentChanges()
-  }
-
-  selectedPdfUrl.value = ""
-  selectedPdfName.value = ""
-  selectedFileId.value = ""
-  editablePages.value = []
-  currentPage.value = 1
-  totalPages.value = 0
-  isLoading.value = false
-  loadError.value = ''
-  searchResults.value = []
-  searchQuery.value = ''
-  editHistory.value = []
-  hasUnsavedChanges.value = false
-  undoHistory.value = []
-  redoHistory.value = []
-  hideContextMenu()
-  hideAISuggestions()
-
-  if (autoSaveTimer.value) {
-    clearTimeout(autoSaveTimer.value)
-    autoSaveTimer.value = null
-  }
-
-  localStorage.removeItem(CURRENT_DOCUMENT_KEY)
-}
-
-function formatFileSize(bytes: number): string {
-  if (bytes === 0) return '0 Bytes'
-  const k = 1024
-  const sizes = ['Bytes', 'KB', 'MB', 'GB']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
-}
-
-function getModifiedPagesCount(): number {
-  return editablePages.value.filter(page => page.isModified).length
-}
-
-function cleanupFiles() {
-  uploadedFiles.value.forEach((file) => {
-    if (file.url.startsWith("blob:")) {
-      URL.revokeObjectURL(file.url)
-    }
-  })
 }
 
 function applyAIResult() {
   const currentPageData = getCurrentPageContent()
   if (currentPageData && aiPopoverContent.value.trim()) {
-    saveToHistory()
-    const newContent = currentPageData.content.replace(originalTextForAI.value, aiPopoverContent.value.trim())
+    history.saveToHistory()
+    const newContent = currentPageData.content.replace(
+      originalTextForAI.value,
+      aiPopoverContent.value.trim()
+    )
     updatePageContent(newContent)
     addToHistory(`AI ${currentAIAction.value}`, `Applied ${currentAIAction.value} to selected text`)
   }
   showAIPopover.value = false
   aiPopoverContent.value = ''
   originalTextForAI.value = ''
+}
+
+// ============================================
+// SIDEBAR RESIZE
+// ============================================
+function startSidebarResize() {
+  isResizingSidebar.value = true
+  document.addEventListener('mousemove', handleSidebarResize)
+  document.addEventListener('mouseup', stopSidebarResize)
+}
+
+function handleSidebarResize(event: MouseEvent) {
+  if (!isResizingSidebar.value) return
+  const newWidth = event.clientX
+  sidebarWidth.value = Math.max(290, Math.min(newWidth, maxSidebarWidth))
+}
+
+function stopSidebarResize() {
+  isResizingSidebar.value = false
+}
+
+// ============================================
+// DRAG HANDLERS
+// ============================================
+const isDraggingAISuggestions = ref(false)
+const isDraggingAIPopover = ref(false)
+const dragOffset = ref({ x: 0, y: 0 })
+
+function startSuggestionsDrag(event: MouseEvent) {
+  event.preventDefault()
+  event.stopPropagation()
+
+  isDraggingAISuggestions.value = true
+
+  const rect = (event.currentTarget as HTMLElement).closest('.ai-suggestions')?.getBoundingClientRect()
+  if (rect) {
+    dragOffset.value = {
+      x: event.clientX - rect.left,
+      y: event.clientY - rect.top
+    }
+  }
+
+  document.addEventListener('mousemove', handleSuggestionsDrag)
+  document.addEventListener('mouseup', stopSuggestionsDrag)
+}
+
+function handleSuggestionsDrag(event: MouseEvent) {
+  if (!isDraggingAISuggestions.value) return
+
+  event.preventDefault()
+
+  let newX = event.clientX - dragOffset.value.x
+  let newY = event.clientY - dragOffset.value.y
+
+  const viewport = {
+    width: window.innerWidth,
+    height: window.innerHeight
+  }
+
+  newX = Math.max(10, Math.min(newX, viewport.width - 290))
+  newY = Math.max(10, Math.min(newY, viewport.height - 250))
+
+  aiSuggestionsPosition.value = { x: newX, y: newY }
+}
+
+function stopSuggestionsDrag() {
+  isDraggingAISuggestions.value = false
+  document.removeEventListener('mousemove', handleSuggestionsDrag)
+  document.removeEventListener('mouseup', stopSuggestionsDrag)
+}
+
+function startDrag(event: MouseEvent, component: string) {
+  if (component !== 'popover') return
+
+  const target = event.target as HTMLElement
+  const isDragHandle = target.classList.contains('drag-handle') || target.closest('.drag-handle')
+
+  if (!isDragHandle) return
+
+  event.preventDefault()
+  event.stopPropagation()
+
+  isDraggingAIPopover.value = true
+
+  dragOffset.value = {
+    x: event.clientX - aiPopoverPosition.value.x,
+    y: event.clientY - aiPopoverPosition.value.y
+  }
+
+  const handleMouseMove = (e: MouseEvent) => {
+    if (!isDraggingAIPopover.value) return
+
+    e.preventDefault()
+    let newX = e.clientX - dragOffset.value.x
+    let newY = e.clientY - dragOffset.value.y
+
+    const viewport = {
+      width: window.innerWidth,
+      height: window.innerHeight
+    }
+
+    newX = Math.max(10, Math.min(newX, viewport.width - 320 - 10))
+    newY = Math.max(10, Math.min(newY, viewport.height - 200 - 10))
+
+    aiPopoverPosition.value = { x: newX, y: newY }
+  }
+
+  const handleMouseUp = () => {
+    isDraggingAIPopover.value = false
+    document.removeEventListener('mousemove', handleMouseMove)
+    document.removeEventListener('mouseup', handleMouseUp)
+  }
+
+  document.addEventListener('mousemove', handleMouseMove)
+  document.addEventListener('mouseup', handleMouseUp)
 }
 
 function handleGlobalClick(event: MouseEvent) {
@@ -1427,39 +681,116 @@ function handleGlobalClick(event: MouseEvent) {
     }
   }
 
-  // if (showAIPopover.value) {
-  //   const target = event.target as HTMLElement
-  //   if (!target.closest('.ai-popover')) {
-  //     showAIPopover.value = false
-  //   }
-  // }
+  // Close document menu
+  if (activeDocumentMenu.value) {
+    const target = event.target as HTMLElement
+    if (!target.closest('.document-menu')) {
+      closeDocumentMenu()
+    }
+  }
 }
 
-const toggleExportDropdown = () => {
-  showExportDropdown.value = !showExportDropdown.value
-}
-
-const closeExportDropdown = () => {
-  showExportDropdown.value = false
-}
-
-const handlePreview = () => {
+function handlePreview() {
   closeExportDropdown()
   generatePreview()
 }
 
+function getImageDropdownPosition(): { left: number, top: number } {
+  const imageButton = document.querySelector('.image-dropdown-button') as HTMLElement;
+
+  if (!imageButton) {
+    // Fallback positioning
+    return {
+      left: Math.min(window.innerWidth - 300, 100),
+      top: 150
+    };
+  }
+
+  const rect = imageButton.getBoundingClientRect();
+  return {
+    left: rect.left,
+    top: rect.bottom + window.scrollY
+  };
+}
+
+function toggleDocumentMenu(fileId: string, event: Event) {
+  event.stopPropagation()
+  activeDocumentMenu.value = activeDocumentMenu.value === fileId ? null : fileId
+}
+
+function closeDocumentMenu() {
+  activeDocumentMenu.value = null
+}
+
+function renameDocument(file: UploadedFile) {
+  const newName = prompt('Enter new name:', file.name)
+  if (newName && newName.trim()) {
+    file.name = newName.trim()
+    documentStore.saveToLocalStorage()
+  }
+  closeDocumentMenu()
+}
+
+function duplicateDocument(file: UploadedFile) {
+  const duplicatedFile: UploadedFile = {
+    ...file,
+    id: Date.now().toString() + Math.random(),
+    name: `${file.name} (Copy)`,
+    uploadedAt: new Date()
+  }
+  documentStore.addFile(duplicatedFile)
+  closeDocumentMenu()
+}
+
+function getThemeTitle(): string {
+  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+
+  if (currentTheme.value === 'system') {
+    return `System Theme (${prefersDark ? 'Dark' : 'Light'})`
+  } else if (currentTheme.value === 'light') {
+    return 'Light Theme'
+  } else {
+    return 'Dark Theme'
+  }
+}
+
+// ============================================
+// WATCHERS
+// ============================================
+watch([editablePages], () => {
+  hasUnsavedChanges.value = editablePages.value.some(page => page.isModified)
+  if (hasUnsavedChanges.value) {
+    scheduleAutoSave()
+  }
+}, { deep: true })
+
+// ============================================
+// LIFECYCLE
+// ============================================
 onMounted(() => {
-  if(screenWidth < 720){
+  if (screenWidth < 768) {
     router.push("/")
   }
-  loadFromLocalStorage()
-  document.addEventListener('mouseup', handleTextSelection)
+
+  documentStore.loadFromLocalStorage()
+
+  const currentDocId = documentStore.getCurrentDocumentId()
+  if (currentDocId) {
+    const lastOpenedDoc = uploadedFiles.value.find(file => file.id === currentDocId)
+    if (lastOpenedDoc) {
+      setTimeout(() => openPdfEditor(lastOpenedDoc), 100)
+    }
+  }
+
   document.addEventListener('click', handleGlobalClick)
   document.addEventListener('mouseup', stopSidebarResize)
 })
 
 onUnmounted(() => {
-  document.removeEventListener('mouseup', handleTextSelection)
+  if (hasUnsavedChanges.value) {
+    saveDocumentChanges()
+  }
+
   document.removeEventListener('click', handleGlobalClick)
   document.removeEventListener('mouseup', stopSidebarResize)
   document.removeEventListener('mousemove', handleSuggestionsDrag)
@@ -1469,26 +800,18 @@ onUnmounted(() => {
     clearTimeout(autoSaveTimer.value)
   }
 })
-
-onBeforeUnmount(() => {
-  if (hasUnsavedChanges.value) {
-    saveDocumentChanges()
-  }
-  cleanupFiles()
-  document.removeEventListener('click', handleGlobalClick)
-})
 </script>
 
 <template>
-  <div class="w-full bg-gray-50 text-gray-900 min-h-screen dark:bg-gray-900 dark:text-gray-100">
+  <div @dblclick="imageMenuOpen = false"
+    class="w-full bg-gray-50 text-gray-900 min-h-screen dark:bg-gray-900 dark:text-gray-100">
     <!-- Main Editor Interface -->
     <div class="bg-white h-screen w-full flex flex-col lg:flex-row dark:bg-gray-800">
       <!-- Mobile Header (visible on mobile only) -->
       <div class="lg:hidden bg-gray-100 border-b border-gray-300 p-3 dark:bg-gray-700 dark:border-gray-600">
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-2">
-            <button @click="sidebarOpen = !sidebarOpen" 
-              class="p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-600">
+            <button @click="sidebarOpen = !sidebarOpen" class="p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-600">
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
               </svg>
@@ -1497,24 +820,28 @@ onBeforeUnmount(() => {
               {{ selectedPdfName || "Gemmie Editor" }}
             </h3>
           </div>
-          
+
           <!-- Mobile action buttons -->
           <div class="flex items-center gap-1">
-            <button v-if="selectedPdfName" @click="editorMode = editorMode === 'edit' ? 'preview' : 'edit'" 
+            <button v-if="selectedPdfName" @click="editorMode = editorMode === 'edit' ? 'preview' : 'edit'"
               class="p-2 rounded bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/20 dark:text-blue-400">
               <svg v-if="editorMode === 'edit'" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
               </svg>
               <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
               </svg>
             </button>
-            
+
             <div class="relative">
               <button @click="toggleExportDropdown" class="p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-600">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
                 </svg>
               </button>
             </div>
@@ -1523,8 +850,7 @@ onBeforeUnmount(() => {
       </div>
 
       <!-- Sidebar Overlay (mobile) -->
-      <div v-if="sidebarOpen && innerWidth < 1024" 
-        class="lg:hidden fixed inset-0 z-40 bg-black bg-opacity-50" 
+      <div v-if="sidebarOpen && innerWidth < 1024" class="lg:hidden fixed inset-0 z-40 bg-black bg-opacity-50"
         @click="sidebarOpen = false"></div>
 
       <!-- Sidebar -->
@@ -1601,14 +927,14 @@ onBeforeUnmount(() => {
             <!-- Documents List -->
             <div class="space-y-2">
               <div v-for="file in uploadedFiles" :key="file.id" @click="openPdfEditor(file)" :class="[
-                'p-3 rounded cursor-pointer transition-colors text-sm border',
+                'p-3 rounded cursor-pointer transition-colors text-sm border relative',
                 selectedFileId === file.id
                   ? 'bg-blue-50 text-blue-600 border-blue-500 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-400'
                   : 'hover:bg-gray-50 border-gray-300 dark:hover:bg-gray-600 dark:border-gray-600'
               ]">
                 <div class="flex items-start gap-3">
-                  <svg v-if="file.isCustom" class="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5 dark:text-blue-400" fill="none"
-                    stroke="currentColor" viewBox="0 0 24 24">
+                  <svg v-if="file.isCustom" class="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5 dark:text-blue-400"
+                    fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                       d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                   </svg>
@@ -1617,6 +943,7 @@ onBeforeUnmount(() => {
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                       d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707L13.293 3.293A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
                   </svg>
+
                   <div class="flex-1 min-w-0">
                     <div class="font-medium truncate text-gray-800 dark:text-gray-300">{{ file.name }}</div>
                     <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -1624,14 +951,55 @@ onBeforeUnmount(() => {
                       <span v-if="file.pages"> • {{ file.pages }} pages</span>
                     </div>
                   </div>
-                  <button @click.stop="removeFile(file.id)"
-                    class="w-8 h-8 rounded-full bg-red-100 hover:bg-red-200 flex items-center justify-center text-red-600 transition-colors dark:bg-red-900/20 dark:hover:bg-red-900/30 dark:text-red-400 flex-shrink-0"
-                    title="Delete document">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </button>
+
+                  <!-- More Options Button -->
+                  <div class="document-menu relative flex-shrink-0">
+                    <button @click.stop="toggleDocumentMenu(file.id, $event)"
+                      class="w-8 h-8 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center text-gray-600 dark:text-gray-400 transition-colors"
+                      :class="{ 'bg-gray-200 dark:bg-gray-600': activeDocumentMenu === file.id }" title="More options">
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                      </svg>
+                    </button>
+
+                    <!-- Dropdown Menu -->
+                    <div v-if="activeDocumentMenu === file.id"
+                      class="absolute right-0 top-full mt-1 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg py-1 min-w-48 z-50"
+                      @click.stop>
+
+                      <button @click.stop="renameDocument(file)"
+                        class="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-600 flex items-center gap-3 text-sm text-gray-800 dark:text-gray-200 transition-colors">
+                        <svg class="w-4 h-4 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor"
+                          viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                        <span>Rename</span>
+                      </button>
+
+                      <button @click.stop="duplicateDocument(file)"
+                        class="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-600 flex items-center gap-3 text-sm text-gray-800 dark:text-gray-200 transition-colors">
+                        <svg class="w-4 h-4 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor"
+                          viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                        </svg>
+                        <span>Duplicate</span>
+                      </button>
+
+                      <div class="border-t border-gray-200 dark:border-gray-600"></div>
+
+                      <button @click.stop="removeFile(file.id); closeDocumentMenu()"
+                        class="w-full px-4 py-2 text-left hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-3 text-sm text-red-600 dark:text-red-400 transition-colors">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                        <span>Delete</span>
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -1660,7 +1028,8 @@ onBeforeUnmount(() => {
                   <span class="font-medium truncate">{{ totalPages > 1 ? `Page ${page.pageNum}` : 'Document' }}</span>
                   <div class="flex items-center gap-1 flex-shrink-0 ml-2">
                     <div v-if="page.isModified" class="w-2 h-2 bg-orange-500 rounded-full" title="Modified"></div>
-                    <span v-if="page.annotations.length > 0" class="text-xs text-blue-600 dark:text-blue-400 px-1 py-0.5 bg-blue-100 dark:bg-blue-900/20 rounded"
+                    <span v-if="page.annotations.length > 0"
+                      class="text-xs text-blue-600 dark:text-blue-400 px-1 py-0.5 bg-blue-100 dark:bg-blue-900/20 rounded"
                       :title="`${page.annotations.length} annotations`">
                       {{ page.annotations.length }}
                     </span>
@@ -1706,7 +1075,8 @@ onBeforeUnmount(() => {
 
           <!-- Annotations Tab -->
           <div v-if="activeSidebarTab === 'annotations'" class="p-3">
-            <h4 class="text-sm font-medium text-gray-800 dark:text-gray-300 mb-3">Annotations ({{ allAnnotations.length }})</h4>
+            <h4 class="text-sm font-medium text-gray-800 dark:text-gray-300 mb-3">Annotations ({{ allAnnotations.length
+            }})</h4>
             <div class="space-y-2">
               <div v-for="ann in allAnnotations" :key="ann.id" @click="goToPage(ann.pageNum)"
                 class="p-3 rounded border cursor-pointer hover:bg-gray-50 text-xs dark:hover:bg-gray-600"
@@ -1715,7 +1085,8 @@ onBeforeUnmount(() => {
                   <span class="font-medium capitalize text-gray-800 dark:text-gray-300">{{ ann.type }}</span>
                   <span class="text-gray-500 dark:text-gray-400">Page {{ ann.pageNum }}</span>
                 </div>
-                <div class="text-gray-800 dark:text-gray-300 mb-1 break-words">"{{ ann.text.substring(0, 60) }}..."</div>
+                <div class="text-gray-800 dark:text-gray-300 mb-1 break-words">"{{ ann.text.substring(0, 60) }}..."
+                </div>
                 <div v-if="ann.note" class="text-gray-500 dark:text-gray-400 break-words">{{ ann.note }}</div>
                 <div class="text-gray-500 dark:text-gray-400 text-xs mt-1">
                   {{ ann.timestamp.toLocaleDateString() }}
@@ -1723,7 +1094,8 @@ onBeforeUnmount(() => {
               </div>
               <div v-if="allAnnotations.length === 0" class="text-gray-500 text-center py-8 dark:text-gray-400">
                 <svg class="w-8 h-8 text-gray-300 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
                 </svg>
                 <p class="mb-1">No annotations yet</p>
                 <p class="text-xs px-4">Select text to add notes</p>
@@ -1748,7 +1120,8 @@ onBeforeUnmount(() => {
               </div>
               <div v-if="editHistory.length === 0" class="text-gray-500 text-center py-8 dark:text-gray-400">
                 <svg class="w-8 h-8 text-gray-300 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
                 <p>No edits yet</p>
               </div>
@@ -1760,15 +1133,15 @@ onBeforeUnmount(() => {
       <!-- Main Editor Area -->
       <div class="flex-1 flex flex-col min-w-0">
         <!-- Header (desktop only, hidden on mobile) -->
-        <div class="hidden lg:flex flex-col border-b border-gray-300 bg-gray-50 dark:border-gray-600 dark:bg-gray-700/50">
+        <div
+          class="hidden lg:flex flex-col border-b border-gray-300 bg-gray-50 dark:border-gray-600 dark:bg-gray-700/50">
           <!-- Title bar -->
           <div class="flex items-center justify-between p-3 xl:p-4 border-b border-gray-300 dark:border-gray-600">
             <div class="flex items-center gap-3 min-w-0 flex-1">
-              <svg class="w-6 h-6 text-blue-600 flex-shrink-0 dark:text-blue-400" fill="none" stroke="currentColor"
-                viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                  d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-              </svg>
+              <img
+                :src="currentTheme === 'dark' || (currentTheme === 'system' && isDarkMode) ? '/favicon-light.svg' : '/favicon.svg'"
+                alt="Gemmie Logo" class="w-8 h-8 rounded-md bg-gray-50 dark:bg-gray-700/50" />
+
               <div class="min-w-0 flex-1">
                 <h3 class="font-semibold text-gray-900 truncate dark:text-gray-100">
                   {{ selectedPdfName || "Gemmie Editor" }}
@@ -1838,6 +1211,31 @@ onBeforeUnmount(() => {
                 title="Create New Document">
                 <svg class="w-4 xl:w-5 h-4 xl:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                </svg>
+              </button>
+
+              <!-- Theme Toggle Button -->
+              <button @click="toggleTheme"
+                class="w-8 xl:w-10 h-8 xl:h-10 rounded-md bg-white hover:bg-gray-50 transition-colors text-gray-700 flex items-center justify-center border border-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-300 dark:border-gray-600"
+                :title="getThemeTitle()">
+                <!-- System icon (shown when theme is system) -->
+                <svg v-if="currentTheme === 'system'" class="w-4 xl:w-5 h-4 xl:h-5" fill="none" stroke="currentColor"
+                  viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                <!-- Sun icon (shown in light mode) -->
+                <svg v-else-if="currentTheme === 'light'" class="w-4 xl:w-5 h-4 xl:h-5" fill="none"
+                  stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                </svg>
+                <!-- Moon icon (shown in dark mode) -->
+                <svg v-else class="w-4 xl:w-5 h-4 xl:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
                 </svg>
               </button>
 
@@ -1916,12 +1314,40 @@ onBeforeUnmount(() => {
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 4l4 16M6 8h12M4 16h12" />
                 </svg>
               </button>
-              <button @click="insertCode"
+              <button @click="insertStrikethrough"
                 class="w-7 h-7 xl:w-8 xl:h-8 rounded bg-white hover:bg-gray-50 flex items-center justify-center border border-gray-300 dark:bg-gray-700 dark:border-gray-600 dark:hover:bg-gray-600"
-                title="Code">
+                title="Strike through">
                 <svg class="w-3 h-3 xl:w-4 xl:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                     d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                </svg>
+              </button>
+              <button @click="insertHighlight"
+                class="w-7 h-7 xl:w-8 xl:h-8 rounded bg-white hover:bg-gray-50 flex items-center justify-center border border-gray-300 dark:bg-gray-700 dark:border-gray-600 dark:hover:bg-gray-600"
+                title="Highlight">
+                <svg class="w-3 h-3 xl:w-4 xl:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                </svg>
+              </button>
+            </div>
+
+            <!-- Code & Blocks -->
+            <div class="flex items-center gap-1 border-r border-gray-300 pr-2 mr-2 dark:border-gray-500">
+              <button @click="insertCode"
+                class="w-7 h-7 xl:w-8 xl:h-8 rounded bg-white hover:bg-gray-50 flex items-center justify-center border border-gray-300 dark:bg-gray-700 dark:border-gray-600 dark:hover:bg-gray-600"
+                title="Inline Code">
+                <svg class="w-3 h-3 xl:w-4 xl:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                </svg>
+              </button>
+              <button @click="insertCodeBlock"
+                class="w-7 h-7 xl:w-8 xl:h-8 rounded bg-white hover:bg-gray-50 flex items-center justify-center border border-gray-300 dark:bg-gray-700 dark:border-gray-600 dark:hover:bg-gray-600"
+                title="Code Block">
+                <svg class="w-3 h-3 xl:w-4 xl:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                 </svg>
               </button>
             </div>
@@ -1945,7 +1371,7 @@ onBeforeUnmount(() => {
               </button>
             </div>
 
-            <!-- Lists and Links -->
+            <!-- Lists -->
             <div class="flex items-center gap-1 border-r border-gray-300 pr-2 mr-2 dark:border-gray-500">
               <button @click="insertList"
                 class="w-7 h-7 xl:w-8 xl:h-8 rounded bg-white hover:bg-gray-50 flex items-center justify-center border border-gray-300 dark:bg-gray-700 dark:border-gray-600 dark:hover:bg-gray-600"
@@ -1963,6 +1389,18 @@ onBeforeUnmount(() => {
                     d="M9 5H7a2 2 0 00-2 2v6a2 2 0 002 2h2m0-8h10m-10 8h10" />
                 </svg>
               </button>
+              <button @click="insertTaskList"
+                class="w-7 h-7 xl:w-8 xl:h-8 rounded bg-white hover:bg-gray-50 flex items-center justify-center border border-gray-300 dark:bg-gray-700 dark:border-gray-600 dark:hover:bg-gray-600"
+                title="Task List">
+                <svg class="w-3 h-3 xl:w-4 xl:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                </svg>
+              </button>
+            </div>
+
+            <!-- Links & Media -->
+            <div class="flex items-center gap-1 border-r border-gray-300 pr-2 mr-2 dark:border-gray-500">
               <button @click="insertLink"
                 class="w-7 h-7 xl:w-8 xl:h-8 rounded bg-white hover:bg-gray-50 flex items-center justify-center border border-gray-300 dark:bg-gray-700 dark:border-gray-600 dark:hover:bg-gray-600"
                 title="Link (Ctrl+K)">
@@ -1971,13 +1409,194 @@ onBeforeUnmount(() => {
                     d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
                 </svg>
               </button>
+
+              <!-- Enhanced Image Dropdown Menu -->
+              <div class="relative z-50">
+                <button @click="imageMenuOpen = !imageMenuOpen"
+                  class="image-dropdown-button w-7 h-7 xl:w-8 xl:h-8 rounded bg-white hover:bg-gray-50 flex items-center justify-center border border-gray-300 dark:bg-gray-700 dark:border-gray-600 dark:hover:bg-gray-600 transition-colors"
+                  :class="{ 'bg-blue-50 border-blue-300 dark:bg-blue-900/30 dark:border-blue-500': imageMenuOpen }"
+                  title="Insert Image with Options">
+                  <svg class="w-3 h-3 xl:w-4 xl:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                </button>
+
+                <!-- Dropdown Menu -->
+                <div v-if="imageMenuOpen" @click.away="imageMenuOpen = false"
+                  class="fixed w-72 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 z-[1000] overflow-hidden backdrop-blur-sm"
+                  :style="{
+                    left: getImageDropdownPosition().left + 'px',
+                    top: getImageDropdownPosition().top + 'px'
+                  }">
+
+                  <!-- Header -->
+                  <div class="px-4 py-3 border-b border-gray-100 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/50">
+                    <div class="flex items-center justify-between">
+                      <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Insert Image</h3>
+                      <button @click="imageMenuOpen = false"
+                        class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Choose image format</p>
+                  </div>
+
+                  <!-- Image Options -->
+                  <div class="max-h-96 overflow-y-auto">
+                    <!-- Basic Image -->
+                    <button @click="insertImage(); imageMenuOpen = false"
+                      class="w-full px-3 py-2 text-left hover:bg-gray-50 dark:hover:bg-gray-900/20 border-b border-gray-100 dark:border-gray-600 flex items-center gap-3 group transition-colors">
+                      <div
+                        class="w-8 h-8 bg-blue-100 dark:bg-blue-900 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform">
+                        <svg class="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor"
+                          viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                      </div>
+                      <div class="flex-1 min-w-0">
+                        <div
+                          class="font-medium text-gray-900 dark:text-gray-100 text-sm group-hover:text-blue-600 dark:group-hover:text-blue-400">
+                          Basic Image</div>
+                        <div class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">![alt](url)</div>
+                      </div>
+                      <div
+                        class="text-xs text-gray-500 px-2 py-1 bg-gray-100 group-hover:bg-gray-200 dark:bg-gray-700 rounded">
+                        Default</div>
+                    </button>
+
+                    <!-- Image with Title -->
+                    <button @click="insertImageWithTitle(); imageMenuOpen = false"
+                      class="w-full px-3 py-2 text-left hover:bg-gray-50 dark:hover:bg-gray-900/20 border-b border-gray-100 dark:border-gray-600 flex items-center gap-3 group transition-colors">
+                      <div
+                        class="w-8 h-8 bg-green-100 dark:bg-green-900 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform">
+                        <svg class="w-5 h-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor"
+                          viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      </div>
+                      <div class="flex-1 min-w-0">
+                        <div
+                          class="font-medium text-gray-900 dark:text-gray-100 text-sm group-hover:text-green-600 dark:group-hover:text-green-400">
+                          Image with Title</div>
+                        <div class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">![alt](url "title")</div>
+                      </div>
+                    </button>
+
+                    <!-- Image with Dimensions -->
+                    <button @click="insertImageWithDimensions(); imageMenuOpen = false"
+                      class="w-full px-3 py-2 text-left hover:bg-gray-50 dark:hover:bg-gray-900/20 border-b border-gray-100 dark:border-gray-600 flex items-center gap-3 group transition-colors">
+                      <div
+                        class="w-8 h-8 bg-purple-100 dark:bg-purple-900 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform">
+                        <svg class="w-5 h-5 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor"
+                          viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5" />
+                        </svg>
+                      </div>
+                      <div class="flex-1 min-w-0">
+                        <div
+                          class="font-medium text-gray-900 dark:text-gray-100 text-sm group-hover:text-purple-600 dark:group-hover:text-purple-400">
+                          Image with Size</div>
+                        <div class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">![alt](url =WxH)</div>
+                      </div>
+                    </button>
+
+                    <!-- Centered Image -->
+                    <button @click="insertImageCentered(); imageMenuOpen = false"
+                      class="w-full px-3 py-2 text-left hover:bg-gray-50 dark:hover:bg-gray-900/20 border-b border-gray-100 dark:border-gray-600 flex items-center gap-3 group transition-colors">
+                      <div
+                        class="w-8 h-8 bg-yellow-100 dark:bg-yellow-900 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform">
+                        <svg class="w-5 h-5 text-yellow-600 dark:text-yellow-400" fill="none" stroke="currentColor"
+                          viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14" />
+                        </svg>
+                      </div>
+                      <div class="flex-1 min-w-0">
+                        <div
+                          class="font-medium text-gray-900 dark:text-gray-100 text-sm group-hover:text-yellow-600 dark:group-hover:text-yellow-400">
+                          Centered Image</div>
+                        <div class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">![alt](url){.center}</div>
+                      </div>
+                    </button>
+
+                    <!-- Small Image -->
+                    <button @click="insertImageSmall(); imageMenuOpen = false"
+                      class="w-full px-3 py-2 text-left hover:bg-gray-50 dark:hover:bg-gray-900/20 border-b border-gray-100 dark:border-gray-600 flex items-center gap-3 group transition-colors">
+                      <div
+                        class="w-8 h-8 bg-red-100 dark:bg-red-900 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform">
+                        <svg class="w-5 h-5 text-red-600 dark:text-red-400" fill="none" stroke="currentColor"
+                          viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </div>
+                      <div class="flex-1 min-w-0">
+                        <div
+                          class="font-medium text-gray-900 dark:text-gray-100 text-sm group-hover:text-red-600 dark:group-hover:text-red-400">
+                          Small Image</div>
+                        <div class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">![alt](url){.small}</div>
+                      </div>
+                    </button>
+
+                    <!-- Image with Border -->
+                    <button @click="insertImageWithBorder(); imageMenuOpen = false"
+                      class="w-full px-3 py-2 text-left hover:bg-gray-50 dark:hover:bg-gray-900/20 border-b border-gray-100 dark:border-gray-600 flex items-center gap-3 group transition-colors">
+                      <div
+                        class="w-8 h-8 bg-indigo-100 dark:bg-indigo-900 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform">
+                        <svg class="w-5 h-5 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor"
+                          viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M4 6a2 2 0 012-2h12a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V6z" />
+                        </svg>
+                      </div>
+                      <div class="flex-1 min-w-0">
+                        <div
+                          class="font-medium text-gray-900 dark:text-gray-100 text-sm group-hover:text-indigo-600 dark:group-hover:text-indigo-400">
+                          Image with Border</div>
+                        <div class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">![alt](url){.border}</div>
+                      </div>
+                    </button>
+
+                    <!-- Image Link -->
+                    <button @click="insertImageLink(); imageMenuOpen = false"
+                      class="w-full px-3 py-2 text-left hover:bg-gray-50 dark:hover:bg-gray-900/20 flex items-center gap-3 group transition-colors">
+                      <div
+                        class="w-8 h-8 bg-blue-100 dark:bg-blue-900 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform">
+                        <svg class="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor"
+                          viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                        </svg>
+                      </div>
+                      <div class="flex-1 min-w-0">
+                        <div
+                          class="font-medium text-gray-900 dark:text-gray-100 text-sm group-hover:text-blue-600 dark:group-hover:text-blue-400">
+                          Clickable Image</div>
+                        <div class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">[![alt](url)](link)</div>
+                      </div>
+                    </button>
+                  </div>
+
+                  <!-- Footer -->
+                  <div class="px-3 py-2 border-t border-gray-100 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/50">
+                    <p class="text-xs text-gray-500 dark:text-gray-400 text-center">
+                      Select text before inserting to use as alt text
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <!-- Special Elements -->
             <div class="flex items-center gap-1">
               <button @click="insertQuote"
                 class="w-7 h-7 xl:w-8 xl:h-8 rounded bg-white hover:bg-gray-50 flex items-center justify-center border border-gray-300 dark:bg-gray-700 dark:border-gray-600 dark:hover:bg-gray-600"
-                title="Quote">
+                title="Blockquote">
                 <svg class="w-3 h-3 xl:w-4 xl:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                     d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
@@ -1985,10 +1604,17 @@ onBeforeUnmount(() => {
               </button>
               <button @click="insertTable"
                 class="hidden sm:flex w-7 h-7 xl:w-8 xl:h-8 rounded bg-white hover:bg-gray-50 items-center justify-center border border-gray-300 dark:bg-gray-700 dark:border-gray-600 dark:hover:bg-gray-600"
-                title="Table">
+                title="Insert Table">
                 <svg class="w-3 h-3 xl:w-4 xl:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                     d="M3 10h18M3 14h18M10 3v18M14 3v18" />
+                </svg>
+              </button>
+              <button @click="insertHorizontalRule"
+                class="w-7 h-7 xl:w-8 xl:h-8 rounded bg-white hover:bg-gray-50 flex items-center justify-center border border-gray-300 dark:bg-gray-700 dark:border-gray-600 dark:hover:bg-gray-600"
+                title="Horizontal Rule">
+                <svg class="w-3 h-3 xl:w-4 xl:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14" />
                 </svg>
               </button>
             </div>
@@ -2004,7 +1630,8 @@ onBeforeUnmount(() => {
           </div>
 
           <!-- Page/Document Navigation (responsive) -->
-          <div v-if="selectedPdfName" class="flex flex-col sm:flex-row sm:items-center gap-3 p-3 bg-gray-100/50 dark:bg-gray-600/50">
+          <div v-if="selectedPdfName"
+            class="flex flex-col sm:flex-row sm:items-center gap-3 p-3 bg-gray-100/50 dark:bg-gray-600/50">
             <!-- Page navigation -->
             <div v-if="totalPages > 1"
               class="flex items-center gap-2 border-r border-gray-300 pr-3 sm:border-r-0 sm:pr-0 sm:border-b sm:border-gray-300 sm:pb-3 sm:mb-0 dark:border-gray-500">
@@ -2026,7 +1653,8 @@ onBeforeUnmount(() => {
             </div>
 
             <!-- Text formatting -->
-            <div class="flex flex-wrap items-center gap-2 border-r border-gray-300 pr-3 sm:border-r-0 sm:pr-0 dark:border-gray-500">
+            <div
+              class="flex flex-wrap items-center gap-2 border-r border-gray-300 pr-3 sm:border-r-0 sm:pr-0 dark:border-gray-500">
               <div class="flex items-center gap-2">
                 <span class="text-sm text-gray-700 dark:text-gray-400">Font:</span>
                 <select v-model="fontSize"
@@ -2119,8 +1747,10 @@ onBeforeUnmount(() => {
             class="flex font-light text-sm pt-8 sm:pt-16 lg:pt-32 overflow-y-auto items-start justify-center h-full p-4 sm:p-8">
             <div class="max-w-6xl w-full">
               <div class="text-center mb-6 sm:mb-8">
-                <h2 class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">Welcome to Gemmie Editor</h2>
-                <p class="text-base text-gray-600 dark:text-gray-400 mb-6 sm:mb-8 px-4">Choose a template to get started with your new document</p>
+                <h2 class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">Welcome to Gemmie Editor
+                </h2>
+                <p class="text-base text-gray-600 dark:text-gray-400 mb-6 sm:mb-8 px-4">Choose a template to get started
+                  with your new document</p>
               </div>
 
               <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
@@ -2182,15 +1812,16 @@ onBeforeUnmount(() => {
             <!-- Edit Mode -->
             <div v-if="editorMode === 'edit'" class="bg-white mx-auto dark:bg-gray-800 h-full flex flex-col">
               <!-- Mobile page header -->
-              <div class="lg:hidden py-2 w-full flex items-center justify-between border-b border-gray-200 dark:border-gray-600">
+              <div
+                class="lg:hidden py-2 w-full flex items-center justify-between border-b border-gray-200 dark:border-gray-600">
                 <div class="flex items-center gap-2">
                   <span class="text-sm font-medium text-gray-700 dark:text-gray-400">
                     {{ totalPages > 1 ? `Page ${currentPage}` : 'Document' }}
                   </span>
-                  <span v-if="getCurrentPageContent()?.isModified" 
-                    class="w-2 h-2 bg-orange-500 rounded-full" title="Modified"></span>
+                  <span v-if="getCurrentPageContent()?.isModified" class="w-2 h-2 bg-orange-500 rounded-full"
+                    title="Modified"></span>
                 </div>
-                
+
                 <!-- Page navigation for mobile -->
                 <div v-if="totalPages > 1" class="flex items-center gap-2">
                   <button @click="previousPage" :disabled="currentPage <= 1"
@@ -2224,7 +1855,7 @@ onBeforeUnmount(() => {
               <div class="flex-1 py-2 relative">
                 <textarea v-if="getCurrentPageContent()" :value="getCurrentPageContent()?.content"
                   @input="updatePageContent(($event.target as HTMLTextAreaElement).value)"
-                  @keydown="handleTextareaKeydown"
+                  @keydown="handleTextareaKeydown" @contextmenu="handleTextareaContextMenu"
                   class="w-full outline-none h-full px-3 sm:px-6 overflow-y-auto resize-none bg-white dark:bg-inherit text-gray-900 dark:text-gray-100"
                   :style="{
                     fontSize: fontSize + 'px',
@@ -2232,9 +1863,10 @@ onBeforeUnmount(() => {
                     fontFamily: 'system-ui, -apple-system, sans-serif'
                   }" placeholder="Start writing your markdown content here... 
 
-Press Ctrl+/ for AI assistance
+Right-click for AI assistance
 Use Ctrl+B for bold, Ctrl+I for italic
-Press Ctrl+Z to undo, Ctrl+Y to redo"></textarea>
+Press Ctrl+Z to undo, Ctrl+Y to redo">
+                </textarea>
               </div>
             </div>
 
@@ -2252,8 +1884,8 @@ Press Ctrl+Z to undo, Ctrl+Y to redo"></textarea>
               </div>
 
               <!-- Preview content -->
-              <div class="flex-1 py-2 relative">
-                <div v-if="getCurrentPageContent()" 
+              <div class="flex-1 relative">
+                <div v-if="getCurrentPageContent()"
                   class="prose prose-gray dark:prose-invert max-w-none px-3 sm:px-6 prose-sm sm:prose-base"
                   v-html="renderedMarkdown"></div>
                 <div v-else class="text-center py-8 text-gray-500 dark:text-gray-400">
@@ -2289,13 +1921,14 @@ Press Ctrl+Z to undo, Ctrl+Y to redo"></textarea>
                   </div>
                   <textarea v-if="getCurrentPageContent()" :value="getCurrentPageContent()?.content"
                     @input="updatePageContent(($event.target as HTMLTextAreaElement).value)"
-                    @keydown="handleTextareaKeydown"
+                    @keydown="handleTextareaKeydown" @contextmenu="handleTextareaContextMenu"
                     class="w-full h-64 lg:h-full p-4 outline-none border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
                     :style="{
                       fontSize: fontSize + 'px',
                       lineHeight: lineHeight.toString(),
                       fontFamily: 'system-ui, -apple-system, sans-serif'
-                    }" placeholder="Start writing markdown..."></textarea>
+                    }" placeholder="Start writing markdown...">
+</textarea>
                 </div>
 
                 <!-- Preview side -->
@@ -2324,7 +1957,8 @@ Press Ctrl+Z to undo, Ctrl+Y to redo"></textarea>
                   d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
               <p class="text-gray-900 dark:text-gray-100 mb-2">No text content found</p>
-              <p class="text-sm text-gray-600 dark:text-gray-400 px-4">This PDF may contain only images or have no extractable text.</p>
+              <p class="text-sm text-gray-600 dark:text-gray-400 px-4">This PDF may contain only images or have no
+                extractable text.</p>
             </div>
           </div>
         </div>
@@ -2355,7 +1989,8 @@ Press Ctrl+Z to undo, Ctrl+Y to redo"></textarea>
               <div class="font-medium">{{ suggestion.label }}</div>
               <div class="text-xs text-gray-500 dark:text-gray-400 truncate">{{ suggestion.description }}</div>
             </div>
-            <div class="hidden sm:block text-xs text-gray-400 dark:text-gray-500 flex-shrink-0">{{ suggestion.shortcut.replace('Ctrl+Shift+', 'C+S+') }}</div>
+            <div class="hidden sm:block text-xs text-gray-400 dark:text-gray-500 flex-shrink-0">{{
+              suggestion.shortcut.replace('Ctrl+Shift+', 'C+S+') }}</div>
           </button>
         </div>
       </div>
@@ -2415,7 +2050,8 @@ Press Ctrl+Z to undo, Ctrl+Y to redo"></textarea>
     <!-- AI Modal (responsive) -->
     <div v-if="showAIModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
       @click.self="closeAIModal">
-      <div class="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] border border-gray-300 dark:bg-gray-800 dark:border-gray-600 flex flex-col">
+      <div
+        class="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] border border-gray-300 dark:bg-gray-800 dark:border-gray-600 flex flex-col">
         <div class="p-4 border-b border-gray-300 flex items-center justify-between dark:border-gray-600 flex-shrink-0">
           <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 capitalize">
             {{ currentAIAction }} Text
@@ -2454,7 +2090,8 @@ Press Ctrl+Z to undo, Ctrl+Y to redo"></textarea>
               :placeholder="`${currentAIAction} result will appear here...`"></textarea>
           </div>
         </div>
-        <div class="p-4 border-t border-gray-300 flex flex-col sm:flex-row gap-2 justify-end dark:border-gray-600 flex-shrink-0">
+        <div
+          class="p-4 border-t border-gray-300 flex flex-col sm:flex-row gap-2 justify-end dark:border-gray-600 flex-shrink-0">
           <button @click="discardAIContent"
             class="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors dark:text-gray-400 dark:hover:text-gray-300 order-2 sm:order-1">
             Discard
@@ -2482,7 +2119,8 @@ Press Ctrl+Z to undo, Ctrl+Y to redo"></textarea>
           </button>
         </div>
         <div class="flex-1 p-6 overflow-auto">
-          <pre class="whitespace-pre-wrap text-sm text-gray-800 dark:text-gray-200 font-mono break-words">{{ previewContent }}</pre>
+          <pre
+            class="whitespace-pre-wrap text-sm text-gray-800 dark:text-gray-200 font-mono break-words">{{ previewContent }}</pre>
         </div>
       </div>
     </div>
@@ -2490,6 +2128,53 @@ Press Ctrl+Z to undo, Ctrl+Y to redo"></textarea>
 </template>
 
 <style scoped>
+/* Clear floats after floated images */
+.image-container::after {
+  content: "";
+  display: table;
+  clear: both;
+}
+
+/* Ensure text wraps properly around floated images */
+.image-container.float-left+*,
+.image-container.float-right+* {
+  overflow: hidden;
+}
+
+/* Enhanced blockquote styling */
+blockquote {
+  margin: 1rem 0;
+  padding-left: 1rem;
+  border-left: 4px solid #d1d5db;
+  font-style: italic;
+}
+
+.dark blockquote {
+  border-left-color: #4b5563;
+}
+
+/* Nested quotes */
+blockquote blockquote {
+  border-left-width: 3px;
+  margin-left: 0.5rem;
+  opacity: 0.9;
+}
+
+blockquote blockquote blockquote {
+  border-left-width: 2px;
+  opacity: 0.8;
+}
+
+/* Ensure proper text wrapping */
+.whitespace-pre-wrap {
+  white-space: pre-wrap;
+}
+
+.break-words {
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
 .animate-spin {
   animation: spin 1s linear infinite;
 }
@@ -2587,15 +2272,15 @@ Press Ctrl+Z to undo, Ctrl+Y to redo"></textarea>
   .prose {
     font-size: 14px;
   }
-  
+
   .prose h1 {
     font-size: 1.5em;
   }
-  
+
   .prose h2 {
     font-size: 1.3em;
   }
-  
+
   .prose h3 {
     font-size: 1.1em;
   }
@@ -2603,6 +2288,7 @@ Press Ctrl+Z to undo, Ctrl+Y to redo"></textarea>
 
 /* Touch-friendly interactions */
 @media (max-width: 1024px) {
+
   .ai-suggestions button,
   .ai-popover button {
     min-height: 44px;
