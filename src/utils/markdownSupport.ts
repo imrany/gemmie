@@ -199,6 +199,68 @@ function renderMarkdown(text: string): string {
   // Process images FIRST (before other markdown processing)
   html = processImages(html);
 
+  // Process tables
+  const processTable = (content: string): string => {
+    const tableRegex = /(\|.+\|[\r\n]+\|[-:\s|]+\|[\r\n]+(?:\|.+\|[\r\n]*)+)/g;
+    
+    return content.replace(tableRegex, (match) => {
+      const lines = match.trim().split('\n').map(line => line.trim());
+      
+      if (lines.length < 2) return match;
+      
+      // Parse header
+      const headerCells = lines[0]
+        .split('|')
+        .filter(cell => cell.trim())
+        .map(cell => cell.trim());
+      
+      // Parse alignment from separator row
+      const alignments = lines[1]
+        .split('|')
+        .filter(cell => cell.trim())
+        .map(cell => {
+          const trimmed = cell.trim();
+          if (trimmed.startsWith(':') && trimmed.endsWith(':')) return 'center';
+          if (trimmed.endsWith(':')) return 'right';
+          return 'left';
+        });
+      
+      // Parse body rows
+      const bodyRows = lines.slice(2).map(line => 
+        line.split('|')
+          .filter(cell => cell.trim())
+          .map(cell => cell.trim())
+      );
+      
+      // Build table HTML
+      let tableHtml = '<div class="table-container my-4 overflow-x-auto"><table class="min-w-full border-collapse border border-gray-300 dark:border-gray-600">';
+      
+      // Header
+      tableHtml += '<thead class="bg-gray-100 dark:bg-gray-800"><tr>';
+      headerCells.forEach((cell, i) => {
+        const align = alignments[i] || 'left';
+        tableHtml += `<th class="border border-gray-300 dark:border-gray-600 px-4 py-2 text-${align} font-semibold text-gray-900 dark:text-gray-100">${cell}</th>`;
+      });
+      tableHtml += '</tr></thead>';
+      
+      // Body
+      tableHtml += '<tbody>';
+      bodyRows.forEach(row => {
+        tableHtml += '<tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">';
+        row.forEach((cell, i) => {
+          const align = alignments[i] || 'left';
+          tableHtml += `<td class="border border-gray-300 dark:border-gray-600 px-4 py-2 text-${align} text-gray-800 dark:text-gray-200">${cell}</td>`;
+        });
+        tableHtml += '</tr>';
+      });
+      tableHtml += '</tbody></table></div>';
+      
+      return tableHtml;
+    });
+  };
+
+  html = processTable(html);
+
   // Headers (H1-H6)
   html = html
     .replace(
