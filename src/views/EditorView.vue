@@ -4,6 +4,8 @@ import * as pdfjsLib from "pdfjs-dist"
 import pdfjsWorker from "pdfjs-dist/build/pdf.worker?url"
 import type { Ref } from "vue"
 import { WRAPPER_URL } from "@/utils/globals"
+import { inject } from "vue"
+import { useRouter } from "vue-router"
 
 // configure worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker
@@ -54,6 +56,14 @@ type HistoryEntry = {
   action?: string
 }
 
+const globalState = inject('globalState') as {
+  screenWidth: number
+}
+const {
+  screenWidth
+}=globalState;
+
+const router=useRouter()
 const uploadedFiles = ref<UploadedFile[]>([])
 const selectedPdfUrl = ref("")
 const selectedPdfName = ref("")
@@ -161,9 +171,6 @@ function createDocumentFromTemplate(template: any) {
   saveToLocalStorage()
   openTextEditor(newDoc)
 }
-
-const newDocTitle = ref('')
-const newDocContent = ref('')
 
 // AI Features state
 const showAIModal = ref(false)
@@ -739,7 +746,6 @@ function showAIToolbar() {
 
   showAISuggestions.value = true
 }
-
 
 function hideAISuggestions() {
   showAISuggestions.value = false
@@ -1486,6 +1492,9 @@ const handlePreview = () => {
 }
 
 onMounted(() => {
+  if(screenWidth < 720){
+    router.push("/")
+  }
   loadFromLocalStorage()
   document.addEventListener('mouseup', handleTextSelection)
   document.addEventListener('click', handleGlobalClick)
