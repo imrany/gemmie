@@ -235,7 +235,7 @@ function handleChatClick(chatId: string) {
               class="ml-auto w-2 h-2 bg-orange-500 rounded-full"></div>
           </button>
 
-          <button @click="
+          <button v-if="props.data.screenWidth > 720" @click="
             () => {
               if (router.currentRoute.value.path !== '/editor') {
                 router.push('/editor')
