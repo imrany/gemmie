@@ -209,11 +209,7 @@ function handleChatClick(chatId: string) {
       <div v-if="props.data.parsedUserDetails.username" class="px-3 my-4 max-md:text-lg flex flex-col gap-1 font-light text-sm">
         <button @click="
           () => {
-            props.functions.createNewChat()
-            props.functions.setShowInput()
-            if (router.currentRoute.value.path !== '/') {
-              router.push('/')
-            }
+            router.push('/new')
             if (props.data.screenWidth < 720) props.functions.hideSidebar()
           }
         " title="New Chat" class="w-full flex items-center gap-2 h-[40px] hover:bg-gray-100 rounded-lg px-2">

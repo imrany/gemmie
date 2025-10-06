@@ -15,6 +15,8 @@ import CreateSessView from "./CreateSessView.vue"
 import router from "@/router"
 import { copyPasteContent, detectContentType } from "@/utils/previewPasteContent"
 import PastePreviewModal from "@/components/Modals/PastePreviewModal.vue"
+import { useRoute } from "vue-router"
+import type { Theme } from "vue-sonner/src/packages/types.js"
 
 // Inject global state
 const globalState = inject('globalState') as {
@@ -68,6 +70,8 @@ const globalState = inject('globalState') as {
   setupAutoSync: () => void,
   autoSyncInterval: any,
   isFreeUser: Ref<boolean>,
+  currentTheme: Ref<Theme>,
+  isDarkMode: Ref<boolean>,
 }
 
 const {
@@ -108,6 +112,8 @@ const {
   currentChat,
   linkPreview,
   currentMessages,
+  currentTheme,
+  isDarkMode,
   updateExpandedArray,
   apiCall,
   manualSync,
@@ -118,7 +124,8 @@ const {
   isFreeUser,
 } = globalState
 let parsedUserDetails: Ref<any> = globalState.parsedUserDetails
-
+  
+const route=useRoute()
 // ---------- State ----------
 const authStep = ref(1)
 const showCreateSession = ref(false)
@@ -709,7 +716,7 @@ function removePastePreview() {
   })
 }
 
-// Fixed handleSubmit function
+// handleSubmit function
 async function handleSubmit(e?: any, retryPrompt?: string) {
   e?.preventDefault?.()
 
@@ -917,7 +924,7 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
   }
 }
 
-// Fixed computed properties for better logic
+// computed properties for better logic
 const isRequestLimitExceeded = computed(() => {
   const shouldHaveLimit = isFreeUser.value ||
     planStatus.value.isExpired ||
@@ -946,7 +953,7 @@ const requestsRemaining = computed(() => {
   return Math.max(0, FREE_REQUEST_LIMIT - requestCount.value)
 })
 
-// Fixed input area template logic
+// input area template logic
 const inputPlaceholderText = computed(() => {
   if (pastePreview.value && pastePreview.value.show) {
     return 'Large content ready to send...'
@@ -1665,6 +1672,13 @@ watch(() => ({ ...planStatus.value }), (newStatus, oldStatus) => {
   }
 }, { deep: true })
 
+watch(() => route.path,(newPath, oldPath)=>{
+  if(newPath==="/new"){
+    createNewChat()
+    setShowInput()
+    router.replace(`${oldPath}`)
+  }
+}, { immediate: true })
 
 onBeforeUnmount(() => {
   // Clean up speech recognition
@@ -1686,6 +1700,12 @@ onBeforeUnmount(() => {
 
 // Consolidated onMounted hook for better organization
 onMounted(() => {
+  if(route.path==="/new"){
+    createNewChat()
+    setShowInput()
+    router.replace("/")
+  }
+
   // 1. Load basic state
   const saved = localStorage.getItem("isCollapsed");
   if (saved && saved !== "null") {
@@ -1960,9 +1980,11 @@ onMounted(() => {
           </div>
 
           <div v-else class="flex flex-col md:flex-grow items-center gap-3 text-gray-600">
-            <div class="rounded-full bg-gray-200 w-[60px] h-[60px] flex justify-center items-center">
-              <span class="pi pi-comment text-lg"></span>
-            </div>
+            <!-- {{currentTheme}} {{  isDarkMode }} -->
+            <img
+              :src="currentTheme === 'dark' || (currentTheme === 'system' && isDarkMode) ? 
+              '/favicon-light.svg' : '/logo.svg'"
+              alt="Gemmie Logo" class="w-[60px] h-[60px] rounded-md" />
 
             <p class="text-3xl text-black font-semibold">{{ parsedUserDetails?.username || 'Gemmie' }}</p>
             <div class="text-center max-w-md space-y-2">
@@ -2104,7 +2126,7 @@ onMounted(() => {
 
         <!-- Responsive Scroll to Bottom Button -->
         <button v-if="showScrollDownButton && currentMessages.length !== 0 && isAuthenticated" @click="scrollToBottom"
-          :class="isRequestLimitExceeded || shouldShowUpgradePrompt ? 'bottom-[180px]' : 'bottom-[90px]'"
+          :class="isRequestLimitExceeded || shouldShowUpgradePrompt ? 'bottom-[170px]' : 'bottom-[90px]'"
           class="fixed bg-gray-50 text-gray-500 border px-5 h-[34px] rounded-full shadow-lg hover:bg-gray-100 transition-colors z-20 left-1/2 transform -translate-x-1/2">
           <div class="flex gap-1 sm:gap-2 items-center justify-center w-full font-semibold h-full">
             <i class="pi pi-arrow-down text-center"></i>
