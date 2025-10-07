@@ -2259,7 +2259,7 @@ onMounted(() => {
         <button v-if="showScrollDownButton && currentMessages.length !== 0 && isAuthenticated" @click="scrollToBottom"
           :class="[
             'absolute bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border dark:border-gray-700 px-4 h-8 rounded-full shadow-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors z-20 flex items-center justify-center gap-2',
-            isRequestLimitExceeded || shouldShowUpgradePrompt ? 'bottom-[170px] sm:bottom-[150px]' :
+            isRequestLimitExceeded || shouldShowUpgradePrompt ? 'bottom-[170px] sm:bottom-[170px]' :
               'bottom-[90px] sm:bottom-[100px]'
           ]">
           <i class="pi pi-arrow-down text-xs"></i>
