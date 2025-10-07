@@ -72,6 +72,9 @@ const globalState = inject('globalState') as {
   isFreeUser: Ref<boolean>,
   currentTheme: Ref<Theme>,
   isDarkMode: Ref<boolean>,
+  isUserOnline:Ref<boolean>,
+  connectionStatus:Ref<string>,
+  checkInternetConnection:()=>Promise<boolean>,
 }
 
 const {
@@ -122,6 +125,9 @@ const {
   autoSyncInterval,
   handleAuth,
   isFreeUser,
+  isUserOnline,
+  connectionStatus,
+  checkInternetConnection,
 } = globalState
 let parsedUserDetails: Ref<any> = globalState.parsedUserDetails
 
@@ -720,6 +726,17 @@ function removePastePreview() {
 async function handleSubmit(e?: any, retryPrompt?: string) {
   e?.preventDefault?.()
 
+  if (!isUserOnline.value) {
+    const isActuallyOnline = await checkInternetConnection()
+    if (!isActuallyOnline) {
+      toast.error('You are offline', {
+        duration: 4000,
+        description: 'Please check your internet connection and try again'
+      })
+      return
+    }
+  }
+
   let promptValue = retryPrompt || e?.target?.prompt?.value?.trim()
 
   // If we have a paste preview, use that content instead
@@ -775,9 +792,6 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
 
     isLoading.value = true
 
-    // Increment request count for limited users
-    incrementRequestCount()
-
     if (!retryPrompt && e?.target?.prompt) {
       e.target.prompt.value = ""
       e.target.prompt.style.height = "auto"
@@ -786,8 +800,6 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
     const tempResp: Res = { prompt: promptValue, response: "..." }
     currentChat.value?.messages.push(tempResp)
     expanded.value.push(false)
-    await nextTick()
-    scrollToBottom()
 
     try {
       let combinedResponse = `I've analyzed the link${urls.length > 1 ? "s" : ""} you shared:\n\n`
@@ -817,6 +829,10 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
         }
         currentChat.value.updatedAt = new Date().toISOString()
       }
+
+      // ✅ ONLY INCREMENT ON SUCCESS for link-only prompts
+      incrementRequestCount()
+
     } finally {
       isLoading.value = false
       saveChats()
@@ -840,9 +856,6 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
   }
 
   isLoading.value = true
-
-  // Increment request count for limited users
-  incrementRequestCount()
 
   if (!retryPrompt && e?.target?.prompt) {
     e.target.prompt.value = ""
@@ -897,6 +910,9 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
     // Trigger link preview generation for the new response
     await processLinksInResponse(currentMessages.value.length - 1)
 
+    // ✅ ONLY INCREMENT ON SUCCESS for AI responses
+    incrementRequestCount()
+
   } catch (err: any) {
     toast.error(`Failed to get AI response: ${err.message}`, {
       duration: 5000,
@@ -921,6 +937,149 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
     // Scroll to bottom after response is complete
     await nextTick()
     scrollToBottom()
+  }
+}
+
+async function refreshResponse(oldPrompt?: string) {
+  if (!isUserOnline.value) {
+    const isActuallyOnline = await checkInternetConnection()
+    if (!isActuallyOnline) {
+      toast.error('You are offline', {
+        duration: 4000,
+        description: 'Please check your internet connection and try again'
+      })
+      return
+    }
+  }
+
+  const chatIndex = chats.value.findIndex(chat => chat.id === currentChatId.value)
+  if (chatIndex === -1) return
+
+  const chat = chats.value[chatIndex]
+  const msgIndex = chat.messages.findIndex(m => m.prompt === oldPrompt)
+  if (msgIndex === -1) return
+
+  const oldMessage = chat.messages[msgIndex]
+
+  let fabricatedPrompt = oldPrompt
+  if (oldPrompt && isPromptTooShort(oldPrompt) && currentMessages.value.length > 1) {
+    const lastMessage = currentMessages.value[msgIndex - 1]
+    fabricatedPrompt = `${lastMessage.prompt || ''} ${lastMessage.response || ''}\nUser: ${oldPrompt}`
+  }
+
+  // Check request limits for refresh too
+  checkAndResetDailyCount()
+  const shouldHaveLimit = isFreeUser.value ||
+    planStatus.value.isExpired ||
+    planStatus.value.status === 'no-plan' ||
+    planStatus.value.status === 'expired'
+
+  if (shouldHaveLimit && requestCount.value >= FREE_REQUEST_LIMIT) {
+    if (planStatus.value.isExpired) {
+      toast.error('Your plan has expired', {
+        duration: 5000,
+        description: 'Please renew your plan to continue using the service.'
+      })
+    } else {
+      toast.warning('Free requests exhausted', {
+        duration: 4000,
+        description: 'Please upgrade to continue chatting.'
+      })
+    }
+    return
+  }
+
+  // Show placeholder while refreshing
+  chat.messages[msgIndex] = {
+    ...oldMessage,
+    response: "refreshing...",
+  }
+
+  // handling for link-only prompts
+  if (oldPrompt && isJustLinks(oldPrompt)) {
+    const urls = extractUrls(oldPrompt)
+
+    try {
+      let combinedResponse = `I've analyzed the link${urls.length > 1 ? "s" : ""} you shared:\n\n`
+
+      for (const url of urls) {
+        try {
+          const linkPreview = await fetchLinkPreview(url)
+
+          combinedResponse += `**${linkPreview.title || 'Untitled'}**\n`
+          if (linkPreview.description) {
+            combinedResponse += `Description: ${linkPreview.description}\n`
+          }
+          combinedResponse += `Domain: ${linkPreview.domain || new URL(url).hostname}\n`
+          combinedResponse += `URL: ${url}\n\n`
+        } catch (err: any) {
+          combinedResponse += `⚠️ Failed to analyze: ${url} (${err.message || "Unknown error"})\n\n`
+        }
+      }
+
+      // Replace the same message with the refreshed response
+      chat.messages[msgIndex] = {
+        ...oldMessage,
+        response: combinedResponse.trim(),
+        status: 200,
+      }
+
+      chat.updatedAt = new Date().toISOString()
+      saveChats()
+
+      // Re-run link previews if needed
+      await processLinksInResponse(msgIndex)
+
+      // ✅ ONLY INCREMENT ON SUCCESS for link-only refresh
+      incrementRequestCount()
+
+    } finally {
+      observeNewVideoContainers()
+      await nextTick()
+      scrollToBottom()
+    }
+
+    return // ✅ Exit early for link-only prompts
+  }
+
+  try {
+    // Fetch new response using the same prompt
+    let response = await fetch(WRAPPER_URL, {
+      method: "POST",
+      body: JSON.stringify(fabricatedPrompt),
+      headers: { "content-type": "application/json" }
+    })
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+    }
+
+    let parseRes = await response.json()
+
+    // Replace the same message with the refreshed response
+    chat.messages[msgIndex] = {
+      ...oldMessage,
+      response: parseRes.error ? parseRes.error : parseRes.response,
+      status: response.status,
+    }
+
+    chat.updatedAt = new Date().toISOString()
+    saveChats()
+
+    // Re-run link previews if needed
+    await processLinksInResponse(msgIndex)
+
+    // ✅ ONLY INCREMENT ON SUCCESS for AI refresh
+    incrementRequestCount()
+
+  } catch (err: any) {
+    chat.messages[msgIndex] = {
+      ...oldMessage,
+      response: `⚠️ Failed to refresh response: ${err.message || "Unknown error"}`,
+    }
+    toast.error(`Failed to refresh response: ${err.message}`)
+  } finally {
+    saveChats()
   }
 }
 
@@ -1194,133 +1353,6 @@ function shareResponse(text: string, prompt?: string) {
     toast.info('Copied Instead', {
       duration: 3000,
     })
-  }
-}
-
-async function refreshResponse(oldPrompt?: string) {
-  const chatIndex = chats.value.findIndex(chat => chat.id === currentChatId.value)
-  if (chatIndex === -1) return
-
-  const chat = chats.value[chatIndex]
-  const msgIndex = chat.messages.findIndex(m => m.prompt === oldPrompt)
-  if (msgIndex === -1) return
-
-  const oldMessage = chat.messages[msgIndex]
-
-  let fabricatedPrompt = oldPrompt
-  if (oldPrompt && isPromptTooShort(oldPrompt) && currentMessages.value.length > 1) {
-    const lastMessage = currentMessages.value[msgIndex - 1]
-    fabricatedPrompt = `${lastMessage.prompt || ''} ${lastMessage.response || ''}\nUser: ${oldPrompt}`
-  }
-
-  // Check request limits for refresh too
-  checkAndResetDailyCount()
-  const shouldHaveLimit = isFreeUser.value ||
-    planStatus.value.isExpired ||
-    planStatus.value.status === 'no-plan' ||
-    planStatus.value.status === 'expired'
-
-  if (shouldHaveLimit && requestCount.value >= FREE_REQUEST_LIMIT) {
-    if (planStatus.value.isExpired) {
-      toast.error('Your plan has expired', {
-        duration: 5000,
-        description: 'Please renew your plan to continue using the service.'
-      })
-    } else {
-      toast.warning('Free requests exhausted', {
-        duration: 4000,
-        description: 'Please upgrade to continue chatting.'
-      })
-    }
-    return
-  }
-
-  // Show placeholder while refreshing
-  chat.messages[msgIndex] = {
-    ...oldMessage,
-    response: "refreshing...",
-  }
-
-  // Increment request count for limited users
-  incrementRequestCount()
-
-  // handling for link-only prompts
-  if (oldPrompt&&isJustLinks(oldPrompt)) {
-    const urls = extractUrls(oldPrompt)
-
-    try {
-      let combinedResponse = `I've analyzed the link${urls.length > 1 ? "s" : ""} you shared:\n\n`
-
-      for (const url of urls) {
-        try {
-          const linkPreview = await fetchLinkPreview(url)
-
-          combinedResponse += `**${linkPreview.title || 'Untitled'}**\n`
-          if (linkPreview.description) {
-            combinedResponse += `Description: ${linkPreview.description}\n`
-          }
-          combinedResponse += `Domain: ${linkPreview.domain || new URL(url).hostname}\n`
-          combinedResponse += `URL: ${url}\n\n`
-        } catch (err: any) {
-          combinedResponse += `⚠️ Failed to analyze: ${url} (${err.message || "Unknown error"})\n\n`
-        }
-      }
-
-      // Replace the same message with the refreshed response
-      chat.messages[msgIndex] = {
-        ...oldMessage,
-        response: combinedResponse.trim(),
-        status: 200,
-      }
-
-      chat.updatedAt = new Date().toISOString()
-      saveChats()
-
-      // Re-run link previews if needed
-      await processLinksInResponse(msgIndex)
-    } finally {
-      observeNewVideoContainers()
-      await nextTick()
-      scrollToBottom()
-    }
-
-    return // ✅ Exit early for link-only prompts
-  }
-
-  try {
-    // Fetch new response using the same prompt
-    let response = await fetch(WRAPPER_URL, {
-      method: "POST",
-      body: JSON.stringify(fabricatedPrompt),
-      headers: { "content-type": "application/json" }
-    })
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-    }
-
-    let parseRes = await response.json()
-
-    // Replace the same message with the refreshed response
-    chat.messages[msgIndex] = {
-      ...oldMessage,
-      response: parseRes.error ? parseRes.error : parseRes.response,
-      status: response.status,
-    }
-
-    chat.updatedAt = new Date().toISOString()
-    saveChats()
-
-    // Re-run link previews if needed
-    await processLinksInResponse(msgIndex)
-  } catch (err: any) {
-    chat.messages[msgIndex] = {
-      ...oldMessage,
-      response: `⚠️ Failed to refresh response: ${err.message || "Unknown error"}`,
-    }
-    toast.error(`Failed to refresh response: ${err.message}`)
-  } finally {
-    saveChats()
   }
 }
 

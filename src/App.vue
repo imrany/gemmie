@@ -3,12 +3,14 @@ import { computed, onMounted, onUnmounted, provide, ref, type ComputedRef } from
 import { toast, Toaster } from 'vue-sonner'
 import 'vue-sonner/style.css'
 import type { Chat, ConfirmDialogOptions, CurrentChat, LinkPreview } from './types';
-import { API_BASE_URL, generateChatId, generateChatTitle, extractUrls, validateCredentials, getTransaction } from './utils/globals';
+import { API_BASE_URL, generateChatId, generateChatTitle, extractUrls, validateCredentials, getTransaction, WRAPPER_URL } from './utils/globals';
 import { nextTick } from 'vue';
 import { detectAndProcessVideo } from './utils/videoProcessing';
 import ConfirmDialog from './components/ConfirmDialog.vue';
 import type { Theme } from 'vue-sonner/src/packages/types.js';
 
+const isUserOnline = ref(navigator.onLine)
+const connectionStatus = ref<'online' | 'offline' | 'checking'>('online')
 const screenWidth = ref(screen.width)
 const isDarkMode = ref(false)
 const currentTheme = ref<Theme | any>("system")
@@ -234,6 +236,13 @@ function showConfirmDialog(options: ConfirmDialogOptions) {
 
 // API call with better error handling and retry logic
 async function apiCall(endpoint: string, options: RequestInit = {}, retryCount = 0): Promise<any> {
+  if (!isUserOnline.value) {
+    const isActuallyOnline = await checkInternetConnection()
+    if (!isActuallyOnline) {
+      throw new Error('No internet connection. Please check your network and try again.')
+    }
+  }
+
   const maxRetries = 3
   const retryDelay = Math.pow(2, retryCount) * 1000 // Exponential backoff
 
@@ -1525,6 +1534,17 @@ function loadLocalData() {
 
 // manual sync with smart strategy
 async function manualSync() {
+  if (!isUserOnline.value) {
+    const isActuallyOnline = await checkInternetConnection()
+    if (!isActuallyOnline) {
+      toast.error('Cannot sync while offline', {
+        duration: 4000,
+        description: 'Please check your internet connection'
+      })
+      return
+    }
+  }
+
   if (!parsedUserDetails.value?.user_id) {
     toast.warning('Please log in to sync data', {
       duration: 3000,
@@ -1903,6 +1923,105 @@ function toggleTheme(newTheme?: Theme) {
   // toast.info(`Theme: ${themeLabel}`, { duration: 1500 })
 }
 
+// Function to check internet connectivity more reliably
+async function checkInternetConnection(): Promise<boolean> {
+  try {
+    connectionStatus.value = 'checking'
+    
+    // Try to fetch a small resource from a reliable source
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 5000) // 5 second timeout
+    
+    const response = await fetch(`${API_BASE_URL}/health`, {
+      method: 'HEAD',
+      signal: controller.signal,
+      cache: 'no-cache'
+    })
+    
+    clearTimeout(timeoutId)
+    
+    // If we get any response, we're online
+    const isConnected = response.status < 400
+    isUserOnline.value = isConnected
+    connectionStatus.value = isConnected ? 'online' : 'offline'
+    
+    return isConnected
+  } catch (error) {
+    console.warn('Internet connection check failed:', error)
+    isUserOnline.value = false
+    connectionStatus.value = 'offline'
+    return false
+  }
+}
+
+// Function to show connection status to user
+function showConnectionStatus() {
+  if (!isUserOnline.value) {
+    toast.error('You are offline', {
+      duration: 4000,
+      description: 'Please check your internet connection'
+    })
+  } else {
+    toast.success('Connection restored', {
+      duration: 3000,
+      description: 'You are back online'
+    })
+  }
+}
+
+// Enhanced event listeners with connection checking
+function setupConnectionListeners() {
+  // Basic online/offline events
+  window.addEventListener('online', async () => {
+    console.log('Browser reports online, verifying...')
+    const isActuallyOnline = await checkInternetConnection()
+    if (isActuallyOnline) {
+      showConnectionStatus()
+      
+      // Auto-sync when coming back online if needed
+      if (syncStatus.value.hasUnsyncedChanges && parsedUserDetails.value?.sync_enabled) {
+        setTimeout(() => {
+          manualSync().catch(console.error)
+        }, 2000)
+      }
+    }
+  })
+
+  window.addEventListener('offline', () => {
+    console.log('Browser reports offline')
+    isUserOnline.value = false
+    connectionStatus.value = 'offline'
+    showConnectionStatus()
+  })
+
+  // Periodic connection checking (every 30 seconds when offline)
+  let connectionCheckInterval: any
+  const startConnectionMonitoring = () => {
+    connectionCheckInterval = setInterval(async () => {
+      if (!isUserOnline.value) {
+        await checkInternetConnection()
+        if (isUserOnline.value) {
+          showConnectionStatus()
+        }
+      }
+    }, 30000) // Check every 30 seconds when offline
+  }
+
+  const stopConnectionMonitoring = () => {
+    if (connectionCheckInterval) {
+      clearInterval(connectionCheckInterval)
+    }
+  }
+
+  // Start monitoring when offline
+  if (!isUserOnline.value) {
+    startConnectionMonitoring()
+  }
+
+  window.addEventListener('online', stopConnectionMonitoring)
+  window.addEventListener('offline', startConnectionMonitoring)
+}
+
 // onMounted with comprehensive error handling
 onMounted(async () => {
   try {
@@ -2033,6 +2152,38 @@ onMounted(async () => {
   }
 })
 
+onMounted(() => {
+  // Initial connection check
+  checkInternetConnection().then(isOnline => {
+    console.log(`Initial connection check: ${isOnline ? 'Online' : 'Offline'}`)
+  })
+
+  // Setup event listeners
+  setupConnectionListeners()
+
+  // Check connection on tab focus
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && !isUserOnline.value) {
+      // Re-check connection when tab becomes visible and we were offline
+      setTimeout(() => {
+        checkInternetConnection()
+      }, 1000)
+    }
+  })
+})
+
+onUnmounted(() => {
+  // Cleanup event listeners
+  window.removeEventListener('online', setupConnectionListeners)
+  window.removeEventListener('offline', setupConnectionListeners)
+  
+  // Clear any intervals
+  const intervals = Object.values(globalThis).filter(
+    value => value && typeof value === 'object' && 'refresh' in value
+  )
+  intervals.forEach(interval => clearInterval(interval as any))
+})
+
 onUnmounted(() => {
   // Only cleanup auto-sync if user is logging out
   if (!isAuthenticated.value) {
@@ -2067,8 +2218,11 @@ const globalState = {
   planStatus,
   isDarkMode,
   currentTheme,
-
+  isUserOnline,
+  connectionStatus,
+  
   // Core functions
+  checkInternetConnection,
   showConfirmDialog,
   apiCall,
   logout,
