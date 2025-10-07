@@ -223,7 +223,7 @@ watch(isAuthenticated, (val) => {
         : 'flex-grow flex flex-col ml-[60px] font-light text-sm transition-all duration-300 ease-in-out')
       : 'text-sm font-light flex-grow flex flex-col transition-all duration-300 ease-in-out'">
 
-      <div class="h-screen flex flex-col p-6 overflow-y-auto bg-gray-50 dark:bg-gray-900">
+      <div class="flex flex-col p-4 md:p-6 bg-gray-50 dark:bg-gray-900 min-h-0 flex-1">
         <div class="flex items-center justify-between mb-4">
           <button @click="router.push('/')" title="Go Back"
             class="md:hidden flex items-center justify-center w-8 h-8 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full cursor-pointer transition-colors">
@@ -256,7 +256,7 @@ watch(isAuthenticated, (val) => {
           </nav>
         </div>
 
-        <div class="flex flex-grow gap-8">
+        <div class="flex flex-col md:flex-row gap-4 md:gap-8 flex-1 min-h-0">
           <!-- Tabs Sidebar (hidden on mobile) -->
           <div class="w-48 flex-col gap-2 hidden md:flex flex-shrink-0">
             <button @click="activeTab = 'profile'" :class="activeTab === 'profile'
@@ -280,20 +280,20 @@ watch(isAuthenticated, (val) => {
           </div>
 
           <!-- Content Area -->
-          <div class="flex-grow">
+          <div class="flex-1 min-h-0 overflow-auto">
             <!-- Profile -->
             <div v-if="activeTab === 'profile'"
-              class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 w-full max-w-2xl transition-colors duration-300">
-              <h2 class="text-xl font-medium mb-6 text-gray-900 dark:text-white">Profile</h2>
+              class="bg-white dark:bg-gray-800 p-4 md:p-6 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 w-full max-w-2xl mx-auto transition-colors duration-300">
+              <h2 class="text-xl font-medium mb-4 md:mb-6 text-gray-900 dark:text-white">Profile</h2>
 
-              <form @submit.prevent="saveProfile" class="flex flex-col gap-6">
+              <form @submit.prevent="saveProfile" class="flex flex-col gap-4 md:gap-6">
                 <!-- Username -->
                 <div>
                   <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Your username
                   </label>
                   <input v-model="profileData.username" type="text" disabled
-                    class="border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 w-full text-sm bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-400 cursor-not-allowed transition-colors" />
+                    class="border border-gray-300 dark:border-gray-600 rounded-lg px-3 md:px-4 py-2 w-full text-sm bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-400 cursor-not-allowed transition-colors" />
                   <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Username cannot be changed</p>
                 </div>
 
@@ -301,11 +301,11 @@ watch(isAuthenticated, (val) => {
                 <div>
                   <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Your email</label>
                   <input v-model="profileData.email" type="email" disabled
-                    class="border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 w-full text-sm bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-400 cursor-not-allowed transition-colors" />
+                    class="border border-gray-300 dark:border-gray-600 rounded-lg px-3 md:px-4 py-2 w-full text-sm bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-400 cursor-not-allowed transition-colors" />
                   <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Email cannot be changed</p>
                 </div>
 
-                <!-- Theme Selection -->
+                <!-- Theme Selection - THIS IS THE DESKTOP VERSION -->
                 <div class="max-md:hidden">
                   <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
                     Theme Preference
@@ -401,7 +401,7 @@ watch(isAuthenticated, (val) => {
                     What best describes your work?
                   </label>
                   <select v-model="profileData.workFunction"
-                    class="border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 w-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                    class="border border-gray-300 dark:border-gray-600 rounded-lg px-3 md:px-4 py-2 w-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
                     <option value="">Select your work function</option>
                     <option value="software-developer">Software Developer</option>
                     <option value="designer">Designer</option>
@@ -423,7 +423,7 @@ watch(isAuthenticated, (val) => {
                       class="ml-1 text-xs text-orange-600 dark:text-orange-400 bg-orange-100 dark:bg-orange-900/30 px-2 py-0.5 rounded">Beta</span>
                   </label>
                   <textarea v-model="profileData.preferences" rows="3"
-                    class="border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 w-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
+                    class="border border-gray-300 dark:border-gray-600 rounded-lg px-3 md:px-4 py-2 w-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
                     placeholder="e.g., Be concise, use technical explanations, avoid jargon" />
                   <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
                     Your preferences will apply to all conversations, within guidelines.
@@ -443,7 +443,7 @@ watch(isAuthenticated, (val) => {
 
             <!-- Account -->
             <div v-if="activeTab === 'account'"
-              class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 w-full max-w-2xl transition-colors duration-300">
+              class="bg-white dark:bg-gray-800 p-4 md:p-6 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 w-full max-w-2xl mx-auto transition-colors duration-300">
               <h2 class="text-xl font-medium mb-6 text-gray-900 dark:text-white">Account</h2>
 
               <div class="space-y-6">
@@ -453,7 +453,7 @@ watch(isAuthenticated, (val) => {
                     <h3 class="text-sm font-medium text-gray-800 dark:text-gray-200">Auto Sync</h3>
                     <p class="text-xs max-w-[150px] text-gray-500 dark:text-gray-400">
                       {{ parsedUserDetails?.sync_enabled ? 'Data is synced across all your devices automatically' :
-                      'Data is only stored locally on this device' }}
+                        'Data is only stored locally on this device' }}
                     </p>
                   </div>
                   <button @click="() => toggleSync()"
@@ -532,7 +532,7 @@ watch(isAuthenticated, (val) => {
 
             <!-- Billing -->
             <div v-if="activeTab === 'billing'"
-              class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 w-full max-w-2xl transition-colors duration-300">
+              class="bg-white dark:bg-gray-800 p-4 md:p-6 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 w-full max-w-2xl mx-auto transition-colors duration-300">
               <h2 class="text-xl font-medium mb-6 text-gray-900 dark:text-white">Billing</h2>
 
               <!-- Show M-Pesa number if available -->
@@ -625,14 +625,3 @@ watch(isAuthenticated, (val) => {
     </div>
   </div>
 </template>
-
-<style scoped>
-/* Ensure proper scrolling on mobile */
-@media (max-width: 768px) {
-  .h-screen {
-    height: 100vh;
-    height: 100dvh;
-    /* Better mobile support */
-  }
-}
-</style>
