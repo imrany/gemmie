@@ -124,8 +124,8 @@ const {
   isFreeUser,
 } = globalState
 let parsedUserDetails: Ref<any> = globalState.parsedUserDetails
-  
-const route=useRoute()
+
+const route = useRoute()
 // ---------- State ----------
 const authStep = ref(1)
 const showCreateSession = ref(false)
@@ -328,10 +328,10 @@ function loadChats() {
 function LinkPreviewComponent({ preview }: { preview: LinkPreview }) {
   if (preview.loading) {
     return `
-      <div class="link-preview loading border border-gray-200 rounded-lg p-3 my-2 bg-gray-50 max-w-full">
+      <div class="link-preview loading border border-gray-200 dark:border-gray-700 rounded-lg p-3 my-2 bg-gray-50 dark:bg-gray-800 max-w-full transition-colors duration-200">
         <div class="flex items-center gap-2">
-          <i class="pi pi-spin pi-spinner text-gray-400 flex-shrink-0"></i>
-          <span class="text-sm text-gray-500 truncate">Loading preview...</span>
+          <i class="pi pi-spin pi-spinner text-gray-400 dark:text-gray-500 flex-shrink-0"></i>
+          <span class="text-sm text-gray-500 dark:text-gray-400 truncate">Loading preview...</span>
         </div>
       </div>
     `
@@ -339,11 +339,11 @@ function LinkPreviewComponent({ preview }: { preview: LinkPreview }) {
 
   if (preview.error) {
     return `
-      <div class="link-preview error border border-gray-200 rounded-lg p-3 my-2 bg-gray-50 max-w-full">
+      <div class="link-preview error border border-gray-200 dark:border-gray-700 rounded-lg p-3 my-2 bg-gray-50 dark:bg-gray-800 max-w-full transition-colors duration-200">
         <div class="flex items-center gap-2 min-w-0">
-          <i class="pi pi-external-link text-gray-400 flex-shrink-0"></i>
+          <i class="pi pi-external-link text-gray-400 dark:text-gray-500 flex-shrink-0"></i>
           <a href="${preview.url}" target="_blank" rel="noopener noreferrer" 
-             class="text-blue-600 hover:text-blue-800 text-sm font-medium truncate min-w-0 flex-1">
+             class="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 text-sm font-medium truncate min-w-0 flex-1 transition-colors duration-200">
             ${preview.domain}
           </a>
         </div>
@@ -361,28 +361,28 @@ function LinkPreviewComponent({ preview }: { preview: LinkPreview }) {
     // For embeddable videos (YouTube, Vimeo)
     if (preview.embedHtml && (preview.videoType === 'youtube' || preview.videoType === 'vimeo')) {
       return `
-        <div class="aspect-video w-full bg-black relative group overflow-hidden" id="${videoId}">
+        <div class="aspect-video w-full bg-black dark:bg-gray-900 relative group overflow-hidden" id="${videoId}">
           <div class="video-embed-container object-cover w-full h-full" 
                data-embed='${preview.embedHtml.replace(/'/g, '&apos;')}'
                data-video-type="${preview.videoType}"
                data-video-id="${videoId}">
             
             <!-- Initial thumbnail state -->
-            <div class="video-thumbnail w-full h-full bg-gray-900 flex items-center justify-center cursor-pointer overflow-hidden"
+            <div class="video-thumbnail w-full h-full bg-gray-900 dark:bg-gray-800 flex items-center justify-center cursor-pointer overflow-hidden"
                  onclick="playEmbeddedVideo(this, '${videoId}')">
               ${preview.videoThumbnail || preview.previewImage ? `
                 <img src="${preview.videoThumbnail || preview.previewImage}" 
                      alt="${preview.title}" class="w-full h-full object-cover">
               ` : ''}
-              <div class="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30 group-hover:bg-opacity-20 transition-colors">
-                <div class="w-12 h-12 sm:w-16 sm:h-16 bg-red-600 hover:bg-red-700 rounded-full flex items-center justify-center flex-shrink-0 transform hover:scale-110 transition-all duration-200">
+              <div class="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30 dark:bg-opacity-50 group-hover:bg-opacity-20 dark:group-hover:bg-opacity-40 transition-colors duration-200">
+                <div class="w-12 h-12 sm:w-16 sm:h-16 bg-red-600 hover:bg-red-700 dark:bg-red-500 dark:hover:bg-red-600 rounded-full flex items-center justify-center flex-shrink-0 transform hover:scale-110 transition-all duration-200">
                   <svg class="w-4 h-4 sm:w-6 sm:h-6 text-white ml-0.5 sm:ml-1" fill="currentColor" viewBox="0 0 24 24">
                     <path d="M8 5v14l11-7z"/>
                   </svg>
                 </div>
               </div>
               ${preview.videoDuration ? `
-                <div class="absolute bottom-2 right-2 bg-black bg-opacity-80 text-white text-xs px-2 py-1 rounded max-w-[calc(100%-1rem)] truncate">
+                <div class="absolute bottom-2 right-2 bg-black bg-opacity-80 dark:bg-opacity-90 text-white text-xs px-2 py-1 rounded max-w-[calc(100%-1rem)] truncate">
                   ${preview.videoDuration}
                 </div>
               ` : ''}
@@ -393,21 +393,21 @@ function LinkPreviewComponent({ preview }: { preview: LinkPreview }) {
           <div class="video-controls absolute top-2 right-2 flex gap-2 opacity-0 transition-opacity duration-200" 
                id="${videoId}-controls">
             <button onclick="pauseVideo('${videoId}')" 
-                    class="pause-btn w-8 h-8 bg-black bg-opacity-70 hover:bg-opacity-90 rounded-full flex items-center justify-center text-white transition-all"
+                    class="pause-btn w-8 h-8 bg-black bg-opacity-70 dark:bg-opacity-80 hover:bg-opacity-90 rounded-full flex items-center justify-center text-white transition-all duration-200"
                     title="Pause">
               <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
               </svg>
             </button>
             <button onclick="resumeVideo('${videoId}')" 
-                    class="play-btn w-8 h-8 bg-black bg-opacity-70 hover:bg-opacity-90 rounded-full flex items-center justify-center text-white transition-all hidden"
+                    class="play-btn w-8 h-8 bg-black bg-opacity-70 dark:bg-opacity-80 hover:bg-opacity-90 rounded-full flex items-center justify-center text-white transition-all duration-200 hidden"
                     title="Resume">
               <svg class="w-4 h-4 ml-0.5" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M8 5v14l11-7z"/>
               </svg>
             </button>
             <button onclick="stopVideo('${videoId}')" 
-                    class="stop-btn w-8 h-8 bg-black bg-opacity-70 hover:bg-opacity-90 rounded-full flex items-center justify-center text-white transition-all"
+                    class="stop-btn w-8 h-8 bg-black bg-opacity-70 dark:bg-opacity-80 hover:bg-opacity-90 rounded-full flex items-center justify-center text-white transition-all duration-200"
                     title="Stop">
               <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M6 6h12v12H6z"/>
@@ -421,7 +421,7 @@ function LinkPreviewComponent({ preview }: { preview: LinkPreview }) {
     // For direct video files
     if (preview.videoType === 'direct' && preview.video) {
       return `
-        <div class="aspect-video w-full bg-black overflow-hidden relative group" id="${videoId}">
+        <div class="aspect-video w-full bg-black dark:bg-gray-900 overflow-hidden relative group" id="${videoId}">
           <video 
             id="${videoId}-video"
             controls 
@@ -440,7 +440,7 @@ function LinkPreviewComponent({ preview }: { preview: LinkPreview }) {
           <div class="video-controls absolute top-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200" 
                id="${videoId}-controls">
             <button onclick="toggleDirectVideo('${videoId}')" 
-                    class="toggle-btn w-8 h-8 bg-black bg-opacity-70 hover:bg-opacity-90 rounded-full flex items-center justify-center text-white transition-all"
+                    class="toggle-btn w-8 h-8 bg-black bg-opacity-70 dark:bg-opacity-80 hover:bg-opacity-90 rounded-full flex items-center justify-center text-white transition-all duration-200"
                     title="Play/Pause">
               <svg class="play-icon w-4 h-4 ml-0.5" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M8 5v14l11-7z"/>
@@ -450,7 +450,7 @@ function LinkPreviewComponent({ preview }: { preview: LinkPreview }) {
               </svg>
             </button>
             <button onclick="stopDirectVideo('${videoId}')" 
-                    class="stop-btn w-8 h-8 bg-black bg-opacity-70 hover:bg-opacity-90 rounded-full flex items-center justify-center text-white transition-all"
+                    class="stop-btn w-8 h-8 bg-black bg-opacity-70 dark:bg-opacity-80 hover:bg-opacity-90 rounded-full flex items-center justify-center text-white transition-all duration-200"
                     title="Stop">
               <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M6 6h12v12H6z"/>
@@ -464,18 +464,18 @@ function LinkPreviewComponent({ preview }: { preview: LinkPreview }) {
     // For social media videos (no stop/continue - just external link)
     if ((preview.videoType === 'twitter' || preview.videoType === 'tiktok') && preview.previewImage) {
       return `
-        <div class="aspect-video w-full bg-gray-100 relative group overflow-hidden cursor-pointer"
+        <div class="aspect-video w-full bg-gray-100 dark:bg-gray-800 relative group overflow-hidden cursor-pointer"
              onclick="playSocialVideo('${preview.url}', '${preview.videoType}')">
           <img src="${preview.previewImage}" alt="${preview.title}" 
                class="w-full h-full object-cover">
-          <div class="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30 group-hover:bg-opacity-20 transition-colors">
-            <div class="w-10 h-10 sm:w-12 sm:h-12 bg-white bg-opacity-90 hover:bg-opacity-100 rounded-full flex items-center justify-center flex-shrink-0 transform hover:scale-110 transition-all duration-200">
-              <svg class="w-3 h-3 sm:w-4 sm:h-4 text-gray-800 ml-0.5" fill="currentColor" viewBox="0 0 24 24">
+          <div class="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30 dark:bg-opacity-50 group-hover:bg-opacity-20 dark:group-hover:bg-opacity-40 transition-colors duration-200">
+            <div class="w-10 h-10 sm:w-12 sm:h-12 bg-white dark:bg-gray-300 bg-opacity-90 dark:bg-opacity-90 hover:bg-opacity-100 dark:hover:bg-opacity-100 rounded-full flex items-center justify-center flex-shrink-0 transform hover:scale-110 transition-all duration-200">
+              <svg class="w-3 h-3 sm:w-4 sm:h-4 text-gray-800 dark:text-gray-900 ml-0.5" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M8 5v14l11-7z"/>
               </svg>
             </div>
           </div>
-          <div class="absolute top-2 left-2 bg-black bg-opacity-80 text-white text-xs px-2 py-1 rounded capitalize">
+          <div class="absolute top-2 left-2 bg-black bg-opacity-80 dark:bg-opacity-90 text-white text-xs px-2 py-1 rounded capitalize">
             ${preview.videoType}
           </div>
         </div>
@@ -489,29 +489,29 @@ function LinkPreviewComponent({ preview }: { preview: LinkPreview }) {
   const videoPreview = renderVideoPreview()
 
   return `
-    <div class="link-preview border border-gray-200 rounded-lg overflow-hidden my-2 bg-white hover:shadow-md transition-shadow w-fit max-w-full">
+    <div class="link-preview border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden my-2 bg-white dark:bg-gray-800 hover:shadow-md dark:hover:shadow-gray-900/30 transition-all duration-300 w-fit max-w-full">
       ${hasVideo ? `
         <div class="w-full max-w-[500px]">
           ${videoPreview}
           <div class="p-3 sm:p-4 min-w-0">
             <div class="flex items-start justify-between gap-2 min-w-0">
               <div class="flex-1 min-w-0">
-                <h4 class="font-medium text-gray-900 text-sm sm:text-base line-clamp-2 mb-1 break-words">
-                  <i class="pi pi-play-circle text-red-600 mr-1 flex-shrink-0"></i>
-                  <a href="${preview.url}" target="_blank" rel="noopener noreferrer" class="hover:text-blue-600 break-words">
+                <h4 class="font-medium text-gray-900 dark:text-white text-sm sm:text-base line-clamp-2 mb-1 break-words">
+                  <i class="pi pi-play-circle text-red-600 dark:text-red-500 mr-1 flex-shrink-0"></i>
+                  <a href="${preview.url}" target="_blank" rel="noopener noreferrer" class="hover:text-blue-600 dark:hover:text-blue-400 break-words transition-colors duration-200">
                     ${preview.title}
                   </a>
                 </h4>
                 ${preview.description ? `
-                  <p class="text-gray-600 text-xs sm:text-sm line-clamp-2 sm:line-clamp-3 mb-2 break-words leading-relaxed">${preview.description}</p>
+                  <p class="text-gray-600 dark:text-gray-400 text-xs sm:text-sm line-clamp-2 sm:line-clamp-3 mb-2 break-words leading-relaxed transition-colors duration-200">${preview.description}</p>
                 ` : ''}
-                <div class="flex items-center gap-1 text-xs sm:text-sm text-gray-500 min-w-0">
-                  <i class="pi pi-video text-red-600 flex-shrink-0"></i>
+                <div class="flex items-center gap-1 text-xs sm:text-sm text-gray-500 dark:text-gray-400 min-w-0 transition-colors duration-200">
+                  <i class="pi pi-video text-red-600 dark:text-red-500 flex-shrink-0"></i>
                   <span class="truncate min-w-0 flex-1">${preview.domain}</span>
                   ${preview.videoDuration ? `<span class="ml-2 flex-shrink-0 hidden xs:inline">• ${preview.videoDuration}</span>` : ''}
                 </div>
                 ${preview.videoDuration ? `
-                  <div class="text-xs text-gray-500 mt-1 xs:hidden">
+                  <div class="text-xs text-gray-500 dark:text-gray-500 mt-1 xs:hidden transition-colors duration-200">
                     Duration: ${preview.videoDuration}
                   </div>
                 ` : ''}
@@ -523,7 +523,7 @@ function LinkPreviewComponent({ preview }: { preview: LinkPreview }) {
         <!-- Regular link preview -->
         <a href="${preview.url}" class="block w-full max-w-[400px]" target="_blank" rel="noopener noreferrer">
           ${preview.previewImage ? `
-            <div class="aspect-video overflow-hidden bg-gray-100">
+            <div class="aspect-video overflow-hidden bg-gray-100 dark:bg-gray-700 transition-colors duration-200">
               <img src="${preview.previewImage}" alt="${preview.title}" 
                    class="w-full h-full object-cover"
                    onerror="this.parentElement.style.display='none'">
@@ -532,13 +532,13 @@ function LinkPreviewComponent({ preview }: { preview: LinkPreview }) {
           <div class="p-3 sm:p-4 min-w-0">
             <div class="flex items-start justify-between gap-2 min-w-0">
               <div class="flex-1 min-w-0">
-                <h4 class="font-medium text-gray-900 text-sm sm:text-base line-clamp-2 mb-1 break-words">
+                <h4 class="font-medium text-gray-900 dark:text-white text-sm sm:text-base line-clamp-2 mb-1 break-words transition-colors duration-200">
                   <span class="break-words">${preview.title}</span>
                 </h4>
                 ${preview.description ? `
-                  <p class="text-gray-600 text-xs sm:text-sm line-clamp-2 sm:line-clamp-3 mb-2 break-words leading-relaxed">${preview.description}</p>
+                  <p class="text-gray-600 dark:text-gray-400 text-xs sm:text-sm line-clamp-2 sm:line-clamp-3 mb-2 break-words leading-relaxed transition-colors duration-200">${preview.description}</p>
                 ` : ''}
-                <div class="flex items-center gap-1 text-xs sm:text-sm text-gray-500 min-w-0">
+                <div class="flex items-center gap-1 text-xs sm:text-sm text-gray-500 dark:text-gray-400 min-w-0 transition-colors duration-200">
                   <i class="pi pi-external-link flex-shrink-0"></i>
                   <span class="truncate min-w-0 flex-1">${preview.domain}</span>
                 </div>
@@ -1045,6 +1045,18 @@ async function handleStepSubmit(e: Event) {
       // Check if response exists and has expected structure
       if (!response) {
         throw new Error('No response received from server')
+      } else {
+        // Check if previous route was /upgrade and redirect accordingly
+        const previousRoute = document.referrer
+        const isFromUpgrade = previousRoute.includes('/upgrade') || window.location.search.includes('from=upgrade')
+
+        if (isFromUpgrade) {
+          console.log('Redirecting to upgrade page after authentication')
+          // Use setTimeout to ensure the auth process completes before navigation
+          setTimeout(() => {
+            router.push('/upgrade')
+          }, 2000)
+        }
       }
 
       if (response.error) {
@@ -1195,17 +1207,91 @@ async function refreshResponse(oldPrompt?: string) {
 
   const oldMessage = chat.messages[msgIndex]
 
+  let fabricatedPrompt = oldPrompt
+  if (oldPrompt && isPromptTooShort(oldPrompt) && currentMessages.value.length > 1) {
+    const lastMessage = currentMessages.value[msgIndex - 1]
+    fabricatedPrompt = `${lastMessage.prompt || ''} ${lastMessage.response || ''}\nUser: ${oldPrompt}`
+  }
+
+  // Check request limits for refresh too
+  checkAndResetDailyCount()
+  const shouldHaveLimit = isFreeUser.value ||
+    planStatus.value.isExpired ||
+    planStatus.value.status === 'no-plan' ||
+    planStatus.value.status === 'expired'
+
+  if (shouldHaveLimit && requestCount.value >= FREE_REQUEST_LIMIT) {
+    if (planStatus.value.isExpired) {
+      toast.error('Your plan has expired', {
+        duration: 5000,
+        description: 'Please renew your plan to continue using the service.'
+      })
+    } else {
+      toast.warning('Free requests exhausted', {
+        duration: 4000,
+        description: 'Please upgrade to continue chatting.'
+      })
+    }
+    return
+  }
+
   // Show placeholder while refreshing
   chat.messages[msgIndex] = {
     ...oldMessage,
     response: "refreshing...",
   }
 
+  // Increment request count for limited users
+  incrementRequestCount()
+
+  // handling for link-only prompts
+  if (oldPrompt&&isJustLinks(oldPrompt)) {
+    const urls = extractUrls(oldPrompt)
+
+    try {
+      let combinedResponse = `I've analyzed the link${urls.length > 1 ? "s" : ""} you shared:\n\n`
+
+      for (const url of urls) {
+        try {
+          const linkPreview = await fetchLinkPreview(url)
+
+          combinedResponse += `**${linkPreview.title || 'Untitled'}**\n`
+          if (linkPreview.description) {
+            combinedResponse += `Description: ${linkPreview.description}\n`
+          }
+          combinedResponse += `Domain: ${linkPreview.domain || new URL(url).hostname}\n`
+          combinedResponse += `URL: ${url}\n\n`
+        } catch (err: any) {
+          combinedResponse += `⚠️ Failed to analyze: ${url} (${err.message || "Unknown error"})\n\n`
+        }
+      }
+
+      // Replace the same message with the refreshed response
+      chat.messages[msgIndex] = {
+        ...oldMessage,
+        response: combinedResponse.trim(),
+        status: 200,
+      }
+
+      chat.updatedAt = new Date().toISOString()
+      saveChats()
+
+      // Re-run link previews if needed
+      await processLinksInResponse(msgIndex)
+    } finally {
+      observeNewVideoContainers()
+      await nextTick()
+      scrollToBottom()
+    }
+
+    return // ✅ Exit early for link-only prompts
+  }
+
   try {
     // Fetch new response using the same prompt
     let response = await fetch(WRAPPER_URL, {
       method: "POST",
-      body: JSON.stringify(oldMessage.prompt),
+      body: JSON.stringify(fabricatedPrompt),
       headers: { "content-type": "application/json" }
     })
 
@@ -1227,12 +1313,14 @@ async function refreshResponse(oldPrompt?: string) {
 
     // Re-run link previews if needed
     await processLinksInResponse(msgIndex)
-
   } catch (err: any) {
     chat.messages[msgIndex] = {
       ...oldMessage,
       response: `⚠️ Failed to refresh response: ${err.message || "Unknown error"}`,
     }
+    toast.error(`Failed to refresh response: ${err.message}`)
+  } finally {
+    saveChats()
   }
 }
 
@@ -1297,30 +1385,30 @@ function PastePreviewComponent(content: string, wordCount: number, charCount: nu
   const clickableAttributes = isClickable ?
     `data-paste-content="${encodeURIComponent(content)}" data-word-count="${wordCount}" data-char-count="${charCount}"` : ''
 
-  const clickableClass = isClickable ? 'paste-preview-clickable cursor-pointer hover:bg-gray-200' : ''
+  const clickableClass = isClickable ? 'paste-preview-clickable cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors duration-200' : ''
 
   return `
-    <div class="paste-preview border border-gray-300 rounded-lg overflow-hidden my-2 bg-gray-100 hover:shadow-md transition-all w-full ${clickableClass}" 
+    <div class="paste-preview border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden my-2 bg-gray-100 dark:bg-gray-700 hover:shadow-md transition-all duration-300 w-full ${clickableClass}" 
          id="${componentId}" ${clickableAttributes}>
       <div class="w-full">
-        <div class="bg-gray-600 px-3 py-1 text-white text-xs font-medium flex items-center gap-2">
-          <i class="pi pi-clipboard"></i>
+        <div class="bg-gray-600 dark:bg-gray-800 px-3 py-1 text-white dark:text-gray-200 text-xs font-medium flex items-center gap-2 transition-colors duration-200">
+          <i class="pi pi-clipboard text-gray-300 dark:text-gray-400"></i>
           <span>PASTED CONTENT</span>
-          <span class="ml-auto text-gray-200 hidden sm:inline">${wordCount} words • ${charCount} chars</span>
-          <span class="ml-auto text-gray-200 sm:hidden">${charCount} chars</span>
-          ${isClickable ? '<i class="pi pi-external-link ml-1 text-gray-300"></i>' : ''}
+          <span class="ml-auto text-gray-200 dark:text-gray-400 hidden sm:inline">${wordCount} words • ${charCount} chars</span>
+          <span class="ml-auto text-gray-200 dark:text-gray-400 sm:hidden">${charCount} chars</span>
+          ${isClickable ? '<i class="pi pi-external-link ml-1 text-gray-300 dark:text-gray-500"></i>' : ''}
         </div>
         <div class="pb-3 px-3">
           <div class="relative">
-            <div class="text-sm text-gray-800 leading-relaxed break-words whitespace-pre-wrap font-mono h-20 sm:h-24 overflow-hidden">
+            <div class="text-sm text-gray-800 dark:text-gray-200 leading-relaxed break-words whitespace-pre-wrap font-mono h-20 sm:h-24 overflow-hidden transition-colors duration-200">
               ${escapedPreview}
             </div>
-            <div class="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-gray-100 via-gray-100/80 to-transparent pointer-events-none"></div>
+            <div class="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-gray-100 dark:from-gray-700 via-gray-100/80 dark:via-gray-700/80 to-transparent pointer-events-none transition-colors duration-200"></div>
           </div>
-          <div class="flex items-center justify-between mt-2 text-xs text-gray-600">
+          <div class="flex items-center justify-between mt-2 text-xs text-gray-600 dark:text-gray-400 transition-colors duration-200">
             <span class="hidden sm:inline">${isClickable ? 'Click to view full content' : 'Large content detected'}</span>
             <span class="sm:hidden">${isClickable ? 'Tap to view' : 'Large content'}</span>
-            ${!isClickable ? '<button class="remove-paste-preview text-gray-700 hover:text-gray-900 underline font-medium" type="button">Remove</button>' : ''}
+            ${!isClickable ? '<button class="remove-paste-preview text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 underline font-medium transition-colors duration-200" type="button">Remove</button>' : ''}
           </div>
         </div>
       </div>
@@ -1672,8 +1760,8 @@ watch(() => ({ ...planStatus.value }), (newStatus, oldStatus) => {
   }
 }, { deep: true })
 
-watch(() => route.path,(newPath, oldPath)=>{
-  if(newPath==="/new"){
+watch(() => route.path, (newPath, oldPath) => {
+  if (newPath === "/new") {
     createNewChat()
     setShowInput()
     router.replace(`${oldPath}`)
@@ -1700,7 +1788,7 @@ onBeforeUnmount(() => {
 
 // Consolidated onMounted hook for better organization
 onMounted(() => {
-  if(route.path==="/new"){
+  if (route.path === "/new") {
     createNewChat()
     setShowInput()
     router.replace("/")
@@ -1913,7 +2001,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="flex h-[100vh] bg-background text-[var(--foreground)]">
+  <div class="flex h-[100vh] bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
     <!-- Sidebar -->
     <SideNav v-if="isAuthenticated" :data="{
       chats,
@@ -1953,12 +2041,10 @@ onMounted(() => {
           isCollapsed,
           isSidebarHidden,
           syncStatus,
-          }" 
-          :functions="{
-            hideSidebar,
-            manualSync,
-          }" 
-        />
+        }" :functions="{
+          hideSidebar,
+          manualSync,
+        }" />
         <!-- Empty State -->
         <CreateSessView v-if="!isAuthenticated" :chats="chats" :current-chat-id="currentChatId"
           :is-collapsed="isCollapsed" :parsed-user-details="parsedUserDetails" :screen-width="screenWidth"
@@ -1974,43 +2060,41 @@ onMounted(() => {
         <div v-else-if="isAuthenticated && currentMessages.length === 0">
           <!-- Loading Overlay -->
           <div v-if="isLoading"
-            class="absolute top-0 left-0 w-full h-full bg-white bg-opacity-80 z-10 flex flex-col items-center justify-center">
-            <i class="pi pi-spin pi-spinner text-4xl text-gray-500 mb-4"></i>
-            <p class="text-gray-700">Loading...</p>
+            class="absolute top-0 left-0 w-full h-full bg-white dark:bg-gray-900 bg-opacity-80 dark:bg-opacity-80 z-10 flex flex-col items-center justify-center">
+            <i class="pi pi-spin pi-spinner text-4xl text-gray-500 dark:text-gray-400 mb-4"></i>
+            <p class="text-gray-700 dark:text-gray-300">Loading...</p>
           </div>
 
-          <div v-else class="flex flex-col md:flex-grow items-center gap-3 text-gray-600">
-            <!-- {{currentTheme}} {{  isDarkMode }} -->
-            <img
-              :src="currentTheme === 'dark' || (currentTheme === 'system' && isDarkMode) ? 
-              '/favicon-light.svg' : '/logo.svg'"
-              alt="Gemmie Logo" class="w-[60px] h-[60px] rounded-md" />
+          <div v-else class="flex flex-col md:flex-grow items-center gap-3 text-gray-600 dark:text-gray-400">
+            <img :src="currentTheme === 'dark' || (currentTheme === 'system' && isDarkMode) ?
+              '/favicon-light.svg' : '/logo.svg'" alt="Gemmie Logo" class="w-[60px] h-[60px] rounded-md" />
 
-            <p class="text-3xl text-black font-semibold">{{ parsedUserDetails?.username || 'Gemmie' }}</p>
+            <p class="text-3xl text-black dark:text-white font-semibold">{{ parsedUserDetails?.username || 'Gemmie' }}
+            </p>
             <div class="text-center max-w-md space-y-2">
-              <p class="text-gray-600 leading-relaxed">
+              <p class="text-gray-600 dark:text-gray-400 leading-relaxed">
                 Experience privacy-first conversations with advanced AI. Your data stays secure, local and synced to
                 your
                 all devices.
               </p>
-              <div class="flex items-center justify-center gap-6 text-sm text-gray-500 mt-4">
+              <div class="flex items-center justify-center gap-6 text-sm text-gray-500 dark:text-gray-400 mt-4">
                 <div class="flex items-center gap-1">
-                  <i class="pi pi-shield text-green-500"></i>
+                  <i class="pi pi-shield text-green-500 dark:text-green-400"></i>
                   <span>Private</span>
                 </div>
                 <div class="flex items-center gap-1">
-                  <i class="pi pi-database text-blue-500"></i>
+                  <i class="pi pi-database text-blue-500 dark:text-blue-400"></i>
                   <span>Local Stored</span>
                 </div>
                 <div class="flex items-center gap-1">
-                  <i class="pi pi-sync text-purple-500"></i>
+                  <i class="pi pi-sync text-purple-500 dark:text-purple-400"></i>
                   <span>Synced</span>
                 </div>
               </div>
             </div>
             <div class="flex flex-col gap-3 w-full max-w-xs">
               <button v-if="!showInput" @click="setShowInput"
-                class="group px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg hover:from-blue-600 hover:to-purple-700 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl font-medium">
+                class="group px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 dark:from-blue-600 dark:to-purple-700 text-white rounded-lg hover:from-blue-600 hover:to-purple-700 dark:hover:from-blue-700 dark:hover:to-purple-800 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl font-medium">
                 <span class="flex items-center justify-center gap-2">
                   <i class="pi pi-pencil group-hover:rotate-12 transition-transform"></i>
                   Start Writing
@@ -2020,7 +2104,7 @@ onMounted(() => {
           </div>
         </div>
 
-        <!-- Update your chat messages container -->
+        <!-- Chat Messages Container -->
         <div ref="scrollableElem" v-else-if="currentMessages.length !== 0 && isAuthenticated"
           class="flex-grow no-scrollbar overflow-y-auto px-2 sm:px-4 w-full space-y-3 sm:space-y-4 mt-[55px]" :class="isRequestLimitExceeded || shouldShowUpgradePrompt ? 'pb-[160px] sm:pb-[150px]' :
             showScrollDownButton ? 'pb-[140px] sm:pb-[120px]' :
@@ -2031,8 +2115,10 @@ onMounted(() => {
             <div class="flex w-full justify-end chat-message">
               <div class="flex flex-col items-end max-w-[85%] sm:max-w-[75%] md:max-w-[70%]">
                 <!-- User message bubble -->
-                <div class="bg-gray-50 text-black p-3 rounded-2xl prose prose-sm max-w-none chat-bubble w-fit">
-                  <p class="text-xs opacity-80 text-right mb-1">{{ parsedUserDetails?.username || "You" }}</p>
+                <div
+                  class="bg-gray-50 dark:bg-gray-800 text-black dark:text-gray-100 p-3 rounded-2xl prose prose-sm dark:prose-invert max-w-none chat-bubble w-fit">
+                  <p class="text-xs opacity-80 text-right mb-1 dark:text-gray-400">{{ parsedUserDetails?.username ||
+                    "You" }}</p>
                   <div class="break-words"
                     v-html="renderMarkdown((item && item?.prompt && item?.prompt?.length > 800) ? item?.prompt?.trim().split('#pastedText#')[0] : item.prompt || '')">
                   </div>
@@ -2065,16 +2151,18 @@ onMounted(() => {
             </div>
 
             <!-- Bot Bubble -->
-            <div class="flex w-full justify-start relative">
+            <div class="flex w-full justify-start relative pb-[20px]">
               <div
-                class="bg-none chat-message leading-relaxed text-black p-3 rounded-2xl prose prose-sm w-fit max-w-[95%] sm:max-w-[85%] md:max-w-[80%]">
+                class="bg-none dark:bg-gray-800/50 chat-message leading-relaxed text-black dark:text-gray-100 p-3 rounded-2xl prose prose-sm dark:prose-invert w-fit max-w-[95%] sm:max-w-[85%] md:max-w-[80%]">
 
                 <!-- Loading state -->
-                <div v-if="item.response === '...'" class="flex w-full items-center gap-2 text-gray-500">
+                <div v-if="item.response === '...'"
+                  class="flex w-full items-center gap-2 text-gray-500 dark:text-gray-400">
                   <i class="pi pi-spin pi-spinner"></i>
                   <span class="text-sm">Thinking...</span>
                 </div>
-                <div v-else-if="item.response === 'refreshing...'" class="flex w-full items-center gap-2 text-gray-500">
+                <div v-else-if="item.response === 'refreshing...'"
+                  class="flex w-full items-center gap-2 text-gray-500 dark:text-gray-400">
                   <i class="pi pi-spin pi-spinner"></i>
                   <span class="text-sm">Refreshing...</span>
                 </div>
@@ -2094,27 +2182,27 @@ onMounted(() => {
 
                 <!-- Actions - Responsive with fewer labels on mobile -->
                 <div v-if="item.response !== '...' && item.response !== 'refreshing...'"
-                  class="flex flex-wrap gap-2 sm:gap-3 mt-2 text-gray-500 text-sm">
+                  class="flex flex-wrap gap-2 sm:gap-3 mt-2 text-gray-500 dark:text-gray-400 text-sm">
                   <button @click="copyResponse(item.response, i)"
-                    class="flex items-center gap-1 hover:text-blue-600 transition-colors min-h-[32px]">
+                    class="flex items-center gap-1 hover:text-blue-600 dark:hover:text-blue-400 transition-colors min-h-[32px]">
                     <i class="pi pi-copy"></i>
                     <span>{{ copiedIndex === i ? 'Copied!' : 'Copy' }}</span>
                   </button>
 
                   <button @click="shareResponse(item.response, item.prompt)"
-                    class="flex items-center gap-1 hover:text-green-600 transition-colors min-h-[32px]">
+                    class="flex items-center gap-1 hover:text-green-600 dark:hover:text-green-400 transition-colors min-h-[32px]">
                     <i class="pi pi-share-alt"></i>
                     <span>Share</span>
                   </button>
 
                   <button @click="refreshResponse(item.prompt)" :disabled="isLoading"
-                    class="flex items-center gap-1 hover:text-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-h-[32px]">
+                    class="flex items-center gap-1 hover:text-orange-600 dark:hover:text-orange-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-h-[32px]">
                     <i class="pi pi-refresh"></i>
                     <span>Refresh</span>
                   </button>
 
                   <button @click="deleteMessage(i)" :disabled="isLoading"
-                    class="flex items-center gap-1 hover:text-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-h-[32px]">
+                    class="flex items-center gap-1 hover:text-red-600 dark:hover:text-red-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-h-[32px]">
                     <i class="pi pi-trash"></i>
                     <span>Delete</span>
                   </button>
@@ -2127,7 +2215,7 @@ onMounted(() => {
         <!-- Responsive Scroll to Bottom Button -->
         <button v-if="showScrollDownButton && currentMessages.length !== 0 && isAuthenticated" @click="scrollToBottom"
           :class="isRequestLimitExceeded || shouldShowUpgradePrompt ? 'bottom-[170px]' : 'bottom-[90px]'"
-          class="fixed bg-gray-50 text-gray-500 border px-5 h-[34px] rounded-full shadow-lg hover:bg-gray-100 transition-colors z-20 left-1/2 transform -translate-x-1/2">
+          class="fixed bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border dark:border-gray-700 px-5 h-[34px] rounded-full shadow-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors z-20 left-1/2 transform -translate-x-1/2">
           <div class="flex gap-1 sm:gap-2 items-center justify-center w-full font-semibold h-full">
             <i class="pi pi-arrow-down text-center"></i>
             <p class="whitespace-nowrap">Scroll Down</p>
@@ -2138,16 +2226,17 @@ onMounted(() => {
         <!-- Input Area -->
         <div v-if="(currentMessages.length !== 0 || showInput === true) && isAuthenticated" :style="screenWidth > 720 && !isCollapsed ? 'left:270px;' :
           screenWidth > 720 && isCollapsed ? 'left:60px;' : 'left:0px;'"
-          class="bg-white z-20 bottom-0 right-0 fixed pb-3 sm:pb-5 px-2 sm:px-5">
+          class="bg-white dark:bg-gray-900 z-20 bottom-0 right-0 fixed pb-3 sm:pb-5 px-2 sm:px-5">
 
           <div class="flex items-center justify-center w-full">
-            <form @submit="handleSubmit" :class="screenWidth > 720 ? isCollapsed ?
-              'relative flex bg-gray-50 flex-col border-2 shadow rounded-2xl items-center w-[85%] max-w-6xl' :
-              'relative flex bg-gray-50 flex-col border-2 shadow rounded-2xl items-center w-[85%] max-w-4xl' :
-              'relative flex flex-col border-2 bg-gray-50 shadow rounded-2xl w-full max-w-full items-center'">
+            <form @submit="handleSubmit"
+              :class="screenWidth > 720 ? isCollapsed ?
+                'relative flex bg-gray-50 dark:bg-gray-800 flex-col border-2 dark:border-gray-700 shadow rounded-2xl items-center w-[85%] max-w-6xl' :
+                'relative flex bg-gray-50 dark:bg-gray-800 flex-col border-2 dark:border-gray-700 shadow rounded-2xl items-center w-[85%] max-w-4xl' :
+                'relative flex flex-col border-2 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 shadow rounded-2xl w-full max-w-full items-center'">
 
               <!-- Paste Preview inside form - above other content -->
-              <div v-if="pastePreview && pastePreview.show" class="w-full p-3 border-b">
+              <div v-if="pastePreview && pastePreview.show" class="w-full p-3 border-b dark:border-gray-700">
                 <div
                   v-html="PastePreviewComponent(pastePreview.content, pastePreview.wordCount, pastePreview.charCount)">
                 </div>
@@ -2160,41 +2249,42 @@ onMounted(() => {
                   <div class="flex sm:hidden w-full flex-col gap-2">
                     <div class="flex items-center gap-2">
                       <div
-                        class="w-6 h-6 sm:w-8 sm:h-8 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
-                        <i class="pi pi-ban text-red-600 text-xs sm:text-sm"></i>
+                        class="w-6 h-6 sm:w-8 sm:h-8 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center flex-shrink-0">
+                        <i class="pi pi-ban text-red-600 dark:text-red-400 text-xs sm:text-sm"></i>
                       </div>
                       <div class="min-w-0 flex-1">
-                        <h3 class="text-xs sm:text-sm font-semibold text-red-800 leading-tight">
+                        <h3 class="text-xs sm:text-sm font-semibold text-red-800 dark:text-red-400 leading-tight">
                           {{ planStatus.isExpired ? 'Plan Expired' : 'Free Requests Exhausted' }}
                         </h3>
-                        <p class="text-xs text-red-600 leading-tight mt-0.5">
+                        <p class="text-xs text-red-600 dark:text-red-400 leading-tight mt-0.5">
                           {{ planStatus.isExpired ? 'Renew your plan' : `Used all ${FREE_REQUEST_LIMIT} requests` }}
                         </p>
                       </div>
                     </div>
                     <button @click="$router.push('/upgrade')"
-                      class="w-full bg-red-500 hover:bg-red-600 text-white py-2 rounded-md text-xs font-medium transition-colors">
+                      class="w-full bg-red-500 hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700 text-white py-2 rounded-md text-xs font-medium transition-colors">
                       {{ planStatus.isExpired ? 'Renew Plan' : 'Upgrade Plan' }}
                     </button>
                   </div>
 
                   <!-- Desktop: Horizontal Layout -->
                   <div class="hidden sm:flex w-full items-center gap-3">
-                    <div class="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
-                      <i class="pi pi-ban text-red-600 text-sm"></i>
+                    <div
+                      class="w-8 h-8 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center flex-shrink-0">
+                      <i class="pi pi-ban text-red-600 dark:text-red-400 text-sm"></i>
                     </div>
                     <div class="min-w-0 flex-1">
-                      <h3 class="text-sm font-semibold text-red-800 mb-1">
+                      <h3 class="text-sm font-semibold text-red-800 dark:text-red-400 mb-1">
                         {{ planStatus.isExpired ? 'Plan Expired' : 'Free Requests Exhausted' }}
                       </h3>
-                      <p class="text-xs text-red-600">
+                      <p class="text-xs text-red-600 dark:text-red-400">
                         {{ planStatus.isExpired ?
                           'Please renew your plan to continue using the service.' :
                           `You've used all ${FREE_REQUEST_LIMIT} free requests. Upgrade to continue chatting.` }}
                       </p>
                     </div>
                     <button @click="$router.push('/upgrade')"
-                      class="bg-red-500 px-3 hover:bg-red-600 text-white py-2 rounded-md text-sm font-medium transition-colors flex-shrink-0 whitespace-nowrap">
+                      class="bg-red-500 px-3 hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700 text-white py-2 rounded-md text-sm font-medium transition-colors flex-shrink-0 whitespace-nowrap">
                       {{ planStatus.isExpired ? 'Renew Plan' : 'Upgrade Plan' }}
                     </button>
                   </div>
@@ -2208,39 +2298,41 @@ onMounted(() => {
                   <div class="flex sm:hidden w-full flex-col gap-2">
                     <div class="flex items-center gap-2">
                       <div
-                        class="w-6 h-6 sm:w-8 sm:h-8 bg-yellow-100 rounded-full flex items-center justify-center flex-shrink-0">
-                        <i class="pi pi-exclamation-triangle text-yellow-600 text-xs sm:text-sm"></i>
+                        class="w-6 h-6 sm:w-8 sm:h-8 bg-yellow-100 dark:bg-yellow-900/30 rounded-full flex items-center justify-center flex-shrink-0">
+                        <i
+                          class="pi pi-exclamation-triangle text-yellow-600 dark:text-yellow-400 text-xs sm:text-sm"></i>
                       </div>
                       <div class="min-w-0 flex-1">
-                        <h3 class="text-xs sm:text-sm font-semibold text-yellow-800 leading-tight">
+                        <h3 class="text-xs sm:text-sm font-semibold text-yellow-800 dark:text-yellow-400 leading-tight">
                           {{ requestsRemaining }} requests left
                         </h3>
-                        <p class="text-xs text-yellow-600 leading-tight mt-0.5">
+                        <p class="text-xs text-yellow-600 dark:text-yellow-400 leading-tight mt-0.5">
                           Upgrade for unlimited access
                         </p>
                       </div>
                     </div>
                     <button @click="$router.push('/upgrade')"
-                      class="w-full bg-orange-500 hover:bg-orange-600 text-white py-2 rounded-md text-xs font-medium transition-colors">
+                      class="w-full bg-orange-500 hover:bg-orange-600 dark:bg-orange-600 dark:hover:bg-orange-700 text-white py-2 rounded-md text-xs font-medium transition-colors">
                       Upgrade Plan
                     </button>
                   </div>
 
                   <!-- Desktop: Horizontal Layout -->
                   <div class="hidden sm:flex w-full items-center gap-3">
-                    <div class="w-8 h-8 bg-yellow-100 rounded-full flex items-center justify-center flex-shrink-0">
-                      <i class="pi pi-exclamation-triangle text-yellow-600 text-sm"></i>
+                    <div
+                      class="w-8 h-8 bg-yellow-100 dark:bg-yellow-900/30 rounded-full flex items-center justify-center flex-shrink-0">
+                      <i class="pi pi-exclamation-triangle text-yellow-600 dark:text-yellow-400 text-sm"></i>
                     </div>
                     <div class="min-w-0 flex-1">
-                      <h3 class="text-sm font-semibold text-yellow-800 mb-1">
+                      <h3 class="text-sm font-semibold text-yellow-800 dark:text-yellow-400 mb-1">
                         {{ requestsRemaining }} free requests remaining
                       </h3>
-                      <p class="text-xs text-yellow-600">
+                      <p class="text-xs text-yellow-600 dark:text-yellow-400">
                         Upgrade to continue chatting without limits
                       </p>
                     </div>
                     <button @click="$router.push('/upgrade')"
-                      class="bg-orange-500 px-3 hover:bg-orange-600 text-white py-2 rounded-md text-sm font-medium transition-colors flex-shrink-0 whitespace-nowrap">
+                      class="bg-orange-500 px-3 hover:bg-orange-600 dark:bg-orange-600 dark:hover:bg-orange-700 text-white py-2 rounded-md text-sm font-medium transition-colors flex-shrink-0 whitespace-nowrap">
                       Upgrade Plan
                     </button>
                   </div>
@@ -2248,15 +2340,16 @@ onMounted(() => {
               </div>
 
               <!-- Input Area with Voice Recording -->
-              <div class="flex w-full bg-white rounded-2xl px-2 sm:px-3 py-1 sm:py-2 items-center gap-2 sm:gap-3"
-                :class="inputDisabled ? 'opacity-50 border border-t pointer-events-none' :
-                  showUpgradeBanner ? 'border border-t' : ''">
+              <div
+                class="flex w-full bg-white dark:bg-gray-900 rounded-2xl px-2 sm:px-3 py-1 sm:py-2 items-center gap-2 sm:gap-3"
+                :class="inputDisabled ? 'opacity-50 border border-t dark:border-gray-700 pointer-events-none' :
+                  showUpgradeBanner ? 'border border-t dark:border-gray-700' : ''">
 
                 <!-- Voice Recording Indicator (when active) -->
                 <div v-if="isRecording || isTranscribing"
-                  class="flex items-center gap-1 sm:gap-2 px-2 py-1 bg-red-50 rounded-lg border border-red-200 text-red-600 text-xs sm:text-sm flex-shrink-0">
+                  class="flex items-center gap-1 sm:gap-2 px-2 py-1 bg-red-50 dark:bg-red-900/30 rounded-lg border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 text-xs sm:text-sm flex-shrink-0">
                   <div class="flex items-center gap-1">
-                    <div class="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+                    <div class="w-2 h-2 bg-red-500 dark:bg-red-400 rounded-full animate-pulse"></div>
                     <span class="hidden sm:inline">{{ isTranscribing ? 'Listening...' : 'Starting...' }}</span>
                     <span class="sm:hidden">{{ isTranscribing ? '🎤' : '⏳' }}</span>
                   </div>
@@ -2267,7 +2360,7 @@ onMounted(() => {
                   'rounded-lg w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center transition-all duration-200 flex-shrink-0',
                   isRecording
                     ? 'bg-red-500 hover:bg-red-600 text-white shadow-lg transform scale-105 animate-pulse'
-                    : 'bg-gray-100 hover:bg-gray-200 text-gray-600 hover:text-gray-700',
+                    : 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-200',
                   'disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none'
                 ]" :title="microphonePermission === 'denied'
                   ? 'Microphone access denied'
@@ -2298,7 +2391,8 @@ onMounted(() => {
 
                   <!-- Microphone Denied Icon -->
                   <svg v-else-if="microphonePermission === 'denied' && !isRecording"
-                    class="w-4 h-4 sm:w-5 sm:h-5 text-red-500" fill="currentColor" viewBox="0 0 24 24">
+                    class="w-4 h-4 sm:w-5 sm:h-5 text-red-500 dark:text-red-400" fill="currentColor"
+                    viewBox="0 0 24 24">
                     <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
                     <path d="M19 10v1a7 7 0 0 1-14 0v-1a1 1 0 0 1 2 0v1a5 5 0 0 0 10 0v-1a1 1 0 0 1 2 0Z" />
                     <path d="M12 18.5a1 1 0 0 1 1 1v1a1 1 0 0 1-2 0v-1a1 1 0 0 1 1-1Z" />
@@ -2308,7 +2402,7 @@ onMounted(() => {
 
                 <!-- Clear Voice Button (when transcribed text exists) -->
                 <button v-if="transcribedText && !isRecording" type="button" @click="clearVoiceTranscription"
-                  class="rounded-lg w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center transition-colors text-gray-400 hover:text-gray-600 hover:bg-gray-50 flex-shrink-0"
+                  class="rounded-lg w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center transition-colors text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 flex-shrink-0"
                   title="Clear voice transcription">
                   <svg class="w-3 h-3 sm:w-4 sm:h-4" fill="currentColor" viewBox="0 0 24 24">
                     <path
@@ -2319,7 +2413,7 @@ onMounted(() => {
                 <!-- Textarea -->
                 <textarea required id="prompt" name="prompt" @keydown="onEnter" @input="autoGrow" @paste="handlePaste"
                   :disabled="inputDisabled" rows="1" :class="[
-                    'flex-grow py-3 px-1 placeholder:text-gray-500 rounded-t-2xl bg-white text-sm outline-none resize-none border-none max-h-[120px] sm:max-h-[150px] md:max-h-[200px] overflow-auto leading-relaxed w-full min-w-0',
+                    'flex-grow py-3 px-1 placeholder:text-gray-500 dark:placeholder:text-gray-400 rounded-t-2xl bg-white dark:bg-gray-900 dark:text-gray-100 text-sm outline-none resize-none border-none max-h-[120px] sm:max-h-[150px] md:max-h-[200px] overflow-auto leading-relaxed w-full min-w-0',
                     'disabled:opacity-50 disabled:cursor-not-allowed',
                     isRecording ? 'bg-red-50 border border-red-100' : ''
                   ]" :placeholder="inputPlaceholderText">
@@ -2327,7 +2421,7 @@ onMounted(() => {
 
                 <!-- Submit Button -->
                 <button type="submit" :disabled="inputDisabled"
-                  class="rounded-lg w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center transition-colors text-white bg-blue-500 hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-50 disabled:bg-gray-400 flex-shrink-0">
+                  class="rounded-lg w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center transition-colors text-white bg-blue-500 hover:bg-blue-600 dark:bg-blue-700 dark:hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50 disabled:bg-gray-400 flex-shrink-0">
                   <i v-if="!isLoading" class="pi pi-arrow-up text-xs sm:text-sm"></i>
                   <i v-else class="pi pi-spin pi-spinner text-xs sm:text-sm"></i>
                 </button>

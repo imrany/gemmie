@@ -28,7 +28,7 @@ import type { Theme } from 'vue-sonner/src/packages/types.js'
 
 // Global state
 const globalState = inject('globalState') as {
-  screenWidth: number,
+  screenWidth: Ref<number>,
   toggleTheme: () => void
   isDarkMode: Ref<boolean>,
   currentTheme: Ref<Theme>
@@ -764,11 +764,18 @@ watch([editablePages], () => {
   }
 }, { deep: true })
 
+watch(()=> screenWidth.value, (newValue)=>{
+  console.log(newValue)
+  if (newValue < 768) {
+    router.push("/")
+  }
+})
+
 // ============================================
 // LIFECYCLE
 // ============================================
 onMounted(() => {
-  if (screenWidth < 768) {
+  if (screenWidth.value < 768) {
     router.push("/")
   }
 
