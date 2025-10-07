@@ -30,6 +30,7 @@ const globalState = inject('globalState') as {
   planStatus: Ref<{ status: string; timeLeft: string; expiryDate: string; isExpired: boolean; }>,
   isDarkMode: Ref<boolean>,
   currentTheme: Ref<Theme>,
+  syncEnabled: Ref<boolean>, // Add this
 
   toggleTheme: (theme: string) => void,
   hideSidebar: () => void,
@@ -41,7 +42,9 @@ const globalState = inject('globalState') as {
   renameChat: (chatId: string, newTitle: string) => void,
   toggleSidebar: () => void,
   manualSync: () => Promise<any>,
-  apiCall: (endpoint: string, options?: RequestInit) => Promise<any>
+  apiCall: (endpoint: string, options?: RequestInit) => Promise<any>,
+  isLocalDataEmpty: () => boolean,
+  toggleSync: (syncEnabled?: boolean) => Promise<void> // Fix the type
 }
 
 const {
@@ -67,6 +70,9 @@ const {
   isDarkMode,
   currentTheme,
   toggleTheme,
+  isLocalDataEmpty,
+  toggleSync,
+  syncEnabled, // Add this
 } = globalState
 
 const route = useRoute()
@@ -80,12 +86,6 @@ const profileData = reactive({
   workFunction: parsedUserDetails.value?.workFunction || '',
   preferences: parsedUserDetails.value?.preferences || ''
 })
-
-// Get sync setting from user details or localStorage, default to true
-const syncEnabled = ref(
-  parsedUserDetails.value?.sync_enabled ??
-  (localStorage.getItem('syncEnabled') !== 'false')
-)
 
 const activeTab = ref<'profile' | 'account' | 'billing'>(tabParam ?? 'profile')
 const isSaving = ref(false)
@@ -109,7 +109,7 @@ async function saveProfile() {
     localStorage.setItem("userdetails", JSON.stringify(parsedUserDetails.value))
 
     // Server sync only if enabled
-    if (syncEnabled.value) {
+    if (parsedUserDetails?.value.sync_enabled) {
       try {
         await apiCall('/sync', {
           method: 'POST',
@@ -119,7 +119,7 @@ async function saveProfile() {
             chats: JSON.stringify(chats.value),
             link_previews: "{}",
             current_chat_id: currentChatId.value,
-            sync_enabled: syncEnabled.value
+            sync_enabled: parsedUserDetails?.value.sync_enabled
           })
         })
         toast.success('Profile updated and synced successfully')
@@ -136,69 +136,6 @@ async function saveProfile() {
     toast.error('Failed to save profile changes')
   } finally {
     isSaving.value = false
-  }
-}
-
-// Toggle auto-sync - this affects all future sync operations
-async function toggleSync() {
-  const newSyncValue = !syncEnabled.value
-
-  try {
-    // Update local state first
-    syncEnabled.value = newSyncValue
-    parsedUserDetails.value.sync_enabled = newSyncValue
-
-    // Save to localStorage
-    localStorage.setItem('syncEnabled', String(newSyncValue))
-    localStorage.setItem("userdetails", JSON.stringify(parsedUserDetails.value))
-
-    // If enabling sync, sync current data to server
-    if (newSyncValue) {
-      try {
-        await apiCall('/sync', {
-          method: 'POST',
-          body: JSON.stringify({
-            username: parsedUserDetails.value.username,
-            workFunction: parsedUserDetails.value.workFunction || '',
-            preferences: parsedUserDetails.value.preferences || '',
-            chats: JSON.stringify(chats.value),
-            link_previews: "{}",
-            current_chat_id: currentChatId.value,
-            sync_enabled: newSyncValue
-          })
-        })
-        toast.success('Auto-sync enabled and data synced to server')
-      } catch (error) {
-        console.warn('Failed to sync to server:', error)
-        toast.success('Auto-sync enabled (initial sync failed)')
-      }
-    } else {
-      // When disabling sync, still notify the server about the preference change
-      try {
-        await apiCall('/sync', {
-          method: 'POST',
-          body: JSON.stringify({
-            username: parsedUserDetails.value.username,
-            workFunction: parsedUserDetails.value.workFunction || '',
-            preferences: parsedUserDetails.value.preferences || '',
-            chats: JSON.stringify(chats.value),
-            link_previews: "{}",
-            current_chat_id: currentChatId.value,
-            sync_enabled: newSyncValue
-          })
-        })
-      } catch (error) {
-        console.warn('Failed to update sync preference on server:', error)
-      }
-      toast.info('Auto-sync disabled - data will only be saved locally')
-    }
-
-  } catch (error) {
-    console.error('Failed to toggle sync:', error)
-    // Revert the change on error
-    syncEnabled.value = !newSyncValue
-    parsedUserDetails.value.sync_enabled = !newSyncValue
-    toast.error('Failed to update sync setting')
   }
 }
 
@@ -230,24 +167,16 @@ watch(activeTab, (newVal, oldVal) => {
   router.push({ name: 'settings', params: { tab: newVal } })
 })
 
-//  Watch for changes in parsedUserDetails and update syncEnabled accordingly
-watch(parsedUserDetails, (newVal) => {
-  if (newVal) {
-    // Update sync setting from user details if it exists
-    if (typeof newVal.sync_enabled === 'boolean') {
-      syncEnabled.value = newVal.sync_enabled
-    }
-  }
+// Fix the watch function - watch the actual sync_enabled property
+watch(() => parsedUserDetails.value?.sync_enabled, (newVal) => {
+  console.log('Sync enabled changed:', newVal)
+  // The toggleSync function will handle the UI updates
 }, { deep: true })
 
 // Lifecycle hooks
 onMounted(() => {
   if (parsedUserDetails.value) {
     resetProfileData()
-    // Ensure sync setting is in sync with user details
-    if (typeof parsedUserDetails.value.sync_enabled === 'boolean') {
-      syncEnabled.value = parsedUserDetails.value.sync_enabled
-    }
   } else if (isAuthenticated.value) {
     logout()
     router.push('/')
@@ -523,20 +452,20 @@ watch(isAuthenticated, (val) => {
                   <div>
                     <h3 class="text-sm font-medium text-gray-800 dark:text-gray-200">Auto Sync</h3>
                     <p class="text-xs max-w-[150px] text-gray-500 dark:text-gray-400">
-                      {{ syncEnabled ? 'Data is synced across all your devices automatically' :
-                        'Data is only stored locally on this device' }}
+                      {{ parsedUserDetails?.sync_enabled ? 'Data is synced across all your devices automatically' :
+                      'Data is only stored locally on this device' }}
                     </p>
                   </div>
-                  <button @click="toggleSync"
+                  <button @click="() => toggleSync()"
                     class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200"
-                    :class="syncEnabled ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'">
+                    :class="parsedUserDetails?.sync_enabled ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'">
                     <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200"
-                      :class="syncEnabled ? 'translate-x-6' : 'translate-x-1'" />
+                      :class="parsedUserDetails?.sync_enabled ? 'translate-x-6' : 'translate-x-1'" />
                   </button>
                 </div>
 
                 <!-- Manual Sync Button (only show if sync is enabled) -->
-                <div v-if="syncEnabled" class="flex flex-wrap gap-3 items-center justify-between">
+                <div v-if="parsedUserDetails?.sync_enabled" class="flex flex-wrap gap-3 items-center justify-between">
                   <div>
                     <h3 class="text-sm font-medium text-gray-800 dark:text-gray-200">Manual Sync</h3>
                     <p class="text-xs text-gray-500 dark:text-gray-400">Force sync your data now</p>
@@ -581,7 +510,7 @@ watch(isAuthenticated, (val) => {
                 </div>
 
                 <!-- Sync Status -->
-                <div v-if="syncEnabled" class="space-y-2">
+                <div v-if="parsedUserDetails?.sync_enabled" class="space-y-2">
                   <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Sync Status</label>
                   <div class="text-sm text-gray-600 dark:text-gray-400">
                     <div class="flex items-center gap-2">
@@ -680,7 +609,7 @@ watch(isAuthenticated, (val) => {
                     <div class="flex justify-between text-sm">
                       <span class="text-gray-600 dark:text-gray-400">Phone Number</span>
                       <span class="font-medium text-gray-900 dark:text-white">{{ parsedUserDetails.phone_number
-                      }}</span>
+                        }}</span>
                     </div>
                     <div class="flex justify-between text-sm">
                       <span class="text-gray-600 dark:text-gray-400">Currency</span>
