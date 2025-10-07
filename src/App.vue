@@ -357,72 +357,136 @@ function mergeChats(serverChats: Chat[], localChats: Chat[]): Chat[] {
   }
 }
 
-// Enhanced logout function with better error handling
+// logout function with proper async handling and error management
 async function logout() {
   showConfirmDialog({
     visible: true,
     title: 'Logout Confirmation',
-    message: 'Are you sure you want to logout? Your data will be synced before logging out.',
+    message: 'Are you sure you want to logout? Your unsynced data will be saved locally.',
     type: 'warning',
     confirmText: 'Logout',
+    cancelText: 'Cancel',
     onConfirm: async () => {
       try {
+        isLoading.value = true
+        
         const syncEnabled = parsedUserDetails.value?.sync_enabled
+        const hasUnsyncedChanges = syncStatus.value.hasUnsyncedChanges
 
         // Attempt to sync if enabled and has changes
-        if (syncStatus.value.hasUnsyncedChanges && syncEnabled && !syncStatus.value.syncing) {
-          toast.info('Syncing your data...', { duration: 2000 })
+        if (hasUnsyncedChanges && syncEnabled && !syncStatus.value.syncing) {
           try {
+            toast.info('Syncing your data before logout...', { duration: 3000 })
             await syncToServer()
             toast.success('Data synced successfully')
           } catch (syncError) {
             console.error('Sync failed during logout:', syncError)
-            toast.warning('Failed to sync data, but logout will continue')
+            // Continue with logout even if sync fails - data is saved locally
+            toast.warning('Sync failed, but your data is saved locally', {
+              duration: 4000,
+              description: 'You can sync manually after logging back in'
+            })
           }
         }
 
-        // Clear application state
-        chats.value = []
-        currentChatId.value = ''
-        expanded.value = []
-        showInput.value = false
-        isCollapsed.value = false
-        syncStatus.value = {
-          lastSync: null,
-          syncing: false,
-          hasUnsyncedChanges: false,
-          lastError: null,
-          retryCount: 0,
-          maxRetries: 3
-        }
+        // Clear auto-sync mechanisms FIRST to prevent any background operations
+        cleanupAutoSync()
 
-        // Clear storage based on sync preference
-        if (syncEnabled) {
-          const keysToRemove = ['chats', 'currentChatId', 'linkPreviews']
-          keysToRemove.forEach(key => {
+        // Store current state for potential recovery before clearing
+        const userBackup = { ...parsedUserDetails.value }
+        const hasChats = chats.value.length > 0
+
+        // Clear application state systematically
+        try {
+          // 1. Clear reactive state
+          chats.value = []
+          currentChatId.value = ''
+          expanded.value = []
+          showInput.value = false
+          isCollapsed.value = false
+          
+          // 2. Reset sync status
+          syncStatus.value = {
+            lastSync: null,
+            syncing: false,
+            hasUnsyncedChanges: false,
+            lastError: null,
+            retryCount: 0,
+            maxRetries: 3
+          }
+
+          // 3. Clear authentication state
+          parsedUserDetails.value = null
+
+          // 4. Clear localStorage based on sync preference
+          if (syncEnabled) {
+            // For sync-enabled users, only remove user details
+            // Keep chats and link previews for when they log back in
             try {
-              localStorage.removeItem(key)
+              localStorage.removeItem('userdetails')
             } catch (error) {
-              console.error(`Failed to remove ${key} from localStorage:`, error)
+              console.error('Failed to remove userdetails from localStorage:', error)
             }
-          })
-          linkPreviewCache.value.clear()
+          } else {
+            // For non-sync users, clear everything
+            const keysToRemove = ['userdetails', 'chats', 'currentChatId', 'linkPreviews']
+            keysToRemove.forEach(key => {
+              try {
+                localStorage.removeItem(key)
+              } catch (error) {
+                console.error(`Failed to remove ${key} from localStorage:`, error)
+              }
+            })
+            linkPreviewCache.value.clear()
+          }
+
+        } catch (stateError) {
+          console.error('Error clearing application state:', stateError)
+          // Attempt to restore from backup if state clearing failed
+          try {
+            parsedUserDetails.value = userBackup
+            if (!syncEnabled) {
+              loadLocalData()
+            }
+          } catch (restoreError) {
+            console.error('Failed to restore state after logout error:', restoreError)
+          }
+          
+          throw new Error('Failed to clear application state during logout')
         }
 
-        // Always remove user details
-        localStorage.removeItem('userdetails')
-        parsedUserDetails.value = null
+        // Show appropriate success message
+        if (syncEnabled) {
+          toast.success('Logged out successfully', {
+            duration: 3000,
+            description: hasUnsyncedChanges 
+              ? 'Your data has been synced to the cloud' 
+              : 'Ready to log back in anytime'
+          })
+        } else {
+          toast.success('Logged out successfully', {
+            duration: 3000,
+            description: hasChats 
+              ? 'Your chats are saved locally on this device' 
+              : 'Ready to start fresh when you return'
+          })
+        }
 
-        toast.success('Logged out successfully', {
-          duration: 3000,
-          description: syncEnabled ? 'Your data has been synced' : 'Your data was stored locally'
+      } catch (error: any) {
+        console.error('Critical error during logout:', error)
+        toast.error('Error during logout process', {
+          duration: 5000,
+          description: 'Some cleanup operations may not have completed. Please refresh the page.'
         })
-      } catch (error) {
-        console.error('Error during logout:', error)
-        toast.error('Error during logout', {
-          duration: 4000,
-          description: 'Some cleanup operations may not have completed'
-        })
+      } finally {
+        isLoading.value = false
+      }
+    },
+    onCancel: () => {
+      // User cancelled logout - ensure sync continues if it was in progress
+      if (syncStatus.value.hasUnsyncedChanges && parsedUserDetails.value?.sync_enabled) {
+        // Resume auto-sync if it was stopped
+        setupAutoSync()
       }
     }
   })
@@ -981,6 +1045,11 @@ function saveChats() {
 let syncLock = false
 
 async function syncFromServer(serverData?: any) {
+  if (!parsedUserDetails.value?.user_id) {
+    console.log('Sync skipped - user not authenticated')
+    return
+  }
+  
   if (syncLock) {
     console.log('Sync already in progress, skipping')
     return
@@ -1121,6 +1190,11 @@ async function syncFromServer(serverData?: any) {
 
 // Enhanced sync to server with comprehensive error handling and validation
 async function syncToServer() {
+  if (!parsedUserDetails.value?.user_id) {
+    console.log('Sync skipped - user not authenticated')
+    return
+  }
+
   if (syncLock) {
     console.log('Sync already in progress, skipping')
     return
@@ -1596,14 +1670,15 @@ function setupAutoSync() {
   }
 }
 
-// Cleanup function for auto-sync
 function cleanupAutoSync() {
   try {
+    // Clear all intervals and timeouts
     if (autoSyncInterval) {
       clearInterval(autoSyncInterval)
       autoSyncInterval = null
     }
 
+    // Remove event listeners
     if (visibilityListener) {
       document.removeEventListener('visibilitychange', visibilityListener)
       visibilityListener = null
@@ -1614,10 +1689,15 @@ function cleanupAutoSync() {
       beforeUnloadListener = null
     }
 
+    // Reset sync lock to allow future operations
     syncLock = false
+    
+    // Ensure no sync operations are in progress
+    syncStatus.value.syncing = false
+
     console.log('Auto-sync cleanup completed')
   } catch (error) {
-    console.error('Error cleaning up auto-sync:', error)
+    console.error('Error during auto-sync cleanup:', error)
   }
 }
 
@@ -1650,11 +1730,11 @@ function toggleTheme(newTheme?: Theme) {
   }
 
   // Show theme change notification
-  const themeLabel = currentTheme.value === 'system'
-    ? `System (${prefersDark ? 'Dark' : 'Light'})`
-    : currentTheme.value.charAt(0).toUpperCase() + currentTheme.value.slice(1)
+  // const themeLabel = currentTheme.value === 'system'
+  //   ? `System (${prefersDark ? 'Dark' : 'Light'})`
+  //   : currentTheme.value.charAt(0).toUpperCase() + currentTheme.value.slice(1)
 
-  toast.info(`Theme: ${themeLabel}`, { duration: 1500 })
+  // toast.info(`Theme: ${themeLabel}`, { duration: 1500 })
 }
 
 // Enhanced onMounted with comprehensive error handling
@@ -1784,6 +1864,13 @@ onMounted(async () => {
       duration: 5000,
       description: 'Some features may not work correctly'
     })
+  }
+})
+
+onUnmounted(() => {
+  // Only cleanup auto-sync if user is logging out
+  if (!isAuthenticated.value) {
+    cleanupAutoSync()
   }
 })
 

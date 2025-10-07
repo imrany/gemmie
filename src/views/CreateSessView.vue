@@ -1,15 +1,27 @@
 <script lang="ts" setup>
 import { computed, inject, ref, type Ref, onMounted, onUnmounted } from 'vue'
 import type { Chat } from '@/types'
+import type { Theme } from 'vue-sonner/src/packages/types.js'
 
 const globalState = inject('globalState') as {
+  isDarkMode: Ref<boolean>,
+  currentTheme: Ref<Theme>,
   isAuthenticated: Ref<boolean>
 }
-const { isAuthenticated } = globalState
+const { 
+  isAuthenticated,
+  isDarkMode,
+  currentTheme
+} = globalState
 
 // Carousel state
 const currentSlide = ref(0)
 const autoSlideInterval = ref<number | null>(null)
+
+// Touch swipe state
+const touchStartX = ref(0)
+const touchEndX = ref(0)
+const minSwipeDistance = 50 // Minimum distance for a swipe to be detected
 
 // Sample chat suggestions - you can customize these
 const chatSuggestions = ref([
@@ -186,7 +198,7 @@ const goToSlide = (index: number) => {
 
 const startAutoSlide = () => {
   if (autoSlideInterval.value) return
-  autoSlideInterval.value = window.setInterval(nextSlide, 6000) // 6 seconds
+  autoSlideInterval.value = window.setInterval(nextSlide, 8000) // 8 seconds
 }
 
 const stopAutoSlide = () => {
@@ -194,6 +206,34 @@ const stopAutoSlide = () => {
     clearInterval(autoSlideInterval.value)
     autoSlideInterval.value = null
   }
+}
+
+// Touch event handlers for swipe
+const handleTouchStart = (event: TouchEvent) => {
+  touchStartX.value = event.touches[0].clientX
+  touchEndX.value = 0
+  stopAutoSlide()
+}
+
+const handleTouchMove = (event: TouchEvent) => {
+  touchEndX.value = event.touches[0].clientX
+}
+
+const handleTouchEnd = () => {
+  if (!touchStartX.value || !touchEndX.value) return
+  
+  const distance = touchStartX.value - touchEndX.value
+  const isLeftSwipe = distance > minSwipeDistance
+  const isRightSwipe = distance < -minSwipeDistance
+  
+  if (isLeftSwipe) {
+    nextSlide()
+  } else if (isRightSwipe) {
+    prevSlide()
+  }
+  
+  // Restart auto-slide after a delay
+  setTimeout(startAutoSlide, 3000)
 }
 
 const handleSuggestionClick = (suggestion: typeof chatSuggestions.value[0]) => {
@@ -238,44 +278,46 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="flex flex-col items-center justify-center min-h-screen w-screen">
+  <div class="flex flex-col items-center justify-center min-h-screen w-screen bg-gradient-to-br from-gray-50 to-blue-50 dark:from-gray-900 dark:to-gray-800 transition-colors duration-300">
     <!-- Desktop Layout: Side by side -->
-    <div v-if="isDesktop" class="flex gap-10 items-center justify-center h-full w-full max-w-7xl mx-auto px-8">
+    <div v-if="isDesktop" class="flex scale-90 gap-10 items-center justify-center h-full w-full max-w-7xl mx-auto px-8">
       <!-- LEFT SECTION: Carousel -->
       <div class="flex-1 max-w-2xl" @mouseenter="stopAutoSlide" @mouseleave="startAutoSlide">
         <!-- Carousel Container -->
-        <div class="relative h-[600px] overflow-hidden backdrop-blur-sm rounded-3xl bg-white/80 border border-white/50">
+        <div class="relative h-[600px] overflow-hidden transition-colors duration-300">
           <!-- Slide 1: Welcome -->
           <div
             :class="currentSlide === 0 ? 'translate-x-0 opacity-100' : currentSlide > 0 ? '-translate-x-full opacity-0' : 'translate-x-full opacity-0'"
             class="absolute inset-0 transition-all duration-700 ease-in-out transform p-12 flex flex-col items-center justify-center">
             <div class="text-center">
-              <img src="/logo.svg" alt="Gemmie Logo" class="rounded-full w-24 h-24 mb-8 mx-auto" />
-              <h2 class="text-4xl font-bold text-gray-900 mb-4">
+              <img :src="currentTheme === 'dark' || (currentTheme === 'system' && isDarkMode) ?
+              '/favicon-light.svg' : '/logo.svg'" alt="Gemmie Logo" class="w-[60px] h-[60px] mx-auto mb-5 rounded-md" />
+
+              <h2 class="text-4xl font-bold text-gray-900 dark:text-white mb-4">
                 Welcome to Gemmie
               </h2>
-              <p class="text-gray-600 leading-relaxed mb-3 max-w-lg text-base">
+              <p class="text-gray-600 dark:text-gray-300 leading-relaxed mb-3 max-w-lg text-base">
                 Experience privacy-first conversations with advanced AI. Your data stays secure, local, and synced
                 across all your devices.
               </p>
               <div class="flex items-center justify-center gap-12">
                 <div class="flex flex-col items-center gap-3">
-                  <div class="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-                    <i class="pi pi-shield text-green-600"></i>
+                  <div class="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center">
+                    <i class="pi pi-shield text-green-600 dark:text-green-400"></i>
                   </div>
-                  <span class="text-gray-700 font-medium">Private</span>
+                  <span class="text-gray-700 dark:text-gray-300 font-medium">Private</span>
                 </div>
                 <div class="flex flex-col items-center gap-3">
-                  <div class="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                    <i class="pi pi-database text-blue-600 "></i>
+                  <div class="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center">
+                    <i class="pi pi-database text-blue-600 dark:text-blue-400"></i>
                   </div>
-                  <span class="text-gray-700 font-medium">Local</span>
+                  <span class="text-gray-700 dark:text-gray-300 font-medium">Local</span>
                 </div>
                 <div class="flex flex-col items-center gap-3">
-                  <div class="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
-                    <i class="pi pi-sync text-purple-600"></i>
+                  <div class="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-full flex items-center justify-center">
+                    <i class="pi pi-sync text-purple-600 dark:text-purple-400"></i>
                   </div>
-                  <span class="text-gray-700 font-medium">Synced</span>
+                  <span class="text-gray-700 dark:text-gray-300 font-medium">Synced</span>
                 </div>
               </div>
             </div>
@@ -286,20 +328,20 @@ onUnmounted(() => {
             :class="currentSlide === 1 ? 'translate-x-0 opacity-100' : currentSlide > 1 ? '-translate-x-full opacity-0' : 'translate-x-full opacity-0'"
             class="absolute inset-0 transition-all duration-700 ease-in-out transform p-8">
             <div class="text-center mb-2">
-              <h2 class="text-3xl font-bold text-gray-900 mb-2">What can I help with?</h2>
-              <p class="text-gray-600 text-lg">Try one of these popular conversation starters</p>
+              <h2 class="text-3xl font-bold text-gray-900 dark:text-white mb-2">What can I help with?</h2>
+              <p class="text-gray-600 dark:text-gray-300 text-lg">Try one of these popular conversation starters</p>
             </div>
 
-            <div class="grid grid-cols-2 gap-6 h-96 overflow-x-hidden overflow-y-auto custom-scrollbar">
+            <div class="grid grid-cols-2 gap-6 h-96 overflow-x-hidden overflow-y-auto no-scrollbar">
               <button v-for="suggestion in chatSuggestions" :key="suggestion.title"
                 @click="handleSuggestionClick(suggestion)"
-                class="group px-6 py-3 rounded-xl bg-white/80 backdrop-blur-sm border border-white/50 hover:bg-white/95 hover:shadow-xl transition-all duration-300 transform hover:scale-[1.02] text-left">
+                class="group px-6 py-3 rounded-xl bg-white/80 dark:bg-gray-700/80 backdrop-blur-sm border border-white/50 dark:border-gray-600/50 hover:bg-white/95 dark:hover:bg-gray-700/95 hover:shadow-xl transition-all duration-300 transform hover:scale-[1.02] text-left">
                 <div
                   :class="`w-10 h-10 rounded-lg bg-gradient-to-r ${suggestion.color} flex items-center justify-center mb-4 group-hover:scale-110 transition-transform`">
                   <i :class="`pi ${suggestion.icon} text-white`"></i>
                 </div>
-                <h3 class="font-semibold text-gray-900 mb-2">{{ suggestion.title }}</h3>
-                <p class="text-sm text-gray-600 leading-relaxed">{{ suggestion.description }}</p>
+                <h3 class="font-semibold text-gray-900 dark:text-white mb-2">{{ suggestion.title }}</h3>
+                <p class="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">{{ suggestion.description }}</p>
               </button>
             </div>
           </div>
@@ -309,19 +351,19 @@ onUnmounted(() => {
             :class="currentSlide === 2 ? 'translate-x-0 opacity-100' : currentSlide > 2 ? '-translate-x-full opacity-0' : 'translate-x-full opacity-0'"
             class="absolute inset-0 transition-all duration-700 ease-in-out transform p-8">
             <div class="text-center mb-8">
-              <h2 class="text-3xl font-bold text-gray-900 mb-3">Why Choose Gemmie?</h2>
-              <p class="text-gray-600 text-lg">Built with your privacy and convenience in mind</p>
+              <h2 class="text-3xl font-bold text-gray-900 dark:text-white mb-3">Why Choose Gemmie?</h2>
+              <p class="text-gray-600 dark:text-gray-300 text-lg">Built with your privacy and convenience in mind</p>
             </div>
 
-            <div class="space-y-2 h-96 overflow-y-auto custom-scrollbar">
+            <div class="space-y-2 h-96 overflow-y-auto no-scrollbar">
               <div v-for="feature in features" :key="feature.title"
-                class="flex items-start gap-4 py-3 px-6 rounded-xl bg-white/80 backdrop-blur-sm border border-white/50 hover:bg-white/95 transition-all duration-300">
-                <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center">
-                  <i :class="`pi ${feature.icon} ${feature.color}`"></i>
+                class="flex items-start gap-4 py-3 px-6 rounded-xl bg-white/80 dark:bg-gray-700/80 backdrop-blur-sm border border-white/50 dark:border-gray-600/50 hover:bg-white/95 dark:hover:bg-gray-700/95 transition-all duration-300">
+                <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-gray-100 dark:bg-gray-600 flex items-center justify-center">
+                  <i :class="`pi ${feature.icon} ${feature.color} dark:${feature.color}`"></i>
                 </div>
                 <div>
-                  <h3 class="font-semibold text-gray-900 mb-2">{{ feature.title }}</h3>
-                  <p class="text-sm text-gray-600 leading-relaxed">{{ feature.description }}</p>
+                  <h3 class="font-semibold text-gray-900 dark:text-white mb-2">{{ feature.title }}</h3>
+                  <p class="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">{{ feature.description }}</p>
                 </div>
               </div>
             </div>
@@ -331,24 +373,24 @@ onUnmounted(() => {
           <div :class="currentSlide === 3 ? 'translate-x-0 opacity-100' : '-translate-x-full opacity-0'"
             class="absolute inset-0 transition-all duration-700 ease-in-out transform p-8">
             <div class="text-center mb-8">
-              <h2 class="text-3xl font-bold text-gray-900 mb-3">Pro Tips</h2>
-              <p class="text-gray-600 text-lg">Get the most out of your AI conversations</p>
+              <h2 class="text-3xl font-bold text-gray-900 dark:text-white mb-3">Pro Tips</h2>
+              <p class="text-gray-600 dark:text-gray-300 text-lg">Get the most out of your AI conversations</p>
             </div>
 
-            <div class="space-y-4 h-96 overflow-y-auto custom-scrollbar">
+            <div class="space-y-4 h-96 overflow-y-auto no-scrollbar">
               <div v-for="tip in tips" :key="tip.title"
-                class="py-3 px-6 rounded-xl bg-white/80 backdrop-blur-sm border border-white/50 hover:bg-white/95 transition-all duration-300">
+                class="py-3 px-6 rounded-xl bg-white/80 dark:bg-gray-700/80 backdrop-blur-sm border border-white/50 dark:border-gray-600/50 hover:bg-white/95 dark:hover:bg-gray-700/95 transition-all duration-300">
                 <div class="flex items-start gap-4 mb-3">
-                  <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
-                    <i :class="`pi ${tip.icon} text-blue-600`"></i>
+                  <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+                    <i :class="`pi ${tip.icon} text-blue-600 dark:text-blue-400`"></i>
                   </div>
                   <div>
-                    <h3 class="font-semibold text-gray-900 mb-2">{{ tip.title }}</h3>
-                    <p class="text-sm text-gray-600 leading-relaxed">{{ tip.description }}</p>
+                    <h3 class="font-semibold text-gray-900 dark:text-white mb-2">{{ tip.title }}</h3>
+                    <p class="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">{{ tip.description }}</p>
                   </div>
                 </div>
-                <div class="ml-14 p-3 bg-blue-50 rounded-lg">
-                  <p class="text-xs text-blue-700 italic">{{ tip.example }}</p>
+                <div class="ml-14 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                  <p class="text-xs text-blue-700 dark:text-blue-300 italic">{{ tip.example }}</p>
                 </div>
               </div>
             </div>
@@ -357,21 +399,12 @@ onUnmounted(() => {
           <!-- Slide Indicators -->
           <div class="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-3">
             <button v-for="(slide, index) in carouselSlides" :key="slide.id" @click="goToSlide(index)"
-              :class="currentSlide === index ? 'bg-black shadow-lg scale-110' : 'bg-gray-100 hover:bg-white'"
+              :class="currentSlide === index ? 'bg-black dark:bg-white shadow-lg scale-110' : 'bg-gray-100 dark:bg-gray-600 hover:bg-white dark:hover:bg-gray-500'"
               class="group w-10 h-10 rounded-full transition-all duration-300 flex items-center justify-center"
               :title="slide.title">
               <i
-                :class="currentSlide === index ? `text-white pi ${slide.icon}` : `text-gray-500 pi ${slide.icon}`"></i>
+                :class="currentSlide === index ? `text-white dark:text-gray-900 pi ${slide.icon}` : `text-gray-500 dark:text-gray-300 pi ${slide.icon}`"></i>
             </button>
-          </div>
-
-          <!-- Slide Title -->
-          <div class="max-md:hidden absolute top-6 left-6">
-            <div class="px-4 shadow py-2 bg-gray-100 backdrop-blur-sm rounded-full">
-              <span class="text-sm font-medium text-gray-700">
-                {{ carouselSlides[currentSlide]?.title }}
-              </span>
-            </div>
           </div>
         </div>
       </div>
@@ -379,12 +412,12 @@ onUnmounted(() => {
       <!-- RIGHT SECTION: Auth Form -->
       <div class="flex-1 max-w-md">
         <!-- Multi-step Auth Form -->
-        <div class="text-sm relative overflow-hidden backdrop-blur-sm  p-8 border border-white/50">
+        <div class="text-sm relative overflow-hidden p-8 transition-colors duration-300">
 
           <!-- Progress indicator -->
           <div class="flex justify-center mb-8">
             <div class="flex items-center space-x-2">
-              <div v-for="step in 4" :key="step" :class="step <= authStep ? 'bg-blue-600' : 'bg-gray-300'"
+              <div v-for="step in 4" :key="step" :class="step <= authStep ? 'bg-blue-600 dark:bg-blue-500' : 'bg-gray-300 dark:bg-gray-600'"
                 class="w-3 h-3 rounded-full transition-colors duration-300">
               </div>
             </div>
@@ -397,24 +430,24 @@ onUnmounted(() => {
               authStep > 1 ? '-translate-x-full opacity-0' : 'translate-x-full opacity-0'"
               class="absolute inset-0 transition-all duration-500 ease-in-out transform">
               <div class="text-center mb-8">
-                <h2 class="text-2xl font-semibold text-gray-900 mb-3">Welcome!</h2>
-                <p class="text-gray-600">Let's start by creating your username</p>
+                <h2 class="text-2xl font-semibold text-gray-900 dark:text-white mb-3">Welcome!</h2>
+                <p class="text-gray-600 dark:text-gray-300">Let's start by creating your username</p>
               </div>
 
               <form @submit.prevent="handleStepSubmit" class="space-y-6">
                 <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-3">
+                  <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
                     Choose a username
                   </label>
                   <input v-model="authData.username" required type="text" placeholder="johndoe"
-                    class="border border-gray-300 rounded-xl px-4 py-3 w-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                    :class="authData.username && !validateCurrentStep ? 'border-red-300' : ''"
+                    class="border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-3 w-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
+                    :class="authData.username && !validateCurrentStep ? 'border-red-300 dark:border-red-500' : ''"
                     @input="handleUsernameInput" />
-                  <p class="text-xs text-gray-500 mt-2">This will be your display name</p>
+                  <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">This will be your display name</p>
                 </div>
 
                 <button type="submit" :disabled="!validateCurrentStep"
-                  class="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-xl px-6 py-3 font-semibold hover:from-blue-600 hover:to-purple-700 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed transition-all duration-300 transform hover:scale-[1.02] shadow-lg">
+                  class="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 disabled:from-gray-300 disabled:to-gray-400 dark:disabled:from-gray-600 dark:disabled:to-gray-700 disabled:cursor-not-allowed text-white rounded-xl px-6 py-3 font-semibold transition-all duration-300 transform hover:scale-[1.02] shadow-lg">
                   Continue
                 </button>
               </form>
@@ -425,28 +458,28 @@ onUnmounted(() => {
               authStep > 2 ? '-translate-x-full opacity-0' : 'translate-x-full opacity-0'"
               class="absolute inset-0 transition-all duration-500 ease-in-out transform">
               <div class="text-center mb-8">
-                <h2 class="text-2xl font-semibold text-gray-900 mb-3">Hi {{ authData.username }}!</h2>
-                <p class="text-gray-600">What's your email address?</p>
+                <h2 class="text-2xl font-semibold text-gray-900 dark:text-white mb-3">Hi {{ authData.username }}!</h2>
+                <p class="text-gray-600 dark:text-gray-300">What's your email address?</p>
               </div>
 
               <form @submit.prevent="handleStepSubmit" class="space-y-6">
                 <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-3">
+                  <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
                     Email address
                   </label>
                   <input v-model="authData.email" required type="email" placeholder="johndoe@example.com"
-                    class="border border-gray-300 rounded-xl px-4 py-3 w-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                    :class="authData.email && !validateCurrentStep ? 'border-red-300' : ''" @input="handleEmailInput" />
-                  <p class="text-xs text-gray-500 mt-2">Used for session identification only</p>
+                    class="border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-3 w-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
+                    :class="authData.email && !validateCurrentStep ? 'border-red-300 dark:border-red-500' : ''" @input="handleEmailInput" />
+                  <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">Used for session identification only</p>
                 </div>
 
                 <div class="flex gap-4">
                   <button type="button" @click="prevAuthStep"
-                    class="flex-1 flex gap-2 items-center justify-center bg-gray-100 backdrop-blur-sm text-gray-700 rounded-xl px-4 py-3 font-medium hover:bg-gray-200 transition-all duration-200">
+                    class="flex-1 flex gap-2 items-center justify-center bg-gray-100 dark:bg-gray-700 backdrop-blur-sm text-gray-700 dark:text-gray-300 rounded-xl px-4 py-3 font-medium hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200">
                     <i class="pi pi-arrow-left"></i> Back
                   </button>
                   <button type="submit" :disabled="!validateCurrentStep"
-                    class="bg-gradient-to-r from-blue-500 to-purple-600 flex-1 flex gap-2 items-center justify-center hover:from-blue-600 hover:to-purple-700 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed transform hover:scale-[1.02] shadow-lg rounded-xl px-4 py-3 font-medium text-white transition-all duration-200">
+                    class="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 disabled:from-gray-300 disabled:to-gray-400 dark:disabled:from-gray-600 dark:disabled:to-gray-700 disabled:cursor-not-allowed flex-1 flex gap-2 items-center justify-center transform hover:scale-[1.02] shadow-lg rounded-xl px-4 py-3 font-medium text-white transition-all duration-200">
                     Continue
                   </button>
                 </div>
@@ -458,23 +491,23 @@ onUnmounted(() => {
               authStep > 3 ? '-translate-x-full opacity-0' : 'translate-x-full opacity-0'"
               class="absolute inset-0 transition-all duration-500 ease-in-out transform">
               <div class="text-center mb-8">
-                <h2 class="text-2xl font-semibold text-gray-900 mb-3">Almost there!</h2>
-                <p class="text-gray-600">Create a secure password</p>
+                <h2 class="text-2xl font-semibold text-gray-900 dark:text-white mb-3">Almost there!</h2>
+                <p class="text-gray-600 dark:text-gray-300">Create a secure password</p>
               </div>
 
               <form @submit.prevent="handleStepSubmit" class="space-y-6">
                 <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-3">
+                  <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
                     Password
                   </label>
                   <input v-model="authData.password" required type="password" placeholder="Enter a secure password"
                     minlength="8"
-                    class="border border-gray-300 rounded-xl px-4 py-3 w-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                    :class="authData.password && !validateCurrentStep ? 'border-red-300' : ''"
+                    class="border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-3 w-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
+                    :class="authData.password && !validateCurrentStep ? 'border-red-300 dark:border-red-500' : ''"
                     @input="handlePasswordInput" />
                   <div class="mt-3">
                     <div class="flex items-center gap-2 text-xs">
-                      <div :class="authData.password.length >= 8 ? 'text-green-600' : 'text-gray-400'"
+                      <div :class="authData.password.length >= 8 ? 'text-green-600 dark:text-green-400' : 'text-gray-400 dark:text-gray-500'"
                         class="flex items-center gap-1">
                         <i :class="authData.password.length >= 8 ? 'pi pi-check' : 'pi pi-circle'" class="text-xs"></i>
                         <span>At least 8 characters</span>
@@ -485,11 +518,11 @@ onUnmounted(() => {
 
                 <div class="flex gap-4">
                   <button type="button" @click="prevAuthStep"
-                    class="flex-1 flex gap-2 items-center justify-center bg-gray-100 backdrop-blur-sm text-gray-700 rounded-xl px-4 py-3 font-medium hover:bg-gray-200 transition-all duration-200">
+                    class="flex-1 flex gap-2 items-center justify-center bg-gray-100 dark:bg-gray-700 backdrop-blur-sm text-gray-700 dark:text-gray-300 rounded-xl px-4 py-3 font-medium hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200">
                     <i class="pi pi-arrow-left"></i> Back
                   </button>
                   <button type="submit" :disabled="!validateCurrentStep"
-                    class="bg-gradient-to-r from-blue-500 to-purple-600 flex-1 flex gap-2 items-center justify-center hover:from-blue-600 hover:to-purple-700 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed transform hover:scale-[1.02] shadow-lg rounded-xl px-4 py-3 font-medium text-white transition-all duration-200">
+                    class="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 disabled:from-gray-300 disabled:to-gray-400 dark:disabled:from-gray-600 dark:disabled:to-gray-700 disabled:cursor-not-allowed flex-1 flex gap-2 items-center justify-center transform hover:scale-[1.02] shadow-lg rounded-xl px-4 py-3 font-medium text-white transition-all duration-200">
                     Continue
                   </button>
                 </div>
@@ -500,30 +533,30 @@ onUnmounted(() => {
             <div :class="authStep === 4 ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0'"
               class="absolute inset-0 transition-all duration-500 ease-in-out transform">
               <div class="text-center mb-8">
-                <h2 class="text-2xl font-semibold text-gray-900 mb-3">One last step</h2>
-                <p class="text-gray-600">Please review and accept our terms</p>
+                <h2 class="text-2xl font-semibold text-gray-900 dark:text-white mb-3">One last step</h2>
+                <p class="text-gray-600 dark:text-gray-300">Please review and accept our terms</p>
               </div>
 
               <form @submit.prevent="handleStepSubmit" class="space-y-6">
                 <!-- Terms and Conditions Checkboxes -->
                 <div class="space-y-4">
-                  <div class="border border-gray-200 rounded-xl p-4 bg-gray-50">
+                  <div class="border border-gray-200 dark:border-gray-600 rounded-xl p-4 bg-gray-50 dark:bg-gray-700/50">
                     <div class="flex items-start gap-3">
                       <input
                         id="agree-terms"
                         v-model="authData.agreeToTerms"
                         type="checkbox"
                         required
-                        class="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                        class="mt-1 h-4 w-4 text-blue-600 dark:text-blue-500 focus:ring-blue-500 border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700"
                         @change="handleTermsToggle"
                       />
-                      <label for="agree-terms" class="text-sm text-gray-700 leading-relaxed cursor-pointer">
+                      <label for="agree-terms" class="text-sm text-gray-700 dark:text-gray-300 leading-relaxed cursor-pointer">
                         I agree to the 
-                        <a href="/terms" target="_blank" class="text-blue-600 hover:text-blue-800 underline font-medium">
+                        <a href="/terms" target="_blank" class="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline font-medium">
                           Terms of Service
                         </a> 
                         and 
-                        <a href="/privacy" target="_blank" class="text-blue-600 hover:text-blue-800 underline font-medium">
+                        <a href="/privacy" target="_blank" class="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline font-medium">
                           Privacy Policy
                         </a>
                         <span class="text-red-500">*</span>
@@ -532,12 +565,12 @@ onUnmounted(() => {
                   </div>
 
                   <!-- Key points about terms -->
-                  <div class="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                  <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4">
                     <div class="flex items-start gap-3">
-                      <div class="flex-shrink-0 w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center">
-                        <i class="pi pi-info-circle text-blue-600 text-xs"></i>
+                      <div class="flex-shrink-0 w-6 h-6 bg-blue-100 dark:bg-blue-800 rounded-full flex items-center justify-center">
+                        <i class="pi pi-info-circle text-blue-600 dark:text-blue-400 text-xs"></i>
                       </div>
-                      <div class="text-xs text-blue-800 space-y-2">
+                      <div class="text-xs text-blue-800 dark:text-blue-200 space-y-2">
                         <p><strong>Key highlights:</strong></p>
                         <ul class="list-disc list-inside space-y-1 ml-2">
                           <li>Your data remains private and encrypted</li>
@@ -552,11 +585,11 @@ onUnmounted(() => {
 
                 <div class="flex gap-4">
                   <button type="button" @click="prevAuthStep"
-                    class="flex-1 flex gap-2 items-center justify-center bg-gray-100 backdrop-blur-sm text-gray-700 rounded-xl px-4 py-3 font-medium hover:bg-gray-200 transition-all duration-200">
+                    class="flex-1 flex gap-2 items-center justify-center bg-gray-100 dark:bg-gray-700 backdrop-blur-sm text-gray-700 dark:text-gray-300 rounded-xl px-4 py-3 font-medium hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200">
                     <i class="pi pi-arrow-left"></i> Back
                   </button>
                   <button type="submit" :disabled="!authData.agreeToTerms || isLoading"
-                    class="bg-gradient-to-r from-blue-500 to-purple-600 flex-1 flex gap-2 items-center justify-center hover:from-blue-600 hover:to-purple-700 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed transform hover:scale-[1.02] shadow-lg rounded-xl px-4 py-3 font-medium text-white transition-all duration-200">
+                    class="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 disabled:from-gray-300 disabled:to-gray-400 dark:disabled:from-gray-600 dark:disabled:to-gray-700 disabled:cursor-not-allowed flex-1 flex gap-2 items-center justify-center transform hover:scale-[1.02] shadow-lg rounded-xl px-4 py-3 font-medium text-white transition-all duration-200">
                     <i v-if="isLoading" class="pi pi-spin pi-spinner" :class="isLoading ? '' : 'pi pi-check'"></i>
                     <span>{{ isLoading ? 'Creating...' : 'Create Session' }}</span>
                   </button>
@@ -567,7 +600,7 @@ onUnmounted(() => {
 
           <!-- Footer note -->
           <div class="text-center mt-6">
-            <p class="text-xs text-gray-500 leading-relaxed">
+            <p class="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
               Your data is securely encrypted and synced across all your devices.
               <br>Create an account to access your chats anywhere.
             </p>
@@ -579,38 +612,43 @@ onUnmounted(() => {
     <!-- Mobile Layout: Vertical stack with carousel -->
     <div v-if="isMobile" class="flex flex-col gap-8 items-center justify-center h-full w-full px-2">
       <!-- Mobile Carousel (always shown) -->
-      <div v-if="!showCreateSession" class="w-full max-w-sm" @touchstart="stopAutoSlide" @touchend="startAutoSlide">
-        <div class="relative h-[440px] overflow-hidden backdrop-blur-sm rounded-2xl bg-white/80 border border-white/50">
+      <div v-if="!showCreateSession" class="w-full max-w-sm" 
+        @touchstart="handleTouchStart"
+        @touchmove="handleTouchMove"
+        @touchend="handleTouchEnd"
+        @touchcancel="handleTouchEnd"
+      >
+        <div class="relative h-[440px] overflow-hidden duration-300 touch-pan-y">
           <!-- Mobile Slide 1: Welcome -->
           <div
             :class="currentSlide === 0 ? 'translate-x-0 opacity-100' : currentSlide > 0 ? '-translate-x-full opacity-0' : 'translate-x-full opacity-0'"
             class="absolute inset-0 transition-all duration-700 ease-in-out transform p-6 flex flex-col items-center justify-center">
             <div class="text-center">
               <img src="/logo.svg" alt="Gemmie Logo" class="rounded-full w-16 h-16 mb-4 mx-auto" />
-              <h2 class="text-2xl font-bold text-gray-900 mb-2">
+              <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-2">
                 Welcome to Gemmie
               </h2>
-              <p class="text-gray-600 leading-relaxed mb-6 text-sm">
+              <p class="text-gray-600 dark:text-gray-300 leading-relaxed mb-6 text-sm">
                 Experience privacy-first conversations with advanced AI.
               </p>
               <div class="flex items-center justify-center gap-6 text-xs">
                 <div class="flex flex-col items-center gap-1">
-                  <div class="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
-                    <i class="pi pi-shield text-green-600 text-sm"></i>
+                  <div class="w-8 h-8 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center">
+                    <i class="pi pi-shield text-green-600 dark:text-green-400 text-sm"></i>
                   </div>
-                  <span class="text-gray-700 font-medium">Private</span>
+                  <span class="text-gray-700 dark:text-gray-300 font-medium">Private</span>
                 </div>
                 <div class="flex flex-col items-center gap-1">
-                  <div class="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                    <i class="pi pi-database text-blue-600 text-sm"></i>
+                  <div class="w-8 h-8 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center">
+                    <i class="pi pi-database text-blue-600 dark:text-blue-400 text-sm"></i>
                   </div>
-                  <span class="text-gray-700 font-medium">Local</span>
+                  <span class="text-gray-700 dark:text-gray-300 font-medium">Local</span>
                 </div>
                 <div class="flex flex-col items-center gap-1">
-                  <div class="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
-                    <i class="pi pi-sync text-purple-600 text-sm"></i>
+                  <div class="w-8 h-8 bg-purple-100 dark:bg-purple-900/30 rounded-full flex items-center justify-center">
+                    <i class="pi pi-sync text-purple-600 dark:text-purple-400 text-sm"></i>
                   </div>
-                  <span class="text-gray-700 font-medium">Synced</span>
+                  <span class="text-gray-700 dark:text-gray-300 font-medium">Synced</span>
                 </div>
               </div>
             </div>
@@ -621,20 +659,20 @@ onUnmounted(() => {
             :class="currentSlide === 1 ? 'translate-x-0 opacity-100' : currentSlide > 1 ? '-translate-x-full opacity-0' : 'translate-x-full opacity-0'"
             class="absolute inset-0 transition-all duration-700 ease-in-out transform p-4">
             <div class="text-center mb-4">
-              <h2 class="text-xl font-bold text-gray-900 mb-2">What can I help with?</h2>
-              <p class="text-gray-600 text-sm">Try these conversation starters</p>
+              <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-2">What can I help with?</h2>
+              <p class="text-gray-600 dark:text-gray-300 text-sm">Try these conversation starters</p>
             </div>
 
-            <div class="grid grid-cols-2 gap-3 h-72 overflow-y-auto">
+            <div class="grid grid-cols-2 gap-3 h-72 overflow-y-auto no-scrollbar">
               <button v-for="suggestion in chatSuggestions" :key="suggestion.title"
                 @click="handleSuggestionClick(suggestion)"
-                class="group p-3 rounded-lg bg-white/70 backdrop-blur-sm border border-white/50 hover:bg-white/90 hover:shadow-lg transition-all duration-300 transform hover:scale-[1.02] text-left">
+                class="group p-3 rounded-lg bg-white/70 dark:bg-gray-700/70 backdrop-blur-sm border border-white/50 dark:border-gray-600/50 hover:bg-white/90 dark:hover:bg-gray-700/90 hover:shadow-lg transition-all duration-300 transform hover:scale-[1.02] text-left">
                 <div
                   :class="`w-8 h-8 rounded-lg bg-gradient-to-r ${suggestion.color} flex items-center justify-center mb-2 group-hover:scale-110 transition-transform`">
                   <i :class="`pi ${suggestion.icon} text-white text-sm`"></i>
                 </div>
-                <h3 class="font-semibold text-gray-900 text-xs mb-1">{{ suggestion.title }}</h3>
-                <p class="text-xs text-gray-600 leading-tight">{{ suggestion.description }}</p>
+                <h3 class="font-semibold text-gray-900 dark:text-white text-xs mb-1">{{ suggestion.title }}</h3>
+                <p class="text-xs text-gray-600 dark:text-gray-300 leading-tight">{{ suggestion.description }}</p>
               </button>
             </div>
           </div>
@@ -644,19 +682,19 @@ onUnmounted(() => {
             :class="currentSlide === 2 ? 'translate-x-0 opacity-100' : currentSlide > 2 ? '-translate-x-full opacity-0' : 'translate-x-full opacity-0'"
             class="absolute inset-0 transition-all duration-700 ease-in-out transform p-4">
             <div class="text-center mb-4">
-              <h2 class="text-xl font-bold text-gray-900 mb-2">Why Choose Gemmie?</h2>
-              <p class="text-gray-600 text-sm">Built with your privacy in mind</p>
+              <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-2">Why Choose Gemmie?</h2>
+              <p class="text-gray-600 dark:text-gray-300 text-sm">Built with your privacy in mind</p>
             </div>
 
-            <div class="space-y-3 h-72 overflow-y-auto">
+            <div class="space-y-3 h-72 overflow-y-auto no-scrollbar">
               <div v-for="feature in features" :key="feature.title"
-                class="flex items-start gap-3 p-3 rounded-lg bg-white/70 backdrop-blur-sm border border-white/50 hover:bg-white/90 transition-all duration-300 hover:shadow-md">
-                <div class="flex-shrink-0 w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center">
-                  <i :class="`pi ${feature.icon} ${feature.color} text-sm`"></i>
+                class="flex items-start gap-3 p-3 rounded-lg bg-white/70 dark:bg-gray-700/70 backdrop-blur-sm border border-white/50 dark:border-gray-600/50 hover:bg-white/90 dark:hover:bg-gray-700/90 transition-all duration-300 hover:shadow-md">
+                <div class="flex-shrink-0 w-8 h-8 rounded-lg bg-gray-100 dark:bg-gray-600 flex items-center justify-center">
+                  <i :class="`pi ${feature.icon} ${feature.color} dark:${feature.color} text-sm`"></i>
                 </div>
                 <div>
-                  <h3 class="font-semibold text-gray-900 text-xs mb-1">{{ feature.title }}</h3>
-                  <p class="text-xs text-gray-600 leading-tight">{{ feature.description }}</p>
+                  <h3 class="font-semibold text-gray-900 dark:text-white text-xs mb-1">{{ feature.title }}</h3>
+                  <p class="text-xs text-gray-600 dark:text-gray-300 leading-tight">{{ feature.description }}</p>
                 </div>
               </div>
             </div>
@@ -666,24 +704,24 @@ onUnmounted(() => {
           <div :class="currentSlide === 3 ? 'translate-x-0 opacity-100' : '-translate-x-full opacity-0'"
             class="absolute inset-0 transition-all duration-700 ease-in-out transform p-4">
             <div class="text-center mb-4">
-              <h2 class="text-xl font-bold text-gray-900 mb-2">Pro Tips</h2>
-              <p class="text-gray-600 text-sm">Get the most out of conversations</p>
+              <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-2">Pro Tips</h2>
+              <p class="text-gray-600 dark:text-gray-300 text-sm">Get the most out of conversations</p>
             </div>
 
-            <div class="space-y-3 h-72 overflow-y-auto">
+            <div class="space-y-3 h-72 overflow-y-auto no-scrollbar">
               <div v-for="tip in tips" :key="tip.title"
-                class="p-3 rounded-lg bg-white/70 backdrop-blur-sm border border-white/50 hover:bg-white/90 transition-all duration-300 hover:shadow-md">
+                class="p-3 rounded-lg bg-white/70 dark:bg-gray-700/70 backdrop-blur-sm border border-white/50 dark:border-gray-600/50 hover:bg-white/90 dark:hover:bg-gray-700/90 transition-all duration-300 hover:shadow-md">
                 <div class="flex items-start gap-2 mb-2">
-                  <div class="flex-shrink-0 w-6 h-6 rounded-lg bg-blue-100 flex items-center justify-center">
-                    <i :class="`pi ${tip.icon} text-blue-600 text-xs`"></i>
+                  <div class="flex-shrink-0 w-6 h-6 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+                    <i :class="`pi ${tip.icon} text-blue-600 dark:text-blue-400 text-xs`"></i>
                   </div>
                   <div>
-                    <h3 class="font-semibold text-gray-900 text-xs mb-1">{{ tip.title }}</h3>
-                    <p class="text-xs text-gray-600 leading-tight">{{ tip.description }}</p>
+                    <h3 class="font-semibold text-gray-900 dark:text-white text-xs mb-1">{{ tip.title }}</h3>
+                    <p class="text-xs text-gray-600 dark:text-gray-300 leading-tight">{{ tip.description }}</p>
                   </div>
                 </div>
-                <div class="ml-8 p-2 bg-blue-50 rounded-lg">
-                  <p class="text-xs text-blue-700 italic">{{ tip.example }}</p>
+                <div class="ml-8 p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                  <p class="text-xs text-blue-700 dark:text-blue-300 italic">{{ tip.example }}</p>
                 </div>
               </div>
             </div>
@@ -692,11 +730,11 @@ onUnmounted(() => {
           <!-- Mobile Slide Indicators -->
           <div class="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-2">
             <button v-for="(slide, index) in carouselSlides" :key="slide.id" @click="goToSlide(index)"
-              :class="currentSlide === index ? 'bg-black shadow-lg scale-110' : 'bg-gray-100 hover:bg-gray-100'"
+              :class="currentSlide === index ? 'bg-black dark:bg-white shadow-lg scale-110' : 'bg-gray-100 dark:bg-gray-600 hover:bg-gray-100 dark:hover:bg-gray-500'"
               class="group w-8 h-8 rounded-full transition-all duration-300 flex items-center justify-center"
               :title="slide.title">
               <i
-                :class="currentSlide === index ? `text-white pi ${slide.icon} text-xs ` : `text-gray-500 pi ${slide.icon} text-xs`"></i>
+                :class="currentSlide === index ? `text-white dark:text-gray-900 pi ${slide.icon} text-xs ` : `text-gray-500 dark:text-gray-300 pi ${slide.icon} text-xs`"></i>
             </button>
           </div>
         </div>
@@ -704,11 +742,11 @@ onUnmounted(() => {
 
       <!-- Mobile Auth Section -->
       <div v-if="showCreateSession" class="w-full max-w-sm">
-        <div class="bg-white/80 backdrop-blur-sm rounded-2xl p-2 border border-white/50">
+        <div class="p-2 transition-colors duration-300">
           <!-- Progress indicator -->
           <div class="flex justify-center mb-6">
             <div class="flex items-center space-x-2">
-              <div v-for="step in 4" :key="step" :class="step <= authStep ? 'bg-blue-600' : 'bg-gray-300'"
+              <div v-for="step in 4" :key="step" :class="step <= authStep ? 'bg-blue-600 dark:bg-blue-500' : 'bg-gray-300 dark:bg-gray-600'"
                 class="w-2.5 h-2.5 rounded-full transition-colors duration-300">
               </div>
             </div>
@@ -721,24 +759,24 @@ onUnmounted(() => {
               authStep > 1 ? '-translate-x-full opacity-0' : 'translate-x-full opacity-0'"
               class="absolute inset-0 transition-all duration-500 ease-in-out transform">
               <div class="text-center mb-6">
-                <h2 class="text-xl font-semibold text-gray-900 mb-2">Welcome!</h2>
-                <p class="text-gray-600 text-sm">Let's start by creating your username</p>
+                <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-2">Welcome!</h2>
+                <p class="text-gray-600 dark:text-gray-300 text-sm">Let's start by creating your username</p>
               </div>
 
               <form @submit.prevent="handleStepSubmit" class="space-y-4">
                 <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-2">
+                  <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     Choose a username
                   </label>
                   <input v-model="authData.username" required type="text" placeholder="johndoe"
-                    class="border border-gray-300 rounded-lg px-4 py-2.5 w-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                    :class="authData.username && !validateCurrentStep ? 'border-red-300' : ''"
+                    class="border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2.5 w-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
+                    :class="authData.username && !validateCurrentStep ? 'border-red-300 dark:border-red-500' : ''"
                     @input="handleUsernameInput" />
-                  <p class="text-xs text-gray-500 mt-1">This will be your display name</p>
+                  <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">This will be your display name</p>
                 </div>
 
                 <button type="submit" :disabled="!validateCurrentStep"
-                  class="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg px-6 py-2.5 font-semibold hover:from-blue-600 hover:to-purple-700 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed transition-all duration-300 transform hover:scale-[1.02] shadow-lg">
+                  class="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 disabled:from-gray-300 disabled:to-gray-400 dark:disabled:from-gray-600 dark:disabled:to-gray-700 disabled:cursor-not-allowed text-white rounded-lg px-6 py-2.5 font-semibold transition-all duration-300 transform hover:scale-[1.02] shadow-lg">
                   Continue
                 </button>
               </form>
@@ -749,28 +787,28 @@ onUnmounted(() => {
               authStep > 2 ? '-translate-x-full opacity-0' : 'translate-x-full opacity-0'"
               class="absolute inset-0 transition-all duration-500 ease-in-out transform">
               <div class="text-center mb-6">
-                <h2 class="text-xl font-semibold text-gray-900 mb-2">Hi {{ authData.username }}!</h2>
-                <p class="text-gray-600 text-sm">What's your email address?</p>
+                <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-2">Hi {{ authData.username }}!</h2>
+                <p class="text-gray-600 dark:text-gray-300 text-sm">What's your email address?</p>
               </div>
 
               <form @submit.prevent="handleStepSubmit" class="space-y-4">
                 <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-2">
+                  <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     Email address
                   </label>
                   <input v-model="authData.email" required type="email" placeholder="johndoe@example.com"
-                    class="border border-gray-300 rounded-lg px-4 py-2.5 w-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                    :class="authData.email && !validateCurrentStep ? 'border-red-300' : ''" @input="handleEmailInput" />
-                  <p class="text-xs text-gray-500 mt-1">Used for session identification only</p>
+                    class="border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2.5 w-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
+                    :class="authData.email && !validateCurrentStep ? 'border-red-300 dark:border-red-500' : ''" @input="handleEmailInput" />
+                  <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Used for session identification only</p>
                 </div>
 
                 <div class="flex gap-3">
                   <button type="button" @click="prevAuthStep"
-                    class="flex-1 flex gap-2 items-center justify-center bg-gray-100 backdrop-blur-sm text-gray-700 rounded-lg px-4 py-2.5 font-medium hover:bg-gray-200 transition-all duration-200">
+                    class="flex-1 flex gap-2 items-center justify-center bg-gray-100 dark:bg-gray-700 backdrop-blur-sm text-gray-700 dark:text-gray-300 rounded-lg px-4 py-2.5 font-medium hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200">
                     <i class="pi pi-arrow-left"></i> Back
                   </button>
                   <button type="submit" :disabled="!validateCurrentStep"
-                    class="bg-gradient-to-r from-blue-500 to-purple-600 flex-1 flex gap-2 items-center justify-center hover:from-blue-600 hover:to-purple-700 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed transform hover:scale-[1.02] shadow-lg rounded-lg px-4 py-2.5 font-medium text-white transition-all duration-200">
+                    class="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 disabled:from-gray-300 disabled:to-gray-400 dark:disabled:from-gray-600 dark:disabled:to-gray-700 disabled:cursor-not-allowed flex-1 flex gap-2 items-center justify-center transform hover:scale-[1.02] shadow-lg rounded-lg px-4 py-2.5 font-medium text-white transition-all duration-200">
                     Continue
                   </button>
                 </div>
@@ -782,23 +820,23 @@ onUnmounted(() => {
               authStep > 3 ? '-translate-x-full opacity-0' : 'translate-x-full opacity-0'"
               class="absolute inset-0 transition-all duration-500 ease-in-out transform">
               <div class="text-center mb-6">
-                <h2 class="text-xl font-semibold text-gray-900 mb-2">Almost there!</h2>
-                <p class="text-gray-600 text-sm">Create a secure password</p>
+                <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-2">Almost there!</h2>
+                <p class="text-gray-600 dark:text-gray-300 text-sm">Create a secure password</p>
               </div>
 
               <form @submit.prevent="handleStepSubmit" class="space-y-4">
                 <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-2">
+                  <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     Password
                   </label>
                   <input v-model="authData.password" required type="password" placeholder="Enter a secure password"
                     minlength="8"
-                    class="border border-gray-300 rounded-lg px-4 py-2.5 w-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                    :class="authData.password && !validateCurrentStep ? 'border-red-300' : ''"
+                    class="border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2.5 w-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
+                    :class="authData.password && !validateCurrentStep ? 'border-red-300 dark:border-red-500' : ''"
                     @input="handlePasswordInput" />
                   <div class="mt-2">
                     <div class="flex items-center gap-2 text-xs">
-                      <div :class="authData.password.length >= 8 ? 'text-green-600' : 'text-gray-400'"
+                      <div :class="authData.password.length >= 8 ? 'text-green-600 dark:text-green-400' : 'text-gray-400 dark:text-gray-500'"
                         class="flex items-center gap-1">
                         <i :class="authData.password.length >= 8 ? 'pi pi-check' : 'pi pi-circle'" class="text-xs"></i>
                         <span>At least 8 characters</span>
@@ -809,11 +847,11 @@ onUnmounted(() => {
 
                 <div class="flex gap-3">
                   <button type="button" @click="prevAuthStep"
-                    class="flex-1 flex gap-2 items-center justify-center bg-gray-100 backdrop-blur-sm text-gray-700 rounded-lg px-4 py-2.5 font-medium hover:bg-gray-200 transition-all duration-200">
+                    class="flex-1 flex gap-2 items-center justify-center bg-gray-100 dark:bg-gray-700 backdrop-blur-sm text-gray-700 dark:text-gray-300 rounded-lg px-4 py-2.5 font-medium hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200">
                     <i class="pi pi-arrow-left"></i> Back
                   </button>
                   <button type="submit" :disabled="!validateCurrentStep"
-                    class="bg-gradient-to-r from-blue-500 to-purple-600 flex-1 flex gap-2 items-center justify-center hover:from-blue-600 hover:to-purple-700 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed transform hover:scale-[1.02] shadow-lg rounded-lg px-4 py-2.5 font-medium text-white transition-all duration-200">
+                    class="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 disabled:from-gray-300 disabled:to-gray-400 dark:disabled:from-gray-600 dark:disabled:to-gray-700 disabled:cursor-not-allowed flex-1 flex gap-2 items-center justify-center transform hover:scale-[1.02] shadow-lg rounded-lg px-4 py-2.5 font-medium text-white transition-all duration-200">
                     Continue
                   </button>
                 </div>
@@ -824,30 +862,30 @@ onUnmounted(() => {
             <div :class="authStep === 4 ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0'"
               class="absolute inset-0 transition-all duration-500 ease-in-out transform">
               <div class="text-center mb-4">
-                <h2 class="text-xl font-semibold text-gray-900 mb-2">One last step</h2>
-                <p class="text-gray-600 text-sm">Please review and accept our terms</p>
+                <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-2">One last step</h2>
+                <p class="text-gray-600 dark:text-gray-300 text-sm">Please review and accept our terms</p>
               </div>
 
               <form @submit.prevent="handleStepSubmit" class="space-y-4">
                 <!-- Terms and Conditions Checkbox -->
                 <div class="space-y-3">
-                  <div class="border border-gray-200 rounded-lg p-3 bg-gray-50">
+                  <div class="border border-gray-200 dark:border-gray-600 rounded-lg p-3 bg-gray-50 dark:bg-gray-700/50">
                     <div class="flex items-start gap-2">
                       <input
                         id="mobile-agree-terms"
                         v-model="authData.agreeToTerms"
                         type="checkbox"
                         required
-                        class="mt-0.5 h-3.5 w-3.5 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                        class="mt-0.5 h-3.5 w-3.5 text-blue-600 dark:text-blue-500 focus:ring-blue-500 border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700"
                         @change="handleTermsToggle"
                       />
-                      <label for="mobile-agree-terms" class="text-xs text-gray-700 leading-relaxed cursor-pointer">
+                      <label for="mobile-agree-terms" class="text-xs text-gray-700 dark:text-gray-300 leading-relaxed cursor-pointer">
                         I agree to the 
-                        <a href="/terms" target="_blank" class="text-blue-600 hover:text-blue-800 underline font-medium">
+                        <a href="/terms" target="_blank" class="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline font-medium">
                           Terms of Service
                         </a> 
                         and 
-                        <a href="/privacy" target="_blank" class="text-blue-600 hover:text-blue-800 underline font-medium">
+                        <a href="/privacy" target="_blank" class="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline font-medium">
                           Privacy Policy
                         </a>
                         <span class="text-red-500">*</span>
@@ -856,12 +894,12 @@ onUnmounted(() => {
                   </div>
 
                   <!-- Key points about terms (mobile version) -->
-                  <div class="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                  <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
                     <div class="flex items-start gap-2">
-                      <div class="flex-shrink-0 w-5 h-5 bg-blue-100 rounded-full flex items-center justify-center">
-                        <i class="pi pi-info-circle text-blue-600 text-xs"></i>
+                      <div class="flex-shrink-0 w-5 h-5 bg-blue-100 dark:bg-blue-800 rounded-full flex items-center justify-center">
+                        <i class="pi pi-info-circle text-blue-600 dark:text-blue-400 text-xs"></i>
                       </div>
-                      <div class="text-xs text-blue-800 space-y-1">
+                      <div class="text-xs text-blue-800 dark:text-blue-200 space-y-1">
                         <p><strong>Key highlights:</strong></p>
                         <ul class="list-disc list-inside space-y-0.5 ml-1 text-xs">
                           <li>Your data remains private and encrypted</li>
@@ -876,11 +914,11 @@ onUnmounted(() => {
 
                 <div class="flex gap-3">
                   <button type="button" @click="prevAuthStep"
-                    class="flex-1 flex gap-2 items-center justify-center bg-gray-100 backdrop-blur-sm text-gray-700 rounded-lg px-4 py-2.5 font-medium hover:bg-gray-200 transition-all duration-200">
+                    class="flex-1 flex gap-2 items-center justify-center bg-gray-100 dark:bg-gray-700 backdrop-blur-sm text-gray-700 dark:text-gray-300 rounded-lg px-4 py-2.5 font-medium hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200">
                     <i class="pi pi-arrow-left"></i> Back
                   </button>
                   <button type="submit" :disabled="!authData.agreeToTerms || isLoading"
-                    class="bg-gradient-to-r from-blue-500 to-purple-600 flex-1 flex gap-2 items-center justify-center hover:from-blue-600 hover:to-purple-700 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed transform hover:scale-[1.02] shadow-lg rounded-lg px-4 py-2.5 font-medium text-white transition-all duration-200">
+                    class="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 disabled:from-gray-300 disabled:to-gray-400 dark:disabled:from-gray-600 dark:disabled:to-gray-700 disabled:cursor-not-allowed flex-1 flex gap-2 items-center justify-center transform hover:scale-[1.02] shadow-lg rounded-lg px-4 py-2.5 font-medium text-white transition-all duration-200">
                     <i v-if="isLoading" class="pi pi-spin pi-spinner" :class="isLoading ? '' : 'pi pi-check'"></i>
                     <span>{{ isLoading ? 'Creating...' : 'Create Session' }}</span>
                   </button>
@@ -891,7 +929,7 @@ onUnmounted(() => {
 
           <!-- Mobile Footer note -->
           <div class="text-center mt-4">
-            <p class="text-xs text-gray-500 leading-relaxed">
+            <p class="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
               Your data is securely encrypted and synced across all your devices.
             </p>
           </div>
@@ -912,9 +950,20 @@ onUnmounted(() => {
 
     <!-- Footer disclaimer -->
     <div v-if="isAuthenticated" class="absolute bottom-4 text-center">
-      <p class="text-xs text-gray-500">
+      <p class="text-xs text-gray-500 dark:text-gray-400">
         Gemmie can make mistakes. Check important info.
       </p>
     </div>
   </div>
 </template>
+
+<style scoped>
+.touch-pan-y {
+  touch-action: pan-y;
+}
+
+/* Optional: Add visual feedback during swipe */
+.carousel-slide {
+  transition: transform 0.3s ease-out;
+}
+</style>
