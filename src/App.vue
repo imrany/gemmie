@@ -112,6 +112,8 @@ const parsedUserDetails = ref<any>(
   })()
 )
 
+const syncEnabled = ref(parsedUserDetails.value?.sync_enabled !== false)
+
 // Reactive authentication state with validation
 const isAuthenticated = computed(() => {
   const user = parsedUserDetails.value
@@ -1665,6 +1667,102 @@ function setupAutoSync() {
   }
 }
 
+// toggle auto-sync with smart sync strategy
+async function toggleSync(newSyncValue?: boolean) {
+  const targetSyncValue = newSyncValue ?? !parsedUserDetails.value?.sync_enabled
+
+  try {
+    // Update local state first for immediate UI response
+    parsedUserDetails.value.sync_enabled = targetSyncValue
+    syncEnabled.value = targetSyncValue
+
+    // Save to localStorage
+    localStorage.setItem("userdetails", JSON.stringify(parsedUserDetails.value))
+    console.log('Sync toggle:', { current: syncEnabled.value, target: targetSyncValue })
+
+    // Update sync mechanisms based on new value
+    if (targetSyncValue) {
+      setupAutoSync()
+    } else {
+      cleanupAutoSync()
+    }
+
+    // Update server with retry logic
+    let serverUpdateSuccess = false
+    let retryCount = 0
+    const maxRetries = 2
+
+    while (!serverUpdateSuccess && retryCount <= maxRetries) {
+      try {
+        await apiCall('/sync', {
+          method: 'POST',
+          body: JSON.stringify({
+            username: parsedUserDetails.value.username,
+            sync_enabled: targetSyncValue,
+            chats: targetSyncValue ? JSON.stringify(chats.value) : "[]",
+            link_previews: "{}",
+            current_chat_id: targetSyncValue ? currentChatId.value : ""
+          })
+        })
+        serverUpdateSuccess = true
+        console.log('Sync preference updated on server:', targetSyncValue)
+      } catch (serverError) {
+        retryCount++
+        console.warn(`Failed to update sync preference on server (attempt ${retryCount}):`, serverError)
+        
+        if (retryCount > maxRetries) {
+          console.error('All retry attempts failed for server sync update')
+          // Continue with local operations despite server failure
+        } else {
+          // Wait before retry (exponential backoff)
+          await new Promise(resolve => setTimeout(resolve, 1000 * retryCount))
+        }
+      }
+    }
+
+    // Perform smart sync only after server is updated (if enabling)
+    if (targetSyncValue) {
+      try {
+        await performSmartSync()
+        toast.success('Auto-sync enabled and data synchronized', {
+          duration: 3000,
+          description: serverUpdateSuccess 
+            ? 'Your data is now syncing across devices' 
+            : 'Auto-sync enabled (server update may be delayed)'
+        })
+      } catch (error) {
+        console.warn('Initial sync failed:', error)
+        toast.success('Auto-sync enabled', {
+          duration: 3000,
+          description: serverUpdateSuccess
+            ? 'Initial sync failed, but auto-sync is now active'
+            : 'Auto-sync enabled (server communication issues)'
+        })
+      }
+    } else {
+      toast.info('Auto-sync disabled', {
+        duration: 3000,
+        description: serverUpdateSuccess
+          ? 'Your data will only be saved locally on this device'
+          : 'Auto-sync disabled (server update may be delayed)'
+      })
+    }
+
+  } catch (error) {
+    console.error('Failed to toggle sync:', error)
+    // Revert the change on error
+    parsedUserDetails.value.sync_enabled = !targetSyncValue
+    syncEnabled.value = !targetSyncValue
+    localStorage.setItem("userdetails", JSON.stringify(parsedUserDetails.value))
+    
+    toast.error('Failed to update sync setting', {
+      duration: 4000,
+      description: 'Please try again later'
+    })
+    throw error
+  }
+}
+
 // Smart sync strategy
 async function performSmartSync() {
   if (!isAuthenticated.value || !parsedUserDetails.value?.user_id) {
@@ -1743,6 +1841,29 @@ function cleanupAutoSync() {
     console.log('Auto-sync cleanup completed')
   } catch (error) {
     console.error('Error during auto-sync cleanup:', error)
+  }
+}
+
+// checks if local data is empty or minimal
+function isLocalDataEmpty(): boolean {
+  try {
+    // Check if chats array is empty
+    if (chats.value.length === 0) {
+      return true
+    }
+    
+    // Check if we only have empty/default chats
+    const hasMeaningfulData = chats.value.some(chat => {
+      // Consider a chat meaningful if it has messages or a custom title
+      return chat.messages.length > 0 || 
+             (chat.title && chat.title !== 'New Chat' && chat.title !== '')
+    })
+    
+    return !hasMeaningfulData
+  } catch (error) {
+    console.error('Error checking local data state:', error)
+    // If we can't determine, assume data exists to be safe
+    return false
   }
 }
 
@@ -1972,6 +2093,8 @@ const globalState = {
   // Data persistence functions
   saveChats,
   loadLocalData,
+  isLocalDataEmpty,
+  toggleSync,
 
   // Link preview functions
   fetchLinkPreview,
