@@ -1933,7 +1933,7 @@ async function checkInternetConnection(): Promise<boolean> {
     const timeoutId = setTimeout(() => controller.abort(), 5000) // 5 second timeout
     
     const response = await fetch(`${API_BASE_URL}/health`, {
-      method: 'HEAD',
+      method: 'GET',
       signal: controller.signal,
       cache: 'no-cache'
     })

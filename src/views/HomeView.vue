@@ -72,9 +72,9 @@ const globalState = inject('globalState') as {
   isFreeUser: Ref<boolean>,
   currentTheme: Ref<Theme>,
   isDarkMode: Ref<boolean>,
-  isUserOnline:Ref<boolean>,
-  connectionStatus:Ref<string>,
-  checkInternetConnection:()=>Promise<boolean>,
+  isUserOnline: Ref<boolean>,
+  connectionStatus: Ref<string>,
+  checkInternetConnection: () => Promise<boolean>,
 }
 
 const {
@@ -706,7 +706,6 @@ function handlePaste(e: ClipboardEvent) {
   }
 }
 
-
 function removePastePreview() {
   pastePreview.value = null
 
@@ -960,6 +959,9 @@ async function refreshResponse(oldPrompt?: string) {
   if (msgIndex === -1) return
 
   const oldMessage = chat.messages[msgIndex]
+  const responseUrls = extractUrls(oldMessage.response || '')
+  const promptUrls = extractUrls(oldMessage.prompt || '')
+  const urls = [...new Set([...responseUrls, ...promptUrls])]
 
   let fabricatedPrompt = oldPrompt
   if (oldPrompt && isPromptTooShort(oldPrompt) && currentMessages.value.length > 1) {
@@ -993,6 +995,14 @@ async function refreshResponse(oldPrompt?: string) {
   chat.messages[msgIndex] = {
     ...oldMessage,
     response: "refreshing...",
+  }
+
+  // Clean up link previews
+  if (urls.length > 0) {
+    urls.forEach(url => {
+      linkPreviewCache.value.delete(url)
+    })
+    saveLinkPreviewCache()
   }
 
   // handling for link-only prompts
@@ -2138,7 +2148,8 @@ onMounted(() => {
 
         <!-- Chat Messages Container -->
         <div ref="scrollableElem" v-else-if="currentMessages.length !== 0 && isAuthenticated"
-          class="flex-grow no-scrollbar overflow-y-auto px-2 sm:px-4 w-full space-y-3 sm:space-y-4 mt-[55px]" :class="isRequestLimitExceeded || shouldShowUpgradePrompt ? 'pb-[160px] sm:pb-[150px]' :
+          class="relative flex-grow no-scrollbar overflow-y-auto px-2 sm:px-4 w-full space-y-3 sm:space-y-4 mt-[55px]"
+          :class="isRequestLimitExceeded || shouldShowUpgradePrompt ? 'pb-[160px] sm:pb-[150px]' :
             showScrollDownButton ? 'pb-[140px] sm:pb-[120px]' :
               'pb-[110px] sm:pb-[120px]'">
           <div v-if="currentMessages.length !== 0" v-for="(item, i) in currentMessages" :key="`chat-${i}`"
@@ -2246,14 +2257,14 @@ onMounted(() => {
 
         <!-- Responsive Scroll to Bottom Button -->
         <button v-if="showScrollDownButton && currentMessages.length !== 0 && isAuthenticated" @click="scrollToBottom"
-          :class="isRequestLimitExceeded || shouldShowUpgradePrompt ? 'bottom-[170px]' : 'bottom-[90px]'"
-          class="fixed bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border dark:border-gray-700 px-5 h-[34px] rounded-full shadow-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors z-20 left-1/2 transform -translate-x-1/2">
-          <div class="flex gap-1 sm:gap-2 items-center justify-center w-full font-semibold h-full">
-            <i class="pi pi-arrow-down text-center"></i>
-            <p class="whitespace-nowrap">Scroll Down</p>
-          </div>
+          :class="[
+            'absolute bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border dark:border-gray-700 px-4 h-8 rounded-full shadow-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors z-20 flex items-center justify-center gap-2',
+            isRequestLimitExceeded || shouldShowUpgradePrompt ? 'bottom-[170px] sm:bottom-[150px]' :
+              'bottom-[90px] sm:bottom-[100px]'
+          ]">
+          <i class="pi pi-arrow-down text-xs"></i>
+          <span class="text-sm font-medium">Scroll Down</span>
         </button>
-
 
         <!-- Input Area -->
         <div v-if="(currentMessages.length !== 0 || showInput === true) && isAuthenticated" :style="screenWidth > 720 && !isCollapsed ? 'left:270px;' :
