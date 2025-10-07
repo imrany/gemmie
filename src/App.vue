@@ -33,7 +33,7 @@ const authData = ref({
   agreeToTerms: false
 })
 
-// Enhanced sync status with retry mechanism
+// sync status with retry mechanism
 const syncStatus = ref({
   lastSync: null as Date | null,
   syncing: false,
@@ -56,7 +56,7 @@ const currentMessages = computed(() => {
 // Link preview cache with better error handling
 const linkPreviewCache = ref<Map<string, LinkPreview>>(new Map())
 
-// Enhanced load cached link previews with error handling
+// load cached link previews with error handling
 function loadLinkPreviewCache() {
   try {
     const cached = localStorage.getItem('linkPreviews')
@@ -76,7 +76,7 @@ function loadLinkPreviewCache() {
   }
 }
 
-// Enhanced save link preview cache with error handling
+// save link preview cache with error handling
 function saveLinkPreviewCache() {
   try {
     const cacheObject = Object.fromEntries(linkPreviewCache.value)
@@ -230,7 +230,7 @@ function showConfirmDialog(options: ConfirmDialogOptions) {
   }
 }
 
-// Enhanced API call with better error handling and retry logic
+// API call with better error handling and retry logic
 async function apiCall(endpoint: string, options: RequestInit = {}, retryCount = 0): Promise<any> {
   const maxRetries = 3
   const retryDelay = Math.pow(2, retryCount) * 1000 // Exponential backoff
@@ -300,7 +300,7 @@ async function apiCall(endpoint: string, options: RequestInit = {}, retryCount =
   }
 }
 
-// Enhanced merge chats function with better validation
+// merge chats function with better validation
 function isValidChat(chat: any): chat is Chat {
   return chat &&
     typeof chat === 'object' &&
@@ -369,7 +369,7 @@ async function logout() {
     onConfirm: async () => {
       try {
         isLoading.value = true
-        
+
         const syncEnabled = parsedUserDetails.value?.sync_enabled
         const hasUnsyncedChanges = syncStatus.value.hasUnsyncedChanges
 
@@ -404,7 +404,7 @@ async function logout() {
           expanded.value = []
           showInput.value = false
           isCollapsed.value = false
-          
+
           // 2. Reset sync status
           syncStatus.value = {
             lastSync: null,
@@ -451,7 +451,7 @@ async function logout() {
           } catch (restoreError) {
             console.error('Failed to restore state after logout error:', restoreError)
           }
-          
+
           throw new Error('Failed to clear application state during logout')
         }
 
@@ -459,15 +459,15 @@ async function logout() {
         if (syncEnabled) {
           toast.success('Logged out successfully', {
             duration: 3000,
-            description: hasUnsyncedChanges 
-              ? 'Your data has been synced to the cloud' 
+            description: hasUnsyncedChanges
+              ? 'Your data has been synced to the cloud'
               : 'Ready to log back in anytime'
           })
         } else {
           toast.success('Logged out successfully', {
             duration: 3000,
-            description: hasChats 
-              ? 'Your chats are saved locally on this device' 
+            description: hasChats
+              ? 'Your chats are saved locally on this device'
               : 'Ready to start fresh when you return'
           })
         }
@@ -510,7 +510,7 @@ function setShowInput() {
   })
 }
 
-// Enhanced update expanded array with validation
+// update expanded array with validation
 function updateExpandedArray() {
   try {
     const messagesLength = currentMessages.value?.length || 0
@@ -521,7 +521,7 @@ function updateExpandedArray() {
   }
 }
 
-// Enhanced create new chat with better error handling
+// create new chat with better error handling
 function createNewChat(firstMessage?: string): string {
   try {
     const newChatId = generateChatId()
@@ -620,7 +620,7 @@ function toggleChatMenu(chatId: string, event: Event) {
   }
 }
 
-// Enhanced switch to chat function
+// switch to chat function
 function switchToChat(chatId: string) {
   try {
     if (!chatId || typeof chatId !== 'string') {
@@ -655,7 +655,7 @@ function switchToChat(chatId: string) {
   }
 }
 
-// Enhanced delete chat function
+// delete chat function
 function deleteChat(chatId: string) {
   if (isLoading.value || !chatId) return
 
@@ -726,7 +726,7 @@ function deleteChat(chatId: string) {
   }
 }
 
-// Enhanced rename chat function
+// rename chat function
 function renameChat(chatId: string, newTitle: string) {
   try {
     if (!chatId || !newTitle || typeof newTitle !== 'string') {
@@ -757,7 +757,7 @@ function renameChat(chatId: string, newTitle: string) {
   }
 }
 
-// Enhanced delete message function
+// delete message function
 function deleteMessage(messageIndex: number) {
   if (isLoading.value || !currentChat.value) return
 
@@ -832,7 +832,7 @@ function deleteMessage(messageIndex: number) {
   }
 }
 
-// Enhanced clear all chats function
+// clear all chats function
 function clearAllChats() {
   if (isLoading.value) return
 
@@ -889,7 +889,7 @@ function clearAllChats() {
   }
 }
 
-// Enhanced fetch link preview with better error handling
+// fetch link preview with better error handling
 async function fetchLinkPreview(url: string): Promise<LinkPreview> {
   // Validate URL
   try {
@@ -927,7 +927,7 @@ async function fetchLinkPreview(url: string): Promise<LinkPreview> {
     const results = await response.json()
     const domain = new URL(url).hostname
 
-    // Enhanced video detection and processing with error handling
+    // video detection and processing with error handling
     let videoInfo: any = {}
     try {
       videoInfo = await detectAndProcessVideo(url, results)
@@ -993,7 +993,7 @@ function handleClickOutside() {
   }
 }
 
-// Enhanced saveChats function with better error handling
+// saveChats function with better error handling
 function saveChats() {
   try {
     // Validate chats data before saving
@@ -1041,7 +1041,7 @@ function saveChats() {
   }
 }
 
-// Enhanced sync from server with comprehensive error handling
+// sync from server with comprehensive error handling
 let syncLock = false
 
 async function syncFromServer(serverData?: any) {
@@ -1049,7 +1049,7 @@ async function syncFromServer(serverData?: any) {
     console.log('Sync skipped - user not authenticated')
     return
   }
-  
+
   if (syncLock) {
     console.log('Sync already in progress, skipping')
     return
@@ -1188,7 +1188,7 @@ async function syncFromServer(serverData?: any) {
   }
 }
 
-// Enhanced sync to server with comprehensive error handling and validation
+// sync to server with comprehensive error handling and validation
 async function syncToServer() {
   if (!parsedUserDetails.value?.user_id) {
     console.log('Sync skipped - user not authenticated')
@@ -1282,7 +1282,7 @@ async function syncToServer() {
   }
 }
 
-// Enhanced unsecureApiCall with better error handling and retry logic
+// unsecureApiCall with better error handling and retry logic
 async function unsecureApiCall(endpoint: string, options: RequestInit = {}, retryCount = 0): Promise<any> {
   const maxRetries = 2
   const retryDelay = Math.pow(2, retryCount) * 1000 // Exponential backoff
@@ -1339,7 +1339,7 @@ async function unsecureApiCall(endpoint: string, options: RequestInit = {}, retr
   }
 }
 
-// Enhanced handleAuth with better error handling
+// handleAuth with better error handling
 async function handleAuth(data: {
   username: string
   email: string
@@ -1433,8 +1433,9 @@ async function handleAuth(data: {
     // Only sync data from server if sync is enabled
     if (userData.sync_enabled) {
       try {
-        await syncFromServer(response.data)
-        console.log('Initial data sync completed')
+        // Use smart sync strategy on initial authentication
+        await performSmartSync()
+        console.log('Initial smart sync completed')
       } catch (syncError) {
         console.error('Initial sync failed:', syncError)
         toast.warning('Failed to sync data from server', {
@@ -1459,7 +1460,7 @@ async function handleAuth(data: {
   }
 }
 
-// Enhanced function to load data from localStorage with validation
+// function to load data from localStorage with validation
 function loadLocalData() {
   try {
     console.log('Loading data from localStorage...')
@@ -1520,7 +1521,7 @@ function loadLocalData() {
   }
 }
 
-// Enhanced manual sync with comprehensive status updates
+// manual sync with smart strategy
 async function manualSync() {
   if (!parsedUserDetails.value?.user_id) {
     toast.warning('Please log in to sync data', {
@@ -1547,22 +1548,15 @@ async function manualSync() {
   }
 
   try {
-    console.log('Starting manual sync...')
-    // First sync to server (upload local changes)
-    if (syncStatus.value.hasUnsyncedChanges) {
-      console.log('Syncing local changes to server...')
-      await syncToServer()
-    }
+    console.log('Starting manual smart sync...')
 
-    // Then sync from server (download latest data)
-    console.log('Syncing latest data from server...')
-    await syncFromServer()
+    await performSmartSync()
 
     toast.success('Data synced successfully', {
       duration: 3000,
       description: 'Your data is up to date across all devices'
     })
-    console.log('Manual sync completed successfully')
+    console.log('Manual smart sync completed successfully')
 
   } catch (error: any) {
     console.error('Manual sync failed:', error)
@@ -1573,14 +1567,15 @@ async function manualSync() {
   }
 }
 
-// Enhanced auto-sync setup with better error handling and cleanup
+// auto-sync setup with better error handling and cleanup
 let autoSyncInterval: any = null
 let visibilityListener: (() => void) | null = null
 let beforeUnloadListener: (() => void) | null = null
 
+// auto-sync setup with smart data synchronization strategy
 function setupAutoSync() {
   try {
-    console.log('Setting up auto-sync...')
+    console.log('Setting up smart auto-sync...')
 
     // Clear existing interval and listeners
     if (autoSyncInterval) {
@@ -1596,15 +1591,14 @@ function setupAutoSync() {
       window.removeEventListener('beforeunload', beforeUnloadListener)
     }
 
-    // Auto sync every 5 minutes if authenticated, sync enabled, and has unsynced changes
+    // Smart auto-sync interval - check every 5 minutes
     autoSyncInterval = setInterval(async () => {
       if (isAuthenticated.value &&
         parsedUserDetails.value?.sync_enabled !== false &&
-        syncStatus.value.hasUnsyncedChanges &&
         !syncStatus.value.syncing) {
+
         try {
-          console.log('Auto-sync: Syncing unsynced changes...')
-          await syncToServer()
+          await performSmartSync()
         } catch (error) {
           console.error('Auto-sync failed:', error)
           // Don't show toast for auto-sync failures to avoid spam
@@ -1612,17 +1606,18 @@ function setupAutoSync() {
       }
     }, 5 * 60 * 1000) // 5 minutes
 
-    // Sync when page becomes visible (only if sync enabled)
+    // visibility change handler with smart sync
     visibilityListener = async () => {
       if (!document.hidden &&
         isAuthenticated.value &&
         parsedUserDetails.value?.sync_enabled !== false &&
         !syncStatus.value.syncing) {
+
         // Small delay to ensure tab is fully active
         setTimeout(async () => {
           try {
-            console.log('Tab visibility: Syncing from server...')
-            await syncFromServer()
+            console.log('Tab became visible: Performing smart sync...')
+            await performSmartSync()
           } catch (error) {
             console.error('Visibility sync failed:', error)
           }
@@ -1663,10 +1658,60 @@ function setupAutoSync() {
     }
     window.addEventListener('beforeunload', beforeUnloadListener)
 
-    console.log('Auto-sync setup completed')
+    console.log('Smart auto-sync setup completed')
 
   } catch (error) {
     console.error('Error setting up auto-sync:', error)
+  }
+}
+
+// Smart sync strategy
+async function performSmartSync() {
+  if (!isAuthenticated.value || !parsedUserDetails.value?.user_id) {
+    console.log('Smart sync skipped - user not authenticated')
+    return
+  }
+
+  if (syncLock || syncStatus.value.syncing) {
+    console.log('Smart sync skipped - sync already in progress')
+    return
+  }
+
+  console.log('Performing smart sync...')
+
+  // Check if local data is empty or very minimal
+  const isLocalDataEmpty = chats.value.length === 0 ||
+    (chats.value.length === 1 &&
+      chats.value[0].messages.length === 0)
+
+  if (isLocalDataEmpty) {
+    console.log('Local data is empty - syncing from server first')
+    try {
+      await syncFromServer()
+      console.log('Successfully synced data from server (empty local)')
+    } catch (error) {
+      console.error('Failed to sync from server (empty local):', error)
+      // Don't throw error - we'll try normal sync next time
+    }
+  } else if (syncStatus.value.hasUnsyncedChanges) {
+    console.log('Local has unsynced changes - syncing to server')
+    try {
+      await syncToServer()
+      console.log('Successfully synced changes to server')
+    } catch (error) {
+      console.error('Failed to sync changes to server:', error)
+      throw error // Re-throw to allow retry logic
+    }
+  } else {
+    console.log('No unsynced changes - checking for server updates')
+    try {
+      // Even without unsynced changes, check if server has newer data
+      await syncFromServer()
+      console.log('Checked for server updates - data is current')
+    } catch (error) {
+      console.error('Failed to check for server updates:', error)
+      // Don't throw error for this case - it's just a background check
+    }
   }
 }
 
@@ -1691,7 +1736,7 @@ function cleanupAutoSync() {
 
     // Reset sync lock to allow future operations
     syncLock = false
-    
+
     // Ensure no sync operations are in progress
     syncStatus.value.syncing = false
 
@@ -1737,7 +1782,7 @@ function toggleTheme(newTheme?: Theme) {
   // toast.info(`Theme: ${themeLabel}`, { duration: 1500 })
 }
 
-// Enhanced onMounted with comprehensive error handling
+// onMounted with comprehensive error handling
 onMounted(async () => {
   try {
     console.log('App mounting...')
