@@ -610,7 +610,7 @@ onUnmounted(() => {
     </div>
 
     <!-- Mobile Layout: Vertical stack with carousel -->
-    <div v-if="isMobile" class="flex flex-col gap-8 items-center justify-center h-full w-full px-2">
+    <div v-if="isMobile" class="flex flex-col gap-8 items-center justify-center min-h-screen w-full max-w-full px-4 py-6 overflow-y-auto overflow-x-hidden">
       <!-- Mobile Carousel (always shown) -->
       <div v-if="!showCreateSession" class="w-full max-w-sm" 
         @touchstart="handleTouchStart"
@@ -741,8 +741,8 @@ onUnmounted(() => {
       </div>
 
       <!-- Mobile Auth Section -->
-      <div v-if="showCreateSession" class="w-full max-w-sm">
-        <div class="p-2 transition-colors duration-300">
+      <div v-if="showCreateSession" class="w-full max-w-sm pb-4 px-1">
+        <div class="p-2 transition-colors duration-300 max-w-full overflow-hidden">
           <!-- Progress indicator -->
           <div class="flex justify-center mb-6">
             <div class="flex items-center space-x-2">
@@ -753,7 +753,7 @@ onUnmounted(() => {
           </div>
 
           <!-- Mobile Multi-step form container -->
-          <div class="relative h-80">
+          <div class="relative min-h-80 w-full max-w-full">
             <!-- Mobile Step 1: Username -->
             <div :class="authStep === 1 ? 'translate-x-0 opacity-100' :
               authStep > 1 ? '-translate-x-full opacity-0' : 'translate-x-full opacity-0'"
