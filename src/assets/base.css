@@ -243,25 +243,72 @@ html {
 
 .custom-scrollbar {
   scrollbar-width: thin;
-  scrollbar-color: #cbd5e1 #f1f5f9;
+  scrollbar-color: rgba(203, 213, 225, 0.4) transparent;
 }
 
 .custom-scrollbar::-webkit-scrollbar {
-  width: 4px;
+  width: 3px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-track {
-  background: #f1f5f9;
-  border-radius: 2px;
+  background: transparent;
+  border-radius: 3px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 2px;
+  background: rgba(203, 213, 225, 0.3);
+  border-radius: 3px;
+  backdrop-filter: blur(10px);
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: rgba(148, 163, 184, 0.5);
+  backdrop-filter: blur(10px);
+}
+
+/* Dark mode support */
+.dark .custom-scrollbar {
+  scrollbar-color: rgba(148, 163, 184, 0.3) transparent;
+}
+
+.dark .custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.25);
+}
+
+.dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(203, 213, 225, 0.4);
+}
+
+/* Even more subtle version */
+.custom-scrollbar-ultra-thin {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(203, 213, 225, 0.2) transparent;
+}
+
+.custom-scrollbar-ultra-thin::-webkit-scrollbar {
+  width: 2px;
+}
+
+.custom-scrollbar-ultra-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar-ultra-thin::-webkit-scrollbar-thumb {
+  background: rgba(203, 213, 225, 0.2);
+  border-radius: 1px;
+  backdrop-filter: blur(8px);
+}
+
+.custom-scrollbar-ultra-thin::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.3);
+}
+
+.dark .custom-scrollbar-ultra-thin::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.15);
+}
+
+.dark .custom-scrollbar-ultra-thin::-webkit-scrollbar-thumb:hover {
+  background: rgba(203, 213, 225, 0.25);
 }
 
 /* Pulse animation for loading states */
