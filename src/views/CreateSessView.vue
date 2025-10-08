@@ -270,6 +270,12 @@ const isMobile = computed(() => props.screenWidth < 720)
 // Lifecycle
 onMounted(() => {
   startAutoSlide()
+
+  const previousRoute = document.referrer
+  const isFromUpgrade = previousRoute.includes('/upgrade') || window.location.search.includes('from=upgrade')
+  if (isFromUpgrade) {
+    showCreateSession.value = true
+  }
 })
 
 onUnmounted(() => {

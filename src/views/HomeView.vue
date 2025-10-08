@@ -1224,7 +1224,7 @@ async function handleStepSubmit(e: Event) {
           // Use setTimeout to ensure the auth process completes before navigation
           setTimeout(() => {
             router.push('/upgrade')
-          }, 2000)
+          }, 100)
         }
       }
 
