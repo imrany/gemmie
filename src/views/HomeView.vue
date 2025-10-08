@@ -1171,114 +1171,217 @@ const showUpgradeBanner = computed(() => {
 async function handleStepSubmit(e: Event) {
   e.preventDefault()
 
+  // Early validation with improved error handling
   if (!validateCurrentStep()) {
-    // Show specific validation error
-    let errorMsg = ''
-    switch (authStep.value) {
-      case 1:
-        errorMsg = 'Username must be 2-50 characters'
-        break
-      case 2:
-        errorMsg = 'Please enter a valid email address'
-        break
-      case 3:
-        errorMsg = 'Password must be at least 7 characters'
-        break
-      case 4:
-        errorMsg = 'Please accept the terms of service and privacy policy'
-        break
-    }
-
-    if (errorMsg) {
-      toast.warning(errorMsg, {
-        duration: 3000,
-        description: 'Please correct the error and try again'
-      })
-    }
+    handleValidationError()
     return
   }
 
+  // Handle step progression vs final submission
   if (authStep.value < 4) {
     nextAuthStep()
-  } else {
-    // Check connection before attempting authentication
-    toast.info('Connecting...', { duration: 2000 })
+    return
+  }
 
-    try {
-      // Show loading state
-      isLoading.value = true
+  // Final step - create session
+  await handleFinalAuthStep()
+}
 
-      // Final step - create session
-      const response = await handleAuth(authData.value)
-
-      // Check if response exists and has expected structure
-      if (!response) {
-        throw new Error('No response received from server')
-      } else {
-        // Check if previous route was /upgrade and redirect accordingly
-        const previousRoute = document.referrer
-        const isFromUpgrade = previousRoute.includes('/upgrade') || window.location.search.includes('from=upgrade')
-
-        if (isFromUpgrade) {
-          console.log('Redirecting to upgrade page after authentication')
-          // Use setTimeout to ensure the auth process completes before navigation
-          setTimeout(() => {
-            router.push('/upgrade')
-          }, 100)
-        }
-      }
-
-      if (response.error) {
-        throw new Error(response.error)
-      }
-
-      if (response.data && response.success) {
-        setShowCreateSession(false)
-
-        // Reset form
-        authStep.value = 1
-        authData.value = { username: '', email: '', password: '', agreeToTerms: false }
-        loadRequestCount() // Load request count after successful auth
-        nextTick(() => {
-          const textarea = document.getElementById("prompt") as HTMLTextAreaElement
-          if (textarea) textarea.focus()
-        })
-      } else {
-        throw new Error('Authentication failed - invalid response')
-      }
-    } catch (err: any) {
-      console.error('Authentication error in handleStepSubmit:', err)
-
-      // Show user-friendly error messages
-      let errorMessage = 'Authentication Failed'
-      let errorDescription = 'Please try again'
-
-      if (err.message?.includes('timeout')) {
-        errorMessage = 'Connection Timeout'
-        errorDescription = 'Server took too long to respond. Please try again.'
-      } else if (err.message?.includes('Failed to fetch') || err.message?.includes('NetworkError')) {
-        errorMessage = 'Connection Error'
-        errorDescription = 'Unable to reach server. Check your internet connection.'
-      } else if (err.message?.includes('HTTP 4')) {
-        errorMessage = 'Invalid Credentials'
-        errorDescription = 'Please check your username, email, and password.'
-      } else if (err.message?.includes('HTTP 5')) {
-        errorMessage = 'Server Error'
-        errorDescription = 'Server is experiencing issues. Please try again later.'
-      } else if (err.message) {
-        errorDescription = err.message
-      }
-
-      toast.error(errorMessage, {
-        duration: 5000,
-        description: errorDescription
-      })
-
-      // Don't reset the form on error - let user try again
-    } finally {
-      isLoading.value = false
+function handleValidationError() {
+  const errorMessages = {
+    1: {
+      title: 'Invalid Username',
+      message: 'Username must be 2-50 characters and contain only letters, numbers, and underscores'
+    },
+    2: {
+      title: 'Invalid Email',
+      message: 'Please enter a valid email address (e.g., name@example.com)'
+    },
+    3: {
+      title: 'Weak Password',
+      message: 'Password must be at least 7 characters with a mix of letters and numbers'
+    },
+    4: {
+      title: 'Terms Required',
+      message: 'Please accept the Terms of Service and Privacy Policy to continue'
     }
   }
+
+  const error = errorMessages[authStep.value as keyof typeof errorMessages]
+  if (error) {
+    toast.warning(error.title, {
+      duration: 4000,
+      description: error.message,
+      action: {
+        label: 'Got it',
+        onClick: () => {}
+      }
+    })
+  }
+}
+
+async function handleFinalAuthStep() {
+  // Show connection status
+  const connectionToast = toast.loading('Establishing secure connection...', {
+    duration: 3000
+  })
+
+  try {
+    isLoading.value = true
+
+    // Add a small delay to show the loading state
+    await new Promise(resolve => setTimeout(resolve, 500))
+
+    const response = await handleAuth(authData.value)
+
+    // Validate response structure
+    if (!response) {
+      throw new Error('No response received from authentication service')
+    }
+
+    if (response.error) {
+      throw new Error(response.error)
+    }
+
+    if (!response.data || !response.success) {
+      throw new Error('Authentication failed - invalid response structure')
+    }
+
+    // Success handling
+    await handleAuthSuccess(response)
+    
+  } catch (err: any) {
+    await handleAuthError(err)
+  } finally {
+    isLoading.value = false
+    toast.dismiss(connectionToast)
+  }
+}
+
+async function handleAuthSuccess(response: any) {
+  // Show success feedback
+  toast.success('Welcome!', {
+    duration: 2000,
+    description: `Successfully signed in as ${authData.value.username}`
+  })
+
+  // Reset form state
+  setShowCreateSession(false)
+  authStep.value = 1
+  authData.value = { 
+    username: '', 
+    email: '', 
+    password: '', 
+    agreeToTerms: false 
+  }
+
+  // Load user data
+  await loadRequestCount()
+
+  // Handle redirect logic
+  await handlePostAuthRedirect()
+
+  // Focus input field
+  nextTick(() => {
+    const textarea = document.getElementById("prompt") as HTMLTextAreaElement
+    if (textarea) {
+      textarea.focus()
+      // Add a subtle animation to draw attention to the input
+      textarea.classList.add('ring-2', 'ring-blue-500')
+      setTimeout(() => {
+        textarea.classList.remove('ring-2', 'ring-blue-500')
+      }, 2000)
+    }
+  })
+}
+
+async function handlePostAuthRedirect() {
+  // Check multiple sources for upgrade redirect
+  const previousRoute = document.referrer
+  const urlParams = new URLSearchParams(window.location.search)
+  const isFromUpgrade = 
+    previousRoute.includes('/upgrade') || 
+    urlParams.has('from') && urlParams.get('from') === 'upgrade' ||
+    urlParams.has('redirect') && urlParams.get('redirect') === 'upgrade'
+
+  if (isFromUpgrade) {
+    console.log('Redirecting to upgrade page after authentication')
+    // Small delay for better UX flow
+    await new Promise(resolve => setTimeout(resolve, 1000))
+    router.push('/upgrade')
+  }
+}
+
+async function handleAuthError(err: any) {
+  console.error('Authentication error:', err)
+
+  // Map specific error types to user-friendly messages
+  const errorMap = {
+    timeout: {
+      title: 'Connection Timeout',
+      message: 'Server took too long to respond. Please check your connection and try again.'
+    },
+    network: {
+      title: 'Network Error',
+      message: 'Unable to reach our servers. Please check your internet connection.'
+    },
+    credentials: {
+      title: 'Invalid Credentials',
+      message: 'The username, email, or password you entered is incorrect.'
+    },
+    server: {
+      title: 'Server Error',
+      message: 'Our servers are experiencing issues. Please try again in a few minutes.'
+    },
+    rate_limit: {
+      title: 'Too Many Attempts',
+      message: 'Please wait a moment before trying again.'
+    },
+    default: {
+      title: 'Authentication Failed',
+      message: 'An unexpected error occurred. Please try again.'
+    }
+  }
+
+  // Determine error type
+  let errorType: keyof typeof errorMap = 'default'
+  const errorMessage = err.message?.toLowerCase() || ''
+
+  if (errorMessage.includes('timeout')) errorType = 'timeout'
+  else if (errorMessage.includes('failed to fetch') || errorMessage.includes('network')) errorType = 'network'
+  else if (errorMessage.includes('http 4') || errorMessage.includes('invalid') || errorMessage.includes('credential')) errorType = 'credentials'
+  else if (errorMessage.includes('http 5')) errorType = 'server'
+  else if (errorMessage.includes('rate') || errorMessage.includes('limit')) errorType = 'rate_limit'
+
+  const error = errorMap[errorType]
+
+  // Show error with retry option
+  toast.error(error.title, {
+    duration: 6000,
+    description: error.message,
+    action: {
+      label: 'Try Again',
+      onClick: () => {
+        // Auto-focus the relevant input field based on step
+        nextTick(() => {
+          const focusMap = {
+            1: 'username',
+            2: 'email', 
+            3: 'password',
+            4: 'agreeToTerms'
+          }
+          const fieldToFocus = focusMap[authStep.value as keyof typeof focusMap]
+          if (fieldToFocus && fieldToFocus !== 'agreeToTerms') {
+            const input = document.querySelector(`[name="${fieldToFocus}"]`) as HTMLInputElement
+            if (input) {
+              input.focus()
+              input.select()
+            }
+          }
+        })
+      }
+    }
+  })
 }
 
 // Process links in a response and generate previews
