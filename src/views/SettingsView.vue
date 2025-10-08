@@ -280,7 +280,7 @@ watch(isAuthenticated, (val) => {
           </div>
 
           <!-- Content Area -->
-          <div class="flex-1 min-h-0 overflow-auto">
+          <div class="flex-1 min-h-0 overflow-auto custom-scrollbar">
             <!-- Profile -->
             <div v-if="activeTab === 'profile'"
               class="bg-white dark:bg-gray-800 p-4 md:p-6 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 w-full max-w-2xl mx-auto transition-colors duration-300">
