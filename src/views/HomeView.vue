@@ -2191,16 +2191,39 @@ onMounted(() => {
           manualSync,
         }" />
         <!-- Empty State -->
-        <CreateSessView v-if="!isAuthenticated" :chats="chats" :current-chat-id="currentChatId"
-          :is-collapsed="isCollapsed" :parsed-user-details="parsedUserDetails" :screen-width="screenWidth"
-          :sync-status="syncStatus" :is-loading="isLoading" :auth-step="authStep"
-          showCreateSession :auth-data="authData" :current-messages="currentMessages"
-          :validate-current-step="validateCurrentStep()" :set-show-input="setShowInput" :hide-sidebar="hideSidebar"
-          :clear-all-chats="clearAllChats" :toggle-sidebar="toggleSidebar" :logout="logout"
-          :create-new-chat="createNewChat" :switch-to-chat="switchToChat" :delete-chat="deleteChat"
-          :rename-chat="renameChat" :manual-sync="manualSync" :handle-step-submit="handleStepSubmit"
-          :prev-auth-step="prevAuthStep" :update-auth-data="updateAuthData"
-          :set-show-create-session="setShowCreateSession" />
+        <CreateSessView v-if="!isAuthenticated" 
+          :data="{
+            chats,
+            currentChatId,
+            isCollapsed, 
+            parsedUserDetails,
+            screenWidth,
+            syncStatus,
+            isLoading,
+            authStep,
+            showCreateSession, 
+            authData,
+            currentMessages,
+          }"
+
+          :functions="{
+            validateCurrentStep,
+            setShowInput,
+            hideSidebar,
+            clearAllChats,
+            toggleSidebar,
+            logout,
+            createNewChat,
+            switchToChat,
+            deleteChat,
+            renameChat,
+            manualSync,
+            handleStepSubmit,
+            prevAuthStep,
+            updateAuthData,
+            setShowCreateSession, 
+          }"
+        />
 
         <div v-else-if="isAuthenticated && currentMessages.length === 0">
           <!-- Loading Overlay -->

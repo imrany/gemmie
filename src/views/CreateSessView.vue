@@ -144,43 +144,47 @@ const carouselSlides = computed(() => [
 
 // --- All Props Directly from HomeView ---
 const props = defineProps<{
-  chats: Chat[],
-  currentChatId: string
-  isCollapsed?: boolean
-  parsedUserDetails: {
-    username: string
-  } | null
-  screenWidth: number
-  syncStatus: {
-    lastSync: Date | null
-    syncing: boolean
-    hasUnsyncedChanges: boolean
+  data: {
+    chats: Chat[],
+    currentChatId: string
+    isCollapsed?: boolean
+    parsedUserDetails: {
+      username: string
+    } | null
+    screenWidth: number
+    syncStatus: {
+      lastSync: Date | null
+      syncing: boolean
+      hasUnsyncedChanges: boolean
+    }
+    isLoading: boolean
+    authStep: number
+    showCreateSession: boolean
+    authData: {
+      username: string
+      email: string
+      password: string
+      agreeToTerms: boolean
+    }
+    currentMessages: any[]
+  },
+  functions:{
+    validateCurrentStep: () => boolean,
+    setShowInput: () => void
+    hideSidebar: () => void
+    clearAllChats: () => void
+    toggleSidebar: () => void
+    logout: () => void
+    createNewChat: () => void
+    switchToChat: (chatId: string) => void
+    deleteChat: (chatId: string) => void
+    renameChat: (chatId: string, newTitle: string) => void
+    manualSync: () => void
+    handleStepSubmit: (e: Event) => void
+    setShowCreateSession: (value: boolean) => void
+    prevAuthStep: () => void
+    updateAuthData: (data: Partial<{ username: string; email: string; password: string; agreeToTerms: boolean }>) => void
   }
-  isLoading: boolean
-  authStep: number
-  showCreateSession: Ref<boolean>
-  authData: {
-    username: string
-    email: string
-    password: string
-    agreeToTerms: boolean
-  }
-  currentMessages: any[]
-  validateCurrentStep: boolean
-  setShowInput: () => void
-  hideSidebar: () => void
-  clearAllChats: () => void
-  toggleSidebar: () => void
-  logout: () => void
-  createNewChat: () => void
-  switchToChat: (chatId: string) => void
-  deleteChat: (chatId: string) => void
-  renameChat: (chatId: string, newTitle: string) => void
-  manualSync: () => void
-  handleStepSubmit: (e: Event) => void
-  prevAuthStep: () => void
-  updateAuthData: (data: Partial<{ username: string; email: string; password: string; agreeToTerms: boolean }>) => void
-  setShowCreateSession: (value: boolean) => void
 }>()
 
 // Carousel functions
@@ -237,7 +241,7 @@ const handleTouchEnd = () => {
 }
 
 const handleSuggestionClick = (suggestion: typeof chatSuggestions.value[0]) => {
-  props.createNewChat()
+  props.functions.createNewChat()
   // You might want to emit an event here to set the initial message
   // emit('setInitialMessage', suggestion.prompt)
 }
@@ -245,27 +249,27 @@ const handleSuggestionClick = (suggestion: typeof chatSuggestions.value[0]) => {
 // Handle input updates
 const handleUsernameInput = (event: Event) => {
   const value = (event.target as HTMLInputElement).value.trim()
-  props.updateAuthData({ username: value })
+  props.functions.updateAuthData({ username: value })
 }
 
 const handleEmailInput = (event: Event) => {
   const value = (event.target as HTMLInputElement).value.trim()
-  props.updateAuthData({ email: value })
+  props.functions.updateAuthData({ email: value })
 }
 
 const handlePasswordInput = (event: Event) => {
   const value = (event.target as HTMLInputElement).value.trim()
-  props.updateAuthData({ password: value })
+  props.functions.updateAuthData({ password: value })
 }
 
 const handleTermsToggle = (event: Event) => {
   const checked = (event.target as HTMLInputElement).checked
-  props.updateAuthData({ agreeToTerms: checked })
+  props.functions.updateAuthData({ agreeToTerms: checked })
 }
 
 // Layout logic
-const isDesktop = computed(() => props.screenWidth >= 720)
-const isMobile = computed(() => props.screenWidth < 720)
+const isDesktop = computed(() => props.data.screenWidth >= 720)
+const isMobile = computed(() => props.data.screenWidth < 720)
 
 // Lifecycle
 onMounted(() => {
@@ -274,7 +278,7 @@ onMounted(() => {
   const previousRoute = document.referrer
   const isFromUpgrade = previousRoute.includes('/upgrade') || window.location.search.includes('from=upgrade')
   if (isFromUpgrade) {
-    props.showCreateSession.value = true
+    props.functions.setShowCreateSession(true)
   }
 })
 
@@ -423,7 +427,7 @@ onUnmounted(() => {
           <!-- Progress indicator -->
           <div class="flex justify-center mb-8">
             <div class="flex items-center space-x-2">
-              <div v-for="step in 4" :key="step" :class="step <= authStep ? 'bg-blue-600 dark:bg-blue-500' : 'bg-gray-300 dark:bg-gray-600'"
+              <div v-for="step in 4" :key="step" :class="step <= props.data.authStep ? 'bg-blue-600 dark:bg-blue-500' : 'bg-gray-300 dark:bg-gray-600'"
                 class="w-3 h-3 rounded-full transition-colors duration-300">
               </div>
             </div>
@@ -432,27 +436,27 @@ onUnmounted(() => {
           <!-- Multi-step form container -->
           <div class="relative h-96">
             <!-- Step 1: Username -->
-            <div :class="authStep === 1 ? 'translate-x-0 opacity-100' :
-              authStep > 1 ? '-translate-x-full opacity-0' : 'translate-x-full opacity-0'"
+            <div :class="props.data.authStep === 1 ? 'translate-x-0 opacity-100' :
+              props.data.authStep > 1 ? '-translate-x-full opacity-0' : 'translate-x-full opacity-0'"
               class="absolute inset-0 transition-all duration-500 ease-in-out transform">
               <div class="text-center mb-8">
                 <h2 class="text-2xl font-semibold text-gray-900 dark:text-white mb-3">Welcome!</h2>
                 <p class="text-gray-600 dark:text-gray-300">Let's start by creating your username</p>
               </div>
 
-              <form @submit.prevent="handleStepSubmit" class="space-y-6">
+              <form @submit.prevent="props.functions.handleStepSubmit" class="space-y-6">
                 <div>
                   <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
                     Choose a username
                   </label>
-                  <input v-model="authData.username" required type="text" placeholder="johndoe"
+                  <input v-model="props.data.authData.username" required type="text" placeholder="johndoe"
                     class="border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-3 w-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
-                    :class="authData.username && !validateCurrentStep ? 'border-red-300 dark:border-red-500' : ''"
+                    :class="props.data.authData.username && !props.functions.validateCurrentStep ? 'border-red-300 dark:border-red-500' : ''"
                     @input="handleUsernameInput" />
                   <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">This will be your display name</p>
                 </div>
 
-                <button type="submit" :disabled="!validateCurrentStep"
+                <button type="submit" :disabled="!props.functions.validateCurrentStep"
                   class="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 disabled:from-gray-300 disabled:to-gray-400 dark:disabled:from-gray-600 dark:disabled:to-gray-700 disabled:cursor-not-allowed text-white rounded-xl px-6 py-3 font-semibold transition-all duration-300 transform hover:scale-[1.02] shadow-lg">
                   Continue
                 </button>
@@ -460,31 +464,31 @@ onUnmounted(() => {
             </div>
 
             <!-- Step 2: Email -->
-            <div :class="authStep === 2 ? 'translate-x-0 opacity-100' :
-              authStep > 2 ? '-translate-x-full opacity-0' : 'translate-x-full opacity-0'"
+            <div :class="props.data.authStep === 2 ? 'translate-x-0 opacity-100' :
+              props.data.authStep > 2 ? '-translate-x-full opacity-0' : 'translate-x-full opacity-0'"
               class="absolute inset-0 transition-all duration-500 ease-in-out transform">
               <div class="text-center mb-8">
-                <h2 class="text-2xl font-semibold text-gray-900 dark:text-white mb-3">Hi {{ authData.username }}!</h2>
+                <h2 class="text-2xl font-semibold text-gray-900 dark:text-white mb-3">Hi {{ props.data.authData.username }}!</h2>
                 <p class="text-gray-600 dark:text-gray-300">What's your email address?</p>
               </div>
 
-              <form @submit.prevent="handleStepSubmit" class="space-y-6">
+              <form @submit.prevent="props.functions.handleStepSubmit" class="space-y-6">
                 <div>
                   <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
                     Email address
                   </label>
-                  <input v-model="authData.email" required type="email" placeholder="johndoe@example.com"
+                  <input v-model="props.data.authData.email" required type="email" placeholder="johndoe@example.com"
                     class="border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-3 w-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
-                    :class="authData.email && !validateCurrentStep ? 'border-red-300 dark:border-red-500' : ''" @input="handleEmailInput" />
+                    :class="props.data.authData.email && !props.functions.validateCurrentStep ? 'border-red-300 dark:border-red-500' : ''" @input="handleEmailInput" />
                   <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">Used for session identification only</p>
                 </div>
 
                 <div class="flex gap-4">
-                  <button type="button" @click="prevAuthStep"
+                  <button type="button" @click="props.functions.prevAuthStep"
                     class="flex-1 flex gap-2 items-center justify-center bg-gray-100 dark:bg-gray-700 backdrop-blur-sm text-gray-700 dark:text-gray-300 rounded-xl px-4 py-3 font-medium hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200">
                     <i class="pi pi-arrow-left"></i> Back
                   </button>
-                  <button type="submit" :disabled="!validateCurrentStep"
+                  <button type="submit" :disabled="!props.functions.validateCurrentStep"
                     class="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 disabled:from-gray-300 disabled:to-gray-400 dark:disabled:from-gray-600 dark:disabled:to-gray-700 disabled:cursor-not-allowed flex-1 flex gap-2 items-center justify-center transform hover:scale-[1.02] shadow-lg rounded-xl px-4 py-3 font-medium text-white transition-all duration-200">
                     Continue
                   </button>
@@ -493,29 +497,29 @@ onUnmounted(() => {
             </div>
 
             <!-- Step 3: Password -->
-            <div :class="authStep === 3 ? 'translate-x-0 opacity-100' : 
-              authStep > 3 ? '-translate-x-full opacity-0' : 'translate-x-full opacity-0'"
+            <div :class="props.data.authStep === 3 ? 'translate-x-0 opacity-100' : 
+              props.data.authStep > 3 ? '-translate-x-full opacity-0' : 'translate-x-full opacity-0'"
               class="absolute inset-0 transition-all duration-500 ease-in-out transform">
               <div class="text-center mb-8">
                 <h2 class="text-2xl font-semibold text-gray-900 dark:text-white mb-3">Almost there!</h2>
                 <p class="text-gray-600 dark:text-gray-300">Create a secure password</p>
               </div>
 
-              <form @submit.prevent="handleStepSubmit" class="space-y-6">
+              <form @submit.prevent="props.functions.handleStepSubmit" class="space-y-6">
                 <div>
                   <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
                     Password
                   </label>
-                  <input v-model="authData.password" required type="password" placeholder="Enter a secure password"
+                  <input v-model="props.data.authData.password" required type="password" placeholder="Enter a secure password"
                     minlength="8"
                     class="border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-3 w-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
-                    :class="authData.password && !validateCurrentStep ? 'border-red-300 dark:border-red-500' : ''"
+                    :class="props.data.authData.password && !props.functions.validateCurrentStep ? 'border-red-300 dark:border-red-500' : ''"
                     @input="handlePasswordInput" />
                   <div class="mt-3">
                     <div class="flex items-center gap-2 text-xs">
-                      <div :class="authData.password.length >= 8 ? 'text-green-600 dark:text-green-400' : 'text-gray-400 dark:text-gray-500'"
+                      <div :class="props.data.authData.password.length >= 8 ? 'text-green-600 dark:text-green-400' : 'text-gray-400 dark:text-gray-500'"
                         class="flex items-center gap-1">
-                        <i :class="authData.password.length >= 8 ? 'pi pi-check' : 'pi pi-circle'" class="text-xs"></i>
+                        <i :class="props.data.authData.password.length >= 8 ? 'pi pi-check' : 'pi pi-circle'" class="text-xs"></i>
                         <span>At least 8 characters</span>
                       </div>
                     </div>
@@ -523,11 +527,11 @@ onUnmounted(() => {
                 </div>
 
                 <div class="flex gap-4">
-                  <button type="button" @click="prevAuthStep"
+                  <button type="button" @click="props.functions.prevAuthStep"
                     class="flex-1 flex gap-2 items-center justify-center bg-gray-100 dark:bg-gray-700 backdrop-blur-sm text-gray-700 dark:text-gray-300 rounded-xl px-4 py-3 font-medium hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200">
                     <i class="pi pi-arrow-left"></i> Back
                   </button>
-                  <button type="submit" :disabled="!validateCurrentStep"
+                  <button type="submit" :disabled="!props.functions.validateCurrentStep"
                     class="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 disabled:from-gray-300 disabled:to-gray-400 dark:disabled:from-gray-600 dark:disabled:to-gray-700 disabled:cursor-not-allowed flex-1 flex gap-2 items-center justify-center transform hover:scale-[1.02] shadow-lg rounded-xl px-4 py-3 font-medium text-white transition-all duration-200">
                     Continue
                   </button>
@@ -536,21 +540,21 @@ onUnmounted(() => {
             </div>
 
             <!-- Step 4: Terms & Conditions -->
-            <div :class="authStep === 4 ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0'"
+            <div :class="props.data.authStep === 4 ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0'"
               class="absolute inset-0 transition-all duration-500 ease-in-out transform">
               <div class="text-center mb-8">
                 <h2 class="text-2xl font-semibold text-gray-900 dark:text-white mb-3">One last step</h2>
                 <p class="text-gray-600 dark:text-gray-300">Please review and accept our terms</p>
               </div>
 
-              <form @submit.prevent="handleStepSubmit" class="space-y-6">
+              <form @submit.prevent="props.functions.handleStepSubmit" class="space-y-6">
                 <!-- Terms and Conditions Checkboxes -->
                 <div class="space-y-4">
                   <div class="border border-gray-200 dark:border-gray-600 rounded-xl p-4 bg-gray-50 dark:bg-gray-700/50">
                     <div class="flex items-start gap-3">
                       <input
                         id="agree-terms"
-                        v-model="authData.agreeToTerms"
+                        v-model="props.data.authData.agreeToTerms"
                         type="checkbox"
                         required
                         class="mt-1 h-4 w-4 text-blue-600 dark:text-blue-500 focus:ring-blue-500 border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700"
@@ -590,14 +594,14 @@ onUnmounted(() => {
                 </div>
 
                 <div class="flex gap-4">
-                  <button type="button" @click="prevAuthStep"
+                  <button type="button" @click="props.functions.prevAuthStep"
                     class="flex-1 flex gap-2 items-center justify-center bg-gray-100 dark:bg-gray-700 backdrop-blur-sm text-gray-700 dark:text-gray-300 rounded-xl px-4 py-3 font-medium hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200">
                     <i class="pi pi-arrow-left"></i> Back
                   </button>
-                  <button type="submit" :disabled="!authData.agreeToTerms || isLoading"
+                  <button type="submit" :disabled="!props.data.authData.agreeToTerms || props.data.isLoading"
                     class="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 disabled:from-gray-300 disabled:to-gray-400 dark:disabled:from-gray-600 dark:disabled:to-gray-700 disabled:cursor-not-allowed flex-1 flex gap-2 items-center justify-center transform hover:scale-[1.02] shadow-lg rounded-xl px-4 py-3 font-medium text-white transition-all duration-200">
-                    <i v-if="isLoading" class="pi pi-spin pi-spinner" :class="isLoading ? '' : 'pi pi-check'"></i>
-                    <span>{{ isLoading ? 'Creating...' : 'Create Session' }}</span>
+                    <i v-if="props.data.isLoading" class="pi pi-spin pi-spinner" :class="props.data.isLoading ? '' : 'pi pi-check'"></i>
+                    <span>{{ props.data.isLoading ? 'Creating...' : 'Create Session' }}</span>
                   </button>
                 </div>
               </form>
@@ -618,7 +622,7 @@ onUnmounted(() => {
     <!-- Mobile Layout: Vertical stack with carousel -->
     <div v-if="isMobile" class="flex flex-col gap-8 items-center justify-center min-h-screen w-full max-w-full px-4 py-6 overflow-y-auto overflow-x-hidden">
       <!-- Mobile Carousel (always shown) -->
-      <div v-if="!showCreateSession" class="w-full max-w-sm" 
+      <div v-if="!props.data.showCreateSession" class="w-full max-w-sm" 
         @touchstart="handleTouchStart"
         @touchmove="handleTouchMove"
         @touchend="handleTouchEnd"
@@ -749,12 +753,12 @@ onUnmounted(() => {
       </div>
 
       <!-- Mobile Auth Section -->
-      <div v-if="showCreateSession" class="w-full max-w-sm pb-4 px-1">
+      <div v-if="props.data.showCreateSession" class="w-full max-w-sm pb-4 px-1">
         <div class="p-2 transition-colors duration-300 max-w-full overflow-hidden">
           <!-- Progress indicator -->
           <div class="flex justify-center mb-6">
             <div class="flex items-center space-x-2">
-              <div v-for="step in 4" :key="step" :class="step <= authStep ? 'bg-blue-600 dark:bg-blue-500' : 'bg-gray-300 dark:bg-gray-600'"
+              <div v-for="step in 4" :key="step" :class="step <= props.data.authStep ? 'bg-blue-600 dark:bg-blue-500' : 'bg-gray-300 dark:bg-gray-600'"
                 class="w-2.5 h-2.5 rounded-full transition-colors duration-300">
               </div>
             </div>
@@ -763,27 +767,27 @@ onUnmounted(() => {
           <!-- Mobile Multi-step form container -->
           <div class="relative min-h-80 w-full max-w-full">
             <!-- Mobile Step 1: Username -->
-            <div :class="authStep === 1 ? 'translate-x-0 opacity-100' :
-              authStep > 1 ? '-translate-x-full opacity-0' : 'translate-x-full opacity-0'"
+            <div :class="props.data.authStep === 1 ? 'translate-x-0 opacity-100' :
+              props.data.authStep > 1 ? '-translate-x-full opacity-0' : 'translate-x-full opacity-0'"
               class="absolute inset-0 transition-all duration-500 ease-in-out transform">
               <div class="text-center mb-6">
                 <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-2">Welcome!</h2>
                 <p class="text-gray-600 dark:text-gray-300 text-sm">Let's start by creating your username</p>
               </div>
 
-              <form @submit.prevent="handleStepSubmit" class="space-y-4">
+              <form @submit.prevent="props.functions.handleStepSubmit" class="space-y-4">
                 <div>
                   <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     Choose a username
                   </label>
-                  <input v-model="authData.username" required type="text" placeholder="johndoe"
+                  <input v-model="props.data.authData.username" required type="text" placeholder="johndoe"
                     class="border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2.5 w-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
-                    :class="authData.username && !validateCurrentStep ? 'border-red-300 dark:border-red-500' : ''"
+                    :class="props.data.authData.username && !props.functions.validateCurrentStep ? 'border-red-300 dark:border-red-500' : ''"
                     @input="handleUsernameInput" />
                   <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">This will be your display name</p>
                 </div>
 
-                <button type="submit" :disabled="!validateCurrentStep"
+                <button type="submit" :disabled="!props.functions.validateCurrentStep"
                   class="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 disabled:from-gray-300 disabled:to-gray-400 dark:disabled:from-gray-600 dark:disabled:to-gray-700 disabled:cursor-not-allowed text-white rounded-lg px-6 py-2.5 font-semibold transition-all duration-300 transform hover:scale-[1.02] shadow-lg">
                   Continue
                 </button>
@@ -791,31 +795,31 @@ onUnmounted(() => {
             </div>
 
             <!-- Mobile Step 2: Email -->
-            <div :class="authStep === 2 ? 'translate-x-0 opacity-100' :
-              authStep > 2 ? '-translate-x-full opacity-0' : 'translate-x-full opacity-0'"
+            <div :class="props.data.authStep === 2 ? 'translate-x-0 opacity-100' :
+              props.data.authStep > 2 ? '-translate-x-full opacity-0' : 'translate-x-full opacity-0'"
               class="absolute inset-0 transition-all duration-500 ease-in-out transform">
               <div class="text-center mb-6">
-                <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-2">Hi {{ authData.username }}!</h2>
+                <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-2">Hi {{ props.data.authData.username }}!</h2>
                 <p class="text-gray-600 dark:text-gray-300 text-sm">What's your email address?</p>
               </div>
 
-              <form @submit.prevent="handleStepSubmit" class="space-y-4">
+              <form @submit.prevent="props.functions.handleStepSubmit" class="space-y-4">
                 <div>
                   <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     Email address
                   </label>
-                  <input v-model="authData.email" required type="email" placeholder="johndoe@example.com"
+                  <input v-model="props.data.authData.email" required type="email" placeholder="johndoe@example.com"
                     class="border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2.5 w-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
-                    :class="authData.email && !validateCurrentStep ? 'border-red-300 dark:border-red-500' : ''" @input="handleEmailInput" />
+                    :class="props.data.authData.email && !props.functions.validateCurrentStep ? 'border-red-300 dark:border-red-500' : ''" @input="handleEmailInput" />
                   <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Used for session identification only</p>
                 </div>
 
                 <div class="flex gap-3">
-                  <button type="button" @click="prevAuthStep"
+                  <button type="button" @click="props.functions.prevAuthStep"
                     class="flex-1 flex gap-2 items-center justify-center bg-gray-100 dark:bg-gray-700 backdrop-blur-sm text-gray-700 dark:text-gray-300 rounded-lg px-4 py-2.5 font-medium hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200">
                     <i class="pi pi-arrow-left"></i> Back
                   </button>
-                  <button type="submit" :disabled="!validateCurrentStep"
+                  <button type="submit" :disabled="!props.functions.validateCurrentStep"
                     class="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 disabled:from-gray-300 disabled:to-gray-400 dark:disabled:from-gray-600 dark:disabled:to-gray-700 disabled:cursor-not-allowed flex-1 flex gap-2 items-center justify-center transform hover:scale-[1.02] shadow-lg rounded-lg px-4 py-2.5 font-medium text-white transition-all duration-200">
                     Continue
                   </button>
@@ -824,29 +828,29 @@ onUnmounted(() => {
             </div>
 
             <!-- Mobile Step 3: Password -->
-            <div :class="authStep === 3 ? 'translate-x-0 opacity-100' : 
-              authStep > 3 ? '-translate-x-full opacity-0' : 'translate-x-full opacity-0'"
+            <div :class="props.data.authStep === 3 ? 'translate-x-0 opacity-100' : 
+              props.data.authStep > 3 ? '-translate-x-full opacity-0' : 'translate-x-full opacity-0'"
               class="absolute inset-0 transition-all duration-500 ease-in-out transform">
               <div class="text-center mb-6">
                 <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-2">Almost there!</h2>
                 <p class="text-gray-600 dark:text-gray-300 text-sm">Create a secure password</p>
               </div>
 
-              <form @submit.prevent="handleStepSubmit" class="space-y-4">
+              <form @submit.prevent="props.functions.handleStepSubmit" class="space-y-4">
                 <div>
                   <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     Password
                   </label>
-                  <input v-model="authData.password" required type="password" placeholder="Enter a secure password"
+                  <input v-model="props.data.authData.password" required type="password" placeholder="Enter a secure password"
                     minlength="8"
                     class="border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2.5 w-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
-                    :class="authData.password && !validateCurrentStep ? 'border-red-300 dark:border-red-500' : ''"
+                    :class="props.data.authData.password && !props.functions.validateCurrentStep ? 'border-red-300 dark:border-red-500' : ''"
                     @input="handlePasswordInput" />
                   <div class="mt-2">
                     <div class="flex items-center gap-2 text-xs">
-                      <div :class="authData.password.length >= 8 ? 'text-green-600 dark:text-green-400' : 'text-gray-400 dark:text-gray-500'"
+                      <div :class="props.data.authData.password.length >= 8 ? 'text-green-600 dark:text-green-400' : 'text-gray-400 dark:text-gray-500'"
                         class="flex items-center gap-1">
-                        <i :class="authData.password.length >= 8 ? 'pi pi-check' : 'pi pi-circle'" class="text-xs"></i>
+                        <i :class="props.data.authData.password.length >= 8 ? 'pi pi-check' : 'pi pi-circle'" class="text-xs"></i>
                         <span>At least 8 characters</span>
                       </div>
                     </div>
@@ -854,11 +858,11 @@ onUnmounted(() => {
                 </div>
 
                 <div class="flex gap-3">
-                  <button type="button" @click="prevAuthStep"
+                  <button type="button" @click="props.functions.prevAuthStep"
                     class="flex-1 flex gap-2 items-center justify-center bg-gray-100 dark:bg-gray-700 backdrop-blur-sm text-gray-700 dark:text-gray-300 rounded-lg px-4 py-2.5 font-medium hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200">
                     <i class="pi pi-arrow-left"></i> Back
                   </button>
-                  <button type="submit" :disabled="!validateCurrentStep"
+                  <button type="submit" :disabled="!props.functions.validateCurrentStep"
                     class="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 disabled:from-gray-300 disabled:to-gray-400 dark:disabled:from-gray-600 dark:disabled:to-gray-700 disabled:cursor-not-allowed flex-1 flex gap-2 items-center justify-center transform hover:scale-[1.02] shadow-lg rounded-lg px-4 py-2.5 font-medium text-white transition-all duration-200">
                     Continue
                   </button>
@@ -867,21 +871,21 @@ onUnmounted(() => {
             </div>
 
             <!-- Mobile Step 4: Terms & Conditions -->
-            <div :class="authStep === 4 ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0'"
+            <div :class="props.data.authStep === 4 ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0'"
               class="absolute inset-0 transition-all duration-500 ease-in-out transform">
               <div class="text-center mb-4">
                 <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-2">One last step</h2>
                 <p class="text-gray-600 dark:text-gray-300 text-sm">Please review and accept our terms</p>
               </div>
 
-              <form @submit.prevent="handleStepSubmit" class="space-y-4">
+              <form @submit.prevent="props.functions.handleStepSubmit" class="space-y-4">
                 <!-- Terms and Conditions Checkbox -->
                 <div class="space-y-3">
                   <div class="border border-gray-200 dark:border-gray-600 rounded-lg p-3 bg-gray-50 dark:bg-gray-700/50">
                     <div class="flex items-start gap-2">
                       <input
                         id="mobile-agree-terms"
-                        v-model="authData.agreeToTerms"
+                        v-model="props.data.authData.agreeToTerms"
                         type="checkbox"
                         required
                         class="mt-0.5 h-3.5 w-3.5 text-blue-600 dark:text-blue-500 focus:ring-blue-500 border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700"
@@ -921,14 +925,14 @@ onUnmounted(() => {
                 </div>
 
                 <div class="flex gap-3">
-                  <button type="button" @click="prevAuthStep"
+                  <button type="button" @click="props.functions.prevAuthStep"
                     class="flex-1 flex gap-2 items-center justify-center bg-gray-100 dark:bg-gray-700 backdrop-blur-sm text-gray-700 dark:text-gray-300 rounded-lg px-4 py-2.5 font-medium hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200">
                     <i class="pi pi-arrow-left"></i> Back
                   </button>
-                  <button type="submit" :disabled="!authData.agreeToTerms || isLoading"
+                  <button type="submit" :disabled="!props.data.authData.agreeToTerms || props.data.isLoading"
                     class="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 disabled:from-gray-300 disabled:to-gray-400 dark:disabled:from-gray-600 dark:disabled:to-gray-700 disabled:cursor-not-allowed flex-1 flex gap-2 items-center justify-center transform hover:scale-[1.02] shadow-lg rounded-lg px-4 py-2.5 font-medium text-white transition-all duration-200">
-                    <i v-if="isLoading" class="pi pi-spin pi-spinner" :class="isLoading ? '' : 'pi pi-check'"></i>
-                    <span>{{ isLoading ? 'Creating...' : 'Create Session' }}</span>
+                    <i v-if="props.data.isLoading" class="pi pi-spin pi-spinner" :class="props.data.isLoading ? '' : 'pi pi-check'"></i>
+                    <span>{{ props.data.isLoading ? 'Creating...' : 'Create Session' }}</span>
                   </button>
                 </div>
               </form>
@@ -946,7 +950,7 @@ onUnmounted(() => {
 
       <!-- Mobile Get Started Button (when not in auth mode) -->
       <div v-else class="w-full max-w-sm">
-        <button @click="() => setShowCreateSession(true)"
+        <button @click="() => props.functions.setShowCreateSession(true)"
           class="group w-full px-6 py-3 bg-gradient-to-r from-indigo-500 to-blue-600 text-white rounded-xl hover:from-indigo-600 hover:to-blue-700 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl font-medium">
           <span class="flex items-center justify-center gap-2">
             <i class="pi pi-arrow-right group-hover:translate-x-1 transition-transform"></i>
