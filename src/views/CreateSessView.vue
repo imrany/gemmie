@@ -158,7 +158,7 @@ const props = defineProps<{
   }
   isLoading: boolean
   authStep: number
-  showCreateSession: boolean
+  showCreateSession: Ref<boolean>
   authData: {
     username: string
     email: string
@@ -274,7 +274,7 @@ onMounted(() => {
   const previousRoute = document.referrer
   const isFromUpgrade = previousRoute.includes('/upgrade') || window.location.search.includes('from=upgrade')
   if (isFromUpgrade) {
-    showCreateSession.value = true
+    props.showCreateSession.value = true
   }
 })
 
