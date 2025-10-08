@@ -2109,7 +2109,7 @@ onMounted(() => {
 
           <div v-else class="flex flex-col md:flex-grow items-center gap-3 text-gray-600 dark:text-gray-400">
             <img :src="currentTheme === 'dark' || (currentTheme === 'system' && isDarkMode) ?
-              '/favicon-light.svg' : '/logo.svg'" alt="Gemmie Logo" class="w-[60px] h-[60px] rounded-md" />
+              '/logo-light.svg' : '/logo.svg'" alt="Gemmie Logo" class="w-[60px] h-[60px] rounded-md" />
 
             <p class="text-3xl text-black dark:text-white font-semibold">{{ parsedUserDetails?.username || 'Gemmie' }}
             </p>
