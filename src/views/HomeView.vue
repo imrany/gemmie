@@ -2194,7 +2194,7 @@ onMounted(() => {
         <CreateSessView v-if="!isAuthenticated" :chats="chats" :current-chat-id="currentChatId"
           :is-collapsed="isCollapsed" :parsed-user-details="parsedUserDetails" :screen-width="screenWidth"
           :sync-status="syncStatus" :is-loading="isLoading" :auth-step="authStep"
-          :show-create-session="showCreateSession" :auth-data="authData" :current-messages="currentMessages"
+          showCreateSession :auth-data="authData" :current-messages="currentMessages"
           :validate-current-step="validateCurrentStep()" :set-show-input="setShowInput" :hide-sidebar="hideSidebar"
           :clear-all-chats="clearAllChats" :toggle-sidebar="toggleSidebar" :logout="logout"
           :create-new-chat="createNewChat" :switch-to-chat="switchToChat" :delete-chat="deleteChat"
