@@ -25,7 +25,7 @@ const globalState = inject('globalState') as {
     email: string;
     password: string;
   }) => any,
-  chatDrafts:Ref<Map<string, string>>,
+  chatDrafts: Ref<Map<string, string>>,
   screenWidth: Ref<number>,
   confirmDialog: Ref<ConfirmDialogOptions>,
   isCollapsed: Ref<boolean>,
@@ -52,16 +52,18 @@ const globalState = inject('globalState') as {
   setShowInput: () => void,
   clearAllChats: () => void,
   switchToChat: (chatId: string) => void,
-  createNewChat: (initialMessage?: string) => void,
+  createNewChat: (initialMessage?: string) => string,
   deleteChat: (chatId: string) => void,
-  loadChatDrafts:() => void,
-  saveChatDrafts:() => void,
+  loadChatDrafts: () => void,
+  saveChatDrafts: () => void,
   renameChat: (chatId: string, newTitle: string) => void,
   deleteMessage: (messageIndex: number) => void,
   scrollableElem: Ref<HTMLElement | null>,
   showScrollDownButton: Ref<boolean>,
   handleScroll: () => void,
   scrollToBottom: () => void,
+  cancelAllRequests: () => void,
+  cancelChatRequests: (chatId: string) => void,
   saveChats: () => void,
   clearCurrentDraft: () => void,
   linkPreviewCache: Ref<Map<string, LinkPreview>>,
@@ -82,10 +84,14 @@ const globalState = inject('globalState') as {
   isFreeUser: Ref<boolean>,
   currentTheme: Ref<Theme>,
   isDarkMode: Ref<boolean>,
+  hasActiveRequestsForCurrentChat: Ref<boolean>,
   isUserOnline: Ref<boolean>,
   connectionStatus: Ref<string>,
   checkInternetConnection: () => Promise<boolean>,
-  autoGrow:(e: Event) => void
+  autoGrow: (e: Event) => void,
+  activeRequests: Ref<Map<string, AbortController>>,
+  requestChatMap: Ref<Map<string, string>>,
+  pendingResponses: Ref<Map<string, { prompt: string; chatId: string }>>,
 }
 
 const {
@@ -105,7 +111,10 @@ const {
   isLoading,
   expanded,
   showInput,
+  hasActiveRequestsForCurrentChat,
   showConfirmDialog,
+  cancelAllRequests,
+  cancelChatRequests,
   hideSidebar,
   setShowInput,
   clearAllChats,
@@ -145,6 +154,9 @@ const {
   isUserOnline,
   connectionStatus,
   checkInternetConnection,
+  activeRequests,
+  requestChatMap,
+  pendingResponses,
 } = globalState
 let parsedUserDetails: Ref<any> = globalState.parsedUserDetails
 
@@ -709,12 +721,12 @@ function handlePaste(e: ClipboardEvent) {
       if (currentChatId.value) {
         const textarea = document.getElementById('prompt') as HTMLTextAreaElement
         let currentDraft = textarea?.value || ''
-        
+
         // Combine current textarea content with paste preview content
         const fullDraft = currentDraft + processedContent
         chatDrafts.value.set(currentChatId.value, fullDraft)
         saveChatDrafts()
-        
+
         // Clear textarea but keep the draft with paste content
         if (textarea) {
           textarea.value = currentDraft // Keep only the typed content in textarea
@@ -750,7 +762,7 @@ function removePastePreview() {
   if (currentChatId.value) {
     pastePreviews.value.delete(currentChatId.value)
     saveChatDrafts()
-    
+
     // Also clear textarea if it contains paste content
     const textarea = document.getElementById('prompt') as HTMLTextAreaElement
     if (textarea && textarea.value.includes('#pastedText#')) {
@@ -768,7 +780,7 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
 
   // Stop voice recording immediately when submitting
   if (isRecording.value || isTranscribing.value) {
-    stopVoiceRecording(true) // Pass true to clear text after submission
+    stopVoiceRecording(true)
   }
 
   if (!isUserOnline.value) {
@@ -795,7 +807,7 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
   let fabricatedPrompt = promptValue
   if (!promptValue || isLoading.value) return
 
-  if (!isAuthenticated.value) { // FIX: Added .value
+  if (!isAuthenticated.value) {
     toast.warning('Please create a session first', {
       duration: 4000,
       description: 'You need to be logged in.'
@@ -806,7 +818,6 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
   // Check for daily reset before checking limits
   checkAndResetDailyCount()
 
-  // Fixed: Check request limit for ALL users who should have limits
   const shouldHaveLimit = isFreeUser.value ||
     planStatus.value.isExpired ||
     planStatus.value.status === 'no-plan' ||
@@ -829,74 +840,32 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
 
   // Clear draft for current chat when message is sent
   clearCurrentDraft()
-  
-  // Create new chat if none exists - MOVED to avoid duplicate creation
-  if (!currentChatId.value || !currentChat.value) {
-    createNewChat(promptValue)
+
+  // Store current chat ID at the time of submission
+  let submissionChatId = currentChatId.value
+  const submissionChat = chats.value.find(chat => chat.id === submissionChatId)
+
+  // Create new chat if none exists
+  if (!submissionChatId || !submissionChat) {
+    const newChatId = createNewChat(promptValue)
+    if (!newChatId) return
+    // Use the newly created chat
+    currentChatId.value = newChatId
+    // Update submissionChatId to the new chat ID
+    submissionChatId = newChatId
   }
+
+  // Generate unique request ID
+  const requestId = `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+  const abortController = new AbortController()
+
+  // Track the active request
+  activeRequests.value.set(requestId, abortController)
+  requestChatMap.value.set(requestId, submissionChatId)
 
   // handling for link-only prompts
   if (isJustLinks(promptValue)) {
-    const urls = extractUrls(promptValue)
-
-    isLoading.value = true
-
-    // Clear input field
-    if (!retryPrompt && e?.target?.prompt) {
-      e.target.prompt.value = ""
-      e.target.prompt.style.height = "auto"
-    }
-
-    // Clear voice transcription after using it
-    if (transcribedText.value) {
-      transcribedText.value = ''
-    }
-
-    const tempResp: Res = { prompt: promptValue, response: "..." }
-    currentChat.value?.messages.push(tempResp)
-    expanded.value.push(false)
-
-    try {
-      let combinedResponse = `I've analyzed the link${urls.length > 1 ? "s" : ""} you shared:\n\n`
-
-      for (const url of urls) {
-        try {
-          const linkPreview = await fetchLinkPreview(url)
-
-          combinedResponse += `**${linkPreview.title || 'Untitled'}**\n`
-          if (linkPreview.description) {
-            combinedResponse += `Description: ${linkPreview.description}\n`
-          }
-          combinedResponse += `Domain: ${linkPreview.domain || new URL(url).hostname}\n`
-          combinedResponse += `URL: ${url}\n\n`
-        } catch (err: any) {
-          combinedResponse += `⚠️ Failed to analyze: ${url} (${err.message || "Unknown error"})\n\n`
-        }
-      }
-
-      // Update the response in chat
-      if (currentChat.value) {
-        const lastMessageIndex = currentChat.value.messages.length - 1
-        currentChat.value.messages[lastMessageIndex] = {
-          prompt: promptValue,
-          response: combinedResponse.trim(),
-          status: 200
-        }
-        currentChat.value.updatedAt = new Date().toISOString()
-      }
-
-      // ✅ ONLY INCREMENT ON SUCCESS for link-only prompts
-      incrementRequestCount()
-
-    } finally {
-      isLoading.value = false
-      saveChats()
-      observeNewVideoContainers()
-      await nextTick()
-      scrollToBottom()
-    }
-
-    return // ✅ Exit early for link-only prompts
+    return handleLinkOnlyRequest(promptValue, submissionChatId, requestId, abortController)
   }
 
   // Merge with only the latest message if prompt is short
@@ -920,32 +889,43 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
 
   const tempResp: Res = { prompt: promptValue, response: "..." }
 
-  // Add message to current chat
-  if (currentChat.value) {
-    currentChat.value.messages.push(tempResp)
-    currentChat.value.updatedAt = new Date().toISOString()
+  // Add message to submission chat
+  const targetChat = chats.value.find(chat => chat.id === submissionChatId)
+  if (targetChat) {
+    targetChat.messages.push(tempResp)
+    targetChat.updatedAt = new Date().toISOString()
 
     // Update chat title if this is the first message
-    if (currentChat.value.messages.length === 1) {
-      currentChat.value.title = generateChatTitle(promptValue)
+    if (targetChat.messages.length === 1) {
+      targetChat.title = generateChatTitle(promptValue)
     }
   }
 
-  expanded.value.push(false)
+  // Update expanded array for the submission chat
+  updateExpandedArray()
 
   // Process links in user prompt
   processLinksInUserPrompt(promptValue)
 
-  // Scroll to bottom after adding user message
-  await nextTick()
-  scrollToBottom()
+  // Scroll to bottom of the submission chat if it's currently active
+  if (currentChatId.value === submissionChatId) {
+    await nextTick()
+    scrollToBottom()
+  }
 
   try {
     let response = await fetch(WRAPPER_URL, {
       method: "POST",
       body: JSON.stringify(fabricatedPrompt),
-      headers: { "content-type": "application/json" }
+      headers: { "content-type": "application/json" },
+      signal: abortController.signal
     })
+
+    // Check if request was aborted due to chat switch
+    if (abortController.signal.aborted) {
+      console.log(`Request ${requestId} was aborted due to chat switch`)
+      return
+    }
 
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`)
@@ -953,44 +933,161 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
 
     let parseRes = await response.json()
 
-    if (currentChat.value) {
-      const lastMessageIndex = currentChat.value.messages.length - 1
-      currentChat.value.messages[lastMessageIndex] = {
-        prompt: promptValue,
-        response: parseRes.error ? parseRes.error : parseRes.response,
-        status: response.status
+    // Find the target chat again (it might have changed)
+    const updatedTargetChat = chats.value.find(chat => chat.id === submissionChatId)
+    if (updatedTargetChat) {
+      // Ensure messages array exists
+      if (!updatedTargetChat.messages) {
+        updatedTargetChat.messages = []
       }
-      currentChat.value.updatedAt = new Date().toISOString()
-    }
 
-    // Trigger link preview generation for the new response
-    await processLinksInResponse(currentMessages.value.length - 1)
+      const lastMessageIndex = updatedTargetChat.messages.length - 1
+
+      // Only update if we have a valid message index
+      if (lastMessageIndex >= 0) {
+        updatedTargetChat.messages[lastMessageIndex] = {
+          prompt: promptValue,
+          response: parseRes.error ? parseRes.error : parseRes.response,
+          status: response.status
+        }
+        updatedTargetChat.updatedAt = new Date().toISOString()
+
+        // Trigger link preview generation for the new response
+        await processLinksInResponse(lastMessageIndex)
+      }
+    }
 
     // ✅ ONLY INCREMENT ON SUCCESS for AI responses
     incrementRequestCount()
 
+    // Show success notification if user switched away
+    if (currentChatId.value !== submissionChatId) {
+      toast.success('Response received', {
+        duration: 3000,
+        description: `Switch to "${targetChat?.title || 'chat'}" to view the response`
+      })
+    }
+
   } catch (err: any) {
+    // Don't show error if request was intentionally aborted
+    if (err.name === 'AbortError') {
+      console.log(`Request ${requestId} was aborted`)
+      return
+    }
+
     console.error('AI Response Error:', err)
+
+    // Update error in the target chat - FIX: use submissionChatId instead of undefined variable
+    const errorTargetChat = chats.value.find(chat => chat.id === submissionChatId)
+    if (errorTargetChat && errorTargetChat.messages.length > 0) {
+      const lastMessageIndex = errorTargetChat.messages.length - 1
+      errorTargetChat.messages[lastMessageIndex] = {
+        prompt: promptValue,
+        response: `Error: ${err.message}`,
+        status: 500
+      }
+    }
+
     toast.error(`Failed to get AI response: ${err.message}`, {
       duration: 5000,
       description: 'Please try again or check your connection'
     })
-    
+
     // Optionally restore the draft if the request failed
-    if (currentChatId.value && promptValue.trim()) {
-      chatDrafts.value.set(currentChatId.value, promptValue)
+    if (submissionChatId && promptValue.trim()) {
+      chatDrafts.value.set(submissionChatId, promptValue)
       saveChatDrafts()
     }
   } finally {
+    // Clean up request tracking
+    activeRequests.value.delete(requestId)
+    requestChatMap.value.delete(requestId)
+
     isLoading.value = false
     saveChats()
 
     // Observe any new video containers
     observeNewVideoContainers();
 
-    // Scroll to bottom after response is complete
-    await nextTick()
-    scrollToBottom()
+    // Scroll to bottom if we're still in the same chat
+    if (currentChatId.value === submissionChatId) {
+      await nextTick()
+      scrollToBottom()
+    }
+  }
+}
+
+async function handleLinkOnlyRequest(promptValue: string, chatId: string, requestId: string, abortController: AbortController) {
+  const urls = extractUrls(promptValue)
+
+  isLoading.value = true
+
+  const tempResp: Res = { prompt: promptValue, response: "..." }
+  const targetChat = chats.value.find(chat => chat.id === chatId)
+
+  if (targetChat) {
+    targetChat.messages.push(tempResp)
+    targetChat.updatedAt = new Date().toISOString()
+  }
+
+  try {
+    let combinedResponse = `I've analyzed the link${urls.length > 1 ? "s" : ""} you shared:\n\n`
+
+    for (const url of urls) {
+      // Check if request was aborted
+      if (abortController.signal.aborted) {
+        console.log(`Link request ${requestId} was aborted`)
+        return
+      }
+
+      try {
+        const linkPreview = await fetchLinkPreview(url)
+
+        combinedResponse += `**${linkPreview.title || 'Untitled'}**\n`
+        if (linkPreview.description) {
+          combinedResponse += `Description: ${linkPreview.description}\n`
+        }
+        combinedResponse += `Domain: ${linkPreview.domain || new URL(url).hostname}\n`
+        combinedResponse += `URL: ${url}\n\n`
+      } catch (err: any) {
+        combinedResponse += `⚠️ Failed to analyze: ${url} (${err.message || "Unknown error"})\n\n`
+      }
+    }
+
+    // Update the response in chat
+    const updatedTargetChat = chats.value.find(chat => chat.id === chatId)
+    if (updatedTargetChat) {
+      const lastMessageIndex = updatedTargetChat.messages.length - 1
+      updatedTargetChat.messages[lastMessageIndex] = {
+        prompt: promptValue,
+        response: combinedResponse.trim(),
+        status: 200
+      }
+      updatedTargetChat.updatedAt = new Date().toISOString()
+    }
+
+    // ✅ ONLY INCREMENT ON SUCCESS for link-only prompts
+    incrementRequestCount()
+
+    // Show notification if user switched away
+    if (currentChatId.value !== chatId) {
+      toast.success('Links analyzed', {
+        duration: 3000,
+        description: `Switch to "${targetChat?.title || 'chat'}" to view the analysis`
+      })
+    }
+
+  } finally {
+    activeRequests.value.delete(requestId)
+    requestChatMap.value.delete(requestId)
+    isLoading.value = false
+    saveChats()
+
+    if (currentChatId.value === chatId) {
+      observeNewVideoContainers()
+      await nextTick()
+      scrollToBottom()
+    }
   }
 }
 
@@ -1474,15 +1571,13 @@ async function handleAuthError(err: any) {
 
 // Process links in a response and generate previews
 async function processLinksInResponse(index: number) {
-  const messages = currentMessages.value
-  if (!messages[index] || !messages[index].response || messages[index].response === "...") return
+  const targetChat = chats.value.find(chat => chat.id === currentChatId.value)
+  if (!targetChat || !targetChat.messages[index] || !targetChat.messages[index].response || targetChat.messages[index].response === "...") return
 
-  const urls = extractUrls(messages[index].response)
+  const urls = extractUrls(targetChat.messages[index].response)
   if (urls.length > 0) {
-    // Start loading previews
     urls.slice(0, 3).forEach(url => {
       fetchLinkPreview(url).then(() => {
-        // Trigger reactivity update
         linkPreviewCache.value = new Map(linkPreviewCache.value)
       })
     })
@@ -1913,16 +2008,20 @@ onUpdated(() => {
   observeNewVideoContainers();
 });
 
-// Watch for chat switches to clean up recording state and load drafts
+// Watch for chat switches to manage requests
 watch(currentChatId, (newChatId, oldChatId) => {
   loadChatDrafts()
+
   if (oldChatId && newChatId !== oldChatId) {
     // Clear paste preview when switching chats
     pastePreviews.value.delete(oldChatId)
 
+    // Cancel ongoing requests for the old chat (optional - remove if you want them to continue)
+    // cancelChatRequests(oldChatId)
+
     // User switched chats - stop any active recording
     if (isRecording.value || isTranscribing.value) {
-      stopVoiceRecording(true) // Clear text when switching chats
+      stopVoiceRecording(true)
       toast.info('Voice recording stopped', {
         duration: 2000,
         description: 'Switched to different chat'
@@ -2027,6 +2126,12 @@ watch(() => route.path, (newPath, oldPath) => {
 }, { immediate: true })
 
 onBeforeUnmount(() => {
+  if (transcriptionTimer) clearInterval(transcriptionTimer);
+  if (updateTimeout) clearTimeout(updateTimeout);
+
+  // Clean up all active requests
+  cancelAllRequests()
+
   // Clean up speech recognition
   if (isRecording.value || isTranscribing.value) {
     stopVoiceRecording(false) // Don't clear text during unmount

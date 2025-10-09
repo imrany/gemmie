@@ -16,6 +16,9 @@ const isDarkMode = ref(false)
 const currentTheme = ref<Theme | any>("system")
 const scrollableElem = ref<HTMLElement | null>(null)
 const showScrollDownButton = ref(false)
+const activeRequests = ref<Map<string, AbortController>>(new Map())
+const requestChatMap = ref<Map<string, string>>(new Map()) // requestId -> chatId
+const pendingResponses = ref<Map<string, { prompt: string; chatId: string }>>(new Map())
 const chatDrafts = ref<Map<string, string>>(new Map())
 const pastePreviews = ref<Map<string, {
   content: string;
@@ -2221,6 +2224,46 @@ function showConnectionStatus() {
   }
 }
 
+// Cancel all active requests for a specific chat
+function cancelChatRequests(chatId: string) {
+  const requestsToCancel: string[] = []
+  
+  requestChatMap.value.forEach((requestChatId, requestId) => {
+    if (requestChatId === chatId) {
+      requestsToCancel.push(requestId)
+    }
+  })
+  
+  requestsToCancel.forEach(requestId => {
+    const controller = activeRequests.value.get(requestId)
+    if (controller) {
+      controller.abort()
+      activeRequests.value.delete(requestId)
+      requestChatMap.value.delete(requestId)
+    }
+  })
+}
+
+// Cancel all active requests
+function cancelAllRequests() {
+  activeRequests.value.forEach((controller, requestId) => {
+    controller.abort()
+  })
+  activeRequests.value.clear()
+  requestChatMap.value.clear()
+}
+
+// Check if there are active requests for current chat
+const hasActiveRequestsForCurrentChat = computed(() => {
+  let hasRequests = false
+  requestChatMap.value.forEach((chatId) => {
+    if (chatId === currentChatId.value) {
+      hasRequests = true
+    }
+  })
+  return hasRequests
+})
+
 // Enhanced event listeners with connection checking
 function setupConnectionListeners() {
   // Basic online/offline events
@@ -2453,6 +2496,9 @@ onUnmounted(() => {
 // Global state object with all functions and reactive references
 const globalState = {
   // Reactive references
+  activeRequests,
+  requestChatMap,
+  pendingResponses,
   chatDrafts,
   pastePreviews,
   screenWidth,
@@ -2481,8 +2527,11 @@ const globalState = {
   currentTheme,
   isUserOnline,
   connectionStatus,
+  hasActiveRequestsForCurrentChat,
   
   // Core functions
+  cancelAllRequests,
+  cancelChatRequests,
   checkInternetConnection,
   showConfirmDialog,
   apiCall,
