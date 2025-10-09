@@ -95,7 +95,7 @@ func main() {
 	viper.BindPFlag("SMTP_EMAIL", rootCmd.PersistentFlags().Lookup("SMTP_EMAIL"))
 	
 
-	// Bind env variables (PORT, DATA_FILE)
+	// Bind env variables
 	viper.AutomaticEnv()
 
 	if err := rootCmd.Execute(); err != nil {
@@ -117,21 +117,18 @@ func runServer() {
 		Email:    viper.GetString("SMTP_EMAIL"),
 	}
 
+	// Validate SMTP configuration and log status
+	if smtpConfig.Host == "" || smtpConfig.Username == "" || smtpConfig.Password == "" {
+		slog.Warn("SMTP not fully configured, email features will be disabled")
+	} else {
+		slog.Info("SMTP configured successfully", "host", smtpConfig.Host, "email", smtpConfig.Email)
+	}
+
 	// Configure email scheduler
 	schedulerConfig := v1.EmailSchedulerConfig{
 		SMTPConfig:      smtpConfig,
-		SendInterval:    7 * 24 * time.Hour, // Send every 7 days
-		EnableScheduler: smtpConfig.Host != "",   // Only enable if SMTP is configured
-	}
-
-	// Validate SMTP configuration
-	if schedulerConfig.EnableScheduler {
-		if smtpConfig.Host == "" || smtpConfig.Username == "" || smtpConfig.Password == "" {
-			slog.Warn("SMTP not fully configured, email scheduler will be disabled")
-			schedulerConfig.EnableScheduler = false
-		} else {
-			slog.Info("Email scheduler enabled", "interval", schedulerConfig.SendInterval.String())
-		}
+		SendInterval:    7 * 24 * time.Hour, // Send every 7 days (recommended)
+		EnableScheduler: smtpConfig.Host != "", // Only enable if SMTP is configured
 	}
 
 	// Start the email scheduler in background
@@ -142,18 +139,39 @@ func runServer() {
 
 	// Router setup
 	r := mux.NewRouter()
+	
+	// Auth routes
 	r.HandleFunc("/api/register", v1.RegisterHandler).Methods(http.MethodPost)
 	r.HandleFunc("/api/login", v1.LoginHandler).Methods(http.MethodPost)
 	r.HandleFunc("/api/sync", v1.SyncHandler).Methods(http.MethodGet, http.MethodPost)
 	r.HandleFunc("/api/health", v1.HealthHandler).Methods(http.MethodGet)
 	r.HandleFunc("/api/delete_account", v1.DeleteAccountHandler).Methods(http.MethodDelete)
+	r.HandleFunc("/api/profile", v1.ProfileHandler)
 
 	// Payment routes
 	r.HandleFunc("/api/payments/stk", v1.SendSTKHandler).Methods(http.MethodPost)
 	r.HandleFunc("/api/transactions", v1.GetTransactionsHandler).Methods(http.MethodGet)
 	r.HandleFunc("/api/transactions/{external_reference}", v1.GetTransactionByRefHandler).Methods(http.MethodGet)
 	r.HandleFunc("/api/callback", v1.StoreTransactionHandler).Methods(http.MethodPost)
-	r.HandleFunc("/api/profile", v1.ProfileHandler)
+	
+	// NEW: Email management routes
+	// Unsubscribe from promotional emails (supports both GET from email link and POST from API)
+	r.HandleFunc("/unsubscribe", v1.UnsubscribeHandler).Methods(http.MethodGet, http.MethodPost)
+	
+	// Resubscribe to promotional emails (requires authentication)
+	r.HandleFunc("/resubscribe", v1.ResubscribeHandler).Methods(http.MethodPost)
+	
+	// Update email subscription preference (requires authentication)
+	r.HandleFunc("/api/email-subscription", v1.UpdateEmailSubscriptionHandler).Methods(http.MethodPut)
+	
+	// Send email verification link (requires authentication)
+	r.HandleFunc("/api/send-verification", func(w http.ResponseWriter, r *http.Request) {
+		v1.SendVerificationEmailHandler(w, r, smtpConfig)
+	}).Methods(http.MethodPost)
+	
+	// Verify email with token (supports both GET from email link and POST from API)
+	r.HandleFunc("/api/verify-email", v1.VerifyEmailHandler).Methods(http.MethodGet, http.MethodPost)
+	
 	// Handle CORS preflight
 	r.Methods(http.MethodOptions).HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -201,4 +219,3 @@ func runServer() {
 		slog.Info("Server exited cleanly")
 	}
 }
-

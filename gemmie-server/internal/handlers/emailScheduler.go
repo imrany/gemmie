@@ -10,9 +10,9 @@ import (
 
 // EmailSchedulerConfig holds the configuration for email scheduling
 type EmailSchedulerConfig struct {
-	SMTPConfig       mailer.SMTPConfig
-	SendInterval     time.Duration // How often to send emails (e.g., 7 days)
-	EnableScheduler  bool          // Master switch to enable/disable scheduler
+	SMTPConfig      mailer.SMTPConfig
+	SendInterval    time.Duration // How often to send emails (e.g., 7 days)
+	EnableScheduler bool          // Master switch to enable/disable scheduler
 }
 
 // StartEmailScheduler starts the background scheduler for sending upgrade emails
@@ -22,7 +22,7 @@ func StartEmailScheduler(config EmailSchedulerConfig) {
 		return
 	}
 
-	slog.Info("Starting email scheduler", 
+	slog.Info("Starting email scheduler",
 		"interval", config.SendInterval.String(),
 	)
 
@@ -91,6 +91,16 @@ func sendUpgradeEmails(smtpConfig mailer.SMTPConfig) {
 
 // isEligibleForUpgradeEmail checks if a user should receive an upgrade email
 func isEligibleForUpgradeEmail(user store.User) bool {
+	// Check if user is subscribed to emails
+	if !user.EmailSubscribed {
+		return false
+	}
+
+	// TODO: In future, also check email verification
+	// if !user.EmailVerified {
+	//     return false
+	// }
+
 	now := time.Now().Unix()
 
 	// Free plan users are always eligible
@@ -115,7 +125,7 @@ func isEligibleForUpgradeEmail(user store.User) bool {
 // sendUpgradeEmail sends an upgrade email to a specific user
 func sendUpgradeEmail(user store.User, smtpConfig mailer.SMTPConfig) error {
 	subject := "Unlock Premium Features with Gemmie Pro! 🚀"
-	
+
 	// Determine email content based on user status
 	var body string
 	if user.Plan == "free" || user.Plan == "" {
@@ -199,7 +209,7 @@ func buildFreeUserEmailBody(user store.User) string {
         <div class="footer">
             <p>Thanks for being part of the Gemmie community!</p>
             <p>Questions? Reply to this email or visit our support center.</p>
-            <p><a href="https://gemmie-ai.web.app/unsubscribe">Unsubscribe from promotional emails</a></p>
+            <p><a href="https://gemmie.villebiz.com/unsubscribe?email=` + user.Email + `&token=` + user.ID + `">Unsubscribe from promotional emails</a></p>
         </div>
     </div>
 </body>
@@ -211,7 +221,7 @@ func buildFreeUserEmailBody(user store.User) string {
 func buildExpiredUserEmailBody(user store.User) string {
 	now := time.Now().Unix()
 	isExpired := user.ExpiryTimestamp < now
-	
+
 	statusMessage := "Your Gemmie Pro subscription has expired"
 	if !isExpired {
 		daysRemaining := (user.ExpiryTimestamp - now) / (24 * 60 * 60)
@@ -256,7 +266,7 @@ func buildExpiredUserEmailBody(user store.User) string {
             <p>Renew now and pick up right where you left off!</p>
             
             <center>
-				<a href="https://gemmie-ai.web.app/upgrade/` + user.PlanName + `" class="cta-button">Renew Subscription →</a>
+                <a href="https://gemmie-ai.web.app/upgrade/` + user.PlanName + `" class="cta-button">Renew Subscription →</a>
             </center>
             
             <p style="margin-top: 30px;">
@@ -267,7 +277,7 @@ func buildExpiredUserEmailBody(user store.User) string {
         <div class="footer">
             <p>We'd love to have you back!</p>
             <p>Questions? Reply to this email or contact support.</p>
-            <p><a href="https://gemmie-ai.web.app/unsubscribe">Unsubscribe from promotional emails</a></p>
+            <p><a href="https://gemmie.villebiz.com/unsubscribe?email=` + user.Email + `&token=` + user.ID + `">Unsubscribe from promotional emails</a></p>
         </div>
     </div>
 </body>

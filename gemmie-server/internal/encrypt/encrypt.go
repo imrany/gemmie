@@ -25,3 +25,16 @@ func HashCredentials(username, email, password string) string {
 	hash := sha256.Sum256([]byte(combined))
 	return hex.EncodeToString(hash[:])
 }
+
+// Helper function to generate unsubscribe token
+func GenerateUnsubscribeToken(userID string) string {
+	data := fmt.Sprintf("%s:%d:%s", userID, time.Now().Unix(), "unsubscribe")
+	hash := sha256.Sum256([]byte(data))
+	return hex.EncodeToString(hash[:])
+}
+
+func GenerateVerificationToken(email, userID string) string {
+	data := fmt.Sprintf("%s:%s:%d", email, userID, time.Now().Unix())
+	hash := sha256.Sum256([]byte(data))
+	return hex.EncodeToString(hash[:])
+}
