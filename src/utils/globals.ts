@@ -154,3 +154,10 @@ export function checkConnectionStatus(): Promise<boolean> {
     .catch(() => resolve(false))
   })
 }
+
+// paste detection function
+export function detectLargePaste(text: string): boolean {
+  const wordCount = text.trim().split(/\s+/).length
+  const charCount = text.length
+  return wordCount > 100 || charCount > 800
+}

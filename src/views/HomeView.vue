@@ -10,7 +10,7 @@ import type { Chat, ConfirmDialogOptions, CurrentChat, LinkPreview, Res } from "
 import { toast } from 'vue-sonner'
 import { destroyVideoLazyLoading, initializeVideoLazyLoading, observeNewVideoContainers, pauseVideo, playEmbeddedVideo, playSocialVideo, resumeVideo, showVideoControls, stopDirectVideo, stopVideo, toggleDirectVideo, updateVideoControls } from "@/utils/videoProcessing"
 import { onUpdated } from "vue"
-import { extractUrls, generateChatTitle, copyCode, isPromptTooShort, WRAPPER_URL } from "@/utils/globals"
+import { extractUrls, generateChatTitle, copyCode, isPromptTooShort, WRAPPER_URL, detectLargePaste } from "@/utils/globals"
 import CreateSessView from "./CreateSessView.vue"
 import router from "@/router"
 import { copyPasteContent, detectContentType } from "@/utils/previewPasteContent"
@@ -25,6 +25,7 @@ const globalState = inject('globalState') as {
     email: string;
     password: string;
   }) => any,
+  chatDrafts:Ref<Map<string, string>>,
   screenWidth: Ref<number>,
   confirmDialog: Ref<ConfirmDialogOptions>,
   isCollapsed: Ref<boolean>,
@@ -35,6 +36,12 @@ const globalState = inject('globalState') as {
   parsedUserDetails: any,
   planStatus: Ref<{ status: string; timeLeft: string; expiryDate: string; isExpired: boolean; }>,
   currentChatId: Ref<string>,
+  pastePreviews: Ref<Map<string, {
+    content: string;
+    wordCount: number;
+    charCount: number;
+    show: boolean;
+  }>>,
   chats: Ref<Chat[]>
   logout: () => void,
   isLoading: Ref<boolean>,
@@ -47,6 +54,8 @@ const globalState = inject('globalState') as {
   switchToChat: (chatId: string) => void,
   createNewChat: (initialMessage?: string) => void,
   deleteChat: (chatId: string) => void,
+  loadChatDrafts:() => void,
+  saveChatDrafts:() => void,
   renameChat: (chatId: string, newTitle: string) => void,
   deleteMessage: (messageIndex: number) => void,
   scrollableElem: Ref<HTMLElement | null>,
@@ -54,6 +63,7 @@ const globalState = inject('globalState') as {
   handleScroll: () => void,
   scrollToBottom: () => void,
   saveChats: () => void,
+  clearCurrentDraft: () => void,
   linkPreviewCache: Ref<Map<string, LinkPreview>>,
   fetchLinkPreview: (url: string) => Promise<LinkPreview>,
   loadLinkPreviewCache: () => void,
@@ -75,9 +85,11 @@ const globalState = inject('globalState') as {
   isUserOnline: Ref<boolean>,
   connectionStatus: Ref<string>,
   checkInternetConnection: () => Promise<boolean>,
+  autoGrow:(e: Event) => void
 }
 
 const {
+  chatDrafts,
   screenWidth,
   confirmDialog,
   isCollapsed,
@@ -86,6 +98,7 @@ const {
   syncStatus,
   isAuthenticated,
   currentChatId,
+  pastePreviews,
   chats,
   planStatus,
   logout,
@@ -99,6 +112,9 @@ const {
   switchToChat,
   createNewChat,
   deleteChat,
+  loadChatDrafts,
+  saveChatDrafts,
+  clearCurrentDraft,
   renameChat,
   deleteMessage,
   scrollableElem,
@@ -122,6 +138,7 @@ const {
   manualSync,
   toggleSidebar,
   setupAutoSync,
+  autoGrow,
   autoSyncInterval,
   handleAuth,
   isFreeUser,
@@ -150,18 +167,14 @@ let transcriptionTimer: number | null = null
 let updateTimeout: number | null = null
 
 const showPasteModal = ref(false)
+const pastePreview = computed(() => {
+  return pastePreviews.value.get(currentChatId.value) || null
+})
 const currentPasteContent = ref<{
   content: string;
   wordCount: number;
   charCount: number;
   type: 'text' | 'code' | 'json' | 'markdown' | 'xml' | 'html';
-} | null>(null)
-
-const pastePreview = ref<{
-  content: string;
-  wordCount: number;
-  charCount: number;
-  show: boolean;
 } | null>(null)
 
 // ---------- Request Limit Functions ----------
@@ -638,15 +651,16 @@ function renderMarkdown(text?: string) {
 }
 
 // Debounced scroll handler to improve performance
-let scrollTimeout: any = null
+let scrollTimeout: any = null;
 function debouncedHandleScroll() {
   if (scrollTimeout) {
-    clearTimeout(scrollTimeout)
+    clearTimeout(scrollTimeout);
   }
 
   scrollTimeout = setTimeout(() => {
-    handleScroll()
-  }, 16) // ~60fps
+    handleScroll();
+    scrollTimeout = null;
+  }, 100); // Increased for better performance
 }
 
 // Detect if prompt is just URLs (1 or more) with little/no extra text
@@ -666,13 +680,6 @@ function isJustLinks(prompt: string): boolean {
   return promptWithoutUrls.split(/\s+/).filter(Boolean).length <= 3
 }
 
-// paste detection function
-function detectLargePaste(text: string): boolean {
-  const wordCount = text.trim().split(/\s+/).length
-  const charCount = text.length
-  return wordCount > 100 || charCount > 800
-}
-
 function handlePaste(e: ClipboardEvent) {
   try {
     const pastedText = e.clipboardData?.getData('text') || ''
@@ -688,17 +695,49 @@ function handlePaste(e: ClipboardEvent) {
       // Enhanced paste preview with proper content handling
       const processedContent = wordCount > 100 ? `#pastedText#${pastedText}` : pastedText
 
-      pastePreview.value = {
-        content: processedContent,
-        wordCount,
-        charCount,
-        show: true
+      // Store in pastePreviews map using current chat ID
+      if (currentChatId.value) {
+        pastePreviews.value.set(currentChatId.value, {
+          content: processedContent,
+          wordCount,
+          charCount,
+          show: true
+        })
+      }
+
+      // Save draft immediately when large content is pasted
+      if (currentChatId.value) {
+        const textarea = document.getElementById('prompt') as HTMLTextAreaElement
+        let currentDraft = textarea?.value || ''
+        
+        // Combine current textarea content with paste preview content
+        const fullDraft = currentDraft + processedContent
+        chatDrafts.value.set(currentChatId.value, fullDraft)
+        saveChatDrafts()
+        
+        // Clear textarea but keep the draft with paste content
+        if (textarea) {
+          textarea.value = currentDraft // Keep only the typed content in textarea
+          autoGrow({ target: textarea } as any)
+        }
       }
 
       toast.info('Large content detected', {
         duration: 4000,
         description: `${wordCount} words, ${charCount} characters. Preview shown below.`
       })
+    } else {
+      // For small pastes, let the normal paste happen and then save draft
+      setTimeout(() => {
+        if (currentChatId.value) {
+          const textarea = document.getElementById('prompt') as HTMLTextAreaElement
+          if (textarea) {
+            // For small pastes, save the normal content
+            chatDrafts.value.set(currentChatId.value, textarea.value)
+            saveChatDrafts()
+          }
+        }
+      }, 100)
     }
   } catch (error) {
     console.error('Error handling paste:', error)
@@ -707,18 +746,20 @@ function handlePaste(e: ClipboardEvent) {
 }
 
 function removePastePreview() {
-  pastePreview.value = null
-
-  // Also clear the textarea if it contains the preview content
-  nextTick(() => {
-    const textarea = document.getElementById("prompt") as HTMLTextAreaElement
+  // Remove paste preview for current chat
+  if (currentChatId.value) {
+    pastePreviews.value.delete(currentChatId.value)
+    saveChatDrafts()
+    
+    // Also clear textarea if it contains paste content
+    const textarea = document.getElementById('prompt') as HTMLTextAreaElement
     if (textarea && textarea.value.includes('#pastedText#')) {
       // Extract any non-pasted content
       const parts = textarea.value.split('#pastedText#')
       textarea.value = parts[0] || ''
       autoGrow({ target: textarea } as any)
     }
-  })
+  }
 }
 
 // handleSubmit function
@@ -744,16 +785,17 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
   let promptValue = retryPrompt || e?.target?.prompt?.value?.trim()
 
   // If we have a paste preview, use that content instead
-  if (pastePreview.value && pastePreview.value.show && !retryPrompt) {
-    promptValue += pastePreview.value.content
+  const currentPastePreview = pastePreviews.value.get(currentChatId.value)
+  if (currentPastePreview && currentPastePreview.show && !retryPrompt) {
+    promptValue += currentPastePreview.content
     // Clear the paste preview
-    pastePreview.value = null
+    pastePreviews.value.delete(currentChatId.value)
   }
 
   let fabricatedPrompt = promptValue
   if (!promptValue || isLoading.value) return
 
-  if (!isAuthenticated) {
+  if (!isAuthenticated.value) { // FIX: Added .value
     toast.warning('Please create a session first', {
       duration: 4000,
       description: 'You need to be logged in.'
@@ -785,17 +827,21 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
     return
   }
 
+  // Clear draft for current chat when message is sent
+  clearCurrentDraft()
+  
+  // Create new chat if none exists - MOVED to avoid duplicate creation
+  if (!currentChatId.value || !currentChat.value) {
+    createNewChat(promptValue)
+  }
+
   // handling for link-only prompts
   if (isJustLinks(promptValue)) {
     const urls = extractUrls(promptValue)
 
-    // Create chat if needed
-    if (!currentChatId.value || !currentChat.value) {
-      createNewChat(promptValue)
-    }
-
     isLoading.value = true
 
+    // Clear input field
     if (!retryPrompt && e?.target?.prompt) {
       e.target.prompt.value = ""
       e.target.prompt.style.height = "auto"
@@ -859,13 +905,9 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
     fabricatedPrompt = `${lastMessage.prompt || ''} ${lastMessage.response || ''}\nUser: ${promptValue}`
   }
 
-  // Create new chat if none exists
-  if (!currentChatId.value || !currentChat.value) {
-    createNewChat(promptValue)
-  }
-
   isLoading.value = true
 
+  // Clear input field
   if (!retryPrompt && e?.target?.prompt) {
     e.target.prompt.value = ""
     e.target.prompt.style.height = "auto"
@@ -928,10 +970,17 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
     incrementRequestCount()
 
   } catch (err: any) {
+    console.error('AI Response Error:', err)
     toast.error(`Failed to get AI response: ${err.message}`, {
       duration: 5000,
-      description: ''
+      description: 'Please try again or check your connection'
     })
+    
+    // Optionally restore the draft if the request failed
+    if (currentChatId.value && promptValue.trim()) {
+      chatDrafts.value.set(currentChatId.value, promptValue)
+      saveChatDrafts()
+    }
   } finally {
     isLoading.value = false
     saveChats()
@@ -1454,19 +1503,6 @@ async function processLinksInUserPrompt(prompt: string) {
   }
 }
 
-function autoGrow(e: Event) {
-  const el = e.target as HTMLTextAreaElement
-  const maxHeight = 200
-  el.style.height = "auto"
-  if (el.scrollHeight <= maxHeight) {
-    el.style.height = el.scrollHeight + "px"
-    el.style.overflowY = "hidden"
-  } else {
-    el.style.height = maxHeight + "px"
-    el.style.overflowY = "auto"
-  }
-}
-
 // ---------- Extra actions ----------
 function copyResponse(text: string, index?: number) {
   navigator.clipboard.writeText(text)
@@ -1877,9 +1913,13 @@ onUpdated(() => {
   observeNewVideoContainers();
 });
 
-// Watch for chat switches to clean up recording state 
+// Watch for chat switches to clean up recording state and load drafts
 watch(currentChatId, (newChatId, oldChatId) => {
+  loadChatDrafts()
   if (oldChatId && newChatId !== oldChatId) {
+    // Clear paste preview when switching chats
+    pastePreviews.value.delete(oldChatId)
+
     // User switched chats - stop any active recording
     if (isRecording.value || isTranscribing.value) {
       stopVoiceRecording(true) // Clear text when switching chats
@@ -1890,7 +1930,6 @@ watch(currentChatId, (newChatId, oldChatId) => {
     }
   }
 })
-
 
 watch([isRecording, isTranscribing], ([recording, transcribing]) => {
   if (!recording && !transcribing && !transcribedText.value) {
@@ -1970,6 +2009,14 @@ watch(() => ({ ...planStatus.value }), (newStatus, oldStatus) => {
     })
   }
 }, { deep: true })
+
+watch([() => currentMessages.value.length, () => chats.value], () => {
+  nextTick(() => {
+    setTimeout(() => {
+      handleScroll(); // Recalculate scroll position after content changes
+    }, 100);
+  });
+}, { deep: true });
 
 watch(() => route.path, (newPath, oldPath) => {
   if (newPath === "/new") {
@@ -2152,7 +2199,19 @@ onMounted(() => {
     // Initial scroll to bottom with delay to ensure content is rendered
     setTimeout(() => {
       scrollToBottom();
-    }, 100);
+
+      // Set up scroll listener after initial render
+      if (scrollableElem.value) {
+        scrollableElem.value.addEventListener("scroll", debouncedHandleScroll, {
+          passive: true
+        });
+
+        // Trigger initial scroll state calculation
+        setTimeout(() => {
+          handleScroll();
+        }, 200);
+      }
+    }, 300); // Increased delay for more reliable initial render;
   });
 
   // 11. Store cleanup functions for onBeforeUnmount
@@ -2351,7 +2410,7 @@ onUnmounted(() => {
 
         <!-- Chat Messages Container -->
         <div ref="scrollableElem" v-else-if="currentMessages.length !== 0 && isAuthenticated"
-          class="relative flex-grow no-scrollbar overflow-y-auto px-2 sm:px-4 w-full space-y-3 sm:space-y-4 mt-[55px]"
+          class="relative flex-grow no-scrollbar overflow-y-auto px-2 sm:px-4 w-full space-y-3 sm:space-y-4 mt-[55px]  scroll-container"
           :class="scrollContainerPadding">
           <div v-if="currentMessages.length !== 0" v-for="(item, i) in currentMessages" :key="`chat-${i}`"
             class="flex flex-col gap-2">
