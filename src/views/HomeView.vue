@@ -725,6 +725,11 @@ function removePastePreview() {
 async function handleSubmit(e?: any, retryPrompt?: string) {
   e?.preventDefault?.()
 
+  // Stop voice recording immediately when submitting
+  if (isRecording.value || isTranscribing.value) {
+    stopVoiceRecording(true) // Pass true to clear text after submission
+  }
+
   if (!isUserOnline.value) {
     const isActuallyOnline = await checkInternetConnection()
     if (!isActuallyOnline) {
@@ -796,6 +801,11 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
       e.target.prompt.style.height = "auto"
     }
 
+    // Clear voice transcription after using it
+    if (transcribedText.value) {
+      transcribedText.value = ''
+    }
+
     const tempResp: Res = { prompt: promptValue, response: "..." }
     currentChat.value?.messages.push(tempResp)
     expanded.value.push(false)
@@ -861,6 +871,11 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
     e.target.prompt.style.height = "auto"
   }
 
+  // Clear voice transcription after using it
+  if (transcribedText.value) {
+    transcribedText.value = ''
+  }
+
   const tempResp: Res = { prompt: promptValue, response: "..." }
 
   // Add message to current chat
@@ -917,15 +932,6 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
       duration: 5000,
       description: ''
     })
-
-    if (currentChat.value) {
-      const lastMessageIndex = currentChat.value.messages.length - 1
-      currentChat.value.messages[lastMessageIndex] = {
-        prompt: promptValue,
-        response: `⚠️ Error: ${err.message || 'Failed to get response. Please try again.'}`
-      }
-      currentChat.value.updatedAt = new Date().toISOString()
-    }
   } finally {
     isLoading.value = false
     saveChats()
@@ -1083,10 +1089,6 @@ async function refreshResponse(oldPrompt?: string) {
     incrementRequestCount()
 
   } catch (err: any) {
-    chat.messages[msgIndex] = {
-      ...oldMessage,
-      response: `⚠️ Failed to refresh response: ${err.message || "Unknown error"}`,
-    }
     toast.error(`Failed to refresh response: ${err.message}`)
   } finally {
     saveChats()
@@ -1167,6 +1169,43 @@ const showUpgradeBanner = computed(() => {
   return shouldShowUpgradePrompt.value && !isRequestLimitExceeded.value
 })
 
+const scrollButtonPosition = computed(() => {
+  // Base positions
+  const basePosition = 'bottom-[90px] sm:bottom-[100px]'
+  const withScrollButton = 'bottom-[90px] sm:bottom-[100px]'
+  const withBanners = 'bottom-[170px] sm:bottom-[170px]'
+  const withPastePreview = 'bottom-[270px] sm:bottom-[310px]'
+  const withPasteAndBanners = 'bottom-[370px] sm:bottom-[380px]'
+
+  // Priority order: paste + banners > banners > paste > scroll button > base
+  if ((isRequestLimitExceeded.value || shouldShowUpgradePrompt.value) && pastePreview.value?.show) {
+    return withPasteAndBanners
+  } else if (isRequestLimitExceeded.value || shouldShowUpgradePrompt.value) {
+    return withBanners
+  } else if (pastePreview.value?.show) {
+    return withPastePreview
+  } else if (showScrollDownButton.value) {
+    return withScrollButton
+  } else {
+    return basePosition
+  }
+})
+
+// Update the scroll container padding computed property
+const scrollContainerPadding = computed(() => {
+  if ((isRequestLimitExceeded.value || shouldShowUpgradePrompt.value) && pastePreview.value?.show) {
+    return 'pb-[200px] sm:pb-[190px]'
+  } else if (isRequestLimitExceeded.value || shouldShowUpgradePrompt.value) {
+    return 'pb-[160px] sm:pb-[150px]'
+  } else if (pastePreview.value?.show) {
+    return 'pb-[150px] sm:pb-[140px]'
+  } else if (showScrollDownButton.value) {
+    return 'pb-[140px] sm:pb-[120px]'
+  } else {
+    return 'pb-[110px] sm:pb-[120px]'
+  }
+})
+
 // Add connection checking before authentication
 async function handleStepSubmit(e: Event) {
   e.preventDefault()
@@ -1214,7 +1253,7 @@ function handleValidationError() {
       description: error.message,
       action: {
         label: 'Got it',
-        onClick: () => {}
+        onClick: () => { }
       }
     })
   }
@@ -1249,7 +1288,7 @@ async function handleFinalAuthStep() {
 
     // Success handling
     await handleAuthSuccess(response)
-    
+
   } catch (err: any) {
     await handleAuthError(err)
   } finally {
@@ -1268,11 +1307,11 @@ async function handleAuthSuccess(response: any) {
   // Reset form state
   setShowCreateSession(false)
   authStep.value = 1
-  authData.value = { 
-    username: '', 
-    email: '', 
-    password: '', 
-    agreeToTerms: false 
+  authData.value = {
+    username: '',
+    email: '',
+    password: '',
+    agreeToTerms: false
   }
 
   // Load user data
@@ -1299,8 +1338,8 @@ async function handlePostAuthRedirect() {
   // Check multiple sources for upgrade redirect
   const previousRoute = document.referrer
   const urlParams = new URLSearchParams(window.location.search)
-  const isFromUpgrade = 
-    previousRoute.includes('/upgrade') || 
+  const isFromUpgrade =
+    previousRoute.includes('/upgrade') ||
     urlParams.has('from') && urlParams.get('from') === 'upgrade' ||
     urlParams.has('redirect') && urlParams.get('redirect') === 'upgrade'
 
@@ -1366,7 +1405,7 @@ async function handleAuthError(err: any) {
         nextTick(() => {
           const focusMap = {
             1: 'username',
-            2: 'email', 
+            2: 'email',
             3: 'password',
             4: 'agreeToTerms'
           }
@@ -1669,13 +1708,6 @@ function cleanupPastePreviewHandlers() {
   console.log('Paste preview handlers cleaned up') // Debug log
 }
 
-
-// Move onUpdated outside of onMounted
-onUpdated(() => {
-  // Check for new video containers after DOM updates
-  observeNewVideoContainers();
-});
-
 function updateAuthData(data: Partial<{ username: string; email: string; password: string }>) {
   Object.assign(authData.value, data)
 }
@@ -1699,6 +1731,9 @@ function initializeSpeechRecognition() {
   recognition.maxAlternatives = 1
 
   recognition.onresult = (event: any) => {
+    // Only process if we're still recording (FIX 6)
+    if (!isRecording.value) return
+
     let interimTranscript = ''
     for (let i = event.resultIndex; i < event.results.length; i++) {
       const transcript = event.results[i][0].transcript
@@ -1716,15 +1751,23 @@ function initializeSpeechRecognition() {
     isRecording.value = false
     isTranscribing.value = false
     microphonePermission.value = event.error === 'not-allowed' ? 'denied' : microphonePermission.value
-    toast.error('Voice Input Error', {
-      duration: 4000,
-      description: event.error
-    })
+
+    if (event.error !== 'aborted') { // Don't show toast for manual stops
+      toast.error('Voice Input Error', {
+        duration: 4000,
+        description: event.error === 'not-allowed' ? 'Microphone access denied' : event.error
+      })
+    }
   }
 
   recognition.onend = () => {
-    if (isRecording.value) {
-      setTimeout(() => recognition.start(), 500)
+    // Only restart if we're still supposed to be recording (FIX 5)
+    if (isRecording.value && !isTranscribing.value) {
+      setTimeout(() => {
+        if (isRecording.value) { // Double check we're still recording
+          recognition.start()
+        }
+      }, 500)
     } else {
       isTranscribing.value = false
     }
@@ -1741,12 +1784,10 @@ function updateTextarea(interim: string) {
   if (updateTimeout) clearTimeout(updateTimeout)
   updateTimeout = window.setTimeout(() => {
     const textarea = document.getElementById('prompt') as HTMLTextAreaElement
-    if (textarea) {
-      // Only update if we're actually recording or have transcribed text
-      if (isRecording.value || transcribedText.value) {
-        textarea.value = transcribedText.value + interim
-        autoGrow({ target: textarea } as any)
-      }
+    if (textarea && (isRecording.value || transcribedText.value)) {
+      // Only update if we're actively recording or have transcribed text
+      textarea.value = transcribedText.value + interim
+      autoGrow({ target: textarea } as any)
     }
   }, 100)
 }
@@ -1762,10 +1803,8 @@ async function toggleVoiceRecording() {
   }
 
   if (isRecording.value) {
-    // Stop recording
-    stopVoiceRecording()
+    stopVoiceRecording(false) // Don't clear text - let user decide
   } else {
-    // Start recording
     await startVoiceRecording()
   }
 }
@@ -1798,11 +1837,16 @@ async function startVoiceRecording() {
 }
 
 // Stop voice recording
-function stopVoiceRecording() {
+function stopVoiceRecording(clearText: boolean = true) {
   isRecording.value = false
   isTranscribing.value = false
   stopTimer()
   voiceRecognition.value?.stop()
+
+  // Clear transcribed text if requested (FIX 2 & 5)
+  if (clearText) {
+    clearVoiceTranscription()
+  }
 }
 
 function startTimer() {
@@ -1818,13 +1862,35 @@ function stopTimer() {
 // Clear voice transcription
 function clearVoiceTranscription() {
   transcribedText.value = ''
+  transcriptionDuration.value = 0 // FIX 8: Reset duration
   const textarea = document.getElementById('prompt') as HTMLTextAreaElement
   if (textarea) {
     textarea.value = ''
     autoGrow({ target: textarea } as any)
-    textarea.focus() // Refocus after clearing
+    textarea.focus()
   }
 }
+
+// Move onUpdated outside of onMounted
+onUpdated(() => {
+  // Check for new video containers after DOM updates
+  observeNewVideoContainers();
+});
+
+// Watch for chat switches to clean up recording state 
+watch(currentChatId, (newChatId, oldChatId) => {
+  if (oldChatId && newChatId !== oldChatId) {
+    // User switched chats - stop any active recording
+    if (isRecording.value || isTranscribing.value) {
+      stopVoiceRecording(true) // Clear text when switching chats
+      toast.info('Voice recording stopped', {
+        duration: 2000,
+        description: 'Switched to different chat'
+      })
+    }
+  }
+})
+
 
 watch([isRecording, isTranscribing], ([recording, transcribing]) => {
   if (!recording && !transcribing && !transcribedText.value) {
@@ -1915,8 +1981,8 @@ watch(() => route.path, (newPath, oldPath) => {
 
 onBeforeUnmount(() => {
   // Clean up speech recognition
-  if (isRecording.value) {
-    stopVoiceRecording()
+  if (isRecording.value || isTranscribing.value) {
+    stopVoiceRecording(false) // Don't clear text during unmount
   }
 
   // Remove keyboard listener
@@ -2143,6 +2209,21 @@ onMounted(() => {
     }
   });
 });
+
+onUnmounted(() => {
+  // Final cleanup for voice recording
+  if (voiceRecognition.value) {
+    voiceRecognition.value.abort()
+  }
+
+  if (transcriptionTimer) {
+    clearInterval(transcriptionTimer)
+  }
+
+  if (updateTimeout) {
+    clearTimeout(updateTimeout)
+  }
+})
 </script>
 
 <template>
@@ -2191,39 +2272,35 @@ onMounted(() => {
           manualSync,
         }" />
         <!-- Empty State -->
-        <CreateSessView v-if="!isAuthenticated" 
-          :data="{
-            chats,
-            currentChatId,
-            isCollapsed, 
-            parsedUserDetails,
-            screenWidth,
-            syncStatus,
-            isLoading,
-            authStep,
-            showCreateSession, 
-            authData,
-            currentMessages,
-          }"
-
-          :functions="{
-            validateCurrentStep,
-            setShowInput,
-            hideSidebar,
-            clearAllChats,
-            toggleSidebar,
-            logout,
-            createNewChat,
-            switchToChat,
-            deleteChat,
-            renameChat,
-            manualSync,
-            handleStepSubmit,
-            prevAuthStep,
-            updateAuthData,
-            setShowCreateSession, 
-          }"
-        />
+        <CreateSessView v-if="!isAuthenticated" :data="{
+          chats,
+          currentChatId,
+          isCollapsed,
+          parsedUserDetails,
+          screenWidth,
+          syncStatus,
+          isLoading,
+          authStep,
+          showCreateSession,
+          authData,
+          currentMessages,
+        }" :functions="{
+          validateCurrentStep,
+          setShowInput,
+          hideSidebar,
+          clearAllChats,
+          toggleSidebar,
+          logout,
+          createNewChat,
+          switchToChat,
+          deleteChat,
+          renameChat,
+          manualSync,
+          handleStepSubmit,
+          prevAuthStep,
+          updateAuthData,
+          setShowCreateSession,
+        }" />
 
         <div v-else-if="isAuthenticated && currentMessages.length === 0">
           <!-- Loading Overlay -->
@@ -2275,9 +2352,7 @@ onMounted(() => {
         <!-- Chat Messages Container -->
         <div ref="scrollableElem" v-else-if="currentMessages.length !== 0 && isAuthenticated"
           class="relative flex-grow no-scrollbar overflow-y-auto px-2 sm:px-4 w-full space-y-3 sm:space-y-4 mt-[55px]"
-          :class="isRequestLimitExceeded || shouldShowUpgradePrompt ? 'pb-[160px] sm:pb-[150px]' :
-            showScrollDownButton ? 'pb-[140px] sm:pb-[120px]' :
-              'pb-[110px] sm:pb-[120px]'">
+          :class="scrollContainerPadding">
           <div v-if="currentMessages.length !== 0" v-for="(item, i) in currentMessages" :key="`chat-${i}`"
             class="flex flex-col gap-2">
             <!-- User Bubble -->
@@ -2385,17 +2460,17 @@ onMounted(() => {
         <button v-if="showScrollDownButton && currentMessages.length !== 0 && isAuthenticated" @click="scrollToBottom"
           :class="[
             'absolute bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border dark:border-gray-700 px-4 h-8 rounded-full shadow-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors z-20 flex items-center justify-center gap-2',
-            isRequestLimitExceeded || shouldShowUpgradePrompt ? 'bottom-[170px] sm:bottom-[170px]' :
-              'bottom-[90px] sm:bottom-[100px]'
-          ]">
-          <i class="pi pi-arrow-down text-xs"></i>
+            scrollButtonPosition
+          ]" :disabled="isRecording" :title="isRecording ? 'Recording in progress' : 'Scroll to bottom'">
+          <i class="pi pi-arrow-down text-xs" :class="{ 'animate-bounce': !isRecording }"></i>
           <span class="text-sm font-medium">Scroll Down</span>
         </button>
 
         <!-- Input Area -->
         <div v-if="(currentMessages.length !== 0 || showInput === true) && isAuthenticated" :style="screenWidth > 720 && !isCollapsed ? 'left:270px;' :
           screenWidth > 720 && isCollapsed ? 'left:60px;' : 'left:0px;'"
-          class="bg-white dark:bg-gray-900 z-20 bottom-0 right-0 fixed pb-3 sm:pb-5 px-2 sm:px-5">
+          class="bg-white dark:bg-gray-900 z-20 bottom-0 right-0 fixed pb-3 sm:pb-5 px-2 sm:px-5"
+          :class="pastePreview?.show ? 'pt-2' : ''">
 
           <div class="flex items-center justify-center w-full">
             <form @submit="handleSubmit"
@@ -2403,7 +2478,6 @@ onMounted(() => {
                 'relative flex bg-gray-50 dark:bg-gray-800 flex-col border-2 dark:border-gray-700 shadow rounded-2xl items-center w-[85%] max-w-6xl' :
                 'relative flex bg-gray-50 dark:bg-gray-800 flex-col border-2 dark:border-gray-700 shadow rounded-2xl items-center w-[85%] max-w-4xl' :
                 'relative flex flex-col border-2 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 shadow rounded-2xl w-full max-w-full items-center'">
-
               <!-- Paste Preview inside form - above other content -->
               <div v-if="pastePreview && pastePreview.show" class="w-full p-3 border-b dark:border-gray-700">
                 <div
