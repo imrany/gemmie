@@ -56,7 +56,7 @@ type SyncRequest struct {
 	ExternalReference string `json:"external_reference,omitempty"` // For payment tracking
 }
 
-// AuthResponse represents authentication response - FIXED field naming consistency
+// Update AuthResponse struct
 type AuthResponse struct {
 	UserID          string    `json:"user_id"`
 	Username        string    `json:"username"`
@@ -73,10 +73,12 @@ type AuthResponse struct {
 	PlanName        string    `json:"plan_name,omitempty"`
 	Amount          int       `json:"amount,omitempty"`
 	Duration        string    `json:"duration,omitempty"`
-	PhoneNumber     string    `json:"phone_number,omitempty"`     // Consistent naming
+	PhoneNumber     string    `json:"phone_number,omitempty"`
 	ExpiryTimestamp int64     `json:"expiry_timestamp,omitempty"`
 	ExpireDuration  int64     `json:"expire_duration,omitempty"`
 	Price           string    `json:"price,omitempty"`
+	EmailVerified   bool      `json:"email_verified"`
+	EmailSubscribed bool      `json:"email_subscribed"`
 }
 
 type ProfileUpdateRequest struct {
@@ -88,7 +90,7 @@ type ProfileUpdateRequest struct {
 	PhoneNumber  string `json:"phone_number,omitempty"`  // Added phone number support
 }
 
-// ADDED: Phone number validation function
+// Phone number validation function
 func validatePhoneNumber(phone string) bool {
 	if phone == "" {
 		return true // Optional field
@@ -100,7 +102,7 @@ func validatePhoneNumber(phone string) bool {
 	return phoneRegex.MatchString(strings.TrimSpace(phone))
 }
 
-// ADDED: Input sanitization function
+// Input sanitization function
 func sanitizeString(input string) string {
 	return strings.TrimSpace(input)
 }
@@ -131,7 +133,6 @@ func findUserByUsername(username string) (*store.User, bool) {
 	return nil, false
 }
 
-// registerHandler handles user registration - ENHANCED with better validation
 func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
@@ -149,7 +150,7 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	req.Username = sanitizeString(req.Username)
 	req.Email = sanitizeString(req.Email)
 
-	// Enhanced validation
+	// Enhanced validation (existing validation code...)
 	if req.Username == "" || req.Email == "" || req.Password == "" {
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(store.Response{
@@ -170,7 +171,7 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate username (alphanumeric, underscore, hyphen, 3-30 chars)
+	// Validate username
 	usernameRegex := regexp.MustCompile(`^[a-zA-Z0-9_-]{3,30}$`)
 	if !usernameRegex.MatchString(req.Username) {
 		w.WriteHeader(http.StatusBadRequest)
@@ -181,7 +182,7 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate password strength (minimum 8 chars)
+	// Validate password strength
 	if len(req.Password) < 8 {
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(store.Response{
@@ -191,7 +192,7 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !req.AgreeToTerms{
+	if !req.AgreeToTerms {
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
@@ -219,9 +220,10 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create new user with consistent field naming
+	// Create new user with email fields
 	userID := encrypt.GenerateUserID()
 	passwordHash := encrypt.HashCredentials(req.Username, req.Email, req.Password)
+	unsubscribeToken := encrypt.GenerateUnsubscribeToken(userID)
 	
 	user := store.User{
 		ID:              userID,
@@ -238,11 +240,17 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		PlanName:        "Free",
 		Amount:          0,
 		Duration:        "",
-		PhoneNumber:     "", // Consistent field naming
+		PhoneNumber:     "",
 		ExpiryTimestamp: 0,
 		ExpireDuration:  0,
 		Price:           "",
-		AgreeToTerms: req.AgreeToTerms,
+		AgreeToTerms:    req.AgreeToTerms,
+		
+		EmailVerified:       false,  // Will be verified after clicking link
+		EmailSubscribed:     true,   // Default: subscribed to promotional emails
+		UnsubscribeToken:    unsubscribeToken,
+		VerificationToken:   "",     // Will be set when verification email is sent
+		VerificationTokenExpiry: time.Time{},
 	}
 
 	// Create empty user data record
@@ -270,11 +278,11 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Return response with user data
+	// Return response with user data (including new fields)
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(store.Response{
 		Success: true,
-		Message: "User registered successfully",
+		Message: "User registered successfully. Please check your email to verify your account.",
 		Data: AuthResponse{
 			UserID:        user.ID,
 			Username:      user.Username,
@@ -287,7 +295,7 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 			WorkFunction:  user.WorkFunction,
 			Theme:         user.Theme,
 			SyncEnabled:   user.SyncEnabled,
-			PhoneNumber:   user.PhoneNumber, // Consistent naming
+			PhoneNumber:   user.PhoneNumber,
 			Plan:          user.Plan,
 			PlanName:      user.PlanName,
 			Amount:        user.Amount,
@@ -299,7 +307,7 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// loginHandler handles user login - ENHANCED with better validation
+// loginHandler handles user login
 func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
@@ -418,7 +426,7 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// syncHandler handles data synchronization - ENHANCED with better validation
+// syncHandler handles data synchronization
 func SyncHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
@@ -613,7 +621,7 @@ func SyncHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// ProfileHandler handles profile updates - ENHANCED with phone validation
+// ProfileHandler handles profile updates
 func ProfileHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
@@ -749,7 +757,7 @@ func ProfileHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// Health check handler - ENHANCED with better metrics
+// Health check handler
 func HealthHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
@@ -770,7 +778,7 @@ func HealthHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// DeleteAccountHandler handles account deletion securely - ENHANCED validation
+// DeleteAccountHandler handles account deletion securely
 func DeleteAccountHandler(w http.ResponseWriter, r *http.Request) {
     w.Header().Set("Content-Type", "application/json")
 

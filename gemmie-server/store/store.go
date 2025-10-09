@@ -6,6 +6,8 @@ import (
 	"os"
 	"sync"
 	"time"
+
+	"github.com/imrany/gemmie/gemmie-server/internal/encrypt"
 )
 
 // Response represents API response
@@ -33,15 +35,22 @@ type User struct {
 	WorkFunction string    `json:"work_function,omitempty"`
 	Theme        string    `json:"theme,omitempty"`
 	SyncEnabled  bool      `json:"sync_enabled"`
-	Plan 	   string    `json:"plan,omitempty"`
+	Plan 	     string    `json:"plan,omitempty"`
 	PlanName	 string    `json:"plan_name,omitempty"`
 	Amount       int       `json:"amount,omitempty"`
 	Duration     string    `json:"duration,omitempty"`
-	PhoneNumber        string    `json:"phone_number,omitempty"`
+	PhoneNumber  string    `json:"phone_number,omitempty"`
 	ExpiryTimestamp int64  `json:"expiry_timestamp,omitempty"`
 	ExpireDuration int64   `json:"expire_duration,omitempty"`
 	Price        string    `json:"price,omitempty"`
-	AgreeToTerms bool		`json:"agree_to_terms"`
+	AgreeToTerms bool      `json:"agree_to_terms"`
+	
+	// NEW FIELDS: Email management
+	EmailVerified   bool      `json:"email_verified"`      // Whether email is verified
+	EmailSubscribed bool      `json:"email_subscribed"`    // Whether user subscribed to promotional emails
+	VerificationToken string  `json:"verification_token,omitempty"` // Token for email verification
+	VerificationTokenExpiry time.Time `json:"verification_token_expiry,omitempty"` // Token expiry
+	UnsubscribeToken string   `json:"unsubscribe_token,omitempty"` // Secure token for unsubscribe
 }
 
 type UserData struct {
@@ -61,7 +70,7 @@ type Transaction struct {
 	MerchantRequestID  string    `json:"MerchantRequestID"`
 	Amount             int       `json:"Amount"`
 	PhoneNumber        string    `json:"Phone"`
-	ResultCode         int    `json:"ResultCode"`
+	ResultCode         int       `json:"ResultCode"`
 	ResultDescription  string    `json:"ResultDesc"`
 	Status             string    `json:"Status"`
 	CreatedAt          time.Time `json:"CreatedAt"`
@@ -120,6 +129,26 @@ func loadStorage() {
 
 		slog.Warn("Storage reset due to unmarshaling error")
 		return
+	}
+
+	// Migration: Set default values for new fields for existing users
+	needsSave := false
+	for userID, user := range Storage.Users {
+		if user.UnsubscribeToken == "" {
+			// Generate unsubscribe token for existing users
+			user.UnsubscribeToken = encrypt.GenerateUnsubscribeToken(userID)
+			// Default: subscribed to emails
+			user.EmailSubscribed = true
+			// Default: email not verified (will be true after they verify)
+			user.EmailVerified = false
+			Storage.Users[userID] = user
+			needsSave = true
+		}
+	}
+
+	if needsSave {
+		slog.Info("Migrating existing users with new email fields")
+		SaveStorage()
 	}
 
 	slog.Info("Storage loaded",
