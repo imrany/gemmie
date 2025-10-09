@@ -10,6 +10,7 @@ import (
 
 	v1 "github.com/imrany/gemmie/gemmie-server/internal/handlers"
 	"github.com/imrany/gemmie/gemmie-server/store"
+	"github.com/imrany/gemmie/gemmie-server/internal/mailer"
 
 	"log/slog"
 
@@ -73,6 +74,11 @@ func main() {
 	rootCmd.PersistentFlags().String("PAYHERO_PASSWORD", "", "PayHero password (env: PAYHERO_PASSWORD)")
 	rootCmd.PersistentFlags().String("PAYHERO_CHANNEL_ID", "", "PayHero channel ID (env: PAYHERO_CHANNEL_ID)")
 	rootCmd.PersistentFlags().String("CALLBACK_URL", "", "Callback URL for PayHero (env: CALLBACK_URL)")
+	rootCmd.PersistentFlags().String("SMTP_HOST", "", "SMTP HOST (env: SMTP_HOST)")
+	rootCmd.PersistentFlags().Int("SMTP_PORT", 587, "SMTP PORT (env: SMTP_PORT)")
+	rootCmd.PersistentFlags().String("SMTP_USERNAME", "", "SMTP Username (env: SMTP_USERNAME)")
+	rootCmd.PersistentFlags().String("SMTP_PASSWORD", "", "SMTP Password (env: SMTP_PASSWORD)")
+	rootCmd.PersistentFlags().String("SMTP_EMAIL", "", "SMTP Email (env: SMTP_EMAIL)")
 	
 
 	// Bind flags to viper
@@ -82,6 +88,12 @@ func main() {
 	viper.BindPFlag("PAYHERO_PASSWORD", rootCmd.PersistentFlags().Lookup("PAYHERO_PASSWORD"))
 	viper.BindPFlag("PAYHERO_CHANNEL_ID", rootCmd.PersistentFlags().Lookup("PAYHERO_CHANNEL_ID"))
 	viper.BindPFlag("CALLBACK_URL", rootCmd.PersistentFlags().Lookup("CALLBACK_URL"))
+	viper.BindPFlag("SMTP_HOST", rootCmd.PersistentFlags().Lookup("SMTP_HOST"))
+	viper.BindPFlag("SMTP_PORT", rootCmd.PersistentFlags().Lookup("SMTP_PORT"))
+	viper.BindPFlag("SMTP_USERNAME", rootCmd.PersistentFlags().Lookup("SMTP_USERNAME"))
+	viper.BindPFlag("SMTP_PASSWORD", rootCmd.PersistentFlags().Lookup("SMTP_PASSWORD"))
+	viper.BindPFlag("SMTP_EMAIL", rootCmd.PersistentFlags().Lookup("SMTP_EMAIL"))
+	
 
 	// Bind env variables (PORT, DATA_FILE)
 	viper.AutomaticEnv()
@@ -95,6 +107,35 @@ func main() {
 func runServer() {
 	port := viper.GetString("PORT")
 	dataFile := viper.GetString("DATA_FILE")
+
+	// Configure SMTP settings
+	smtpConfig := mailer.SMTPConfig{
+		Host:     viper.GetString("SMTP_HOST"),
+		Port:     viper.GetInt("SMTP_PORT"),
+		Username: viper.GetString("SMTP_USERNAME"),
+		Password: viper.GetString("SMTP_PASSWORD"),
+		Email:    viper.GetString("SMTP_EMAIL"),
+	}
+
+	// Configure email scheduler
+	schedulerConfig := v1.EmailSchedulerConfig{
+		SMTPConfig:      smtpConfig,
+		SendInterval:    7 * 24 * time.Hour, // Send every 7 days
+		EnableScheduler: smtpConfig.Host != "",   // Only enable if SMTP is configured
+	}
+
+	// Validate SMTP configuration
+	if schedulerConfig.EnableScheduler {
+		if smtpConfig.Host == "" || smtpConfig.Username == "" || smtpConfig.Password == "" {
+			slog.Warn("SMTP not fully configured, email scheduler will be disabled")
+			schedulerConfig.EnableScheduler = false
+		} else {
+			slog.Info("Email scheduler enabled", "interval", schedulerConfig.SendInterval.String())
+		}
+	}
+
+	// Start the email scheduler in background
+	v1.StartEmailScheduler(schedulerConfig)
 
 	// Initialize storage
 	store.InitStorage(dataFile)
