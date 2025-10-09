@@ -3,7 +3,7 @@ import { computed, onMounted, onUnmounted, provide, ref, type ComputedRef } from
 import { toast, Toaster } from 'vue-sonner'
 import 'vue-sonner/style.css'
 import type { Chat, ConfirmDialogOptions, CurrentChat, LinkPreview } from './types';
-import { API_BASE_URL, generateChatId, generateChatTitle, extractUrls, validateCredentials, getTransaction, WRAPPER_URL } from './utils/globals';
+import { API_BASE_URL, generateChatId, generateChatTitle, extractUrls, validateCredentials, getTransaction, WRAPPER_URL, detectLargePaste } from './utils/globals';
 import { nextTick } from 'vue';
 import { detectAndProcessVideo } from './utils/videoProcessing';
 import ConfirmDialog from './components/ConfirmDialog.vue';
@@ -16,6 +16,18 @@ const isDarkMode = ref(false)
 const currentTheme = ref<Theme | any>("system")
 const scrollableElem = ref<HTMLElement | null>(null)
 const showScrollDownButton = ref(false)
+const chatDrafts = ref<Map<string, string>>(new Map())
+const pastePreviews = ref<Map<string, {
+  content: string;
+  wordCount: number;
+  charCount: number;
+  show: boolean;
+}>>(new Map())
+
+const currentPastePreview = computed(() => {
+  return pastePreviews.value.get(currentChatId.value) || null
+})
+
 const confirmDialog = ref<ConfirmDialogOptions>({
   visible: false,
   title: "",
@@ -532,7 +544,7 @@ function updateExpandedArray() {
   }
 }
 
-// create new chat with better error handling
+// create new chat function with draft handling
 function createNewChat(firstMessage?: string): string {
   try {
     const newChatId = generateChatId()
@@ -551,11 +563,40 @@ function createNewChat(firstMessage?: string): string {
       throw new Error('Invalid chat data generated')
     }
 
+    // Clear any active paste preview for current chat before creating new one
+    if (currentChatId.value) {
+      pastePreviews.value.delete(currentChatId.value)
+    }
+
+    // Save current draft before creating new chat
+    if (currentChatId.value) {
+      const textarea = document.getElementById('prompt') as HTMLTextAreaElement
+      const currentDraft = textarea?.value || ''
+      if (currentDraft.trim()) {
+        chatDrafts.value.set(currentChatId.value, currentDraft)
+        saveChatDrafts()
+      }
+    }
+
+    // Clear draft and paste preview for new chat
+    chatDrafts.value.set(newChatId, '')
+    pastePreviews.value.delete(newChatId)
+
     // Add to beginning of chats array (most recent first)
     chats.value.unshift(newChat)
     currentChatId.value = newChatId
     updateExpandedArray()
     saveChats()
+
+    // Clear input area for new chat
+    nextTick(() => {
+      const textarea = document.getElementById('prompt') as HTMLTextAreaElement
+      if (textarea) {
+        textarea.value = ''
+        autoGrow({ target: textarea } as any)
+        textarea.focus()
+      }
+    })
 
     return newChatId
   } catch (error) {
@@ -565,26 +606,36 @@ function createNewChat(firstMessage?: string): string {
   }
 }
 
-function scrollToBottom() {
+function scrollToBottom(behavior: ScrollBehavior = 'smooth') {
   if (!scrollableElem.value) return;
 
   try {
-    // Use requestAnimationFrame for smooth scrolling
-    requestAnimationFrame(() => {
-      if (scrollableElem.value) {
-        scrollableElem.value.scrollTo({
-          top: scrollableElem.value.scrollHeight,
-          behavior: 'smooth'
-        });
-      }
-    });
+    // Use nextTick to ensure DOM is updated
+    nextTick(() => {
+      // Use setTimeout to ensure browser has recalculated layout
+      setTimeout(() => {
+        if (!scrollableElem.value) return;
+        
+        const container = scrollableElem.value;
+        const scrollHeight = container.scrollHeight;
+        const clientHeight = container.clientHeight;
+        
+        // Only scroll if there's actually content to scroll to
+        if (scrollHeight > clientHeight) {
+          container.scrollTo({
+            top: scrollHeight, // Remove the arbitrary +10 offset
+            behavior
+          });
+        }
 
-    // Update button visibility after scrolling
-    setTimeout(() => {
-      handleScroll();
-    }, 100);
+        // Update button visibility after scrolling with a slight delay
+        setTimeout(() => {
+          handleScroll();
+        }, 150);
+      }, 50);
+    });
   } catch (error) {
-    console.error('Error scrolling to bottom:', error)
+    console.error('Error scrolling to bottom:', error);
   }
 }
 
@@ -593,15 +644,24 @@ function handleScroll() {
     const elem = scrollableElem.value;
     if (!elem) return;
 
-    // More lenient threshold - consider "at bottom" if within 50px
-    const threshold = 50;
-    const isAtBottom = elem.scrollTop + elem.clientHeight >= elem.scrollHeight - threshold;
+    const scrollTop = elem.scrollTop;
+    const scrollHeight = elem.scrollHeight;
+    const clientHeight = elem.clientHeight;
+    
+    // Calculate actual scroll position
+    const currentScrollPosition = scrollTop + clientHeight;
+    const totalScrollableHeight = scrollHeight;
+    
+    // Use a more accurate threshold (2px for rounding errors)
+    const threshold = 2;
+    const isAtBottom = Math.abs(currentScrollPosition - totalScrollableHeight) <= threshold;
 
-    // Only show button when user has scrolled up significantly AND there's content to scroll to
-    const hasScrollableContent = elem.scrollHeight > elem.clientHeight + threshold;
-    showScrollDownButton.value = !isAtBottom && hasScrollableContent;
+    // Only show button when user has scrolled up AND there's substantial content
+    const hasSubstantialContent = scrollHeight > clientHeight + 100; // Only show if there's >100px of scrollable content
+    showScrollDownButton.value = !isAtBottom && hasSubstantialContent;
+
   } catch (error) {
-    console.error('Error handling scroll:', error)
+    console.error('Error handling scroll:', error);
   }
 }
 
@@ -631,7 +691,167 @@ function toggleChatMenu(chatId: string, event: Event) {
   }
 }
 
-// switch to chat function
+function autoGrow(e: Event) {
+  const el = e.target as HTMLTextAreaElement
+  const maxHeight = 200
+  el.style.height = "auto"
+  if (el.scrollHeight <= maxHeight) {
+    el.style.height = el.scrollHeight + "px"
+    el.style.overflowY = "hidden"
+  } else {
+    el.style.height = maxHeight + "px"
+    el.style.overflowY = "auto"
+  }
+
+  // Auto-save draft as user types (including paste preview)
+  if (currentChatId.value) {
+    const textarea = document.getElementById('prompt') as HTMLTextAreaElement
+    let currentDraft = textarea?.value || ''
+    
+    // Include paste preview content in draft if it exists
+    const currentPastePreview = pastePreviews.value.get(currentChatId.value)
+    if (currentPastePreview?.show && currentPastePreview.content) {
+      currentDraft += currentPastePreview.content
+    }
+    
+    // Only save if there's actual content
+    if (currentDraft.trim().length > 0) {
+      chatDrafts.value.set(currentChatId.value, currentDraft)
+      saveChatDrafts()
+    } else {
+      // Clear draft if both textarea and paste preview are empty
+      chatDrafts.value.delete(currentChatId.value)
+      saveChatDrafts()
+    }
+  }
+}
+
+// Save drafts and paste previews to localStorage
+function saveChatDrafts() {
+  try {
+    const draftsObject = Object.fromEntries(chatDrafts.value)
+    localStorage.setItem('chatDrafts', JSON.stringify(draftsObject))
+    
+    // Also save paste previews
+    const previewsObject = Object.fromEntries(pastePreviews.value)
+    localStorage.setItem('pastePreviews', JSON.stringify(previewsObject))
+  } catch (error) {
+    console.error('Failed to save chat drafts:', error)
+  }
+}
+
+// Load drafts from localStorage and detect paste content
+function loadChatDrafts() {
+  try {
+    const saved = localStorage.getItem('chatDrafts')
+    if (saved) {
+      const parsedDrafts = JSON.parse(saved)
+      chatDrafts.value = new Map(Object.entries(parsedDrafts))
+    }
+
+    // Load paste previews from localStorage
+    const savedPastePreviews = localStorage.getItem('pastePreviews')
+    if (savedPastePreviews) {
+      const parsedPreviews = JSON.parse(savedPastePreviews)
+      pastePreviews.value = new Map(Object.entries(parsedPreviews))
+    }
+      
+    // Check if current chat has draft that should be shown as paste preview
+    if (currentChatId.value) {
+      const currentDraft = chatDrafts.value.get(currentChatId.value) || ''
+      const currentPastePreview = pastePreviews.value.get(currentChatId.value)
+      
+      if (currentPastePreview && currentPastePreview.show) {
+        // Show existing paste preview for this chat
+        // Textarea should be cleared if we have a paste preview
+        const textarea = document.getElementById('prompt') as HTMLTextAreaElement
+        if (textarea) {
+          // Extract non-paste content from draft
+          const draftWithoutPaste = currentDraft.replace(currentPastePreview.content, '')
+          textarea.value = draftWithoutPaste
+          autoGrow({ target: textarea } as any)
+        }
+      } else if (currentDraft && detectLargePaste(currentDraft)) {
+        // Auto-detect paste content in draft
+        const wordCount = currentDraft.trim().split(/\s+/).filter(word => word.length > 0).length
+        const charCount = currentDraft.length
+        
+        pastePreviews.value.set(currentChatId.value, {
+          content: currentDraft,
+          wordCount,
+          charCount,
+          show: true
+        })
+        
+        // Clear textarea but keep the draft
+        const textarea = document.getElementById('prompt') as HTMLTextAreaElement
+        if (textarea) {
+          textarea.value = ''
+          autoGrow({ target: textarea } as any)
+        }
+      } else {
+        // For normal content, put it in textarea
+        const textarea = document.getElementById('prompt') as HTMLTextAreaElement
+        if (textarea) {
+          textarea.value = currentDraft
+          autoGrow({ target: textarea } as any)
+        }
+        // Clear any paste preview for this chat
+        pastePreviews.value.delete(currentChatId.value)
+      }
+    }
+  } catch (error) {
+    console.error('Failed to load chat drafts:', error)
+  }
+}
+
+// Clear draft for current chat including paste preview
+function clearCurrentDraft() {
+  if (currentChatId.value) {
+    chatDrafts.value.delete(currentChatId.value)
+    pastePreviews.value.delete(currentChatId.value)
+    saveChatDrafts()
+    
+    // Also clear textarea
+    const textarea = document.getElementById('prompt') as HTMLTextAreaElement
+    if (textarea) {
+      textarea.value = ''
+      autoGrow({ target: textarea } as any)
+    }
+  }
+}
+
+// Auto-save draft when user types (debounced)
+let draftSaveTimeout: any = null
+
+function autoSaveDraft() {
+  if (draftSaveTimeout) {
+    clearTimeout(draftSaveTimeout)
+  }
+  
+  draftSaveTimeout = setTimeout(() => {
+    if (currentChatId.value) {
+      const textarea = document.getElementById('prompt') as HTMLTextAreaElement
+      let currentDraft = textarea?.value || ''
+    
+      // If there's a paste preview, use that content
+      const currentPastePreview = pastePreviews.value.get(currentChatId.value)
+      if (currentPastePreview?.show) {
+        currentDraft += currentPastePreview.content
+      }
+      
+      // Only save if there's actual content
+      if (currentDraft.trim().length > 0) {
+        chatDrafts.value.set(currentChatId.value, currentDraft)
+        saveChatDrafts()
+      } else {
+        chatDrafts.value.delete(currentChatId.value)
+        saveChatDrafts()
+      }
+    }
+  }, 1000) // Save after 1 second of inactivity
+}
+
 function switchToChat(chatId: string) {
   try {
     if (!chatId || typeof chatId !== 'string') {
@@ -644,6 +864,26 @@ function switchToChat(chatId: string) {
       toast.error('Chat not found')
       return
     }
+    
+    // Save current draft (including any paste preview) before switching
+    if (currentChatId.value) {
+      const textarea = document.getElementById('prompt') as HTMLTextAreaElement
+      let currentDraft = textarea?.value || ''
+      
+      // Include paste preview in draft when switching
+      const currentPastePreview = pastePreviews.value.get(currentChatId.value)
+      if (currentPastePreview?.show && currentPastePreview.content) {
+        currentDraft += currentPastePreview.content
+      }
+      
+      if (currentDraft.trim().length === 0) {
+        chatDrafts.value.delete(currentChatId.value)
+        pastePreviews.value.delete(currentChatId.value)
+      } else {
+        chatDrafts.value.set(currentChatId.value, currentDraft)
+      }
+      saveChatDrafts()
+    }
 
     currentChatId.value = chatId
     updateExpandedArray()
@@ -654,8 +894,15 @@ function switchToChat(chatId: string) {
       console.error('Failed to save current chat ID:', error)
     }
 
-    // Scroll to bottom after chat switch with proper timing
+    // Load draft for new chat and handle paste preview content
     nextTick(() => {
+      loadChatDrafts() // This will handle both normal and paste preview content
+      
+      const textarea = document.getElementById('prompt') as HTMLTextAreaElement
+      if (textarea) {
+        textarea.focus()
+      }
+
       setTimeout(() => {
         scrollToBottom()
       }, 100)
@@ -720,6 +967,7 @@ function deleteChat(chatId: string) {
             updateExpandedArray()
           }
 
+          clearCurrentDraft()
           saveChats()
           toast.success('Chat deleted', {
             duration: 3000,
@@ -873,8 +1121,12 @@ function clearAllChats() {
           expanded.value = []
           linkPreviewCache.value.clear()
 
+          // Clear all drafts
+          chatDrafts.value.clear()
+          saveChatDrafts()
+
           // Clear storage
-          const keysToRemove = ['chats', 'currentChatId', 'linkPreviews']
+          const keysToRemove = ['chats', 'currentChatId', 'linkPreviews', 'chatDrafts']
           keysToRemove.forEach(key => {
             try {
               localStorage.removeItem(key)
@@ -2153,6 +2405,10 @@ onMounted(async () => {
 })
 
 onMounted(() => {
+  if(currentChatId.value){
+    loadChatDrafts()
+  }
+
   // Initial connection check
   checkInternetConnection().then(isOnline => {
     console.log(`Initial connection check: ${isOnline ? 'Online' : 'Offline'}`)
@@ -2182,9 +2438,12 @@ onUnmounted(() => {
     value => value && typeof value === 'object' && 'refresh' in value
   )
   intervals.forEach(interval => clearInterval(interval as any))
-})
-
-onUnmounted(() => {
+  
+  // Cleanup draft timeout
+  if (draftSaveTimeout) {
+    clearTimeout(draftSaveTimeout)
+  }
+  
   // Only cleanup auto-sync if user is logging out
   if (!isAuthenticated.value) {
     cleanupAutoSync()
@@ -2194,6 +2453,8 @@ onUnmounted(() => {
 // Global state object with all functions and reactive references
 const globalState = {
   // Reactive references
+  chatDrafts,
+  pastePreviews,
   screenWidth,
   confirmDialog,
   isCollapsed,
@@ -2234,6 +2495,10 @@ const globalState = {
   renameChat,
   deleteMessage,
   clearAllChats,
+  loadChatDrafts,
+  clearCurrentDraft,
+  saveChatDrafts,
+  autoSaveDraft,
 
   // UI functions
   toggleTheme,
@@ -2243,6 +2508,7 @@ const globalState = {
   toggleSidebar,
   toggleChatMenu,
   handleClickOutside,
+  autoGrow,
 
   // Data persistence functions
   saveChats,

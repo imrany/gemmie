@@ -220,6 +220,10 @@ html {
 }
 
 /* ==================== SCROLLBARS ==================== */
+.scroll-container {
+  overflow-anchor: none; /* Prevent browser auto-scroll behaviors */
+  scroll-behavior: smooth;
+}
 .scrollbar-hidden, .no-scrollbar {
   -ms-overflow-style: none; /* Internet Explorer 10+ */
   scrollbar-width: none; /* Firefox */
