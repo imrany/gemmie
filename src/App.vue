@@ -1688,7 +1688,9 @@ async function handleAuth(data: {
       duration: response.data.duration || "",
       price: response.data.price || 0,
       expiry_timestamp: response.data.expiry_timestamp || null,
-      expire_duration: response.data.expire_duration || ""
+      expire_duration: response.data.expire_duration || "",
+      email_verified:   response.email_verified || false,
+			email_subscribed: response.email_subscribed || true,
     }
 
     localStorage.setItem('userdetails', JSON.stringify(userData))
