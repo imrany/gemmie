@@ -46,7 +46,6 @@ type User struct {
 	Price        string    `json:"price,omitempty"`
 	AgreeToTerms bool      `json:"agree_to_terms"`
 	
-	// NEW FIELDS: Email management
 	EmailVerified   bool      `json:"email_verified"`      // Whether email is verified
 	EmailSubscribed bool      `json:"email_subscribed"`    // Whether user subscribed to promotional emails
 	VerificationToken string  `json:"verification_token,omitempty"` // Token for email verification

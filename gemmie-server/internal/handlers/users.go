@@ -54,6 +54,8 @@ type SyncRequest struct {
 	ExpireDuration  int64  `json:"expire_duration,omitempty"`
 	Price           string `json:"price,omitempty"`
 	ExternalReference string `json:"external_reference,omitempty"` // For payment tracking
+	EmailVerified   bool      `json:"email_verified"`      // Whether email is verified
+	EmailSubscribed bool      `json:"email_subscribed"`    // Whether user subscribed to promotional emails
 }
 
 // Update AuthResponse struct
@@ -303,6 +305,8 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 			Price:         user.Price,
 			ExpiryTimestamp: user.ExpiryTimestamp,
 			ExpireDuration:  user.ExpireDuration,
+			EmailVerified: user.EmailVerified,
+			EmailSubscribed: user.EmailSubscribed,
 		},
 	})
 }
@@ -335,7 +339,7 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !req.AgreeToTerms{
+	if !req.AgreeToTerms {
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
@@ -369,17 +373,28 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	// Get user data
 	store.Storage.Mu.RLock()
 	userData, hasData := store.Storage.UserData[user.ID]
-	existingUser :=store.Storage.Users[user.ID]
+	existingUser := store.Storage.Users[user.ID]
 	store.Storage.Mu.RUnlock()
 
-	if !existingUser.AgreeToTerms {
+	//Use the existingUser we already have, don't get a fresh copy
+	if existingUser.AgreeToTerms != req.AgreeToTerms {
 		store.Storage.Mu.Lock()
-		existingUser.AgreeToTerms = req.AgreeToTerms
+		// Update the existingUser we already checked (not a fresh copy)
+		updatedUser := existingUser // Use the user we already have
+		updatedUser.AgreeToTerms = req.AgreeToTerms
+		updatedUser.UpdatedAt = time.Now()
+		store.Storage.Users[user.ID] = updatedUser // Update map
 		store.Storage.Mu.Unlock()
 		
-		store.SaveStorage()
+		if err := store.SaveStorage(); err != nil {
+			slog.Error("Failed to save storage after terms update",
+				"user_id", user.ID,
+				"error", err,
+			)
+		}
+		
+		user = &updatedUser 
 	}
-
 
 	if !hasData {
 		// Create empty user data if doesn't exist
@@ -395,10 +410,15 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 		store.Storage.UserData[user.ID] = userData
 		store.Storage.Mu.Unlock()
 		
-		store.SaveStorage()
+		if err := store.SaveStorage(); err != nil {
+			slog.Error("Failed to save storage after user data creation",
+				"user_id", user.ID,
+				"error", err,
+			)
+		}
 	}
 
-	// Return response with user data - FIXED consistent naming
+	// Return response with user data
 	json.NewEncoder(w).Encode(store.Response{
 		Success: true,
 		Message: "Login successful",
@@ -418,10 +438,12 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 			PlanName:        user.PlanName,
 			Amount:          user.Amount,
 			Duration:        user.Duration,
-			PhoneNumber:     user.PhoneNumber,     // Consistent naming
+			PhoneNumber:     user.PhoneNumber,
 			ExpiryTimestamp: user.ExpiryTimestamp,
 			ExpireDuration:  user.ExpireDuration,
 			Price:           user.Price,
+			EmailVerified:   user.EmailVerified,
+			EmailSubscribed: user.EmailSubscribed,
 		},
 	})
 }
@@ -492,6 +514,8 @@ func SyncHandler(w http.ResponseWriter, r *http.Request) {
 				"expiry_timestamp":  user.ExpiryTimestamp,
 				"expire_duration":   user.ExpireDuration,
 				"price":             user.Price,
+				"email_verified": user.EmailVerified,
+				"email_subscribed": user.EmailSubscribed,
 			},
 		})
 
@@ -580,6 +604,12 @@ func SyncHandler(w http.ResponseWriter, r *http.Request) {
 			}
 			if req.Price != "" {
 				existingUser.Price = req.Price
+			}
+			if req.EmailVerified != existingUser.EmailVerified {
+				existingUser.EmailVerified = req.EmailVerified
+			}
+			if req.EmailSubscribed != existingUser.EmailSubscribed {
+				existingUser.EmailSubscribed = req.EmailSubscribed
 			}
 			// Always update the timestamp
 			existingUser.UpdatedAt = time.Now()
