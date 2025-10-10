@@ -159,7 +159,7 @@ func runServer() {
 	r.HandleFunc("/unsubscribe", v1.UnsubscribeHandler).Methods(http.MethodGet, http.MethodPost)
 	
 	// Resubscribe to promotional emails (requires authentication)
-	r.HandleFunc("/resubscribe", v1.ResubscribeHandler).Methods(http.MethodPost)
+	r.HandleFunc("/resubscribe", v1.ResubscribeHandler).Methods(http.MethodGet, http.MethodPost)
 	
 	// Update email subscription preference (requires authentication)
 	r.HandleFunc("/api/email-subscription", v1.UpdateEmailSubscriptionHandler).Methods(http.MethodPut)

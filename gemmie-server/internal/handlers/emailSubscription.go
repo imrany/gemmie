@@ -83,8 +83,8 @@ func UnsubscribeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verify token (can be user ID or unsubscribe token)
-	if req.Token != user.ID && req.Token != user.UnsubscribeToken {
+	// Verify token (unsubscribe token)
+	if req.Token != user.UnsubscribeToken {
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
@@ -105,6 +105,7 @@ func UnsubscribeHandler(w http.ResponseWriter, r *http.Request) {
 	// Update subscription status
 	store.Storage.Mu.Lock()
 	user.EmailSubscribed = false
+	user.EmailVerified = true
 	user.UpdatedAt = time.Now()
 	store.Storage.Users[user.ID] = *user
 	store.Storage.Mu.Unlock()
@@ -133,29 +134,29 @@ func UnsubscribeHandler(w http.ResponseWriter, r *http.Request) {
 		// For email links, return HTML page
 		w.Header().Set("Content-Type", "text/html")
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprintf(w, `
+		fmt.Fprintf(w, `%s`, `
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Unsubscribed</title>
-    <style>
-        body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; text-align: center; }
-        .success { color: #5cb85c; font-size: 48px; }
-        h1 { color: #333; }
-        p { color: #666; line-height: 1.6; }
-        .resubscribe { margin-top: 30px; }
-        .button { display: inline-block; background: #667eea; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; margin-top: 10px; }
-    </style>
+	<title>Unsubscribed</title>
+	<style>
+		body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; text-align: center; }
+		.success { color: #5cb85c; font-size: 48px; }
+		h1 { color: #333; }
+		p { color: #666; line-height: 1.6; }
+		.resubscribe { margin-top: 30px; }
+		.button { display: inline-block; background: #667eea; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; margin-top: 10px; }
+	</style>
 </head>
 <body>
-    <div class="success">✓</div>
-    <h1>Successfully Unsubscribed</h1>
-    <p>You have been unsubscribed from Gemmie promotional emails.</p>
-    <p>You will no longer receive upgrade notifications and marketing emails.</p>
-    <div class="resubscribe">
-        <p>Changed your mind?</p>
-        <a href="https://gemmie-ai.web.app/settings" class="button">Manage Email Preferences</a>
-    </div>
+	<div class="success">✓</div>
+	<h1>Successfully Unsubscribed</h1>
+	<p>You have been unsubscribed from Gemmie promotional emails.</p>
+	<p>You will no longer receive upgrade notifications and marketing emails.</p>
+	<div class="resubscribe">
+		<p>Changed your mind?</p>
+		<a href="https://gemmie.villebz.com/resubscribe?email=` + user.Email + `&token=` + user.UnsubscribeToken + `" class="button">Click here to resubscribe</a>
+	</div>
 </body>
 </html>
 		`)
@@ -172,7 +173,27 @@ func UnsubscribeHandler(w http.ResponseWriter, r *http.Request) {
 func ResubscribeHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	if r.Method != http.MethodPost {
+	var req struct {
+		Email string `json:"email"`
+		Token string `json:"token"`
+	}
+
+	switch r.Method {
+	case http.MethodPost:
+		// Handle JSON body for API calls
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(store.Response{
+				Success: false,
+				Message: "Invalid request body",
+			})
+			return
+		}
+	case http.MethodGet:
+		// Handle query parameters for email links
+		req.Email = r.URL.Query().Get("email")
+		req.Token = r.URL.Query().Get("token")
+	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
@@ -181,27 +202,50 @@ func ResubscribeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get user ID from header
-	userID := r.Header.Get("X-User-ID")
-	if userID == "" {
-		w.WriteHeader(http.StatusUnauthorized)
+	// Validate inputs
+	req.Email = sanitizeString(req.Email)
+	req.Token = sanitizeString(req.Token)
+
+	if req.Email == "" || req.Token == "" {
+		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
-			Message: "User ID header required",
+			Message: "Email and token are required",
 		})
 		return
 	}
 
-	// Verify user exists
+	// Find user by email
+	var userID string
+	var user store.User
+	var userFound bool
+
 	store.Storage.Mu.RLock()
-	user, userExists := store.Storage.Users[userID]
+	for id, u := range store.Storage.Users {
+		if u.Email == req.Email {
+			userID = id
+			user = u
+			userFound = true
+			break
+		}
+	}
 	store.Storage.Mu.RUnlock()
 
-	if !userExists {
+	if !userFound {
 		w.WriteHeader(http.StatusNotFound)
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
 			Message: "User not found",
+		})
+		return
+	}
+
+	// Verify unsubscribe token matches
+	if user.UnsubscribeToken != req.Token {
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(store.Response{
+			Success: false,
+			Message: "Invalid or expired token",
 		})
 		return
 	}
@@ -226,6 +270,7 @@ func ResubscribeHandler(w http.ResponseWriter, r *http.Request) {
 	if err := store.SaveStorage(); err != nil {
 		slog.Error("Failed to save storage after resubscribe",
 			"user_id", userID,
+			"email", req.Email,
 			"error", err,
 		)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -238,13 +283,42 @@ func ResubscribeHandler(w http.ResponseWriter, r *http.Request) {
 
 	slog.Info("User resubscribed to promotional emails",
 		"user_id", userID,
-		"email", user.Email,
+		"email", req.Email,
 	)
 
-	json.NewEncoder(w).Encode(store.Response{
-		Success: true,
-		Message: "Successfully resubscribed to promotional emails",
-	})
+	// Return appropriate response based on method
+	if r.Method == http.MethodGet {
+		// For email links, return HTML page
+		w.Header().Set("Content-Type", "text/html")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintf(w, `
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Resubscribed</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; text-align: center; }
+        .success { color: #5cb85c; font-size: 48px; }
+        h1 { color: #333; }
+        p { color: #666; line-height: 1.6; }
+    </style>
+</head>
+<body>
+    <div class="success">✓</div>
+    <h1>Successfully Resubscribed</h1>
+    <p>You have been resubscribed to Gemmie promotional emails.</p>
+    <p>You will now receive upgrade notifications and marketing emails.</p>
+    <p><a href="https://gemmie-ai.web.app">Return to Gemmie</a></p>
+</body>
+</html>
+		`)
+	} else {
+		// For API calls, return JSON
+		json.NewEncoder(w).Encode(store.Response{
+			Success: true,
+			Message: "Successfully resubscribed to promotional emails",
+		})
+	}
 }
 
 // UpdateEmailSubscriptionHandler updates user's email subscription preference
@@ -451,9 +525,10 @@ func VerifyEmailHandler(w http.ResponseWriter, r *http.Request) {
 	// Support both GET (from email link) and POST (from API)
 	var token string
 
-	if r.Method == http.MethodGet {
+	switch r.Method {
+	case http.MethodGet:
 		token = r.URL.Query().Get("token")
-	} else if r.Method == http.MethodPost {
+	case http.MethodPost:
 		var req VerifyEmailRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			w.WriteHeader(http.StatusBadRequest)
@@ -464,7 +539,7 @@ func VerifyEmailHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		token = req.Token
-	} else {
+	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,

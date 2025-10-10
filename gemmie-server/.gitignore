@@ -3,5 +3,6 @@ bin/
 
 gemmie_data.json
 gemmie_data.json.backup
+gemmie_data.backup.json
 
 prod-docker-compose.yaml

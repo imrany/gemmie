@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -18,10 +19,10 @@ type Response struct {
 }
 
 type StorageType struct {
-	Users        map[string]User                 `json:"users"`         // key: user_id
-	UserData     map[string]UserData             `json:"user_data"`     // key: user_id
+	Users        map[string]User        `json:"users"`         // key: user_id
+	UserData     map[string]UserData    `json:"user_data"`     // key: user_id
 	Transactions map[string]Transaction `json:"transactions"` // key: transaction_id
-	Mu           sync.RWMutex                    `json:"-"`
+	Mu           sync.RWMutex           `json:"-"`
 }
 
 type User struct {
@@ -35,8 +36,8 @@ type User struct {
 	WorkFunction string    `json:"work_function,omitempty"`
 	Theme        string    `json:"theme,omitempty"`
 	SyncEnabled  bool      `json:"sync_enabled"`
-	Plan 	     string    `json:"plan,omitempty"`
-	PlanName	 string    `json:"plan_name,omitempty"`
+	Plan         string    `json:"plan,omitempty"`
+	PlanName     string    `json:"plan_name,omitempty"`
 	Amount       int       `json:"amount,omitempty"`
 	Duration     string    `json:"duration,omitempty"`
 	PhoneNumber  string    `json:"phone_number,omitempty"`
@@ -120,35 +121,51 @@ func loadStorage() {
 
 	if err := json.Unmarshal(data, Storage); err != nil {
 		slog.Error("Error unmarshaling storage data", "error", err)
-		Storage = &StorageType{
-			Users:        make(map[string]User),
-			UserData:     make(map[string]UserData),
-			Transactions: make(map[string]Transaction),
-			Mu:           sync.RWMutex{},
+		// Create backup of corrupted file
+		backupFile := storageFile + ".corrupted." + time.Now().Format("20060102_150405")
+		if err := os.WriteFile(backupFile, data, 0644); err != nil {
+			slog.Error("Failed to create backup of corrupted file", "error", err)
 		}
-
-		slog.Warn("Storage reset due to unmarshaling error")
+		
+		// Reset storage to empty state
+		Storage.Users = make(map[string]User)
+		Storage.UserData = make(map[string]UserData)
+		Storage.Transactions = make(map[string]Transaction)
+		
+		slog.Warn("Storage reset due to unmarshaling error, backup created", "backup", backupFile)
 		return
 	}
 
 	// Migration: Set default values for new fields for existing users
 	needsSave := false
 	for userID, user := range Storage.Users {
-		if user.UnsubscribeToken == "" {
+		// Check if this user needs migration
+		if user.UnsubscribeToken == "" || !user.EmailSubscribed {
+			slog.Debug("Migrating user", "user_id", userID, "email", user.Email)
+			
 			// Generate unsubscribe token for existing users
-			user.UnsubscribeToken = encrypt.GenerateUnsubscribeToken(userID)
-			// Default: subscribed to emails
-			user.EmailSubscribed = true
-			// Default: email not verified (will be true after they verify)
-			user.EmailVerified = false
+			if user.UnsubscribeToken == "" {
+				user.UnsubscribeToken = encrypt.GenerateUnsubscribeToken(userID)
+			}
+			
+			// Default: subscribed to emails (if not already set)
+			if !user.EmailSubscribed {
+				user.EmailSubscribed = true
+			}
+			
+			// Ensure email verification status is explicit
+			// (keep existing value if already set)
+			
 			Storage.Users[userID] = user
 			needsSave = true
 		}
 	}
 
 	if needsSave {
-		slog.Info("Migrating existing users with new email fields")
-		SaveStorage()
+		slog.Info("Migrated users with new email fields", "count", len(Storage.Users))
+		if err := saveStorageInternal(); err != nil {
+			slog.Error("Failed to save storage after migration", "error", err)
+		}
 	}
 
 	slog.Info("Storage loaded",
@@ -158,9 +175,12 @@ func loadStorage() {
 	)
 }
 
-func SaveStorage() error {
-	Storage.Mu.Lock()
-	defer Storage.Mu.Unlock()
+// Helper function to save without acquiring lock (caller must hold lock)
+func saveStorageInternal() error {
+	// Create backup before saving
+	if err := createBackup(); err != nil {
+		slog.Warn("Failed to create backup", "error", err)
+	}
 
 	data, err := json.MarshalIndent(Storage, "", "  ")
 	if err != nil {
@@ -168,11 +188,45 @@ func SaveStorage() error {
 		return err
 	}
 
-	if err := os.WriteFile(storageFile, data, 0644); err != nil {
-		slog.Error("Error writing storage file", "error", err)
+	// Write to temporary file first for atomic operation
+	tempFile := storageFile + ".tmp"
+	if err := os.WriteFile(tempFile, data, 0644); err != nil {
+		slog.Error("Error writing temporary storage file", "error", err)
+		return err
+	}
+
+	// Atomically replace the old file
+	if err := os.Rename(tempFile, storageFile); err != nil {
+		slog.Error("Error replacing storage file", "error", err)
 		return err
 	}
 
 	slog.Debug("Storage saved", "path", storageFile)
 	return nil
+}
+
+// createBackup creates a backup of the current storage file
+func createBackup() error {
+	if _, err := os.Stat(storageFile); os.IsNotExist(err) {
+		return nil // No file to backup
+	}
+
+	// Use filepath to safely handle file extensions
+	ext := filepath.Ext(storageFile)
+	base := storageFile[:len(storageFile)-len(ext)]
+	backupFile := base + ".backup" + ext
+
+	data, err := os.ReadFile(storageFile)
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(backupFile, data, 0644)
+}
+
+func SaveStorage() error {
+	Storage.Mu.Lock()
+	defer Storage.Mu.Unlock()
+
+	return saveStorageInternal()
 }
