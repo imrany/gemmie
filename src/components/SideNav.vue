@@ -12,6 +12,17 @@ const globalState = inject('globalState') as {
   handleClickOutside: () => void,
   isAuthenticated: Ref<boolean>,
   planStatus: Ref<{ status: string; timeLeft: string; expiryDate: string; isExpired: boolean; }>,
+  syncStatus: Ref<{ 
+    lastSync: Date | null; 
+    syncing: boolean; 
+    hasUnsyncedChanges: boolean;
+    showSyncIndicator: boolean;
+    syncMessage: string;
+    syncProgress: number;
+    lastError: string | null;
+    retryCount: number;
+    maxRetries: number;
+  }>,
 }
 const {
   activeChatMenu,
@@ -20,6 +31,7 @@ const {
   handleClickOutside,
   isAuthenticated,
   planStatus,
+  syncStatus,
 } = globalState
 
 const props = defineProps<{
@@ -35,7 +47,6 @@ const props = defineProps<{
       expiry_timestamp?: number
     }
     screenWidth: number,
-    syncStatus: any
   }
   functions: {
     setShowInput: () => void
@@ -236,17 +247,17 @@ function handleChatClick(chatId: string) {
         <div v-if="isAuthenticated">
           <!-- Sync button -->
           <button title="Sync Data" @click="props.functions.manualSync"
-            :disabled="props.data.syncStatus.syncing || !props.data.parsedUserDetails.sync_enabled"
+            :disabled="syncStatus.syncing || !props.data.parsedUserDetails.sync_enabled"
             class="w-full flex items-center gap-2 h-[40px] hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg px-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
             <i :class="[
-              props.data.syncStatus.syncing ? 'pi pi-spin pi-spinner' : 'pi pi-refresh',
+              syncStatus.syncing ? 'pi pi-spin pi-spinner' : 'pi pi-refresh',
               'dark:text-gray-400'
             ]"></i>
             <span v-if="!props.data.isCollapsed || props.data.screenWidth < 720" class="dark:text-gray-200">
-              {{ props.data.syncStatus.syncing ? 'Syncing...' : 'Sync Data' }}
+              {{ syncStatus.syncing ? 'Syncing...' : 'Sync Data' }}
             </span>
             <div
-              v-if="props.data.syncStatus.hasUnsyncedChanges && props.data.parsedUserDetails.sync_enabled && (!props.data.isCollapsed || props.data.screenWidth < 720)"
+              v-if="syncStatus.hasUnsyncedChanges && props.data.parsedUserDetails.sync_enabled && (!props.data.isCollapsed || props.data.screenWidth < 720)"
               class="ml-auto w-2 h-2 bg-orange-500 dark:bg-orange-400 rounded-full"></div>
           </button>
 

@@ -4,9 +4,20 @@ import type { Ref } from 'vue';
 import { inject } from 'vue';
 
 const globalState= inject('globalState') as {
-  isAuthenticated: Ref<boolean>
+  isAuthenticated: Ref<boolean>,
+  syncStatus: Ref<{ 
+    lastSync: Date | null; 
+    syncing: boolean; 
+    hasUnsyncedChanges: boolean;
+    showSyncIndicator: boolean;
+    syncMessage: string;
+    syncProgress: number;
+    lastError: string | null;
+    retryCount: number;
+    maxRetries: number;
+  }>,
 }
-const { isAuthenticated }= globalState
+const { isAuthenticated, syncStatus }= globalState
 let props = defineProps<{
   data: {
     isCollapsed?: boolean
@@ -14,7 +25,6 @@ let props = defineProps<{
     currentChat: CurrentChat | undefined
     screenWidth: number
     isSidebarHidden?: boolean
-    syncStatus: any,
     chat?:Chat,
   }
   functions: {
@@ -45,20 +55,20 @@ let props = defineProps<{
       <!-- Mobile Sidebar Toggle -->
       <div v-if="props.data.screenWidth < 720" class="flex gap-2 items-center ml-auto">
         <div v-if="isAuthenticated" class="relative">
-          <div v-if="props.data.syncStatus.syncing"
+          <div v-if="syncStatus.syncing"
             class="flex items-center gap-2 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 px-3 py-1.5 rounded-full text-xs border border-blue-200 dark:border-blue-800 shadow-sm animate-pulse">
             <i class="pi pi-spin pi-spinner"></i>
             <span>Syncing...</span>
           </div>
 
-          <div v-else-if="props.data.syncStatus.hasUnsyncedChanges"
+          <div v-else-if="syncStatus.hasUnsyncedChanges"
             class="flex items-center gap-2 bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-400 px-3 py-1.5 rounded-full text-xs border border-orange-200 dark:border-orange-800 shadow-sm cursor-pointer hover:bg-orange-100 dark:hover:bg-orange-900/30 transition"
             @click="props.functions.manualSync">
             <i class="pi pi-cloud-upload"></i>
             <span>Sync pending</span>
           </div>
 
-          <div v-else-if="props.data.syncStatus.lastSync"
+          <div v-else-if="syncStatus.lastSync"
             class="flex items-center gap-2 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 px-3 py-1.5 rounded-full text-xs border border-green-200 dark:border-green-800 shadow-sm">
             <i class="pi pi-check-circle"></i>
             <span>Synced</span>
@@ -75,20 +85,20 @@ let props = defineProps<{
       <div v-else class="flex gap-3 items-center ml-auto">
         <!-- Sync Status -->
         <div v-if="isAuthenticated" class="relative">
-          <div v-if="props.data.syncStatus.syncing"
+          <div v-if="syncStatus.syncing"
             class="flex items-center gap-2 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 px-3 py-1.5 rounded-full text-xs border border-blue-200 dark:border-blue-800 shadow-sm animate-pulse">
             <i class="pi pi-spin pi-spinner"></i>
             <span>Syncing...</span>
           </div>
 
-          <div v-else-if="props.data.syncStatus.hasUnsyncedChanges"
+          <div v-else-if="syncStatus.hasUnsyncedChanges"
             class="flex items-center gap-2 bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-400 px-3 py-1.5 rounded-full text-xs border border-orange-200 dark:border-orange-800 shadow-sm cursor-pointer hover:bg-orange-100 dark:hover:bg-orange-900/30 transition"
             @click="props.functions.manualSync">
             <i class="pi pi-cloud-upload"></i>
             <span>Sync pending</span>
           </div>
 
-          <div v-else-if="props.data.syncStatus.lastSync"
+          <div v-else-if="syncStatus.lastSync"
             class="flex items-center gap-2 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 px-3 py-1.5 rounded-full text-xs border border-green-200 dark:border-green-800 shadow-sm">
             <i class="pi pi-check-circle"></i>
             <span>Synced</span>

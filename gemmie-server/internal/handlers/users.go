@@ -35,7 +35,7 @@ type RegisterRequest struct {
 	AgreeToTerms bool		`json:"agree_to_terms"`
 }
 
-// SyncRequest represents data sync request - FIXED field naming consistency
+// SyncRequest represents data sync request
 type SyncRequest struct {
 	Chats           string `json:"chats"`
 	LinkPreviews    string `json:"link_previews"`
@@ -47,6 +47,7 @@ type SyncRequest struct {
 	Username        string `json:"username"`
 	Plan            string `json:"plan,omitempty"`
 	PlanName        string `json:"plan_name,omitempty"`
+	ResponseMode store.Modes    `json:"response_mode,omitempty"`
 	Amount          int    `json:"amount,omitempty"`
 	Duration        string `json:"duration,omitempty"`
 	PhoneNumber     string `json:"phone_number,omitempty"`     // Consistent naming
@@ -74,6 +75,7 @@ type AuthResponse struct {
 	Plan            string    `json:"plan,omitempty"`
 	PlanName        string    `json:"plan_name,omitempty"`
 	Amount          int       `json:"amount,omitempty"`
+	ResponseMode store.Modes    `json:"response_mode,omitempty"`
 	Duration        string    `json:"duration,omitempty"`
 	PhoneNumber     string    `json:"phone_number,omitempty"`
 	ExpiryTimestamp int64     `json:"expiry_timestamp,omitempty"`
@@ -89,6 +91,7 @@ type ProfileUpdateRequest struct {
 	Preferences  string `json:"preferences,omitempty"`
 	Theme        string `json:"theme,omitempty"`
 	SyncEnabled  *bool  `json:"sync_enabled,omitempty"` // Pointer to handle explicit false
+	ResponseMode store.Modes    `json:"response_mode,omitempty"`
 	PhoneNumber  string `json:"phone_number,omitempty"`  // Added phone number support
 }
 
@@ -246,6 +249,7 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		ExpiryTimestamp: 0,
 		ExpireDuration:  0,
 		Price:           "",
+		ResponseMode: "light-response",
 		AgreeToTerms:    req.AgreeToTerms,
 		
 		EmailVerified:       false,  // Will be verified after clicking link
@@ -303,6 +307,7 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 			Amount:        user.Amount,
 			Duration:      user.Duration,
 			Price:         user.Price,
+			ResponseMode: user.ResponseMode,
 			ExpiryTimestamp: user.ExpiryTimestamp,
 			ExpireDuration:  user.ExpireDuration,
 			EmailVerified: user.EmailVerified,
@@ -442,6 +447,7 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 			ExpiryTimestamp: user.ExpiryTimestamp,
 			ExpireDuration:  user.ExpireDuration,
 			Price:           user.Price,
+			ResponseMode: user.ResponseMode,
 			EmailVerified:   user.EmailVerified,
 			EmailSubscribed: user.EmailSubscribed,
 		},
@@ -514,6 +520,7 @@ func SyncHandler(w http.ResponseWriter, r *http.Request) {
 				"expiry_timestamp":  user.ExpiryTimestamp,
 				"expire_duration":   user.ExpireDuration,
 				"price":             user.Price,
+				"response_mode":     user.ResponseMode,
 				"email_verified": user.EmailVerified,
 				"email_subscribed": user.EmailSubscribed,
 			},
@@ -604,6 +611,9 @@ func SyncHandler(w http.ResponseWriter, r *http.Request) {
 			}
 			if req.Price != "" {
 				existingUser.Price = req.Price
+			}
+			if req.ResponseMode != existingUser.ResponseMode {
+				existingUser.ResponseMode = req.ResponseMode
 			}
 			if req.EmailVerified != existingUser.EmailVerified {
 				existingUser.EmailVerified = req.EmailVerified
@@ -796,6 +806,10 @@ func HealthHandler(w http.ResponseWriter, r *http.Request) {
 	transactionCount := len(store.Storage.Transactions)
 	store.Storage.Mu.RUnlock()
 
+	version := "unknown"
+	if v := store.GetVersion(); v != "" {
+		version = v
+	}
 	json.NewEncoder(w).Encode(store.Response{
 		Success: true,
 		Message: "Server is healthy",
@@ -803,7 +817,7 @@ func HealthHandler(w http.ResponseWriter, r *http.Request) {
 			"timestamp":         time.Now(),
 			"user_count":        userCount,
 			"transaction_count": transactionCount,
-			"version":           "1.0.0", // Add version info
+			"version":           version,
 		},
 	})
 }
