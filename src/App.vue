@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, provide, ref, type ComputedRef } from 'vue';
+import { computed, onMounted, onUnmounted, provide, ref, watch, type ComputedRef } from 'vue';
 import { toast, Toaster } from 'vue-sonner'
 import 'vue-sonner/style.css'
 import type { Chat, ConfirmDialogOptions, CurrentChat, LinkPreview } from './types';
@@ -17,7 +17,7 @@ const currentTheme = ref<Theme | any>("system")
 const scrollableElem = ref<HTMLElement | null>(null)
 const showScrollDownButton = ref(false)
 const activeRequests = ref<Map<string, AbortController>>(new Map())
-const requestChatMap = ref<Map<string, string>>(new Map()) // requestId -> chatId
+const requestChatMap = ref<Map<string, string>>(new Map())
 const pendingResponses = ref<Map<string, { prompt: string; chatId: string }>>(new Map())
 const chatDrafts = ref<Map<string, string>>(new Map())
 const pastePreviews = ref<Map<string, {
@@ -26,10 +26,6 @@ const pastePreviews = ref<Map<string, {
   charCount: number;
   show: boolean;
 }>>(new Map())
-
-const currentPastePreview = computed(() => {
-  return pastePreviews.value.get(currentChatId.value) || null
-})
 
 const confirmDialog = ref<ConfirmDialogOptions>({
   visible: false,
@@ -50,60 +46,56 @@ const authData = ref({
   agreeToTerms: false
 })
 
-// sync status with retry mechanism
 const syncStatus = ref({
   lastSync: null as Date | null,
   syncing: false,
   hasUnsyncedChanges: false,
   lastError: null as string | null,
   retryCount: 0,
-  maxRetries: 3
+  maxRetries: 3,
+  showSyncIndicator: false,
+  syncMessage: '',
+  syncProgress: 0
 })
 
-// Current chat computed property
+const syncQueue: Array<{type: string, data?: any}> = []
+let isProcessingSyncQueue = false
+
 const currentChat: ComputedRef<CurrentChat | undefined> = computed(() => {
   return chats.value.find(chat => chat.id === currentChatId.value)
 })
 
-// Current messages computed property
 const currentMessages = computed(() => {
   return currentChat.value?.messages || []
 })
 
-// Link preview cache with better error handling
 const linkPreviewCache = ref<Map<string, LinkPreview>>(new Map())
 
-// load cached link previews with error handling
 function loadLinkPreviewCache() {
   try {
     const cached = localStorage.getItem('linkPreviews')
     if (cached) {
       const parsedCache = JSON.parse(cached)
-      // Validate cache structure
       if (typeof parsedCache === 'object' && parsedCache !== null) {
         linkPreviewCache.value = new Map(Object.entries(parsedCache))
       }
     }
   } catch (error) {
     console.error('Failed to load link preview cache:', error)
-    // Clear corrupted cache
     localStorage.removeItem('linkPreviews')
     linkPreviewCache.value.clear()
-    toast.warning('Link preview cache was corrupted and has been reset')
   }
 }
 
-// save link preview cache with error handling
 function saveLinkPreviewCache() {
   try {
     const cacheObject = Object.fromEntries(linkPreviewCache.value)
     localStorage.setItem('linkPreviews', JSON.stringify(cacheObject))
   } catch (error) {
     console.error('Failed to save link preview cache:', error)
-    // Try to free up space by clearing old previews
     if (linkPreviewCache.value.size > 100) {
       const entries = Array.from(linkPreviewCache.value.entries())
-      const recent = entries.slice(-50) // Keep only 50 most recent
+      const recent = entries.slice(-50)
       linkPreviewCache.value = new Map(recent)
       try {
         const reducedCache = Object.fromEntries(linkPreviewCache.value)
@@ -116,7 +108,6 @@ function saveLinkPreviewCache() {
 }
 
 let userDetails: any = localStorage.getItem("userdetails")
-// Initialize user details reactively with validation
 const parsedUserDetails = ref<any>(
   (() => {
     try {
@@ -131,7 +122,6 @@ const parsedUserDetails = ref<any>(
 
 const syncEnabled = ref(parsedUserDetails.value?.sync_enabled !== false)
 
-// Reactive authentication state with validation
 const isAuthenticated = computed(() => {
   const user = parsedUserDetails.value
   if (!user || typeof user !== 'object') return false
@@ -141,7 +131,6 @@ const isAuthenticated = computed(() => {
     user.username &&
     user.user_id &&
     user.sessionId &&
-    // Validate email format
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(user.email)
   )
 })
@@ -154,6 +143,41 @@ const showInput = ref(false)
 const activeChatMenu = ref<string | null>(null)
 const showProfileMenu = ref(false)
 const now = ref(Date.now())
+
+const localStorageQueue: Array<() => void> = []
+let isWritingToStorage = false
+
+async function queueLocalStorageWrite(key: string, value: string) {
+  return new Promise<void>((resolve) => {
+    localStorageQueue.push(() => {
+      try {
+        localStorage.setItem(key, value)
+        resolve()
+      } catch (error) {
+        console.error(`Failed to write ${key} to localStorage:`, error)
+        resolve() // Resolve anyway to continue queue
+      }
+    })
+    
+    processLocalStorageQueue()
+  })
+}
+
+async function processLocalStorageQueue() {
+  if (isWritingToStorage || localStorageQueue.length === 0) return
+  
+  isWritingToStorage = true
+  
+  while (localStorageQueue.length > 0) {
+    const write = localStorageQueue.shift()
+    if (write) {
+      write()
+      await new Promise(resolve => setTimeout(resolve, 10)) // Small delay
+    }
+  }
+  
+  isWritingToStorage = false
+}
 
 const planStatus = computed(() => {
   if (!parsedUserDetails.value || !parsedUserDetails.value.expiry_timestamp) {
@@ -174,15 +198,14 @@ const planStatus = computed(() => {
   const days = Math.floor(diff / (1000 * 60 * 60 * 24))
   const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
   const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
-  const seconds = Math.floor((diff % (1000 * 60)) / 1000)
 
   let timeLeft = ''
   if (days > 0) {
     timeLeft = `${days}d ${hours}h ${minutes}m`
   } else if (hours > 0) {
-    timeLeft = `${hours}h ${minutes}m ${seconds}s`
+    timeLeft = `${hours}h ${minutes}m`
   } else {
-    timeLeft = `${minutes}m ${seconds}s`
+    timeLeft = `${minutes}m`
   }
 
   const expiryDate = new Date(expiryMs).toLocaleString('en-KE', {
@@ -200,26 +223,40 @@ const planStatus = computed(() => {
 const isFreeUser = computed(() => {
   try {
     if (!parsedUserDetails.value) {
-      return true // Not authenticated, consider as free user
+      return true
     }
 
-    // Check if user has no plan or free plan
     const hasFreePlan = !parsedUserDetails.value.plan ||
       parsedUserDetails.value.plan === 'free' ||
       parsedUserDetails.value.plan === '' ||
       planStatus.value.status === 'no-plan'
 
-    // Check if user's plan has expired
     const planExpired = planStatus.value.isExpired
 
-    // User is considered "free" if they have a free plan OR their paid plan has expired
     return hasFreePlan || planExpired
 
   } catch (error) {
     console.error('Error checking user plan:', error)
-    return true // Default to free user on error
+    return true
   }
 })
+
+function showSyncIndicator(message: string, progress: number = 0) {
+  syncStatus.value.showSyncIndicator = true
+  syncStatus.value.syncMessage = message
+  syncStatus.value.syncProgress = progress
+}
+
+function hideSyncIndicator() {
+  syncStatus.value.showSyncIndicator = false
+  syncStatus.value.syncMessage = ''
+  syncStatus.value.syncProgress = 0
+}
+
+function updateSyncProgress(message: string, progress: number) {
+  syncStatus.value.syncMessage = message
+  syncStatus.value.syncProgress = progress
+}
 
 function showConfirmDialog(options: ConfirmDialogOptions) {
   confirmDialog.value = {
@@ -249,7 +286,6 @@ function showConfirmDialog(options: ConfirmDialogOptions) {
   }
 }
 
-// API call with better error handling and retry logic
 async function apiCall(endpoint: string, options: RequestInit = {}, retryCount = 0): Promise<any> {
   if (!isUserOnline.value) {
     const isActuallyOnline = await checkInternetConnection()
@@ -259,15 +295,13 @@ async function apiCall(endpoint: string, options: RequestInit = {}, retryCount =
   }
 
   const maxRetries = 3
-  const retryDelay = Math.pow(2, retryCount) * 1000 // Exponential backoff
+  const retryDelay = Math.pow(2, retryCount) * 1000
 
   try {
-    // Validate user authentication for protected endpoints
     if (!parsedUserDetails.value?.user_id && !endpoint.includes('/login') && !endpoint.includes('/register')) {
       throw new Error('User not authenticated')
     }
 
-    // Create AbortController for timeout
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 30000)
 
@@ -278,8 +312,7 @@ async function apiCall(endpoint: string, options: RequestInit = {}, retryCount =
         ...(parsedUserDetails.value?.user_id ? { 'X-User-ID': parsedUserDetails.value.user_id } : {}),
         ...options.headers,
       },
-      // Add timeout
-      signal: controller.signal // 30 second timeout
+      signal: controller.signal
     })
 
     clearTimeout(timeoutId)
@@ -294,7 +327,6 @@ async function apiCall(endpoint: string, options: RequestInit = {}, retryCount =
       throw new Error(data.message || 'API request failed')
     }
 
-    // Reset retry count on success
     syncStatus.value.retryCount = 0
     syncStatus.value.lastError = null
 
@@ -302,12 +334,10 @@ async function apiCall(endpoint: string, options: RequestInit = {}, retryCount =
   } catch (error: any) {
     console.error(`API Error on ${endpoint}:`, error)
 
-    // Handle abort/timeout errors
     if (error.name === 'AbortError') {
       throw new Error('Request timeout - please try again')
     }
 
-    // Handle network errors with retry logic
     if ((error.name === 'NetworkError' || error.name === 'TypeError' || error.name === 'TimeoutError') &&
       retryCount < maxRetries) {
       console.log(`Retrying ${endpoint} in ${retryDelay}ms (attempt ${retryCount + 1}/${maxRetries})`)
@@ -316,7 +346,6 @@ async function apiCall(endpoint: string, options: RequestInit = {}, retryCount =
       return apiCall(endpoint, options, retryCount + 1)
     }
 
-    // Update sync status on persistent errors
     if (endpoint.includes('/sync')) {
       syncStatus.value.lastError = error.message
       syncStatus.value.retryCount = retryCount
@@ -326,7 +355,6 @@ async function apiCall(endpoint: string, options: RequestInit = {}, retryCount =
   }
 }
 
-// merge chats function with better validation
 function isValidChat(chat: any): chat is Chat {
   return chat &&
     typeof chat === 'object' &&
@@ -352,14 +380,12 @@ function mergeChats(serverChats: Chat[], localChats: Chat[]): Chat[] {
 
     const merged = new Map<string, Chat>()
 
-    // Validate and add local chats first
     localChats.forEach(chat => {
       if (isValidChat(chat)) {
         merged.set(chat.id, chat)
       }
     })
 
-    // Validate and add server chats (will overwrite local if same ID and server is newer)
     serverChats.forEach(serverChat => {
       if (!isValidChat(serverChat)) return
 
@@ -369,7 +395,6 @@ function mergeChats(serverChats: Chat[], localChats: Chat[]): Chat[] {
       }
     })
 
-    // Sort by updatedAt (most recent first) with error handling
     return Array.from(merged.values()).sort((a, b) => {
       try {
         return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
@@ -383,540 +408,6 @@ function mergeChats(serverChats: Chat[], localChats: Chat[]): Chat[] {
   }
 }
 
-// logout function with proper async handling and error management
-async function logout() {
-  showConfirmDialog({
-    visible: true,
-    title: 'Logout Confirmation',
-    message: 'Are you sure you want to logout? Your unsynced data will be saved locally.',
-    type: 'warning',
-    confirmText: 'Logout',
-    cancelText: 'Cancel',
-    onConfirm: async () => {
-      try {
-        isLoading.value = true
-
-        const syncEnabled = parsedUserDetails.value?.sync_enabled
-        const hasUnsyncedChanges = syncStatus.value.hasUnsyncedChanges
-
-        // Attempt to sync if enabled and has changes
-        if (hasUnsyncedChanges && syncEnabled && !syncStatus.value.syncing) {
-          try {
-            toast.info('Syncing your data before logout...', { duration: 3000 })
-            await syncToServer()
-            toast.success('Data synced successfully')
-          } catch (syncError) {
-            console.error('Sync failed during logout:', syncError)
-            // Continue with logout even if sync fails - data is saved locally
-            toast.warning('Sync failed, but your data is saved locally', {
-              duration: 4000,
-              description: 'You can sync manually after logging back in'
-            })
-          }
-        }
-
-        // Clear auto-sync mechanisms FIRST to prevent any background operations
-        cleanupAutoSync()
-
-        // Store current state for potential recovery before clearing
-        const userBackup = { ...parsedUserDetails.value }
-        const hasChats = chats.value.length > 0
-
-        // Clear application state systematically
-        try {
-          // 1. Clear reactive state
-          chats.value = []
-          currentChatId.value = ''
-          expanded.value = []
-          showInput.value = false
-          isCollapsed.value = false
-
-          // 2. Reset sync status
-          syncStatus.value = {
-            lastSync: null,
-            syncing: false,
-            hasUnsyncedChanges: false,
-            lastError: null,
-            retryCount: 0,
-            maxRetries: 3
-          }
-
-          // 3. Clear authentication state
-          parsedUserDetails.value = null
-
-          // 4. Clear localStorage based on sync preference
-          if (syncEnabled) {
-            // For sync-enabled users, only remove user details
-            // Keep chats and link previews for when they log back in
-            try {
-              localStorage.removeItem('userdetails')
-            } catch (error) {
-              console.error('Failed to remove userdetails from localStorage:', error)
-            }
-          } else {
-            // For non-sync users, clear everything
-            const keysToRemove = ['userdetails', 'chats', 'currentChatId', 'linkPreviews']
-            keysToRemove.forEach(key => {
-              try {
-                localStorage.removeItem(key)
-              } catch (error) {
-                console.error(`Failed to remove ${key} from localStorage:`, error)
-              }
-            })
-            linkPreviewCache.value.clear()
-          }
-
-        } catch (stateError) {
-          console.error('Error clearing application state:', stateError)
-          // Attempt to restore from backup if state clearing failed
-          try {
-            parsedUserDetails.value = userBackup
-            if (!syncEnabled) {
-              loadLocalData()
-            }
-          } catch (restoreError) {
-            console.error('Failed to restore state after logout error:', restoreError)
-          }
-
-          throw new Error('Failed to clear application state during logout')
-        }
-
-        // Show appropriate success message
-        if (syncEnabled) {
-          toast.success('Logged out successfully', {
-            duration: 3000,
-            description: hasUnsyncedChanges
-              ? 'Your data has been synced to the cloud'
-              : 'Ready to log back in anytime'
-          })
-        } else {
-          toast.success('Logged out successfully', {
-            duration: 3000,
-            description: hasChats
-              ? 'Your chats are saved locally on this device'
-              : 'Ready to start fresh when you return'
-          })
-        }
-
-      } catch (error: any) {
-        console.error('Critical error during logout:', error)
-        toast.error('Error during logout process', {
-          duration: 5000,
-          description: 'Some cleanup operations may not have completed. Please refresh the page.'
-        })
-      } finally {
-        isLoading.value = false
-      }
-    },
-    onCancel: () => {
-      // User cancelled logout - ensure sync continues if it was in progress
-      if (syncStatus.value.hasUnsyncedChanges && parsedUserDetails.value?.sync_enabled) {
-        // Resume auto-sync if it was stopped
-        setupAutoSync()
-      }
-    }
-  })
-}
-
-function setShowInput() {
-  if (currentMessages.value.length !== 0) {
-    return
-  }
-  if (!isAuthenticated.value) {
-    toast.warning('Please create a session first', {
-      duration: 3000,
-      description: 'You need to be logged in.'
-    })
-    return
-  }
-  showInput.value = true
-  nextTick(() => {
-    const textarea = document.getElementById("prompt") as HTMLTextAreaElement
-    if (textarea) textarea.focus()
-  })
-}
-
-// update expanded array with validation
-function updateExpandedArray() {
-  try {
-    const messagesLength = currentMessages.value?.length || 0
-    expanded.value = new Array(messagesLength).fill(false)
-  } catch (error) {
-    console.error('Error updating expanded array:', error)
-    expanded.value = []
-  }
-}
-
-// create new chat function with draft handling
-function createNewChat(firstMessage?: string): string {
-  try {
-    const newChatId = generateChatId()
-    const now = new Date().toISOString()
-
-    const newChat: Chat = {
-      id: newChatId,
-      title: firstMessage ? generateChatTitle(firstMessage) : 'New Chat',
-      messages: [],
-      createdAt: now,
-      updatedAt: now
-    }
-
-    // Validate chat data
-    if (!newChat.id || !newChat.title) {
-      throw new Error('Invalid chat data generated')
-    }
-
-    // Clear any active paste preview for current chat before creating new one
-    if (currentChatId.value) {
-      pastePreviews.value.delete(currentChatId.value)
-    }
-
-    // Save current draft before creating new chat
-    if (currentChatId.value) {
-      const textarea = document.getElementById('prompt') as HTMLTextAreaElement
-      const currentDraft = textarea?.value || ''
-      if (currentDraft.trim()) {
-        chatDrafts.value.set(currentChatId.value, currentDraft)
-        saveChatDrafts()
-      }
-    }
-
-    // Clear draft and paste preview for new chat
-    chatDrafts.value.set(newChatId, '')
-    pastePreviews.value.delete(newChatId)
-
-    // Add to beginning of chats array (most recent first)
-    chats.value.unshift(newChat)
-    currentChatId.value = newChatId
-    updateExpandedArray()
-    saveChats()
-
-    // Clear input area for new chat
-    nextTick(() => {
-      const textarea = document.getElementById('prompt') as HTMLTextAreaElement
-      if (textarea) {
-        textarea.value = ''
-        autoGrow({ target: textarea } as any)
-        textarea.focus()
-      }
-    })
-
-    return newChatId
-  } catch (error) {
-    console.error('Error creating new chat:', error)
-    toast.error('Failed to create new chat')
-    return ''
-  }
-}
-
-function scrollToBottom(behavior: ScrollBehavior = 'smooth') {
-  if (!scrollableElem.value) return;
-
-  try {
-    // Use nextTick to ensure DOM is updated
-    nextTick(() => {
-      // Use setTimeout to ensure browser has recalculated layout
-      setTimeout(() => {
-        if (!scrollableElem.value) return;
-        
-        const container = scrollableElem.value;
-        const scrollHeight = container.scrollHeight;
-        const clientHeight = container.clientHeight;
-        
-        // Only scroll if there's actually content to scroll to
-        if (scrollHeight > clientHeight) {
-          container.scrollTo({
-            top: scrollHeight, // Remove the arbitrary +10 offset
-            behavior
-          });
-        }
-
-        // Update button visibility after scrolling with a slight delay
-        setTimeout(() => {
-          handleScroll();
-        }, 150);
-      }, 50);
-    });
-  } catch (error) {
-    console.error('Error scrolling to bottom:', error);
-  }
-}
-
-function handleScroll() {
-  try {
-    const elem = scrollableElem.value;
-    if (!elem) return;
-
-    const scrollTop = elem.scrollTop;
-    const scrollHeight = elem.scrollHeight;
-    const clientHeight = elem.clientHeight;
-    
-    // Calculate actual scroll position
-    const currentScrollPosition = scrollTop + clientHeight;
-    const totalScrollableHeight = scrollHeight;
-    
-    // Use a more accurate threshold (2px for rounding errors)
-    const threshold = 2;
-    const isAtBottom = Math.abs(currentScrollPosition - totalScrollableHeight) <= threshold;
-
-    // Only show button when user has scrolled up AND there's substantial content
-    const hasSubstantialContent = scrollHeight > clientHeight + 100; // Only show if there's >100px of scrollable content
-    showScrollDownButton.value = !isAtBottom && hasSubstantialContent;
-
-  } catch (error) {
-    console.error('Error handling scroll:', error);
-  }
-}
-
-function hideSidebar() {
-  try {
-    const sideNav = document.getElementById("side_nav")
-    if (sideNav) {
-      if (sideNav.classList.contains("none")) {
-        sideNav.classList.add("w-full", "bg-white", "z-30", "fixed", "top-0", "left-0", "bottom-0", "border-r-[1px]", "flex", "flex-col", "transition-all", "duration-300", "ease-in-out")
-      } else {
-        sideNav.classList.remove("w-full", "bg-white", "z-30", "fixed", "top-0", "left-0", "bottom-0", "border-r-[1px]", "flex", "flex-col", "transition-all", "duration-300", "ease-in-out")
-      }
-      sideNav.classList.toggle("none")
-      isSidebarHidden.value = !isSidebarHidden.value
-    }
-  } catch (error) {
-    console.error('Error toggling sidebar:', error)
-  }
-}
-
-function toggleChatMenu(chatId: string, event: Event) {
-  try {
-    event.stopPropagation()
-    activeChatMenu.value = activeChatMenu.value === chatId ? null : chatId
-  } catch (error) {
-    console.error('Error toggling chat menu:', error)
-  }
-}
-
-function autoGrow(e: Event) {
-  const el = e.target as HTMLTextAreaElement
-  const maxHeight = 200
-  el.style.height = "auto"
-  if (el.scrollHeight <= maxHeight) {
-    el.style.height = el.scrollHeight + "px"
-    el.style.overflowY = "hidden"
-  } else {
-    el.style.height = maxHeight + "px"
-    el.style.overflowY = "auto"
-  }
-
-  // Auto-save draft as user types (including paste preview)
-  if (currentChatId.value) {
-    const textarea = document.getElementById('prompt') as HTMLTextAreaElement
-    let currentDraft = textarea?.value || ''
-    
-    // Include paste preview content in draft if it exists
-    const currentPastePreview = pastePreviews.value.get(currentChatId.value)
-    if (currentPastePreview?.show && currentPastePreview.content) {
-      currentDraft += currentPastePreview.content
-    }
-    
-    // Only save if there's actual content
-    if (currentDraft.trim().length > 0) {
-      chatDrafts.value.set(currentChatId.value, currentDraft)
-      saveChatDrafts()
-    } else {
-      // Clear draft if both textarea and paste preview are empty
-      chatDrafts.value.delete(currentChatId.value)
-      saveChatDrafts()
-    }
-  }
-}
-
-// Save drafts and paste previews to localStorage
-function saveChatDrafts() {
-  try {
-    const draftsObject = Object.fromEntries(chatDrafts.value)
-    localStorage.setItem('chatDrafts', JSON.stringify(draftsObject))
-    
-    // Also save paste previews
-    const previewsObject = Object.fromEntries(pastePreviews.value)
-    localStorage.setItem('pastePreviews', JSON.stringify(previewsObject))
-  } catch (error) {
-    console.error('Failed to save chat drafts:', error)
-  }
-}
-
-// Load drafts from localStorage and detect paste content
-function loadChatDrafts() {
-  try {
-    const saved = localStorage.getItem('chatDrafts')
-    if (saved) {
-      const parsedDrafts = JSON.parse(saved)
-      chatDrafts.value = new Map(Object.entries(parsedDrafts))
-    }
-
-    // Load paste previews from localStorage
-    const savedPastePreviews = localStorage.getItem('pastePreviews')
-    if (savedPastePreviews) {
-      const parsedPreviews = JSON.parse(savedPastePreviews)
-      pastePreviews.value = new Map(Object.entries(parsedPreviews))
-    }
-      
-    // Check if current chat has draft that should be shown as paste preview
-    if (currentChatId.value) {
-      const currentDraft = chatDrafts.value.get(currentChatId.value) || ''
-      const currentPastePreview = pastePreviews.value.get(currentChatId.value)
-      
-      if (currentPastePreview && currentPastePreview.show) {
-        // Show existing paste preview for this chat
-        // Textarea should be cleared if we have a paste preview
-        const textarea = document.getElementById('prompt') as HTMLTextAreaElement
-        if (textarea) {
-          // Extract non-paste content from draft
-          const draftWithoutPaste = currentDraft.replace(currentPastePreview.content, '')
-          textarea.value = draftWithoutPaste
-          autoGrow({ target: textarea } as any)
-        }
-      } else if (currentDraft && detectLargePaste(currentDraft)) {
-        // Auto-detect paste content in draft
-        const wordCount = currentDraft.trim().split(/\s+/).filter(word => word.length > 0).length
-        const charCount = currentDraft.length
-        
-        pastePreviews.value.set(currentChatId.value, {
-          content: currentDraft,
-          wordCount,
-          charCount,
-          show: true
-        })
-        
-        // Clear textarea but keep the draft
-        const textarea = document.getElementById('prompt') as HTMLTextAreaElement
-        if (textarea) {
-          textarea.value = ''
-          autoGrow({ target: textarea } as any)
-        }
-      } else {
-        // For normal content, put it in textarea
-        const textarea = document.getElementById('prompt') as HTMLTextAreaElement
-        if (textarea) {
-          textarea.value = currentDraft
-          autoGrow({ target: textarea } as any)
-        }
-        // Clear any paste preview for this chat
-        pastePreviews.value.delete(currentChatId.value)
-      }
-    }
-  } catch (error) {
-    console.error('Failed to load chat drafts:', error)
-  }
-}
-
-// Clear draft for current chat including paste preview
-function clearCurrentDraft() {
-  if (currentChatId.value) {
-    chatDrafts.value.delete(currentChatId.value)
-    pastePreviews.value.delete(currentChatId.value)
-    saveChatDrafts()
-    
-    // Also clear textarea
-    const textarea = document.getElementById('prompt') as HTMLTextAreaElement
-    if (textarea) {
-      textarea.value = ''
-      autoGrow({ target: textarea } as any)
-    }
-  }
-}
-
-// Auto-save draft when user types (debounced)
-let draftSaveTimeout: any = null
-
-function autoSaveDraft() {
-  if (draftSaveTimeout) {
-    clearTimeout(draftSaveTimeout)
-  }
-  
-  draftSaveTimeout = setTimeout(() => {
-    if (currentChatId.value) {
-      const textarea = document.getElementById('prompt') as HTMLTextAreaElement
-      let currentDraft = textarea?.value || ''
-    
-      // If there's a paste preview, use that content
-      const currentPastePreview = pastePreviews.value.get(currentChatId.value)
-      if (currentPastePreview?.show) {
-        currentDraft += currentPastePreview.content
-      }
-      
-      // Only save if there's actual content
-      if (currentDraft.trim().length > 0) {
-        chatDrafts.value.set(currentChatId.value, currentDraft)
-        saveChatDrafts()
-      } else {
-        chatDrafts.value.delete(currentChatId.value)
-        saveChatDrafts()
-      }
-    }
-  }, 1000) // Save after 1 second of inactivity
-}
-
-function switchToChat(chatId: string) {
-  try {
-    if (!chatId || typeof chatId !== 'string') {
-      console.error('Invalid chat ID provided')
-      return
-    }
-
-    const chatExists = chats.value.find(chat => chat.id === chatId)
-    if (!chatExists) {
-      toast.error('Chat not found')
-      return
-    }
-    
-    // Save current draft (including any paste preview) before switching
-    if (currentChatId.value) {
-      const textarea = document.getElementById('prompt') as HTMLTextAreaElement
-      let currentDraft = textarea?.value || ''
-      
-      // Include paste preview in draft when switching
-      const currentPastePreview = pastePreviews.value.get(currentChatId.value)
-      if (currentPastePreview?.show && currentPastePreview.content) {
-        currentDraft += currentPastePreview.content
-      }
-      
-      if (currentDraft.trim().length === 0) {
-        chatDrafts.value.delete(currentChatId.value)
-        pastePreviews.value.delete(currentChatId.value)
-      } else {
-        chatDrafts.value.set(currentChatId.value, currentDraft)
-      }
-      saveChatDrafts()
-    }
-
-    currentChatId.value = chatId
-    updateExpandedArray()
-
-    try {
-      localStorage.setItem('currentChatId', currentChatId.value)
-    } catch (error) {
-      console.error('Failed to save current chat ID:', error)
-    }
-
-    // Load draft for new chat and handle paste preview content
-    nextTick(() => {
-      loadChatDrafts() // This will handle both normal and paste preview content
-      
-      const textarea = document.getElementById('prompt') as HTMLTextAreaElement
-      if (textarea) {
-        textarea.focus()
-      }
-
-      setTimeout(() => {
-        scrollToBottom()
-      }, 100)
-    })
-  } catch (error) {
-    console.error('Error switching to chat:', error)
-    toast.error('Failed to switch to chat')
-  }
-}
-
-// delete chat function
 function deleteChat(chatId: string) {
   if (isLoading.value || !chatId) return
 
@@ -972,6 +463,14 @@ function deleteChat(chatId: string) {
 
           clearCurrentDraft()
           saveChats()
+
+          // Trigger sync after deleting chat
+          if (isAuthenticated.value && parsedUserDetails.value?.sync_enabled) {
+            setTimeout(() => {
+              performSmartSync()
+            }, 1000)
+          }
+
           toast.success('Chat deleted', {
             duration: 3000,
             description: 'Chat has been removed successfully.'
@@ -988,38 +487,464 @@ function deleteChat(chatId: string) {
   }
 }
 
-// rename chat function
-function renameChat(chatId: string, newTitle: string) {
+async function logout() {
+  showConfirmDialog({
+    visible: true,
+    title: 'Logout Confirmation',
+    message: 'Are you sure you want to logout? Your unsynced data will be saved locally.',
+    type: 'warning',
+    confirmText: 'Logout',
+    cancelText: 'Cancel',
+    onConfirm: async () => {
+      try {
+        isLoading.value = true
+
+        const syncEnabled = parsedUserDetails.value?.sync_enabled
+        const hasUnsyncedChanges = syncStatus.value.hasUnsyncedChanges
+
+        if (hasUnsyncedChanges && syncEnabled && !syncStatus.value.syncing) {
+          try {
+            showSyncIndicator('Syncing your data before logout...', 50)
+            await syncToServer()
+            hideSyncIndicator()
+          } catch (syncError) {
+            console.error('Sync failed during logout:', syncError)
+            hideSyncIndicator()
+          }
+        }
+
+        const userBackup = { ...parsedUserDetails.value }
+        const hasChats = chats.value.length > 0
+
+        try {
+          chats.value = []
+          currentChatId.value = ''
+          expanded.value = []
+          showInput.value = false
+          isCollapsed.value = false
+
+          syncStatus.value = {
+            lastSync: null,
+            syncing: false,
+            hasUnsyncedChanges: false,
+            lastError: null,
+            retryCount: 0,
+            maxRetries: 3,
+            showSyncIndicator: false,
+            syncMessage: '',
+            syncProgress: 0
+          }
+
+          parsedUserDetails.value = null
+
+          if (syncEnabled) {
+            try {
+              localStorage.removeItem('userdetails')
+            } catch (error) {
+              console.error('Failed to remove userdetails from localStorage:', error)
+            }
+          } else {
+            const keysToRemove = ['userdetails', 'chats', 'currentChatId', 'linkPreviews']
+            keysToRemove.forEach(key => {
+              try {
+                localStorage.removeItem(key)
+              } catch (error) {
+                console.error(`Failed to remove ${key} from localStorage:`, error)
+              }
+            })
+            linkPreviewCache.value.clear()
+          }
+
+        } catch (stateError) {
+          console.error('Error clearing application state:', stateError)
+          try {
+            parsedUserDetails.value = userBackup
+            if (!syncEnabled) {
+              loadLocalData()
+            }
+          } catch (restoreError) {
+            console.error('Failed to restore state after logout error:', restoreError)
+          }
+
+          throw new Error('Failed to clear application state during logout')
+        }
+
+        if (syncEnabled) {
+          toast.success('Logged out successfully', {
+            duration: 3000,
+            description: hasUnsyncedChanges
+              ? 'Your data has been synced to the cloud'
+              : 'Ready to log back in anytime'
+          })
+        } else {
+          toast.success('Logged out successfully', {
+            duration: 3000,
+            description: hasChats
+              ? 'Your chats are saved locally on this device'
+              : 'Ready to start fresh when you return'
+          })
+        }
+
+      } catch (error: any) {
+        console.error('Critical error during logout:', error)
+        toast.error('Error during logout process', {
+          duration: 5000,
+          description: 'Some cleanup operations may not have completed. Please refresh the page.'
+        })
+      } finally {
+        isLoading.value = false
+      }
+    }
+  })
+}
+
+function setShowInput() {
+  if (currentMessages.value.length !== 0) {
+    return
+  }
+  if (!isAuthenticated.value) {
+    toast.warning('Please create a session first', {
+      duration: 3000,
+      description: 'You need to be logged in.'
+    })
+    return
+  }
+  showInput.value = true
+  nextTick(() => {
+    const textarea = document.getElementById("prompt") as HTMLTextAreaElement
+    if (textarea) textarea.focus()
+  })
+}
+
+function updateExpandedArray() {
   try {
-    if (!chatId || !newTitle || typeof newTitle !== 'string') {
-      toast.error('Invalid chat title')
-      return
-    }
-
-    const chat = chats.value.find(c => c.id === chatId)
-    if (!chat) {
-      toast.error('Chat not found')
-      return
-    }
-
-    const trimmedTitle = newTitle.trim()
-    if (!trimmedTitle) {
-      toast.error('Chat title cannot be empty')
-      return
-    }
-
-    chat.title = trimmedTitle
-    chat.updatedAt = new Date().toISOString()
-    saveChats()
-
-    toast.success('Chat renamed successfully')
+    const messagesLength = currentMessages.value?.length || 0
+    expanded.value = new Array(messagesLength).fill(false)
   } catch (error) {
-    console.error('Error renaming chat:', error)
-    toast.error('Failed to rename chat')
+    console.error('Error updating expanded array:', error)
+    expanded.value = []
   }
 }
 
-// delete message function
+function scrollToBottom(behavior: ScrollBehavior = 'smooth') {
+  if (!scrollableElem.value) return;
+
+  try {
+    nextTick(() => {
+      setTimeout(() => {
+        if (!scrollableElem.value) return;
+        
+        const container = scrollableElem.value;
+        const scrollHeight = container.scrollHeight;
+        const clientHeight = container.clientHeight;
+        
+        if (scrollHeight > clientHeight) {
+          container.scrollTo({
+            top: scrollHeight,
+            behavior
+          });
+        }
+
+        setTimeout(() => {
+          handleScroll();
+        }, 150);
+      }, 50);
+    });
+  } catch (error) {
+    console.error('Error scrolling to bottom:', error);
+  }
+}
+
+function handleScroll() {
+  try {
+    const elem = scrollableElem.value;
+    if (!elem) return;
+
+    const scrollTop = elem.scrollTop;
+    const scrollHeight = elem.scrollHeight;
+    const clientHeight = elem.clientHeight;
+    
+    const currentScrollPosition = scrollTop + clientHeight;
+    const totalScrollableHeight = scrollHeight;
+    
+    const threshold = 2;
+    const isAtBottom = Math.abs(currentScrollPosition - totalScrollableHeight) <= threshold;
+
+    const hasSubstantialContent = scrollHeight > clientHeight + 100;
+    showScrollDownButton.value = !isAtBottom && hasSubstantialContent;
+
+  } catch (error) {
+    console.error('Error handling scroll:', error);
+  }
+}
+
+function hideSidebar() {
+  try {
+    const sideNav = document.getElementById("side_nav")
+    if (sideNav) {
+      if (sideNav.classList.contains("none")) {
+        sideNav.classList.add("w-full", "bg-white", "z-30", "fixed", "top-0", "left-0", "bottom-0", "border-r-[1px]", "flex", "flex-col", "transition-all", "duration-300", "ease-in-out")
+      } else {
+        sideNav.classList.remove("w-full", "bg-white", "z-30", "fixed", "top-0", "left-0", "bottom-0", "border-r-[1px]", "flex", "flex-col", "transition-all", "duration-300", "ease-in-out")
+      }
+      sideNav.classList.toggle("none")
+      isSidebarHidden.value = !isSidebarHidden.value
+    }
+  } catch (error) {
+    console.error('Error toggling sidebar:', error)
+  }
+}
+
+function toggleChatMenu(chatId: string, event: Event) {
+  try {
+    event.stopPropagation()
+    activeChatMenu.value = activeChatMenu.value === chatId ? null : chatId
+  } catch (error) {
+    console.error('Error toggling chat menu:', error)
+  }
+}
+
+function autoGrow(e: Event) {
+  const el = e.target as HTMLTextAreaElement
+  const maxHeight = 200
+  el.style.height = "auto"
+  if (el.scrollHeight <= maxHeight) {
+    el.style.height = el.scrollHeight + "px"
+    el.style.overflowY = "hidden"
+  } else {
+    el.style.height = maxHeight + "px"
+    el.style.overflowY = "auto"
+  }
+
+  autoSaveDraft()
+}
+
+function saveChatDrafts() {
+  try {
+    const draftsObject = Object.fromEntries(chatDrafts.value)
+    localStorage.setItem('chatDrafts', JSON.stringify(draftsObject))
+    
+    const previewsObject = Object.fromEntries(pastePreviews.value)
+    localStorage.setItem('pastePreviews', JSON.stringify(previewsObject))
+  } catch (error) {
+    console.error('Failed to save chat drafts:', error)
+  }
+}
+
+function loadChatDrafts() {
+  try {
+    const saved = localStorage.getItem('chatDrafts')
+    if (saved) {
+      const parsedDrafts = JSON.parse(saved)
+      chatDrafts.value = new Map(Object.entries(parsedDrafts))
+    }
+
+    const savedPastePreviews = localStorage.getItem('pastePreviews')
+    if (savedPastePreviews) {
+      const parsedPreviews = JSON.parse(savedPastePreviews)
+      pastePreviews.value = new Map(Object.entries(parsedPreviews))
+    }
+      
+    if (currentChatId.value) {
+      const currentDraft = chatDrafts.value.get(currentChatId.value) || ''
+      const currentPastePreview = pastePreviews.value.get(currentChatId.value)
+      
+      if (currentPastePreview && currentPastePreview.show) {
+        const textarea = document.getElementById('prompt') as HTMLTextAreaElement
+        if (textarea) {
+          const draftWithoutPaste = currentDraft.replace(currentPastePreview.content, '')
+          textarea.value = draftWithoutPaste
+          autoGrow({ target: textarea } as any)
+        }
+      } else if (currentDraft && detectLargePaste(currentDraft)) {
+        const wordCount = currentDraft.trim().split(/\s+/).filter(word => word.length > 0).length
+        const charCount = currentDraft.length
+        
+        pastePreviews.value.set(currentChatId.value, {
+          content: currentDraft,
+          wordCount,
+          charCount,
+          show: true
+        })
+        
+        const textarea = document.getElementById('prompt') as HTMLTextAreaElement
+        if (textarea) {
+          textarea.value = ''
+          autoGrow({ target: textarea } as any)
+        }
+      } else {
+        const textarea = document.getElementById('prompt') as HTMLTextAreaElement
+        if (textarea) {
+          textarea.value = currentDraft
+          autoGrow({ target: textarea } as any)
+        }
+        pastePreviews.value.delete(currentChatId.value)
+      }
+    }
+  } catch (error) {
+    console.error('Failed to load chat drafts:', error)
+  }
+}
+
+function clearCurrentDraft() {
+  if (currentChatId.value) {
+    chatDrafts.value.delete(currentChatId.value)
+    pastePreviews.value.delete(currentChatId.value)
+    saveChatDrafts()
+    
+    const textarea = document.getElementById('prompt') as HTMLTextAreaElement
+    if (textarea) {
+      textarea.value = ''
+      autoGrow({ target: textarea } as any)
+    }
+  }
+}
+
+let draftSaveTimeout: any = null
+
+function autoSaveDraft() {
+  if (draftSaveTimeout) {
+    clearTimeout(draftSaveTimeout)
+  }
+  
+  draftSaveTimeout = setTimeout(() => {
+    if (currentChatId.value) {
+      const textarea = document.getElementById('prompt') as HTMLTextAreaElement
+      let currentDraft = textarea?.value || ''
+    
+      const currentPastePreview = pastePreviews.value.get(currentChatId.value)
+      if (currentPastePreview?.show) {
+        currentDraft += currentPastePreview.content
+      }
+      
+      if (currentDraft.trim().length > 0) {
+        chatDrafts.value.set(currentChatId.value, currentDraft)
+        saveChatDrafts()
+      } else {
+        chatDrafts.value.delete(currentChatId.value)
+        saveChatDrafts()
+      }
+    }
+  }, 1000)
+}
+
+function switchToChat(chatId: string) {
+  try {
+    if (!chatId || typeof chatId !== 'string') {
+      console.error('Invalid chat ID provided')
+      return
+    }
+
+    const chatExists = chats.value.find(chat => chat.id === chatId)
+    if (!chatExists) {
+      toast.error('Chat not found')
+      return
+    }
+    
+    if (currentChatId.value) {
+      const textarea = document.getElementById('prompt') as HTMLTextAreaElement
+      let currentDraft = textarea?.value || ''
+      
+      const currentPastePreview = pastePreviews.value.get(currentChatId.value)
+      if (currentPastePreview?.show && currentPastePreview.content) {
+        currentDraft += currentPastePreview.content
+      }
+      
+      if (currentDraft.trim().length === 0) {
+        chatDrafts.value.delete(currentChatId.value)
+        pastePreviews.value.delete(currentChatId.value)
+      } else {
+        chatDrafts.value.set(currentChatId.value, currentDraft)
+      }
+      saveChatDrafts()
+    }
+
+    currentChatId.value = chatId
+    updateExpandedArray()
+
+    try {
+      localStorage.setItem('currentChatId', currentChatId.value)
+    } catch (error) {
+      console.error('Failed to save current chat ID:', error)
+    }
+
+    nextTick(() => {
+      loadChatDrafts()
+      
+      const textarea = document.getElementById('prompt') as HTMLTextAreaElement
+      if (textarea) {
+        textarea.focus()
+      }
+
+      setTimeout(() => {
+        scrollToBottom()
+      }, 100)
+    })
+  } catch (error) {
+    console.error('Error switching to chat:', error)
+    toast.error('Failed to switch to chat')
+  }
+}
+
+function createNewChat(firstMessage?: string): string {
+  try {
+    const newChatId = generateChatId()
+    const now = new Date().toISOString()
+
+    const newChat: Chat = {
+      id: newChatId,
+      title: firstMessage ? generateChatTitle(firstMessage) : 'New Chat',
+      messages: [],
+      createdAt: now,
+      updatedAt: now
+    }
+
+    if (currentChatId.value) {
+      pastePreviews.value.delete(currentChatId.value)
+    }
+
+    if (currentChatId.value) {
+      const textarea = document.getElementById('prompt') as HTMLTextAreaElement
+      const currentDraft = textarea?.value || ''
+      if (currentDraft.trim()) {
+        chatDrafts.value.set(currentChatId.value, currentDraft)
+        saveChatDrafts()
+      }
+    }
+
+    chatDrafts.value.set(newChatId, '')
+    pastePreviews.value.delete(newChatId)
+
+    chats.value.unshift(newChat)
+    currentChatId.value = newChatId
+    updateExpandedArray()
+    saveChats()
+
+    // Trigger sync after creating new chat
+    if (isAuthenticated.value && parsedUserDetails.value?.sync_enabled) {
+      setTimeout(() => {
+        performSmartSync()
+      }, 1000)
+    }
+
+    nextTick(() => {
+      const textarea = document.getElementById('prompt') as HTMLTextAreaElement
+      if (textarea) {
+        textarea.value = ''
+        autoGrow({ target: textarea } as any)
+        textarea.focus()
+      }
+    })
+
+    return newChatId
+  } catch (error) {
+    console.error('Error creating new chat:', error)
+    toast.error('Failed to create new chat')
+    return ''
+  }
+}
+
+//  deleteMessage function
 function deleteMessage(messageIndex: number) {
   if (isLoading.value || !currentChat.value) return
 
@@ -1046,20 +971,16 @@ function deleteMessage(messageIndex: number) {
             return
           }
 
-          // Get URLs before deleting the message for cache cleanup
           const messageToDelete = currentChat.value.messages[messageIndex]
           const responseUrls = extractUrls(messageToDelete.response || '')
           const promptUrls = extractUrls(messageToDelete.prompt || '')
           const urls = [...new Set([...responseUrls, ...promptUrls])]
 
-          // Remove message and corresponding expanded state
           currentChat.value.messages.splice(messageIndex, 1)
           expanded.value.splice(messageIndex, 1)
 
-          // Update chat's timestamp
           currentChat.value.updatedAt = new Date().toISOString()
 
-          // Update title if we deleted the first message
           if (messageIndex === 0 && currentChat.value.messages.length > 0) {
             const firstMessage = currentChat.value.messages[0].prompt || currentChat.value.messages[0].response
             if (firstMessage) {
@@ -1069,7 +990,6 @@ function deleteMessage(messageIndex: number) {
             currentChat.value.title = 'New Chat'
           }
 
-          // Clean up link previews
           if (urls.length > 0) {
             urls.forEach(url => {
               linkPreviewCache.value.delete(url)
@@ -1078,6 +998,14 @@ function deleteMessage(messageIndex: number) {
           }
 
           saveChats()
+          
+          // Trigger sync after deleting message
+          if (isAuthenticated.value && parsedUserDetails.value?.sync_enabled) {
+            setTimeout(() => {
+              performSmartSync()
+            }, 1000)
+          }
+
           toast.success('Message deleted', {
             duration: 3000,
             description: 'Message has been removed successfully.'
@@ -1094,7 +1022,44 @@ function deleteMessage(messageIndex: number) {
   }
 }
 
-// clear all chats function
+//  renameChat function
+function renameChat(chatId: string, newTitle: string) {
+  try {
+    if (!chatId || !newTitle || typeof newTitle !== 'string') {
+      toast.error('Invalid chat title')
+      return
+    }
+
+    const chat = chats.value.find(c => c.id === chatId)
+    if (!chat) {
+      toast.error('Chat not found')
+      return
+    }
+
+    const trimmedTitle = newTitle.trim()
+    if (!trimmedTitle) {
+      toast.error('Chat title cannot be empty')
+      return
+    }
+
+    chat.title = trimmedTitle
+    chat.updatedAt = new Date().toISOString()
+    saveChats()
+
+    // Trigger sync after renaming chat
+    if (isAuthenticated.value && parsedUserDetails.value?.sync_enabled) {
+      setTimeout(() => {
+        performSmartSync()
+      }, 1000)
+    }
+
+    toast.success('Chat renamed successfully')
+  } catch (error) {
+    console.error('Error renaming chat:', error)
+    toast.error('Failed to rename chat')
+  }
+}
+
 function clearAllChats() {
   if (isLoading.value) return
 
@@ -1118,17 +1083,14 @@ function clearAllChats() {
       confirmText: 'Delete All',
       onConfirm: () => {
         try {
-          // Clear all data
           chats.value = []
           currentChatId.value = ''
           expanded.value = []
           linkPreviewCache.value.clear()
 
-          // Clear all drafts
           chatDrafts.value.clear()
           saveChatDrafts()
 
-          // Clear storage
           const keysToRemove = ['chats', 'currentChatId', 'linkPreviews', 'chatDrafts']
           keysToRemove.forEach(key => {
             try {
@@ -1155,9 +1117,7 @@ function clearAllChats() {
   }
 }
 
-// fetch link preview with better error handling
 async function fetchLinkPreview(url: string): Promise<LinkPreview> {
-  // Validate URL
   try {
     new URL(url)
   } catch (error) {
@@ -1183,7 +1143,7 @@ async function fetchLinkPreview(url: string): Promise<LinkPreview> {
     const proxyUrl = `https://spindle.villebiz.com/scrape?url=${encodeURIComponent(url)}&lang=${lang}`
 
     const response = await fetch(proxyUrl, {
-      signal: AbortSignal.timeout(15000) // 15 second timeout for link previews
+      signal: AbortSignal.timeout(15000)
     })
 
     if (!response.ok) {
@@ -1193,7 +1153,6 @@ async function fetchLinkPreview(url: string): Promise<LinkPreview> {
     const results = await response.json()
     const domain = new URL(url).hostname
 
-    // video detection and processing with error handling
     let videoInfo: any = {}
     try {
       videoInfo = await detectAndProcessVideo(url, results)
@@ -1225,7 +1184,6 @@ async function fetchLinkPreview(url: string): Promise<LinkPreview> {
   } catch (error) {
     console.error("Failed to fetch link preview:", error)
 
-    // Fallback preview if failed
     const fallbackPreview: LinkPreview = {
       url,
       title: new URL(url).hostname,
@@ -1249,7 +1207,6 @@ function toggleSidebar() {
   }
 }
 
-// Close menus when clicking outside
 function handleClickOutside() {
   try {
     activeChatMenu.value = null
@@ -1259,21 +1216,17 @@ function handleClickOutside() {
   }
 }
 
-// saveChats function with better error handling
 function saveChats() {
   try {
-    // Validate chats data before saving
     if (!Array.isArray(chats.value)) {
       console.error('Chats is not an array, resetting to empty array')
       chats.value = []
     }
 
-    // Save to localStorage with size validation
     const chatsJson = JSON.stringify(chats.value)
     const currentChatJson = JSON.stringify(currentChatId.value)
 
-    // Check if data is too large (localStorage typically has ~5-10MB limit)
-    if (chatsJson.length > 5000000) { // ~5MB
+    if (chatsJson.length > 5000000) {
       toast.warning('Chat data is getting large', {
         duration: 5000,
         description: 'Consider clearing old chats to improve performance'
@@ -1283,20 +1236,8 @@ function saveChats() {
     localStorage.setItem('chats', chatsJson)
     localStorage.setItem('currentChatId', currentChatId.value)
 
-    // Only sync to server if user is authenticated and sync is enabled
-    const shouldSync = isAuthenticated.value && parsedUserDetails.value?.sync_enabled
-
-    if (shouldSync) {
+    if (isAuthenticated.value && parsedUserDetails.value?.sync_enabled) {
       syncStatus.value.hasUnsyncedChanges = true
-
-      // Auto-sync after short delay with debouncing
-      setTimeout(() => {
-        if (syncStatus.value.hasUnsyncedChanges && !syncStatus.value.syncing) {
-          syncToServer().catch(error => {
-            console.error('Auto-sync failed:', error)
-          })
-        }
-      }, 2000)
     }
   } catch (error) {
     console.error('Failed to save chats:', error)
@@ -1307,45 +1248,41 @@ function saveChats() {
   }
 }
 
-// sync from server with comprehensive error handling
-let syncLock = false
-
 async function syncFromServer(serverData?: any) {
   if (!parsedUserDetails.value?.user_id) {
-    console.log('Sync skipped - user not authenticated')
+    console.log('❌ syncFromServer: No user ID')
     return
   }
 
-  if (syncLock) {
-    console.log('Sync already in progress, skipping')
-    return
-  }
-
-  // Only sync from server if sync is enabled or if it's initial data during auth
   const shouldSync = parsedUserDetails.value?.sync_enabled !== false || serverData
-
-  if (!parsedUserDetails.value?.user_id || !shouldSync) {
+  if (!shouldSync) {
+    console.log('❌ syncFromServer: Sync disabled')
     return
   }
-
-  syncLock = true
 
   try {
     syncStatus.value.syncing = true
     syncStatus.value.lastError = null
+    showSyncIndicator('Syncing data from server...', 30)
 
     let data = serverData
     if (!data) {
-      console.log('Fetching data from server...')
+      console.log('📡 Fetching data from server...')
+      updateSyncProgress('Fetching data from server...', 50)
       const response = await apiCall('/sync', { method: 'GET' })
       data = response.data
     }
 
     if (!data) {
-      throw new Error('No data received from server')
+      console.warn('⚠️ No data received from server')
+      return
     }
 
-    // Parse and validate server chats data
+    console.log('📥 Server data received:')
+
+    updateSyncProgress('Processing chats...', 70)
+
+    // Process chats
     if (data.chats && data.chats !== '[]') {
       try {
         const serverChatsData = typeof data.chats === 'string' ? JSON.parse(data.chats) : data.chats
@@ -1356,20 +1293,18 @@ async function syncFromServer(serverData?: any) {
 
           chats.value = mergedChats
           localStorage.setItem('chats', JSON.stringify(mergedChats))
-          console.log(`Synced ${mergedChats.length} chats from server`)
-        } else {
-          console.warn('Server chats data is not an array')
+          console.log(`✅ Synced ${mergedChats.length} chats from server`)
         }
       } catch (parseError) {
-        console.error('Error parsing server chats:', parseError)
-        toast.warning('Failed to parse server chat data', {
-          duration: 3000,
-          description: 'Using local data instead'
-        })
+        console.error('❌ Error parsing server chats:', parseError)
       }
+    } else {
+      console.log('📭 No chats data from server')
     }
 
-    // Parse and validate server link previews
+    updateSyncProgress('Processing link previews...', 85)
+
+    // Process link previews
     if (data.link_previews && data.link_previews !== '{}') {
       try {
         const serverPreviewsData = typeof data.link_previews === 'string'
@@ -1382,64 +1317,68 @@ async function syncFromServer(serverData?: any) {
 
           linkPreviewCache.value = new Map(Object.entries(mergedPreviews))
           localStorage.setItem('linkPreviews', JSON.stringify(mergedPreviews))
-          console.log(`Synced ${Object.keys(mergedPreviews).length} link previews from server`)
+          console.log(`✅ Synced ${Object.keys(mergedPreviews).length} link previews from server`)
         }
       } catch (parseError) {
-        console.error('Error parsing server link previews:', parseError)
-        toast.warning('Failed to parse server link preview data')
+        console.error('❌ Error parsing server link previews:', parseError)
       }
     }
 
-    // Update current chat ID if provided
+    // Process current chat ID
     if (data.current_chat_id && typeof data.current_chat_id === 'string') {
-      // Validate that the chat ID exists in our chats
       const chatExists = chats.value.some(chat => chat.id === data.current_chat_id)
       if (chatExists) {
         currentChatId.value = data.current_chat_id
         localStorage.setItem('currentChatId', data.current_chat_id)
-      } else {
-        console.warn('Server provided current_chat_id that does not exist in chats')
+        console.log(`✅ Set current chat ID: ${data.current_chat_id}`)
       }
     }
 
-    // Update user preferences and settings
+    updateSyncProgress('Updating preferences...', 95)
+
+    // Update user details if provided
     if (data.sync_enabled !== undefined || data.preferences || data.theme ||
       data.work_function || data.phone_number || data.plan) {
-      try {
-        parsedUserDetails.value = {
-          ...parsedUserDetails.value,
-          preferences: data.preferences || parsedUserDetails.value?.preferences,
-          theme: data.theme || parsedUserDetails.value?.theme,
-          workFunction: data.work_function || parsedUserDetails.value?.workFunction,
-          phone_number: data.phone_number || parsedUserDetails.value?.phone_number,
-          plan: data.plan || parsedUserDetails.value?.plan,
-          plan_name: data.plan_name || parsedUserDetails.value?.plan_name,
-          amount: data.amount ?? parsedUserDetails.value?.amount,
-          duration: data.duration || parsedUserDetails.value?.duration,
-          price: data.price || parsedUserDetails.value?.price,
-          expiry_timestamp: data.expiry_timestamp || parsedUserDetails.value?.expiry_timestamp,
-          expire_duration: data.expire_duration || parsedUserDetails.value?.expire_duration,
-          sync_enabled: data.sync_enabled !== undefined ? data.sync_enabled : parsedUserDetails.value?.sync_enabled
-        }
-        localStorage.setItem("userdetails", JSON.stringify(parsedUserDetails.value))
-      } catch (updateError) {
-        console.error('Error updating user details:', updateError)
+      
+      const updatedUserDetails = {
+        ...parsedUserDetails.value,
+        preferences: data.preferences || parsedUserDetails.value.preferences,
+        theme: data.theme || parsedUserDetails.value.theme,
+        workFunction: data.work_function || parsedUserDetails.value.workFunction,
+        phone_number: data.phone_number || parsedUserDetails.value.phone_number,
+        plan: data.plan || parsedUserDetails.value.plan,
+        plan_name: data.plan_name || parsedUserDetails.value.plan_name,
+        amount: data.amount ?? parsedUserDetails.value.amount,
+        duration: data.duration || parsedUserDetails.value.duration,
+        price: data.price || parsedUserDetails.value.price,
+        response_mode: data.response_mode || parsedUserDetails.value.response_mode,
+        expiry_timestamp: data.expiry_timestamp || parsedUserDetails.value.expiry_timestamp,
+        expire_duration: data.expire_duration || parsedUserDetails.value.expire_duration,
+        sync_enabled: data.sync_enabled !== undefined ? data.sync_enabled : parsedUserDetails.value.sync_enabled
       }
+
+      parsedUserDetails.value = updatedUserDetails
+      localStorage.setItem("userdetails", JSON.stringify(updatedUserDetails))
+      console.log('✅ User details updated from server')
     }
 
-    // Update sync status
     syncStatus.value.lastSync = new Date()
     syncStatus.value.hasUnsyncedChanges = false
     syncStatus.value.retryCount = 0
     updateExpandedArray()
 
-    console.log('Successfully synced data from server')
+    updateSyncProgress('Sync complete!', 100)
+    setTimeout(() => {
+      hideSyncIndicator()
+    }, 1000)
+
+    console.log('✅ Successfully synced data from server')
 
   } catch (error: any) {
-    console.error('Sync from server failed:', error)
+    console.error('❌ Sync from server failed:', error)
     syncStatus.value.lastError = error.message
+    hideSyncIndicator()
 
-    // Only show toast for non-network errors or after multiple retries
     if (!error.message.includes('NetworkError') && !error.message.includes('TypeError')) {
       toast.warning('Failed to sync data from server', {
         duration: 3000,
@@ -1450,35 +1389,19 @@ async function syncFromServer(serverData?: any) {
     throw error
   } finally {
     syncStatus.value.syncing = false
-    syncLock = false
   }
 }
 
-// sync to server with comprehensive error handling and validation
 async function syncToServer() {
-  if (!parsedUserDetails.value?.user_id) {
-    console.log('Sync skipped - user not authenticated')
-    return
-  }
-
-  if (syncLock) {
-    console.log('Sync already in progress, skipping')
-    return
-  }
-
-  // Only sync if user has sync enabled
   if (!parsedUserDetails.value?.user_id || parsedUserDetails.value.sync_enabled === false) {
-    console.log('Sync to server skipped - user not authenticated or sync disabled')
     return
   }
-
-  syncLock = true
 
   try {
     syncStatus.value.syncing = true
     syncStatus.value.lastError = null
+    showSyncIndicator('Syncing data to server...', 20)
 
-    // Validate data before syncing
     if (!Array.isArray(chats.value)) {
       throw new Error('Chats data is not valid')
     }
@@ -1487,7 +1410,8 @@ async function syncToServer() {
       throw new Error('User data is incomplete')
     }
 
-    // Prepare sync data with validation
+    updateSyncProgress('Preparing sync data...', 40)
+
     const syncData = {
       chats: JSON.stringify(chats.value),
       link_previews: JSON.stringify(Object.fromEntries(linkPreviewCache.value)),
@@ -1496,16 +1420,18 @@ async function syncToServer() {
       preferences: parsedUserDetails.value.preferences || '',
       work_function: parsedUserDetails.value.workFunction || '',
       theme: parsedUserDetails.value.theme || 'system',
-      sync_enabled: parsedUserDetails.value.sync_enabled
+      sync_enabled: parsedUserDetails.value.sync_enabled,
+      response_mode: parsedUserDetails.value.response_mode || 'light-response',
     }
 
-    // Validate sync data size (prevent sending too much data)
     const syncDataSize = JSON.stringify(syncData).length
-    if (syncDataSize > 10000000) { // ~10MB limit
+    if (syncDataSize > 10000000) {
       throw new Error('Sync data is too large. Please clear some old chats.')
     }
 
     console.log(`Syncing ${chats.value.length} chats to server (${(syncDataSize / 1024).toFixed(1)}KB)`)
+
+    updateSyncProgress('Sending data to server...', 70)
 
     const response = await apiCall('/sync', {
       method: 'POST',
@@ -1516,7 +1442,12 @@ async function syncToServer() {
     syncStatus.value.hasUnsyncedChanges = false
     syncStatus.value.retryCount = 0
 
-    console.log('Successfully synced data to server')
+    updateSyncProgress('Sync complete!', 100)
+    setTimeout(() => {
+      hideSyncIndicator()
+    }, 1000)
+
+    console.log('Successfully synced data to server') // ✅ This only logs on ACTUAL success
 
     return response
 
@@ -1524,17 +1455,16 @@ async function syncToServer() {
     console.error('Sync to server failed:', error)
     syncStatus.value.lastError = error.message
     syncStatus.value.hasUnsyncedChanges = true
+    hideSyncIndicator()
 
-    // Increment retry count for exponential backoff
     syncStatus.value.retryCount = Math.min(syncStatus.value.retryCount + 1, syncStatus.value.maxRetries)
 
-    // Only show error toast for certain types of errors
     if (error.message.includes('too large')) {
       toast.error('Data too large to sync', {
         duration: 5000,
         description: error.message
       })
-    } else if (!error.message.includes('NetworkError') && !error.message.includes('TypeError')) {
+    } else if (!error.message.includes('NetworkError') && !error.message.includes('TypeError') && !error.message.includes('already in progress')) {
       toast.error('Failed to sync data to server', {
         duration: 3000,
         description: 'Your data is saved locally'
@@ -1544,18 +1474,89 @@ async function syncToServer() {
     throw error
   } finally {
     syncStatus.value.syncing = false
-    syncLock = false
   }
 }
 
-// unsecureApiCall with better error handling and retry logic
+async function performSmartSync() {
+  if (syncStatus.value.syncing) {
+    console.log('⏳ Sync already in progress, skipping...')
+    return
+  }
+
+  console.log('🔄 Performing SmartSync')
+
+  if (!isAuthenticated.value || !parsedUserDetails.value?.user_id) {
+    console.log('❌ Sync skipped: not authenticated or no user ID')
+    return
+  }
+
+  try {
+    const isLocalDataEmpty = chats.value.length === 0 ||
+      (chats.value.length === 1 && chats.value[0].messages.length === 0)
+
+    if (isLocalDataEmpty) {
+      console.log('📥 Local data empty - syncing FROM server')
+      try {
+        syncStatus.value.syncing = true
+        await syncFromServer()
+        console.log('✅ Successfully synced data from server')
+      } catch (error) {
+        console.error('❌ Failed to sync from server:', error)
+      }
+    } else if (syncStatus.value.hasUnsyncedChanges) {
+      console.log('📤 Has unsynced changes - syncing TO server')
+      
+      const hadUnsyncedChangesBeforeSync = syncStatus.value.hasUnsyncedChanges
+      
+      // Clear the flag BEFORE attempting sync
+      syncStatus.value.hasUnsyncedChanges = false
+      
+      try {
+        syncStatus.value.syncing = true
+        await syncToServer()
+        console.log('✅ Successfully synced changes to server')
+        
+      } catch (error: any) {
+        console.error('❌ Failed to sync to server:', error)
+        
+        if (hadUnsyncedChangesBeforeSync) {
+          syncStatus.value.hasUnsyncedChanges = true
+          console.log('🔄 Marked changes as unsynced due to sync failure')
+        }
+        
+        // Auto-retry for network errors
+        if (error.message?.includes('Network') || error.message?.includes('timeout')) {
+          console.log('🔄 Network error - will retry sync')
+          setTimeout(() => {
+            performSmartSync().catch(console.error)
+          }, 5000)
+        }
+      }
+    } else {
+      console.log('🔍 No unsynced changes - checking for server updates')
+      try {
+        syncStatus.value.syncing = true
+        await syncFromServer()
+        console.log('✅ Server data is current')
+      } catch (error) {
+        console.error('❌ Failed to check for server updates:', error)
+      }
+    }
+  } catch (error) {
+    console.error('💥 Critical error in performSmartSync:', error)
+  } finally {
+    console.log('🔓 Sync completed')
+    syncStatus.value.syncing = false
+  }
+}
+
 async function unsecureApiCall(endpoint: string, options: RequestInit = {}, retryCount = 0): Promise<any> {
   const maxRetries = 2
-  const retryDelay = Math.pow(2, retryCount) * 1000 // Exponential backoff
+  const retryDelay = Math.pow(2, retryCount) * 1000
 
   try {
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 15000) // 15 second timeout
+    const timeoutId = setTimeout(() => controller.abort(), 15000)
 
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       ...options,
@@ -1584,12 +1585,10 @@ async function unsecureApiCall(endpoint: string, options: RequestInit = {}, retr
   } catch (error: any) {
     console.error(`Unsecure API Error on ${endpoint} (attempt ${retryCount + 1}):`, error)
 
-    // Handle different types of errors
     if (error.name === 'AbortError') {
       throw new Error('Request timeout - please try again')
     }
 
-    // Retry for network errors
     if ((error.name === 'NetworkError' ||
       error.name === 'TypeError' ||
       error.message?.includes('Failed to fetch')) &&
@@ -1605,7 +1604,6 @@ async function unsecureApiCall(endpoint: string, options: RequestInit = {}, retr
   }
 }
 
-// handleAuth with better error handling
 async function handleAuth(data: {
   username: string
   email: string
@@ -1615,7 +1613,6 @@ async function handleAuth(data: {
   const { username, email, password, agreeToTerms } = data
 
   try {
-    // Custom validation
     const validationError = validateCredentials(username, email, password, agreeToTerms)
     if (validationError) {
       throw new Error(validationError)
@@ -1625,7 +1622,6 @@ async function handleAuth(data: {
     let isLogin = false
 
     try {
-      // Try login first
       console.log('Attempting login...')
       response = await unsecureApiCall('/login', {
         method: 'POST',
@@ -1640,7 +1636,6 @@ async function handleAuth(data: {
     } catch (loginError: any) {
       console.log('Login failed, attempting registration...')
 
-      // Try register if login fails
       try {
         response = await unsecureApiCall('/register', {
           method: 'POST',
@@ -1652,7 +1647,6 @@ async function handleAuth(data: {
           description: `Welcome ${response.data.username}!`
         })
       } catch (registerError: any) {
-        // If both fail, throw the more specific error
         if (loginError.message?.includes('Connection') || loginError.message?.includes('Network')) {
           throw loginError
         } else {
@@ -1665,12 +1659,10 @@ async function handleAuth(data: {
       throw new Error('Invalid response from server')
     }
 
-    // Validate response data
     if (!response.data.user_id || !response.data.username || !response.data.email) {
       throw new Error('Incomplete user data received from server')
     }
 
-    // Store user details locally with comprehensive data
     const userData = {
       user_id: response.data.user_id,
       username: response.data.username,
@@ -1680,40 +1672,55 @@ async function handleAuth(data: {
       workFunction: response.data.work_function || "",
       preferences: response.data.preferences || "",
       theme: response.data.theme || "system",
-      sync_enabled: response.data.sync_enabled !== false, // Default to true if not specified
+      sync_enabled: response.data.sync_enabled !== false,
       phone_number: response.data.phone_number || "",
       plan: response.data.plan || "free",
       plan_name: response.data.plan_name || "",
       amount: response.data.amount || 0,
       duration: response.data.duration || "",
       price: response.data.price || 0,
+      response_mode: response.data.response_mode || "light-response",
       expiry_timestamp: response.data.expiry_timestamp || null,
       expire_duration: response.data.expire_duration || "",
-      email_verified:   response.email_verified || false,
-			email_subscribed: response.email_subscribed || true,
+      email_verified: response.email_verified || false,
+      email_subscribed: response.email_subscribed || true,
     }
 
-    localStorage.setItem('userdetails', JSON.stringify(userData))
+    // ✅ Set in-memory state first
     parsedUserDetails.value = userData
 
     console.log(`Authentication successful for user: ${userData.username} (sync: ${userData.sync_enabled})`)
 
-    // Only sync data from server if sync is enabled
     if (userData.sync_enabled) {
       try {
-        // Use smart sync strategy on initial authentication
+        // Sync first, then save
         await performSmartSync()
         console.log('Initial smart sync completed')
+        
+        // ✅ ONLY save to localStorage AFTER successful sync
+        localStorage.setItem('userdetails', JSON.stringify(userData))
+        console.log('User details saved locally after successful sync')
+        
       } catch (syncError) {
         console.error('Initial sync failed:', syncError)
-        toast.warning('Failed to sync data from server', {
-          duration: 3000,
-          description: 'Using local data instead'
-        })
+
+        // Reset unsynced changes flag
+        syncStatus.value.hasUnsyncedChanges = false
+        
+        // Load local data as fallback
         loadLocalData()
+        
+        // Still save userData to localStorage as fallback
+        localStorage.setItem('userdetails', JSON.stringify(userData))
+        
+        toast.warning('Synced with server but failed to merge data', {
+          duration: 4000,
+          description: 'Your local data is preserved'
+        })
       }
     } else {
-      // Just load local data if sync is disabled
+      // If sync is disabled, safe to save immediately
+      localStorage.setItem('userdetails', JSON.stringify(userData))
       loadLocalData()
       console.log('Sync disabled, loaded local data only')
     }
@@ -1722,24 +1729,19 @@ async function handleAuth(data: {
 
   } catch (error: any) {
     console.error('Authentication error:', error)
-
-    // Don't show toast here - let the calling function handle it
     throw error
   }
 }
 
-// function to load data from localStorage with validation
 function loadLocalData() {
   try {
     console.log('Loading data from localStorage...')
 
-    // Load chats with validation
     const storedChats = localStorage.getItem('chats')
     if (storedChats) {
       try {
         const parsedChats = JSON.parse(storedChats)
         if (Array.isArray(parsedChats)) {
-          // Validate each chat object
           const validChats = parsedChats.filter(chat =>
             chat &&
             typeof chat === 'object' &&
@@ -1756,14 +1758,12 @@ function loadLocalData() {
       } catch (parseError) {
         console.error('Error parsing stored chats:', parseError)
         chats.value = []
-        localStorage.removeItem('chats') // Remove corrupted data
+        localStorage.removeItem('chats')
       }
     }
 
-    // Load current chat ID with validation
     const storedChatId = localStorage.getItem('currentChatId')
     if (storedChatId && typeof storedChatId === 'string') {
-      // Verify the chat ID exists in our chats
       const chatExists = chats.value.some(chat => chat.id === storedChatId)
       if (chatExists) {
         currentChatId.value = storedChatId
@@ -1774,7 +1774,6 @@ function loadLocalData() {
       }
     }
 
-    // Load link previews
     loadLinkPreviewCache()
 
     updateExpandedArray()
@@ -1789,7 +1788,6 @@ function loadLocalData() {
   }
 }
 
-// manual sync with smart strategy
 async function manualSync() {
   if (!isUserOnline.value) {
     const isActuallyOnline = await checkInternetConnection()
@@ -1813,7 +1811,7 @@ async function manualSync() {
   if (parsedUserDetails.value.sync_enabled === false) {
     toast.info('Sync is disabled', {
       duration: 3000,
-      description: 'Enable auto-sync in settings to sync your data'
+      description: 'Enable sync in settings to sync your data'
     })
     return
   }
@@ -1828,6 +1826,7 @@ async function manualSync() {
 
   try {
     console.log('Starting manual smart sync...')
+    showSyncIndicator('Starting manual sync...', 10)
 
     await performSmartSync()
 
@@ -1846,125 +1845,20 @@ async function manualSync() {
   }
 }
 
-// auto-sync setup with better error handling and cleanup
-let autoSyncInterval: any = null
-let visibilityListener: (() => void) | null = null
-let beforeUnloadListener: (() => void) | null = null
-
-// auto-sync setup with smart data synchronization strategy
-function setupAutoSync() {
-  try {
-    console.log('Setting up smart auto-sync...')
-
-    // Clear existing interval and listeners
-    if (autoSyncInterval) {
-      clearInterval(autoSyncInterval)
-      autoSyncInterval = null
-    }
-
-    if (visibilityListener) {
-      document.removeEventListener('visibilitychange', visibilityListener)
-    }
-
-    if (beforeUnloadListener) {
-      window.removeEventListener('beforeunload', beforeUnloadListener)
-    }
-
-    // Smart auto-sync interval - check every 5 minutes
-    autoSyncInterval = setInterval(async () => {
-      if (isAuthenticated.value &&
-        parsedUserDetails.value?.sync_enabled !== false &&
-        !syncStatus.value.syncing) {
-
-        try {
-          await performSmartSync()
-        } catch (error) {
-          console.error('Auto-sync failed:', error)
-          // Don't show toast for auto-sync failures to avoid spam
-        }
-      }
-    }, 5 * 60 * 1000) // 5 minutes
-
-    // visibility change handler with smart sync
-    visibilityListener = async () => {
-      if (!document.hidden &&
-        isAuthenticated.value &&
-        parsedUserDetails.value?.sync_enabled !== false &&
-        !syncStatus.value.syncing) {
-
-        // Small delay to ensure tab is fully active
-        setTimeout(async () => {
-          try {
-            console.log('Tab became visible: Performing smart sync...')
-            await performSmartSync()
-          } catch (error) {
-            console.error('Visibility sync failed:', error)
-          }
-        }, 1000)
-      }
-    }
-    document.addEventListener('visibilitychange', visibilityListener)
-
-    // Sync before page unload (only if sync enabled and has changes)
-    beforeUnloadListener = () => {
-      if (syncStatus.value.hasUnsyncedChanges &&
-        parsedUserDetails.value?.sync_enabled !== false &&
-        navigator.sendBeacon) {
-        try {
-          const syncData = {
-            chats: JSON.stringify(chats.value),
-            link_previews: JSON.stringify(Object.fromEntries(linkPreviewCache.value)),
-            current_chat_id: currentChatId.value,
-            username: parsedUserDetails.value.username,
-            preferences: parsedUserDetails.value.preferences || '',
-            work_function: parsedUserDetails.value.workFunction || '',
-            theme: parsedUserDetails.value.theme || 'system',
-            sync_enabled: parsedUserDetails.value.sync_enabled
-          }
-
-          console.log('Page unload: Sending data via beacon...')
-
-          const formData = new FormData()
-          Object.entries(syncData).forEach(([key, value]) => {
-            formData.append(key, value.toString())
-          })
-
-          navigator.sendBeacon(`${API_BASE_URL}/sync`, formData)
-        } catch (error) {
-          console.error('Failed to send beacon:', error)
-        }
-      }
-    }
-    window.addEventListener('beforeunload', beforeUnloadListener)
-
-    console.log('Smart auto-sync setup completed')
-
-  } catch (error) {
-    console.error('Error setting up auto-sync:', error)
-  }
-}
-
-// toggle auto-sync with smart sync strategy
 async function toggleSync(newSyncValue?: boolean) {
   const targetSyncValue = newSyncValue ?? !parsedUserDetails.value?.sync_enabled
+  
+  // Store original state for rollback
+  const originalSyncValue = parsedUserDetails.value.sync_enabled
+  const originalUserDetails = { ...parsedUserDetails.value }
 
   try {
-    // Update local state first for immediate UI response
+    // Update in-memory state (but NOT localStorage yet)
     parsedUserDetails.value.sync_enabled = targetSyncValue
     syncEnabled.value = targetSyncValue
+    
+    console.log('Attempting sync toggle:', { current: syncEnabled.value, target: targetSyncValue })
 
-    // Save to localStorage
-    localStorage.setItem("userdetails", JSON.stringify(parsedUserDetails.value))
-    console.log('Sync toggle:', { current: syncEnabled.value, target: targetSyncValue })
-
-    // Update sync mechanisms based on new value
-    if (targetSyncValue) {
-      setupAutoSync()
-    } else {
-      cleanupAutoSync()
-    }
-
-    // Update server with retry logic
     let serverUpdateSuccess = false
     let retryCount = 0
     const maxRetries = 2
@@ -1983,155 +1877,70 @@ async function toggleSync(newSyncValue?: boolean) {
         })
         serverUpdateSuccess = true
         console.log('Sync preference updated on server:', targetSyncValue)
+        
+        // ✅ ONLY save to localStorage AFTER server confirms
+        localStorage.setItem("userdetails", JSON.stringify(parsedUserDetails.value))
+        console.log('Sync preference saved locally after server confirmation')
+        
       } catch (serverError) {
         retryCount++
         console.warn(`Failed to update sync preference on server (attempt ${retryCount}):`, serverError)
         
         if (retryCount > maxRetries) {
           console.error('All retry attempts failed for server sync update')
-          // Continue with local operations despite server failure
+          throw new Error('Failed to update sync preference on server')
         } else {
-          // Wait before retry (exponential backoff)
           await new Promise(resolve => setTimeout(resolve, 1000 * retryCount))
         }
       }
     }
 
-    // Perform smart sync only after server is updated (if enabling)
+    // Proceed with sync operations if enabled
     if (targetSyncValue) {
       try {
         await performSmartSync()
-        toast.success('Auto-sync enabled and data synchronized', {
+        toast.success('Sync enabled and data synchronized', {
           duration: 3000,
-          description: serverUpdateSuccess 
-            ? 'Your data is now syncing across devices' 
-            : 'Auto-sync enabled (server update may be delayed)'
+          description: 'Your data is now syncing across devices'
         })
       } catch (error) {
         console.warn('Initial sync failed:', error)
-        toast.success('Auto-sync enabled', {
+        toast.success('Sync enabled', {
           duration: 3000,
-          description: serverUpdateSuccess
-            ? 'Initial sync failed, but auto-sync is now active'
-            : 'Auto-sync enabled (server communication issues)'
+          description: 'Initial sync failed, but sync is now active'
         })
       }
     } else {
-      toast.info('Auto-sync disabled', {
+      toast.info('Sync disabled', {
         duration: 3000,
-        description: serverUpdateSuccess
-          ? 'Your data will only be saved locally on this device'
-          : 'Auto-sync disabled (server update may be delayed)'
+        description: 'Your data will only be saved locally on this device'
       })
     }
 
   } catch (error) {
     console.error('Failed to toggle sync:', error)
-    // Revert the change on error
-    parsedUserDetails.value.sync_enabled = !targetSyncValue
-    syncEnabled.value = !targetSyncValue
-    localStorage.setItem("userdetails", JSON.stringify(parsedUserDetails.value))
+    
+    // ❌ ROLLBACK: Revert both in-memory AND localStorage
+    parsedUserDetails.value.sync_enabled = originalSyncValue
+    syncEnabled.value = originalSyncValue
+    parsedUserDetails.value = originalUserDetails
+    localStorage.setItem("userdetails", JSON.stringify(originalUserDetails))
     
     toast.error('Failed to update sync setting', {
       duration: 4000,
-      description: 'Please try again later'
+      description: 'Changes have been reverted. Please try again.'
     })
     throw error
   }
 }
 
-// Smart sync strategy
-async function performSmartSync() {
-  if (!isAuthenticated.value || !parsedUserDetails.value?.user_id) {
-    console.log('Smart sync skipped - user not authenticated')
-    return
-  }
-
-  if (syncLock || syncStatus.value.syncing) {
-    console.log('Smart sync skipped - sync already in progress')
-    return
-  }
-
-  console.log('Performing smart sync...')
-
-  // Check if local data is empty or very minimal
-  const isLocalDataEmpty = chats.value.length === 0 ||
-    (chats.value.length === 1 &&
-      chats.value[0].messages.length === 0)
-
-  if (isLocalDataEmpty) {
-    console.log('Local data is empty - syncing from server first')
-    try {
-      await syncFromServer()
-      console.log('Successfully synced data from server (empty local)')
-    } catch (error) {
-      console.error('Failed to sync from server (empty local):', error)
-      // Don't throw error - we'll try normal sync next time
-    }
-  } else if (syncStatus.value.hasUnsyncedChanges) {
-    console.log('Local has unsynced changes - syncing to server')
-    try {
-      await syncToServer()
-      console.log('Successfully synced changes to server')
-    } catch (error) {
-      console.error('Failed to sync changes to server:', error)
-      throw error // Re-throw to allow retry logic
-    }
-  } else {
-    console.log('No unsynced changes - checking for server updates')
-    try {
-      // Even without unsynced changes, check if server has newer data
-      await syncFromServer()
-      console.log('Checked for server updates - data is current')
-    } catch (error) {
-      console.error('Failed to check for server updates:', error)
-      // Don't throw error for this case - it's just a background check
-    }
-  }
-}
-
-function cleanupAutoSync() {
-  try {
-    // Clear all intervals and timeouts
-    if (autoSyncInterval) {
-      clearInterval(autoSyncInterval)
-      autoSyncInterval = null
-    }
-
-    // Remove event listeners
-    if (visibilityListener) {
-      document.removeEventListener('visibilitychange', visibilityListener)
-      visibilityListener = null
-    }
-
-    if (beforeUnloadListener) {
-      window.removeEventListener('beforeunload', beforeUnloadListener)
-      beforeUnloadListener = null
-    }
-
-    // Reset sync lock to allow future operations
-    syncLock = false
-
-    // Ensure no sync operations are in progress
-    syncStatus.value.syncing = false
-
-    console.log('Auto-sync cleanup completed')
-  } catch (error) {
-    console.error('Error during auto-sync cleanup:', error)
-  }
-}
-
-// checks if local data is empty or minimal
 function isLocalDataEmpty(): boolean {
   try {
-    // Check if chats array is empty
     if (chats.value.length === 0) {
       return true
     }
     
-    // Check if we only have empty/default chats
     const hasMeaningfulData = chats.value.some(chat => {
-      // Consider a chat meaningful if it has messages or a custom title
       return chat.messages.length > 0 || 
              (chat.title && chat.title !== 'New Chat' && chat.title !== '')
     })
@@ -2139,17 +1948,14 @@ function isLocalDataEmpty(): boolean {
     return !hasMeaningfulData
   } catch (error) {
     console.error('Error checking local data state:', error)
-    // If we can't determine, assume data exists to be safe
     return false
   }
 }
 
 function toggleTheme(newTheme?: Theme) {
-  // If a specific theme is provided, use it
   if (newTheme && ['light', 'dark', 'system'].includes(newTheme)) {
     currentTheme.value = newTheme
   } else {
-    // Cycle through themes: system -> light -> dark -> system
     if (currentTheme.value === 'system') {
       currentTheme.value = 'light'
     } else if (currentTheme.value === 'light') {
@@ -2159,10 +1965,8 @@ function toggleTheme(newTheme?: Theme) {
     }
   }
 
-  // Save the theme preference
   localStorage.setItem('theme', currentTheme.value)
 
-  // Apply the theme
   const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
   if (currentTheme.value === 'dark' || (currentTheme.value === 'system' && prefersDark)) {
     isDarkMode.value = true
@@ -2171,23 +1975,14 @@ function toggleTheme(newTheme?: Theme) {
     isDarkMode.value = false
     document.documentElement.classList.remove('dark')
   }
-
-  // Show theme change notification
-  // const themeLabel = currentTheme.value === 'system'
-  //   ? `System (${prefersDark ? 'Dark' : 'Light'})`
-  //   : currentTheme.value.charAt(0).toUpperCase() + currentTheme.value.slice(1)
-
-  // toast.info(`Theme: ${themeLabel}`, { duration: 1500 })
 }
 
-// Function to check internet connectivity more reliably
 async function checkInternetConnection(): Promise<boolean> {
   try {
     connectionStatus.value = 'checking'
     
-    // Try to fetch a small resource from a reliable source
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 5000) // 5 second timeout
+    const timeoutId = setTimeout(() => controller.abort(), 5000)
     
     const response = await fetch(`${API_BASE_URL}/health`, {
       method: 'GET',
@@ -2197,7 +1992,6 @@ async function checkInternetConnection(): Promise<boolean> {
     
     clearTimeout(timeoutId)
     
-    // If we get any response, we're online
     const isConnected = response.status < 400
     isUserOnline.value = isConnected
     connectionStatus.value = isConnected ? 'online' : 'offline'
@@ -2211,7 +2005,6 @@ async function checkInternetConnection(): Promise<boolean> {
   }
 }
 
-// Function to show connection status to user
 function showConnectionStatus() {
   if (!isUserOnline.value) {
     toast.error('You are offline', {
@@ -2226,7 +2019,6 @@ function showConnectionStatus() {
   }
 }
 
-// Cancel all active requests for a specific chat
 function cancelChatRequests(chatId: string) {
   const requestsToCancel: string[] = []
   
@@ -2246,7 +2038,6 @@ function cancelChatRequests(chatId: string) {
   })
 }
 
-// Cancel all active requests
 function cancelAllRequests() {
   activeRequests.value.forEach((controller, requestId) => {
     controller.abort()
@@ -2255,7 +2046,6 @@ function cancelAllRequests() {
   requestChatMap.value.clear()
 }
 
-// Check if there are active requests for current chat
 const hasActiveRequestsForCurrentChat = computed(() => {
   let hasRequests = false
   requestChatMap.value.forEach((chatId) => {
@@ -2266,20 +2056,22 @@ const hasActiveRequestsForCurrentChat = computed(() => {
   return hasRequests
 })
 
-// Enhanced event listeners with connection checking
 function setupConnectionListeners() {
-  // Basic online/offline events
   window.addEventListener('online', async () => {
     console.log('Browser reports online, verifying...')
     const isActuallyOnline = await checkInternetConnection()
     if (isActuallyOnline) {
       showConnectionStatus()
       
-      // Auto-sync when coming back online if needed
+      // Auto-sync when coming back online with retry logic
       if (syncStatus.value.hasUnsyncedChanges && parsedUserDetails.value?.sync_enabled) {
+        console.log('Connection restored - syncing unsaved changes')
         setTimeout(() => {
-          manualSync().catch(console.error)
-        }, 2000)
+          performSmartSync().catch(error => {
+            console.error('Auto-sync after connection recovery failed:', error)
+            // Don't show error toast for auto-sync failures
+          })
+        }, 3000)
       }
     }
   })
@@ -2291,7 +2083,6 @@ function setupConnectionListeners() {
     showConnectionStatus()
   })
 
-  // Periodic connection checking (every 30 seconds when offline)
   let connectionCheckInterval: any
   const startConnectionMonitoring = () => {
     connectionCheckInterval = setInterval(async () => {
@@ -2301,7 +2092,7 @@ function setupConnectionListeners() {
           showConnectionStatus()
         }
       }
-    }, 30000) // Check every 30 seconds when offline
+    }, 30000)
   }
 
   const stopConnectionMonitoring = () => {
@@ -2310,7 +2101,6 @@ function setupConnectionListeners() {
     }
   }
 
-  // Start monitoring when offline
   if (!isUserOnline.value) {
     startConnectionMonitoring()
   }
@@ -2319,15 +2109,161 @@ function setupConnectionListeners() {
   window.addEventListener('offline', startConnectionMonitoring)
 }
 
-// onMounted with comprehensive error handling
+let userDetailsDebounceTimer: any = null
+let chatsDebounceTimer: any = null
+let previousUserDetails: any = null
+
+let userDetailsSyncTimeout: any = null
+watch(() => parsedUserDetails.value, (newUserDetails) => {
+  if (!isAuthenticated.value || !newUserDetails?.sync_enabled) return
+  
+  const oldUserDetails = previousUserDetails
+  
+  if (!oldUserDetails) {
+    previousUserDetails = JSON.parse(JSON.stringify(newUserDetails))
+    return
+  }
+  
+  // ✅ FIX: Clear any pending sync immediately
+  if (userDetailsSyncTimeout) {
+    clearTimeout(userDetailsSyncTimeout)
+  }
+  
+  const hasChanges = hasUserDetailsChangedMeaningfully(newUserDetails, oldUserDetails)
+  
+  if (!hasChanges) {
+    console.log('No meaningful user details changes detected')
+    previousUserDetails = JSON.parse(JSON.stringify(newUserDetails))
+    return
+  }
+  
+  console.log('User details changed meaningfully')
+
+  userDetailsSyncTimeout = setTimeout(async () => {
+    // Store the new state temporarily
+    const tempNewState = JSON.parse(JSON.stringify(newUserDetails))
+    
+    try {
+      console.log('Syncing user details changes to server...')
+      
+      // Save to localStorage immediately for good UX
+      localStorage.setItem("userdetails", JSON.stringify(tempNewState))
+      
+      // Mark as having unsynced changes
+      syncStatus.value.hasUnsyncedChanges = true
+      
+      // Attempt sync
+      await performSmartSync()
+      
+      console.log('User details synced successfully')
+      previousUserDetails = tempNewState
+      
+    } catch (error:any) {
+      console.error('Sync after user details change failed:', error)
+      
+      // On sync failure, we keep the local changes
+      previousUserDetails = tempNewState
+      
+      // Don't show error for lock conflicts - these are temporary
+      if (!error.message?.includes('already in progress')) {
+        toast.warning('Failed to sync user details', {
+          duration: 4000,
+          description: 'Changes saved locally. Will retry automatically.'
+        })
+      } else {
+        console.log('Sync conflict - changes saved locally, will retry')
+      }
+    }
+  }, 1500) // Reduced debounce time for better responsiveness
+}, { deep: true, immediate: false })
+
+function hasUserDetailsChangedMeaningfully(newDetails: any, oldDetails: any): boolean {
+  if (!oldDetails || !newDetails) return false
+  
+  // Ignore timestamp-only changes
+  const keysToCheck = ['preferences', 'theme', 'workFunction', 'phone_number', 'sync_enabled', 'response_mode']
+  
+  return keysToCheck.some(key => {
+    const oldValue = oldDetails[key]
+    const newValue = newDetails[key]
+    
+    // Handle undefined/null comparisons properly
+    if (oldValue === undefined || oldValue === null) {
+      return newValue !== undefined && newValue !== null
+    }
+    
+    return JSON.stringify(newValue) !== JSON.stringify(oldValue)
+  })
+}
+
+watch(() => chats.value, (newChats, oldChats) => {
+  if (!isAuthenticated.value || !parsedUserDetails.value?.sync_enabled) {
+    console.log('🔕 Sync disabled - skipping chat change detection');
+    return;
+  }
+
+  if (!oldChats || oldChats.length === 0) {
+    console.log('🆕 Initial chats load - no previous state to compare');
+    return;
+  }
+
+  if (chatsDebounceTimer) {
+    clearTimeout(chatsDebounceTimer);
+  }
+
+  const hasMeaningfulChanges = hasChatsChangedMeaningfully(newChats, oldChats);
+
+  if (hasMeaningfulChanges) {
+    console.log('💾 Chat changes detected - will sync');
+    syncStatus.value.hasUnsyncedChanges = true;
+
+    // Use a reasonable debounce but ensure sync happens
+    chatsDebounceTimer = setTimeout(() => {
+      if (syncStatus.value.hasUnsyncedChanges && !syncStatus.value.syncing) {
+        console.log('🔄 Triggering sync from chat changes');
+        performSmartSync().catch(error => {
+          console.error('Sync from chat changes failed:', error);
+        });
+      }
+    }, 5000); // Increased to 5 seconds
+  }
+}, { deep: true, immediate: false });
+
+function hasChatsChangedMeaningfully(newChats: Chat[], oldChats: Chat[]): boolean {
+  if (!oldChats || !Array.isArray(oldChats)) return true
+  
+  if (newChats.length !== oldChats.length) return true
+  
+  for (let i = 0; i < newChats.length; i++) {
+    const newChat = newChats[i]
+    const oldChat = oldChats[i]
+    
+    if (!oldChat) return true
+    
+    if (newChat.messages.length !== oldChat.messages.length) return true
+    
+    for (let j = 0; j < newChat.messages.length; j++) {
+      const newMessage = newChat.messages[j]
+      const oldMessage = oldChat.messages[j]
+      
+      if (!oldMessage) return true
+      
+      if (newMessage.prompt !== oldMessage.prompt || 
+          newMessage.response !== oldMessage.response) {
+        return true
+      }
+    }
+  }
+  
+  return false
+}
+
 onMounted(async () => {
   try {
     console.log('App mounting...')
-    // Initialize theme
     const savedTheme = localStorage.getItem('theme') || 'system'
     currentTheme.value = savedTheme
 
-    // Apply the theme
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
     if (currentTheme.value === 'dark' || (currentTheme.value === 'system' && prefersDark)) {
       isDarkMode.value = true
@@ -2337,7 +2273,6 @@ onMounted(async () => {
       document.documentElement.classList.remove('dark')
     }
 
-    // Listen for system theme changes when in system mode
     const systemThemeListener: any = (e: MediaQueryListEvent) => {
       const currentTheme = localStorage.getItem('theme')
       if (currentTheme === 'system' || !currentTheme) {
@@ -2353,7 +2288,6 @@ onMounted(async () => {
     const darkModeQuery = window.matchMedia('(prefers-color-scheme: dark)')
     darkModeQuery.addEventListener('change', systemThemeListener)
 
-    // Load initial state from localStorage with validation
     try {
       const storedIsCollapsed = localStorage.getItem("isCollapsed")
       if (storedIsCollapsed !== null) {
@@ -2363,17 +2297,14 @@ onMounted(async () => {
       console.error('Error loading collapsed state:', error)
     }
 
-    // Handle authenticated user initialization
     if (isAuthenticated.value) {
       console.log('User is authenticated, initializing...')
 
       try {
-        // Handle external reference if present
         const localExt = localStorage.getItem("external_reference")
         if (localExt) {
           try {
             const ext = JSON.parse(localExt)
-            // Add timeout to prevent blocking initialization
             Promise.race([
               getTransaction(ext),
               new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000))
@@ -2383,20 +2314,15 @@ onMounted(async () => {
             })
           } catch (extError) {
             console.error('Error processing external reference:', extError)
-            localStorage.removeItem("external_reference") // Remove invalid data
+            localStorage.removeItem("external_reference")
           }
         }
 
-        // Sync from server if sync is enabled
         if (parsedUserDetails.value?.sync_enabled !== false) {
           await syncFromServer()
         } else {
           loadLocalData()
         }
-
-        // Setup auto-sync for authenticated users
-        setupAutoSync()
-
       } catch (syncError) {
         console.error('Error during initial sync:', syncError)
         toast.warning('Failed to sync initial data', {
@@ -2406,11 +2332,9 @@ onMounted(async () => {
         loadLocalData()
       }
     } else {
-      // Load local data for unauthenticated users
       loadLocalData()
     }
 
-    // Setup responsive design handling
     try {
       screenWidth.value = window.innerWidth
 
@@ -2424,10 +2348,8 @@ onMounted(async () => {
 
       window.addEventListener('resize', handleResize)
 
-      // Cleanup on unmount
       onUnmounted(() => {
         window.removeEventListener('resize', handleResize)
-        cleanupAutoSync()
       })
     } catch (error) {
       console.error('Error setting up resize listener:', error)
@@ -2435,7 +2357,6 @@ onMounted(async () => {
 
     onUnmounted(() => {
       darkModeQuery.removeEventListener('change', systemThemeListener)
-      cleanupAutoSync()
     })
 
     console.log('App mounted successfully')
@@ -2454,18 +2375,18 @@ onMounted(() => {
     loadChatDrafts()
   }
 
-  // Initial connection check
   checkInternetConnection().then(isOnline => {
     console.log(`Initial connection check: ${isOnline ? 'Online' : 'Offline'}`)
   })
 
-  // Setup event listeners
   setupConnectionListeners()
 
-  // Check connection on tab focus
+  if (parsedUserDetails.value) {
+    previousUserDetails = JSON.parse(JSON.stringify(parsedUserDetails.value))
+  }
+
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden && !isUserOnline.value) {
-      // Re-check connection when tab becomes visible and we were offline
       setTimeout(() => {
         checkInternetConnection()
       }, 1000)
@@ -2474,30 +2395,24 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  // Cleanup event listeners
   window.removeEventListener('online', setupConnectionListeners)
   window.removeEventListener('offline', setupConnectionListeners)
   
-  // Clear any intervals
   const intervals = Object.values(globalThis).filter(
     value => value && typeof value === 'object' && 'refresh' in value
   )
   intervals.forEach(interval => clearInterval(interval as any))
   
-  // Cleanup draft timeout
   if (draftSaveTimeout) {
     clearTimeout(draftSaveTimeout)
-  }
-  
-  // Only cleanup auto-sync if user is logging out
-  if (!isAuthenticated.value) {
-    cleanupAutoSync()
   }
 })
 
 // Global state object with all functions and reactive references
 const globalState = {
   // Reactive references
+  userDetailsDebounceTimer,
+  chatsDebounceTimer,
   activeRequests,
   requestChatMap,
   pendingResponses,
@@ -2560,6 +2475,12 @@ const globalState = {
   toggleChatMenu,
   handleClickOutside,
   autoGrow,
+  performSmartSync,
+
+  // Sync UI functions
+  showSyncIndicator,
+  hideSyncIndicator,
+  updateSyncProgress,
 
   // Data persistence functions
   saveChats,
@@ -2576,14 +2497,9 @@ const globalState = {
   syncFromServer,
   syncToServer,
   manualSync,
-  setupAutoSync,
-  cleanupAutoSync,
 
   // Authentication
   handleAuth,
-
-  // Legacy compatibility
-  autoSyncInterval // Keep for backward compatibility
 }
 
 // Provide global state to child components

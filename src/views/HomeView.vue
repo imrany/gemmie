@@ -26,12 +26,24 @@ const globalState = inject('globalState') as {
     password: string;
   }) => any,
   chatDrafts: Ref<Map<string, string>>,
+  userDetailsDebounceTimer:any,
+  chatsDebounceTimer:any,
   screenWidth: Ref<number>,
   confirmDialog: Ref<ConfirmDialogOptions>,
   isCollapsed: Ref<boolean>,
   isSidebarHidden: Ref<boolean>,
   authData: Ref<{ username: string; email: string; password: string; agreeToTerms: boolean; }>,
-  syncStatus: Ref<{ lastSync: Date | null; syncing: boolean; hasUnsyncedChanges: boolean; }>,
+  syncStatus: Ref<{ 
+    lastSync: Date | null; 
+    syncing: boolean; 
+    hasUnsyncedChanges: boolean;
+    showSyncIndicator: boolean;
+    syncMessage: string;
+    syncProgress: number;
+    lastError: string | null;
+    retryCount: number;
+    maxRetries: number;
+  }>,
   isAuthenticated: Ref<boolean>,
   parsedUserDetails: any,
   planStatus: Ref<{ status: string; timeLeft: string; expiryDate: string; isExpired: boolean; }>,
@@ -79,8 +91,6 @@ const globalState = inject('globalState') as {
   apiCall: (endpoint: string, options: RequestInit) => any,
   manualSync: () => Promise<any>
   toggleSidebar: () => void,
-  setupAutoSync: () => void,
-  autoSyncInterval: any,
   isFreeUser: Ref<boolean>,
   currentTheme: Ref<Theme>,
   isDarkMode: Ref<boolean>,
@@ -89,6 +99,10 @@ const globalState = inject('globalState') as {
   connectionStatus: Ref<string>,
   checkInternetConnection: () => Promise<boolean>,
   autoGrow: (e: Event) => void,
+  showSyncIndicator: (message: string, progress?: number) => void,
+  hideSyncIndicator: () => void,
+  updateSyncProgress: (message: string, progress: number) => void,
+  performSmartSync: () => Promise<void>,
   activeRequests: Ref<Map<string, AbortController>>,
   requestChatMap: Ref<Map<string, string>>,
   pendingResponses: Ref<Map<string, { prompt: string; chatId: string }>>,
@@ -107,6 +121,8 @@ const {
   pastePreviews,
   chats,
   planStatus,
+  userDetailsDebounceTimer,
+  chatsDebounceTimer,
   logout,
   isLoading,
   expanded,
@@ -146,9 +162,7 @@ const {
   apiCall,
   manualSync,
   toggleSidebar,
-  setupAutoSync,
   autoGrow,
-  autoSyncInterval,
   handleAuth,
   isFreeUser,
   isUserOnline,
@@ -157,6 +171,7 @@ const {
   activeRequests,
   requestChatMap,
   pendingResponses,
+  performSmartSync,
 } = globalState
 let parsedUserDetails: Ref<any> = globalState.parsedUserDetails
 
@@ -168,6 +183,7 @@ const copiedIndex = ref<number | null>(null)
 const requestCount = ref(0)
 const FREE_REQUEST_LIMIT = 5
 const now = ref(Date.now())
+const showInputModeDropdown = ref(false)
 
 const isRecording = ref(false)
 const isTranscribing = ref(false)
@@ -783,6 +799,7 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
     stopVoiceRecording(true)
   }
 
+  // Use the global connection check
   if (!isUserOnline.value) {
     const isActuallyOnline = await checkInternetConnection()
     if (!isActuallyOnline) {
@@ -796,11 +813,10 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
 
   let promptValue = retryPrompt || e?.target?.prompt?.value?.trim()
 
-  // If we have a paste preview, use that content instead
+  // Handle paste preview content
   const currentPastePreview = pastePreviews.value.get(currentChatId.value)
   if (currentPastePreview && currentPastePreview.show && !retryPrompt) {
     promptValue += currentPastePreview.content
-    // Clear the paste preview
     pastePreviews.value.delete(currentChatId.value)
   }
 
@@ -815,9 +831,8 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
     return
   }
 
-  // Check for daily reset before checking limits
+  // Check request limits using global state
   checkAndResetDailyCount()
-
   const shouldHaveLimit = isFreeUser.value ||
     planStatus.value.isExpired ||
     planStatus.value.status === 'no-plan' ||
@@ -838,20 +853,17 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
     return
   }
 
-  // Clear draft for current chat when message is sent
+  // Clear draft for current chat
   clearCurrentDraft()
 
-  // Store current chat ID at the time of submission
+  // Create new chat if none exists
   let submissionChatId = currentChatId.value
   const submissionChat = chats.value.find(chat => chat.id === submissionChatId)
 
-  // Create new chat if none exists
   if (!submissionChatId || !submissionChat) {
     const newChatId = createNewChat(promptValue)
     if (!newChatId) return
-    // Use the newly created chat
     currentChatId.value = newChatId
-    // Update submissionChatId to the new chat ID
     submissionChatId = newChatId
   }
 
@@ -859,16 +871,16 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
   const requestId = `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
   const abortController = new AbortController()
 
-  // Track the active request
+  // Track the active request using global state
   activeRequests.value.set(requestId, abortController)
   requestChatMap.value.set(requestId, submissionChatId)
 
-  // handling for link-only prompts
+  // Handle link-only prompts
   if (isJustLinks(promptValue)) {
     return handleLinkOnlyRequest(promptValue, submissionChatId, requestId, abortController)
   }
 
-  // Merge with only the latest message if prompt is short
+  // Merge with context for short prompts
   if (isPromptTooShort(promptValue) && currentMessages.value.length > 0) {
     const lastMessage = currentMessages.value[currentMessages.value.length - 1]
     fabricatedPrompt = `${lastMessage.prompt || ''} ${lastMessage.response || ''}\nUser: ${promptValue}`
@@ -882,7 +894,7 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
     e.target.prompt.style.height = "auto"
   }
 
-  // Clear voice transcription after using it
+  // Clear voice transcription
   if (transcribedText.value) {
     transcribedText.value = ''
   }
@@ -895,19 +907,16 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
     targetChat.messages.push(tempResp)
     targetChat.updatedAt = new Date().toISOString()
 
-    // Update chat title if this is the first message
+    // Update chat title if first message
     if (targetChat.messages.length === 1) {
       targetChat.title = generateChatTitle(promptValue)
     }
   }
 
-  // Update expanded array for the submission chat
   updateExpandedArray()
-
-  // Process links in user prompt
   processLinksInUserPrompt(promptValue)
 
-  // Scroll to bottom of the submission chat if it's currently active
+  // Scroll to bottom
   if (currentChatId.value === submissionChatId) {
     await nextTick()
     scrollToBottom()
@@ -921,9 +930,9 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
       signal: abortController.signal
     })
 
-    // Check if request was aborted due to chat switch
+    // Check if request was aborted
     if (abortController.signal.aborted) {
-      console.log(`Request ${requestId} was aborted due to chat switch`)
+      console.log(`Request ${requestId} was aborted`)
       return
     }
 
@@ -933,17 +942,10 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
 
     let parseRes = await response.json()
 
-    // Find the target chat again (it might have changed)
+    // Update the response in chat
     const updatedTargetChat = chats.value.find(chat => chat.id === submissionChatId)
     if (updatedTargetChat) {
-      // Ensure messages array exists
-      if (!updatedTargetChat.messages) {
-        updatedTargetChat.messages = []
-      }
-
       const lastMessageIndex = updatedTargetChat.messages.length - 1
-
-      // Only update if we have a valid message index
       if (lastMessageIndex >= 0) {
         updatedTargetChat.messages[lastMessageIndex] = {
           prompt: promptValue,
@@ -951,13 +953,11 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
           status: response.status
         }
         updatedTargetChat.updatedAt = new Date().toISOString()
-
-        // Trigger link preview generation for the new response
         await processLinksInResponse(lastMessageIndex)
       }
     }
 
-    // ✅ ONLY INCREMENT ON SUCCESS for AI responses
+    // Increment request count on success
     incrementRequestCount()
 
     // Show success notification if user switched away
@@ -977,7 +977,7 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
 
     console.error('AI Response Error:', err)
 
-    // Update error in the target chat - FIX: use submissionChatId instead of undefined variable
+    // Update error in target chat
     const errorTargetChat = chats.value.find(chat => chat.id === submissionChatId)
     if (errorTargetChat && errorTargetChat.messages.length > 0) {
       const lastMessageIndex = errorTargetChat.messages.length - 1
@@ -993,7 +993,7 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
       description: 'Please try again or check your connection'
     })
 
-    // Optionally restore the draft if the request failed
+    // Restore draft if request failed
     if (submissionChatId && promptValue.trim()) {
       chatDrafts.value.set(submissionChatId, promptValue)
       saveChatDrafts()
@@ -1006,10 +1006,17 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
     isLoading.value = false
     saveChats()
 
-    // Observe any new video containers
+    // Trigger background sync if needed
+    setTimeout(() => {
+      performSmartSync().catch(error => {
+        console.error('Background sync failed:', error);
+      });
+    }, 500);
+   
+    // Observe new video containers
     observeNewVideoContainers();
 
-    // Scroll to bottom if we're still in the same chat
+    // Scroll to bottom if still in same chat
     if (currentChatId.value === submissionChatId) {
       await nextTick()
       scrollToBottom()
@@ -2002,7 +2009,91 @@ function clearVoiceTranscription() {
   }
 }
 
-// Move onUpdated outside of onMounted
+// Select input mode and handle special actions
+async function selectInputMode(mode: 'web-search' | 'deep-search' | 'light-response') {
+  // Store original value for rollback
+  const originalMode = parsedUserDetails.value.response_mode
+  
+  // Don't do anything if same mode
+  if (originalMode === mode) {
+    showInputModeDropdown.value = false
+    return
+  }
+  
+  try {
+    // Update in-memory state - the watch will handle syncing
+    parsedUserDetails.value.response_mode = mode
+    showInputModeDropdown.value = false
+
+    const modeNames = {
+      'web-search': 'Web Search',
+      'deep-search': 'Deep Search',
+      'light-response': 'Light Response'
+    }
+
+    // Show success immediately - sync happens in background via watch
+    toast.success(`Switched to ${modeNames[mode]}`, {
+      duration: 2000,
+      description: mode === 'web-search'
+        ? 'Responses will include web search results'
+        : mode === 'deep-search'
+          ? 'Responses will be more detailed and thorough'
+          : 'Responses will be quick and concise'
+    })
+  } catch (error) {
+    console.error('Error selecting input mode:', error)
+    parsedUserDetails.value.response_mode = originalMode
+    
+    toast.error('Failed to change mode', {
+      duration: 3000,
+      description: 'An error occurred'
+    })
+  }
+}
+
+// Close dropdown when clicking outside
+const handleClickOutside = (e: MouseEvent) => {
+  const dropdown = document.querySelector('.relative .absolute')
+  const button = document.querySelector('.relative button')
+
+  if (dropdown && !dropdown.contains(e.target as Node) &&
+    button && !button.contains(e.target as Node)) {
+    showInputModeDropdown.value = false
+  }
+}
+
+type ModeOption = {
+  mode: 'light-response' | 'web-search' | 'deep-search',
+  label: string,
+  description: string,
+  icon: string,
+  title: string
+}
+
+const modeOptions: Record<string, ModeOption> = {
+  'light-response': {
+    mode: 'light-response',
+    label: 'Quick Response',
+    description: 'Fast & concise',
+    icon: 'pi pi-bolt',
+    title: 'Quick Response - Click to change mode'
+  },
+  'web-search': {
+    mode: 'web-search',
+    label: 'Web Search',
+    description: 'Include web results',
+    icon: 'pi pi-search',
+    title: 'Web Search - Click to change mode'
+  },
+  'deep-search': {
+    mode: 'deep-search',
+    label: 'Deep Search',
+    description: 'Detailed analysis',
+    icon: 'pi pi-code',
+    title: 'Deep Search - Click to change mode'
+  }
+}
+
 onUpdated(() => {
   // Check for new video containers after DOM updates
   observeNewVideoContainers();
@@ -2014,7 +2105,7 @@ watch(currentChatId, (newChatId, oldChatId) => {
 
   if (oldChatId && newChatId !== oldChatId) {
     // Clear paste preview when switching chats
-    pastePreviews.value.delete(oldChatId)
+    // pastePreviews.value.delete(oldChatId)
 
     // Cancel ongoing requests for the old chat (optional - remove if you want them to continue)
     // cancelChatRequests(oldChatId)
@@ -2139,6 +2230,7 @@ onBeforeUnmount(() => {
 
   // Remove keyboard listener
   document.removeEventListener('keydown', handleModalKeydown)
+  document.removeEventListener('click', handleClickOutside)
 
   // Clean up paste preview handlers (use the enhanced cleanup function)
   cleanupPastePreviewHandlers()
@@ -2146,6 +2238,14 @@ onBeforeUnmount(() => {
   // Restore body scroll if modal is open
   if (showPasteModal.value) {
     document.body.style.overflow = 'auto'
+  }
+
+  // Clear debounce timers
+  if (chatsDebounceTimer) {
+    clearTimeout(chatsDebounceTimer)
+  }
+  if (userDetailsDebounceTimer) {
+    clearTimeout(userDetailsDebounceTimer)
   }
 })
 
@@ -2208,6 +2308,8 @@ onMounted(() => {
     (window as any).playSocialVideo = safeGlobalFunction(playSocialVideo, 'playSocialVideo');
   }
 
+  document.addEventListener('click', handleClickOutside)
+
   // 5. Initialize features based on authentication
   if (isAuthenticated.value) {
     // Load request count for limited users
@@ -2221,7 +2323,6 @@ onMounted(() => {
     }
 
     loadChats();
-    setupAutoSync();
 
     // Initial sync from server (delayed to avoid conflicts)
     setTimeout(() => {
@@ -2339,10 +2440,6 @@ onMounted(() => {
     clearInterval(interval);
     clearInterval(resetCheckInterval);
 
-    if (autoSyncInterval) {
-      clearInterval(autoSyncInterval);
-    }
-
     // Clear timeouts
     if (scrollTimeout) {
       clearTimeout(scrollTimeout);
@@ -2399,7 +2496,6 @@ onUnmounted(() => {
       parsedUserDetails,
       screenWidth,
       isCollapsed,
-      syncStatus,
     }" :functions="{
       setShowInput,
       hideSidebar,
@@ -2430,7 +2526,6 @@ onUnmounted(() => {
           screenWidth,
           isCollapsed,
           isSidebarHidden,
-          syncStatus,
         }" :functions="{
           hideSidebar,
           manualSync,
@@ -2642,6 +2737,7 @@ onUnmounted(() => {
                 'relative flex bg-gray-50 dark:bg-gray-800 flex-col border-2 dark:border-gray-700 shadow rounded-2xl items-center w-[85%] max-w-6xl' :
                 'relative flex bg-gray-50 dark:bg-gray-800 flex-col border-2 dark:border-gray-700 shadow rounded-2xl items-center w-[85%] max-w-4xl' :
                 'relative flex flex-col border-2 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 shadow rounded-2xl w-full max-w-full items-center'">
+
               <!-- Paste Preview inside form - above other content -->
               <div v-if="pastePreview && pastePreview.show" class="w-full p-3 border-b dark:border-gray-700">
                 <div
@@ -2746,92 +2842,146 @@ onUnmounted(() => {
                 </div>
               </div>
 
-              <!-- Input Area with Voice Recording -->
-              <div
-                class="flex w-full bg-white dark:bg-gray-900 rounded-2xl px-2 sm:px-3 py-1 sm:py-2 items-center gap-2 sm:gap-3"
+              <!-- Input Area with Voice Recording - FLEX COL LAYOUT -->
+              <div class="flex flex-col w-full bg-white dark:bg-gray-900 rounded-2xl px-2 sm:px-3 py-1 sm:py-2 gap-2"
                 :class="inputDisabled ? 'opacity-50 border border-t dark:border-gray-700 pointer-events-none' :
                   showUpgradeBanner ? 'border border-t dark:border-gray-700' : ''">
 
-                <!-- Voice Recording Indicator (when active) -->
-                <div v-if="isRecording || isTranscribing"
-                  class="flex items-center gap-1 sm:gap-2 px-2 py-1 bg-red-50 dark:bg-red-900/30 rounded-lg border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 text-xs sm:text-sm flex-shrink-0">
-                  <div class="flex items-center gap-1">
-                    <div class="w-2 h-2 bg-red-500 dark:bg-red-400 rounded-full animate-pulse"></div>
-                    <span class="hidden sm:inline">{{ isTranscribing ? 'Listening...' : 'Starting...' }}</span>
-                    <span class="sm:hidden">{{ isTranscribing ? '🎤' : '⏳' }}</span>
+                <div class="w-full items-center justify-center flex">
+                  <!-- Voice Recording Indicator (when active) - Now aligned horizontally -->
+                  <div v-if="isRecording || isTranscribing"
+                    class="flex items-center gap-1 sm:gap-2 px-2 py-1 bg-red-50 dark:bg-red-900/30 rounded-lg border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 text-xs sm:text-sm flex-shrink-0 h-fit">
+                    <div class="flex items-center gap-1">
+                      <div class="w-2 h-2 bg-red-500 dark:bg-red-400 rounded-full animate-pulse"></div>
+                      <span class="hidden sm:inline">{{ isTranscribing ? 'Listening...' : 'Starting...' }}</span>
+                      <span class="sm:hidden">{{ isTranscribing ? '🎤' : '⏳' }}</span>
+                    </div>
                   </div>
+
+                  <!-- Clear Voice Button (when transcribed text exists) -->
+                  <button v-if="transcribedText && !isRecording" type="button" @click="clearVoiceTranscription"
+                    class="rounded-lg w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center transition-colors text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 flex-shrink-0"
+                    title="Clear voice transcription">
+                    <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="currentColor" viewBox="0 0 24 24">
+                      <path
+                        d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
+                    </svg>
+                  </button>
+
+                  <!-- Textarea - Now takes remaining space alongside the indicator -->
+                  <textarea required id="prompt" name="prompt" @keydown="onEnter" @input="autoGrow" @paste="handlePaste"
+                    :disabled="inputDisabled" rows="1" :class="[
+                      'flex-grow py-3 px-3 placeholder:text-gray-500 dark:placeholder:text-gray-400 rounded-xl bg-white dark:bg-gray-900 dark:text-gray-100 text-sm outline-none resize-none max-h-[120px] sm:max-h-[150px] md:max-h-[200px] overflow-auto leading-relaxed min-w-0',
+                      'disabled:opacity-50 disabled:cursor-not-allowed',
+                      isRecording ? 'bg-red-50 border-red-200 dark:border-red-800' : 'focus:border-blue-500 dark:focus:border-blue-400'
+                    ]" :placeholder="inputPlaceholderText">
+                  </textarea>
                 </div>
 
-                <!-- Microphone Toggle Button -->
-                <button type="button" @click="toggleVoiceRecording" :disabled="inputDisabled" :class="[
-                  'rounded-lg w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center transition-all duration-200 flex-shrink-0',
-                  isRecording
-                    ? 'bg-red-500 hover:bg-red-600 text-white shadow-lg transform scale-105 animate-pulse'
-                    : 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-200',
-                  'disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none'
-                ]" :title="microphonePermission === 'denied'
-                  ? 'Microphone access denied'
-                  : isRecording
-                    ? 'Stop voice input'
-                    : 'Start voice input'" :aria-label="isRecording ? 'Stop voice input' : 'Start voice input'">
+                <!-- Buttons Row - Below textarea -->
+                <div class="flex items-center justify-between w-full gap-2">
+                  <!-- Left side buttons -->
+                  <div class="flex items-center gap-2">
+                    <!-- Microphone Toggle Button -->
+                    <button type="button" @click="toggleVoiceRecording" :disabled="inputDisabled" :class="[
+                      'rounded-lg w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center transition-all duration-200 flex-shrink-0',
+                      isRecording
+                        ? 'bg-red-500 hover:bg-red-600 text-white shadow-lg transform scale-105 animate-pulse'
+                        : 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-200',
+                      'disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none'
+                    ]" :title="microphonePermission === 'denied'
+              ? 'Microphone access denied'
+              : isRecording
+                ? 'Stop voice input'
+                : 'Start voice input'">
 
-                  <!-- Microphone Icon -->
-                  <svg v-if="microphonePermission === 'prompt'" class="w-4 h-4 sm:w-5 sm:h-5" fill="currentColor"
-                    viewBox="0 0 24 24">
-                    <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
-                    <path d="M19 10v1a7 7 0 0 1-14 0v-1a1 1 0 0 1 2 0v1a5 5 0 0 0 10 0v-1a1 1 0 0 1 2 0Z" />
-                    <path d="M12 18.5a1 1 0 0 1 1 1v1a1 1 0 0 1-2 0v-1a1 1 0 0 1 1-1Z" />
-                  </svg>
+                      <!-- Microphone Icon -->
+                      <svg v-if="microphonePermission === 'prompt'" class="w-4 h-4 sm:w-5 sm:h-5" fill="currentColor"
+                        viewBox="0 0 24 24">
+                        <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+                        <path d="M19 10v1a7 7 0 0 1-14 0v-1a1 1 0 0 1 2 0v1a5 5 0 0 0 10 0v-1a1 1 0 0 1 2 0Z" />
+                      </svg>
 
-                  <svg v-if="!isRecording && microphonePermission === 'granted'" class="w-4 h-4 sm:w-5 sm:h-5"
-                    fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
-                    <path d="M19 10v1a7 7 0 0 1-14 0v-1a1 1 0 0 1 2 0v1a5 5 0 0 0 10 0v-1a1 1 0 0 1 2 0Z" />
-                    <path d="M12 18.5a1 1 0 0 1 1 1v1a1 1 0 0 1-2 0v-1a1 1 0 0 1 1-1Z" />
-                  </svg>
+                      <svg v-else-if="!isRecording && microphonePermission === 'granted'" class="w-4 h-4 sm:w-5 sm:h-5"
+                        fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+                        <path d="M19 10v1a7 7 0 0 1-14 0v-1a1 1 0 0 1 2 0v1a5 5 0 0 0 10 0v-1a1 1 0 0 1 2 0Z" />
+                      </svg>
 
-                  <!-- Stop Icon -->
-                  <svg v-else-if="microphonePermission === 'granted' && isRecording" class="w-4 h-4 sm:w-5 sm:h-5"
-                    fill="currentColor" viewBox="0 0 24 24">
-                    <rect x="6" y="6" width="12" height="12" rx="2" />
-                  </svg>
+                      <!-- Stop Icon -->
+                      <svg v-else-if="microphonePermission === 'granted' && isRecording" class="w-4 h-4 sm:w-5 sm:h-5"
+                        fill="currentColor" viewBox="0 0 24 24">
+                        <rect x="6" y="6" width="12" height="12" rx="2" />
+                      </svg>
 
-                  <!-- Microphone Denied Icon -->
-                  <svg v-else-if="microphonePermission === 'denied' && !isRecording"
-                    class="w-4 h-4 sm:w-5 sm:h-5 text-red-500 dark:text-red-400" fill="currentColor"
-                    viewBox="0 0 24 24">
-                    <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
-                    <path d="M19 10v1a7 7 0 0 1-14 0v-1a1 1 0 0 1 2 0v1a5 5 0 0 0 10 0v-1a1 1 0 0 1 2 0Z" />
-                    <path d="M12 18.5a1 1 0 0 1 1 1v1a1 1 0 0 1-2 0v-1a1 1 0 0 1 1-1Z" />
-                    <line x1="4" y1="4" x2="20" y2="20" stroke="currentColor" stroke-width="2" />
-                  </svg>
-                </button>
+                      <!-- Microphone Denied Icon -->
+                      <svg v-else-if="microphonePermission === 'denied' && !isRecording"
+                        class="w-4 h-4 sm:w-5 sm:h-5 text-red-500 dark:text-red-400" fill="currentColor"
+                        viewBox="0 0 24 24">
+                        <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+                        <path d="M19 10v1a7 7 0 0 1-14 0v-1a1 1 0 0 1 2 0v1a5 5 0 0 0 10 0v-1a1 1 0 0 1 2 0Z" />
+                        <line x1="4" y1="4" x2="20" y2="20" stroke="currentColor" stroke-width="2" />
+                      </svg>
+                    </button>
 
-                <!-- Clear Voice Button (when transcribed text exists) -->
-                <button v-if="transcribedText && !isRecording" type="button" @click="clearVoiceTranscription"
-                  class="rounded-lg w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center transition-colors text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 flex-shrink-0"
-                  title="Clear voice transcription">
-                  <svg class="w-3 h-3 sm:w-4 sm:h-4" fill="currentColor" viewBox="0 0 24 24">
-                    <path
-                      d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
-                  </svg>
-                </button>
+                    <!-- Mode Dropdown Container -->
+                    <div class="relative flex-shrink-0">
+                      <!-- Dropdown Button - Shows current mode -->
+                      <button type="button" @click.stop="showInputModeDropdown = !showInputModeDropdown"
+                        :disabled="inputDisabled" :class="[
+                          'rounded-lg w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm border',
+                          parsedUserDetails?.response_mode === 'web-search'
+                            ? 'border-green-300 bg-green-50 hover:bg-green-100 dark:border-green-600 dark:bg-green-900/30 dark:hover:bg-green-900/50 text-green-700 dark:text-green-300'
+                            : parsedUserDetails?.response_mode === 'deep-search'
+                              ? 'border-orange-300 bg-orange-50 hover:bg-orange-100 dark:border-orange-600 dark:bg-orange-900/30 dark:hover:bg-orange-900/50 text-orange-700 dark:text-orange-300'
+                              : 'border-blue-300 bg-blue-50 hover:bg-blue-100 dark:border-blue-600 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 text-blue-700 dark:text-blue-300'
+                        ]" :title="modeOptions[parsedUserDetails?.response_mode].title">
+                        <!-- Dynamic icon based on selected mode -->
+                        <i :class="modeOptions[parsedUserDetails?.response_mode].icon" class="text-xs sm:text-sm"></i>
+                      </button>
 
-                <!-- Textarea -->
-                <textarea required id="prompt" name="prompt" @keydown="onEnter" @input="autoGrow" @paste="handlePaste"
-                  :disabled="inputDisabled" rows="1" :class="[
-                    'flex-grow py-3 px-1 placeholder:text-gray-500 dark:placeholder:text-gray-400 rounded-t-2xl bg-white dark:bg-gray-900 dark:text-gray-100 text-sm outline-none resize-none border-none max-h-[120px] sm:max-h-[150px] md:max-h-[200px] overflow-auto leading-relaxed w-full min-w-0',
-                    'disabled:opacity-50 disabled:cursor-not-allowed',
-                    isRecording ? 'bg-red-50 border border-red-100' : ''
-                  ]" :placeholder="inputPlaceholderText">
-                </textarea>
+                      <!-- Dropdown Menu -->
+                      <div v-show="showInputModeDropdown"
+                        class="absolute bottom-12 left-0 bg-white dark:bg-gray-800 border-[1px] border-gray-300 dark:border-gray-600 rounded-lg shadow-2xl pt-2 z-[100] w-[220px] sm:w-[240px]"
+                        @click.stop>
+                        <div
+                          class="px-2 py-1 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide border-b border-gray-200 dark:border-gray-700">
+                          Response Mode
+                        </div>
 
-                <!-- Submit Button -->
-                <button type="submit" :disabled="inputDisabled"
-                  class="rounded-lg w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center transition-colors text-white bg-blue-500 hover:bg-blue-600 dark:bg-blue-700 dark:hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50 disabled:bg-gray-400 flex-shrink-0">
-                  <i v-if="!isLoading" class="pi pi-arrow-up text-xs sm:text-sm"></i>
-                  <i v-else class="pi pi-spin pi-spinner text-xs sm:text-sm"></i>
-                </button>
+                        <!-- Mode Options -->
+                        <button v-for="(option, key) in modeOptions" :key="option.mode" type="button"
+                          @click="selectInputMode(option.mode)" :class="[
+                            'w-full px-3 py-2.5 text-left text-sm flex items-center gap-3 transition-colors',
+                            parsedUserDetails?.response_mode === option.mode
+                              ? 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 border-r-2 border-green-500'
+                              : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200'
+                          ]">
+                          <i :class="[option.icon,
+                            parsedUserDetails?.response_mode === option.mode
+                            ? ' text-green-600 dark:text-green-400'
+                            :' text-gray-600 dark:text-gray-400'
+                          ]"></i>
+                          <div class="flex-1 min-w-0">
+                            <div class="font-semibold">{{ option.label }}</div>
+                            <div class="text-xs opacity-70">{{ option.description }}</div>
+                          </div>
+                          <i v-if="parsedUserDetails?.response_mode === option.mode"
+                            class="pi pi-check text-green-600 dark:text-green-400 text-sm font-bold"></i>
+                        </button>
+                      </div>
+                    </div>
+
+                  
+                  </div>
+
+                  <!-- Submit Button - Right side -->
+                  <button type="submit" :disabled="inputDisabled"
+                    class="rounded-lg w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center transition-colors text-white bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50 disabled:bg-gray-400 flex-shrink-0 shadow-sm">
+                    <i v-if="!isLoading" class="pi pi-arrow-up text-xs sm:text-sm"></i>
+                    <i v-else class="pi pi-spin pi-spinner text-xs sm:text-sm"></i>
+                  </button>
+                </div>
               </div>
             </form>
           </div>

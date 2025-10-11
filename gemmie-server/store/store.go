@@ -25,6 +25,14 @@ type StorageType struct {
 	Mu           sync.RWMutex           `json:"-"`
 }
 
+type Modes string
+
+const (
+	ModesLightResponse Modes = "light-response"
+	ModesWebSearch     Modes = "web-search"
+	ModesDeepSearch    Modes = "deep-search"
+)
+
 type User struct {
 	ID           string    `json:"id"`
 	Username     string    `json:"username"`
@@ -44,6 +52,7 @@ type User struct {
 	ExpiryTimestamp int64  `json:"expiry_timestamp,omitempty"`
 	ExpireDuration int64   `json:"expire_duration,omitempty"`
 	Price        string    `json:"price,omitempty"`
+	ResponseMode Modes    `json:"response_mode,omitempty"`
 	AgreeToTerms bool      `json:"agree_to_terms"`
 	
 	EmailVerified   bool      `json:"email_verified"`      // Whether email is verified
@@ -139,22 +148,28 @@ func loadStorage() {
 	needsSave := false
 	for userID, user := range Storage.Users {
 		// Check if this user needs migration
-		if user.UnsubscribeToken == "" || !user.EmailSubscribed {
+		// Migrate new fields for User struct
+		updated := false
+
+		if user.ResponseMode == "" {
+			user.ResponseMode = "light-response"
+			updated = true
+		}
+
+		if user.UnsubscribeToken == "" {
+			user.UnsubscribeToken = encrypt.GenerateUnsubscribeToken(userID)
+			updated = true
+		}
+		if !user.EmailSubscribed {
+			user.EmailSubscribed = true
+			updated = true
+		}
+
+		// Add more migrations for any new fields here, e.g.:
+		// if user.NewField == "" { user.NewField = "defaultValue"; updated = true }
+
+		if updated {
 			slog.Debug("Migrating user", "user_id", userID, "email", user.Email)
-			
-			// Generate unsubscribe token for existing users
-			if user.UnsubscribeToken == "" {
-				user.UnsubscribeToken = encrypt.GenerateUnsubscribeToken(userID)
-			}
-			
-			// Default: subscribed to emails (if not already set)
-			if !user.EmailSubscribed {
-				user.EmailSubscribed = true
-			}
-			
-			// Ensure email verification status is explicit
-			// (keep existing value if already set)
-			
 			Storage.Users[userID] = user
 			needsSave = true
 		}
@@ -228,4 +243,8 @@ func SaveStorage() error {
 	defer Storage.Mu.Unlock()
 
 	return saveStorageInternal()
+}
+
+func GetVersion() string{
+	return "v0.4.22"
 }

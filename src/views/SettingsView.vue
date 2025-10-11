@@ -103,34 +103,7 @@ async function saveProfile() {
     // Update global state
     parsedUserDetails.value.username = profileData.username.trim()
     parsedUserDetails.value.workFunction = profileData.workFunction
-    parsedUserDetails.value.preferences = profileData.preferences
-
-    // Always save to localStorage
-    localStorage.setItem("userdetails", JSON.stringify(parsedUserDetails.value))
-
-    // Server sync only if enabled
-    if (parsedUserDetails?.value.sync_enabled) {
-      try {
-        await apiCall('/sync', {
-          method: 'POST',
-          body: JSON.stringify({
-            workFunction: profileData.workFunction,
-            preferences: profileData.preferences,
-            chats: JSON.stringify(chats.value),
-            link_previews: "{}",
-            current_chat_id: currentChatId.value,
-            sync_enabled: parsedUserDetails?.value.sync_enabled
-          })
-        })
-        toast.success('Profile updated and synced successfully')
-      } catch (serverError) {
-        console.warn('Failed to sync profile to server:', serverError)
-        toast.success('Profile updated locally (sync failed)')
-      }
-    } else {
-      toast.success('Profile updated locally')
-    }
-
+    parsedUserDetails.value.preferences = profileData.preferences   
   } catch (error) {
     console.error('Failed to save profile:', error)
     toast.error('Failed to save profile changes')
@@ -202,7 +175,6 @@ watch(isAuthenticated, (val) => {
       parsedUserDetails,
       screenWidth,
       isCollapsed,
-      syncStatus,
     }" :functions="{
       setShowInput,
       hideSidebar,
