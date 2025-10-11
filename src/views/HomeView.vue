@@ -18,6 +18,14 @@ import PastePreviewModal from "@/components/Modals/PastePreviewModal.vue"
 import { useRoute } from "vue-router"
 import type { Theme } from "vue-sonner/src/packages/types.js"
 
+type ModeOption = {
+  mode: 'light-response' | 'web-search' | 'deep-search',
+  label: string,
+  description: string,
+  icon: string,
+  title: string
+}
+
 // Inject global state
 const globalState = inject('globalState') as {
   handleAuth: (data: {
@@ -1327,7 +1335,7 @@ const scrollButtonPosition = computed(() => {
   const basePosition = 'bottom-[90px] sm:bottom-[100px]'
   const withScrollButton = 'bottom-[90px] sm:bottom-[100px]'
   const withBanners = 'bottom-[170px] sm:bottom-[170px]'
-  const withPastePreview = 'bottom-[270px] sm:bottom-[310px]'
+  const withPastePreview = 'bottom-[270px] sm:bottom-[280px]'
   const withPasteAndBanners = 'bottom-[370px] sm:bottom-[380px]'
 
   // Priority order: paste + banners > banners > paste > scroll button > base
@@ -2062,14 +2070,6 @@ const handleClickOutside = (e: MouseEvent) => {
   }
 }
 
-type ModeOption = {
-  mode: 'light-response' | 'web-search' | 'deep-search',
-  label: string,
-  description: string,
-  icon: string,
-  title: string
-}
-
 const modeOptions: Record<string, ModeOption> = {
   'light-response': {
     mode: 'light-response',
@@ -2564,7 +2564,7 @@ onUnmounted(() => {
         <div v-else-if="isAuthenticated && currentMessages.length === 0">
           <!-- Loading Overlay -->
           <div v-if="isLoading"
-            class="absolute top-0 left-0 w-full h-full bg-white dark:bg-gray-900 bg-opacity-80 dark:bg-opacity-80 z-10 flex flex-col items-center justify-center">
+            class="absolute w-full h-full bg-white dark:bg-gray-900 bg-opacity-80 dark:bg-opacity-80 z-10 flex flex-col items-center justify-center">
             <i class="pi pi-spin pi-spinner text-4xl text-gray-500 dark:text-gray-400 mb-4"></i>
             <p class="text-gray-700 dark:text-gray-300">Loading...</p>
           </div>
@@ -2843,7 +2843,7 @@ onUnmounted(() => {
               </div>
 
               <!-- Input Area with Voice Recording - FLEX COL LAYOUT -->
-              <div class="flex flex-col w-full bg-white dark:bg-gray-900 rounded-2xl px-2 sm:px-3 py-1 sm:py-2 gap-2"
+              <div class="flex flex-col w-full bg-white dark:bg-gray-900 rounded-2xl px-2 sm:px-3 py-2 gap-1 sm:gap-2"
                 :class="inputDisabled ? 'opacity-50 border border-t dark:border-gray-700 pointer-events-none' :
                   showUpgradeBanner ? 'border border-t dark:border-gray-700' : ''">
 
@@ -2971,8 +2971,6 @@ onUnmounted(() => {
                         </button>
                       </div>
                     </div>
-
-                  
                   </div>
 
                   <!-- Submit Button - Right side -->
