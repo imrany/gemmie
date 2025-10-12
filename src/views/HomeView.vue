@@ -10,7 +10,7 @@ import type { Chat, ConfirmDialogOptions, CurrentChat, LinkPreview, Res } from "
 import { toast } from 'vue-sonner'
 import { destroyVideoLazyLoading, initializeVideoLazyLoading, observeNewVideoContainers, pauseVideo, playEmbeddedVideo, playSocialVideo, resumeVideo, showVideoControls, stopDirectVideo, stopVideo, toggleDirectVideo, updateVideoControls } from "@/utils/videoProcessing"
 import { onUpdated } from "vue"
-import { extractUrls, generateChatTitle, copyCode, isPromptTooShort, WRAPPER_URL, detectLargePaste } from "@/utils/globals"
+import { extractUrls, generateChatTitle, copyCode, isPromptTooShort, WRAPPER_URL, detectLargePaste, SPINDLE_URL } from "@/utils/globals"
 import CreateSessView from "./CreateSessView.vue"
 import router from "@/router"
 import { copyPasteContent, detectContentType } from "@/utils/previewPasteContent"
@@ -649,6 +649,7 @@ function validateCurrentStep(): boolean {
 // Enhanced marked configuration with link handling
 marked.use({
   renderer: {
+    // Links
     link({ href, title, text }) {
       return `<a 
         href="${href}" 
@@ -658,18 +659,121 @@ marked.use({
         data-url="${href}"
       >${text}</a>`
     },
+    
+    // Code blocks
     code({ text, lang }) {
       let highlighted = lang && hljs.getLanguage(lang)
         ? hljs.highlight(text, { language: lang }).value
         : hljs.highlightAuto(text).value
 
       return `
-        <div class="code-container relative">
-          <pre><code class="hljs language-${lang || 'plaintext'}">${highlighted}</code></pre>
+        <div class="code-container relative my-4">
+          <pre class="bg-gray-900 rounded-lg p-4 overflow-x-auto"><code class="hljs language-${lang || 'plaintext'} text-sm">${highlighted}</code></pre>
           <button 
-            class="copy-button absolute top-2 right-2 bg-gray-700 text-white px-2 py-1 rounded text-xs hover:bg-gray-600"
+            class="copy-button absolute top-2 right-2 bg-gray-700 text-white px-3 py-1 rounded text-xs hover:bg-gray-600 transition-colors"
             data-code="${encodeURIComponent(text)}"
-          >Copy code</button>
+          >Copy</button>
+        </div>
+      `
+    },
+    
+    // Inline code
+    // codespan({ text }) {
+    //   return `<code class="inline-code bg-gray-100 text-red-600 px-1 py-0.5 rounded text-sm font-mono">${text}</code>`
+    // },
+    
+    // Headings
+    heading({ text, depth }) {
+      const sizes = ['text-3xl', 'text-2xl', 'text-xl', 'text-lg', 'text-base', 'text-sm']
+      const weights = ['font-bold', 'font-bold', 'font-semibold', 'font-semibold', 'font-medium', 'font-medium']
+      return `
+        <h${depth} class="${sizes[depth - 1]} ${weights[depth - 1]} text-inherit mt-6 mb-3 text-gray-900">
+          ${text}
+        </h${depth}>
+      `
+    },
+    
+    // Paragraphs
+    paragraph({ text }) {
+      return `<p class="my-3 text-gray-700 dark:text-gray-200 leading-relaxed">${text}</p>`
+    },
+    
+    // // Blockquotes
+    // blockquote({ text }) {
+    //   return `
+    //     <blockquote class="border-l-4 border-blue-500 pl-4 my-4 text-gray-600 italic bg-blue-50 py-2 rounded-r">
+    //       ${text}
+    //     </blockquote>
+    //   `
+    // },
+    
+    // // Lists
+    // list({ items, ordered }) {
+    //   const listClass = ordered ? 'list-decimal' : 'list-disc'
+    //   return `
+    //     <${ordered ? 'ol' : 'ul'} class="${listClass} my-3 pl-6 space-y-1">
+    //       ${items}
+    //     </${ordered ? 'ol' : 'ul'}>
+    //   `
+    // },
+    
+    // listitem({ text }) {
+    //   return `<li class="my-1 text-gray-700">${text}</li>`
+    // },
+    
+    // Strong/Bold
+    strong({ text }) {
+      return `<strong class="font-bold text-gray-900 dark:text-gray-100">${text}</strong>`
+    },
+    
+    // // Emphasis/Italic
+    // em({ text }) {
+    //   return `<em class="italic text-gray-800">${text}</em>`
+    // },
+    
+    // // Horizontal Rule
+    // hr() {
+    //   return `<hr class="my-6 border-gray-300">`
+    // },
+    
+    // // Tables
+    // table({ header, rows }) {
+    //   return `
+    //     <div class="overflow-x-auto my-4">
+    //       <table class="min-w-full border-collapse border border-gray-300">
+    //         <thead>${header}</thead>
+    //         <tbody>${rows}</tbody>
+    //       </table>
+    //     </div>
+    //   `
+    // },
+    
+    // tablerow({ text }) {
+    //   return `<tr class="border-b border-gray-200">${text}</tr>`
+    // },
+    
+    // tablecell({ text, header }) {
+    //   const cellClass = header 
+    //     ? 'bg-gray-100 font-semibold text-gray-900 px-4 py-2 border border-gray-300'
+    //     : 'px-4 py-2 border border-gray-300 text-gray-700'
+    //   return `
+    //     <${header ? 'th' : 'td'} class="${cellClass}">
+    //       ${text}
+    //     </${header ? 'th' : 'td'}>
+    //   `
+    // },
+    
+    // Images
+    image({ href, title, text }) {
+      return `
+        <div class="my-4">
+          <img 
+            src="${href}" 
+            alt="${text}" 
+            title="${title || ''}"
+            class="max-w-full h-auto rounded-lg shadow-sm border border-gray-200"
+            loading="lazy"
+          />
         </div>
       `
     }
@@ -821,9 +925,11 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
 
   let promptValue = retryPrompt || e?.target?.prompt?.value?.trim()
 
-  // Handle paste preview content
+  // Check if we have paste preview content
   const currentPastePreview = pastePreviews.value.get(currentChatId.value)
-  if (currentPastePreview && currentPastePreview.show && !retryPrompt) {
+  const hasPastePreview = currentPastePreview && currentPastePreview.show && !retryPrompt
+  
+  if (hasPastePreview) {
     promptValue += currentPastePreview.content
     pastePreviews.value.delete(currentChatId.value)
   }
@@ -888,14 +994,25 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
     return handleLinkOnlyRequest(promptValue, submissionChatId, requestId, abortController)
   }
 
-  // Merge with context for short prompts
-  if (isPromptTooShort(promptValue) && currentMessages.value.length > 0) {
+  isLoading.value = true
+  
+  // Determine response mode - use light-response for pasted content, otherwise user preference
+  let responseMode = parsedUserDetails?.value?.response_mode || 'light-response'
+  
+  // Override to light-response if pasted content is detected
+  if (hasPastePreview) {
+    responseMode = 'light-response'
+    console.log('Pasted content detected - using light-response mode')
+  }
+  
+  const isSearchMode = responseMode === 'web-search' || responseMode === 'deep-search'
+  
+  // Merge with context for short prompts in non-search modes
+  if (responseMode === 'light-response' && isPromptTooShort(promptValue) && currentMessages.value.length > 0) {
     const lastMessage = currentMessages.value[currentMessages.value.length - 1]
     fabricatedPrompt = `${lastMessage.prompt || ''} ${lastMessage.response || ''}\nUser: ${promptValue}`
   }
-
-  isLoading.value = true
-
+  
   // Clear input field
   if (!retryPrompt && e?.target?.prompt) {
     e.target.prompt.value = ""
@@ -907,7 +1024,10 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
     transcribedText.value = ''
   }
 
-  const tempResp: Res = { prompt: promptValue, response: "..." }
+  const tempResp: Res = { 
+    prompt: promptValue, 
+    response: "...", 
+  }
 
   // Add message to submission chat
   const targetChat = chats.value.find(chat => chat.id === submissionChatId)
@@ -931,12 +1051,51 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
   }
 
   try {
-    let response = await fetch(WRAPPER_URL, {
-      method: "POST",
-      body: JSON.stringify(fabricatedPrompt),
-      headers: { "content-type": "application/json" },
-      signal: abortController.signal
-    })
+    let response: Response
+    let parseRes: any
+
+    if (isSearchMode) {
+      // Enhanced search request with proper parameters
+      const searchParams = new URLSearchParams({
+        query: encodeURIComponent(fabricatedPrompt),
+        mode: responseMode === 'web-search' ? 'light-search' : 'deep-search',
+        max_results: responseMode === 'deep-search' ? '10' : '5',
+        content_depth: responseMode === 'deep-search' ? '2' : '1'
+      })
+
+      console.log(`Making ${responseMode} request:`, {
+        query: fabricatedPrompt,
+        mode: responseMode,
+        url: `${SPINDLE_URL}/search?${searchParams}`
+      })
+
+      response = await fetch(
+        `${SPINDLE_URL}/search?${searchParams}`,
+        {
+          method: "GET",
+          signal: abortController.signal,
+          headers: {
+            "Content-Type": "application/json",
+          }
+        }
+      )
+    } else {
+      // Standard light-response mode
+      console.log('Making light-response request:', {
+        prompt: fabricatedPrompt,
+        hasPastePreview: hasPastePreview,
+        originalMode: parsedUserDetails?.value?.response_mode
+      })
+      
+      response = await fetch(WRAPPER_URL, {
+        method: "POST",
+        body: JSON.stringify(fabricatedPrompt),
+        headers: { 
+          "Content-Type": "application/json" 
+        },
+        signal: abortController.signal
+      })
+    }
 
     // Check if request was aborted
     if (abortController.signal.aborted) {
@@ -945,22 +1104,34 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
     }
 
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      const errorText = await response.text()
+      throw new Error(`HTTP ${response.status}: ${errorText || response.statusText}`)
     }
 
-    let parseRes = await response.json()
+    parseRes = await response.json()
+
+    // Enhanced response processing for search modes
+    let finalResponse = parseRes.error ? parseRes.error : parseRes.response
+    
+    if (isSearchMode && parseRes.results) {
+      // Format search results nicely
+      finalResponse = formatSearchResults(parseRes, responseMode)
+    }
 
     // Update the response in chat
     const updatedTargetChat = chats.value.find(chat => chat.id === submissionChatId)
     if (updatedTargetChat) {
       const lastMessageIndex = updatedTargetChat.messages.length - 1
       if (lastMessageIndex >= 0) {
-        updatedTargetChat.messages[lastMessageIndex] = {
+        const updatedMessage = {
           prompt: promptValue,
-          response: parseRes.error ? parseRes.error : parseRes.response,
-          status: response.status
+          response: finalResponse,
+          status: response.status,
         }
+        updatedTargetChat.messages[lastMessageIndex] = updatedMessage
         updatedTargetChat.updatedAt = new Date().toISOString()
+        
+        // Process links in the response
         await processLinksInResponse(lastMessageIndex)
       }
     }
@@ -992,7 +1163,7 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
       errorTargetChat.messages[lastMessageIndex] = {
         prompt: promptValue,
         response: `Error: ${err.message}`,
-        status: 500
+        status: 500,
       }
     }
 
@@ -1030,6 +1201,83 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
       scrollToBottom()
     }
   }
+}
+
+// Helper function to format search results
+function formatSearchResults(searchData: any, mode: string): string {
+  if (!searchData.results || searchData.results.length === 0) {
+    return "No search results found for your query."
+  }
+
+  let formatted = "";
+  
+  if (mode === 'light-search' || mode === 'web-search') {
+    const { results, total_pages } = searchData
+    
+    const firstFive = results.length>5?results.slice(0,5):results
+    formatted += `<div class="prose prose-sm max-w-none">`
+    formatted += `<p class="my-3 text-gray-700 dark:text-gray-200 leading-relaxed"><strong class="font-bold text-gray-900 dark:text-gray-100">First Five Top:</strong> ${total_pages || firstFive.length} results</p>`
+    
+    firstFive.forEach((result: any, index: number) => {
+      const title = result.title || 'No Title'
+      const url = result.url || '#'
+      const description = result.description || 'No description available'
+
+      formatted += `<h4 class="text-inherit mt-6 mb-3 text-gray-900 text-lg font-semibold">${index + 1}. ${title.lenght>50?title.slice(0, 50) + '...':title}</h4>`
+      formatted += `<p class="my-3 text-gray-700 dark:text-gray-200 leading-relaxed">${description}</p>`
+      formatted += `<a href="${url}" class="text-blue-600 mb-3 underline hover:text-blue-800 link-with-preview" target="_blank" rel="noopener noreferrer">${url.length > 40 ? url.slice(0, 40) + '...' : url}</a>`
+    })
+    formatted += `</div>`
+  } else if (mode === 'deep-search') {
+    const { query, search_engine, results, total_pages, content_depth, search_time, timestamp } = searchData
+    
+    formatted += `<div class="prose prose-sm max-w-none">`
+    formatted += `<h3>🔍 Deep Search Results</h3>`
+    formatted += `<p><strong>Query:</strong> "${query}"<br>`
+    formatted += `<strong>Engine:</strong> ${search_engine} | <strong>Mode:</strong> ${mode} | <strong>Depth:</strong> ${content_depth || 1}<br>`
+    formatted += `<strong>Found:</strong> ${total_pages || results.length} results in ${(search_time / 1e9).toFixed(2)}s</p>`
+    
+    results.forEach((result: any, index: number) => {
+      const title = result.title || 'No Title'
+      const url = result.url || '#'
+      const description = result.description || 'No description available'
+      const content = result.content ? result.content.substring(0, 300) + '...' : ''
+      const markdownContent = result.markdown_content ? result.markdown_content.substring(0, 250) + '...' : ''
+      const depth = result.depth || 0
+      const source = result.source || 'Unknown'
+
+      formatted += `<h4>${index + 1}. ${title}</h4>`
+      formatted += `<p><strong>URL:</strong> <a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a><br>`
+      formatted += `<strong>Source:</strong> ${source} | <strong>Depth:</strong> ${depth}</p>`
+      
+      if (description && description !== 'No description available') {
+        formatted += `<p><strong>Description:</strong> ${description}</p>`
+      }
+      
+      if (markdownContent) {
+        formatted += `<p><strong>Content:</strong> ${markdownContent}</p>`
+      } else if (content) {
+        formatted += `<p><strong>Preview:</strong> ${content}</p>`
+      }
+      
+      // Show additional metadata for deep search
+      if (result.timestamp) {
+        const date = new Date(result.timestamp).toLocaleString()
+        formatted += `<p><strong>Crawled:</strong> ${date}</p>`
+      }
+      
+      formatted += `<hr/>`
+    })
+
+    // Add summary for deep search
+    const totalContentResults = results.filter((r: any) => r.content || r.markdown_content).length
+    if (totalContentResults > 0) {
+      formatted += `<p><em>${totalContentResults} out of ${results.length} results include extracted content.</em></p>`
+    }
+    formatted += `</div>`
+  }
+
+  return formatted
 }
 
 async function handleLinkOnlyRequest(promptValue: string, chatId: string, requestId: string, abortController: AbortController) {
@@ -1332,11 +1580,11 @@ const showUpgradeBanner = computed(() => {
 
 const scrollButtonPosition = computed(() => {
   // Base positions
-  const basePosition = 'bottom-[90px] sm:bottom-[100px]'
-  const withScrollButton = 'bottom-[90px] sm:bottom-[100px]'
-  const withBanners = 'bottom-[170px] sm:bottom-[170px]'
-  const withPastePreview = 'bottom-[270px] sm:bottom-[280px]'
-  const withPasteAndBanners = 'bottom-[370px] sm:bottom-[380px]'
+  const basePosition = 'bottom-[100px] sm:bottom-[140px]'
+  const withScrollButton = 'bottom-[100px] sm:bottom-[140px]'
+  const withBanners = 'bottom-[200px] sm:bottom-[220px]'
+  const withPastePreview = 'bottom-[300px] sm:bottom-[350px]'
+  const withPasteAndBanners = 'bottom-[400px] sm:bottom-[420px]'
 
   // Priority order: paste + banners > banners > paste > scroll button > base
   if ((isRequestLimitExceeded.value || shouldShowUpgradePrompt.value) && pastePreview.value?.show) {
@@ -1357,7 +1605,7 @@ const scrollContainerPadding = computed(() => {
   if ((isRequestLimitExceeded.value || shouldShowUpgradePrompt.value) && pastePreview.value?.show) {
     return 'pb-[200px] sm:pb-[190px]'
   } else if (isRequestLimitExceeded.value || shouldShowUpgradePrompt.value) {
-    return 'pb-[160px] sm:pb-[150px]'
+    return 'pb-[180px] sm:pb-[200px]'
   } else if (pastePreview.value?.show) {
     return 'pb-[150px] sm:pb-[140px]'
   } else if (showScrollDownButton.value) {
@@ -2716,7 +2964,7 @@ onUnmounted(() => {
         </div>
 
         <!-- Responsive Scroll to Bottom Button -->
-        <button v-if="showScrollDownButton && currentMessages.length !== 0 && isAuthenticated" @click="scrollToBottom"
+        <button v-if="showScrollDownButton && currentMessages.length !== 0 && isAuthenticated" @click="scrollToBottom()"
           :class="[
             'absolute bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border dark:border-gray-700 px-4 h-8 rounded-full shadow-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors z-20 flex items-center justify-center gap-2',
             scrollButtonPosition
