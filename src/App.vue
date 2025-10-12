@@ -3,7 +3,7 @@ import { computed, onMounted, onUnmounted, provide, ref, watch, type ComputedRef
 import { toast, Toaster } from 'vue-sonner'
 import 'vue-sonner/style.css'
 import type { Chat, ConfirmDialogOptions, CurrentChat, LinkPreview } from './types';
-import { API_BASE_URL, generateChatId, generateChatTitle, extractUrls, validateCredentials, getTransaction, WRAPPER_URL, detectLargePaste } from './utils/globals';
+import { API_BASE_URL, generateChatId, generateChatTitle, extractUrls, validateCredentials, getTransaction, WRAPPER_URL, detectLargePaste, SPINDLE_URL } from './utils/globals';
 import { nextTick } from 'vue';
 import { detectAndProcessVideo } from './utils/videoProcessing';
 import ConfirmDialog from './components/ConfirmDialog.vue';
@@ -58,7 +58,7 @@ const syncStatus = ref({
   syncProgress: 0
 })
 
-const syncQueue: Array<{type: string, data?: any}> = []
+const syncQueue: Array<{ type: string, data?: any }> = []
 let isProcessingSyncQueue = false
 
 const currentChat: ComputedRef<CurrentChat | undefined> = computed(() => {
@@ -158,16 +158,16 @@ async function queueLocalStorageWrite(key: string, value: string) {
         resolve() // Resolve anyway to continue queue
       }
     })
-    
+
     processLocalStorageQueue()
   })
 }
 
 async function processLocalStorageQueue() {
   if (isWritingToStorage || localStorageQueue.length === 0) return
-  
+
   isWritingToStorage = true
-  
+
   while (localStorageQueue.length > 0) {
     const write = localStorageQueue.shift()
     if (write) {
@@ -175,7 +175,7 @@ async function processLocalStorageQueue() {
       await new Promise(resolve => setTimeout(resolve, 10)) // Small delay
     }
   }
-  
+
   isWritingToStorage = false
 }
 
@@ -633,11 +633,11 @@ function scrollToBottom(behavior: ScrollBehavior = 'smooth') {
     nextTick(() => {
       setTimeout(() => {
         if (!scrollableElem.value) return;
-        
+
         const container = scrollableElem.value;
         const scrollHeight = container.scrollHeight;
         const clientHeight = container.clientHeight;
-        
+
         if (scrollHeight > clientHeight) {
           container.scrollTo({
             top: scrollHeight,
@@ -663,10 +663,10 @@ function handleScroll() {
     const scrollTop = elem.scrollTop;
     const scrollHeight = elem.scrollHeight;
     const clientHeight = elem.clientHeight;
-    
+
     const currentScrollPosition = scrollTop + clientHeight;
     const totalScrollableHeight = scrollHeight;
-    
+
     const threshold = 2;
     const isAtBottom = Math.abs(currentScrollPosition - totalScrollableHeight) <= threshold;
 
@@ -723,7 +723,7 @@ function saveChatDrafts() {
   try {
     const draftsObject = Object.fromEntries(chatDrafts.value)
     localStorage.setItem('chatDrafts', JSON.stringify(draftsObject))
-    
+
     const previewsObject = Object.fromEntries(pastePreviews.value)
     localStorage.setItem('pastePreviews', JSON.stringify(previewsObject))
   } catch (error) {
@@ -744,11 +744,11 @@ function loadChatDrafts() {
       const parsedPreviews = JSON.parse(savedPastePreviews)
       pastePreviews.value = new Map(Object.entries(parsedPreviews))
     }
-      
+
     if (currentChatId.value) {
       const currentDraft = chatDrafts.value.get(currentChatId.value) || ''
       const currentPastePreview = pastePreviews.value.get(currentChatId.value)
-      
+
       if (currentPastePreview && currentPastePreview.show) {
         const textarea = document.getElementById('prompt') as HTMLTextAreaElement
         if (textarea) {
@@ -759,14 +759,14 @@ function loadChatDrafts() {
       } else if (currentDraft && detectLargePaste(currentDraft)) {
         const wordCount = currentDraft.trim().split(/\s+/).filter(word => word.length > 0).length
         const charCount = currentDraft.length
-        
+
         pastePreviews.value.set(currentChatId.value, {
           content: currentDraft,
           wordCount,
           charCount,
           show: true
         })
-        
+
         const textarea = document.getElementById('prompt') as HTMLTextAreaElement
         if (textarea) {
           textarea.value = ''
@@ -791,7 +791,7 @@ function clearCurrentDraft() {
     chatDrafts.value.delete(currentChatId.value)
     pastePreviews.value.delete(currentChatId.value)
     saveChatDrafts()
-    
+
     const textarea = document.getElementById('prompt') as HTMLTextAreaElement
     if (textarea) {
       textarea.value = ''
@@ -806,17 +806,17 @@ function autoSaveDraft() {
   if (draftSaveTimeout) {
     clearTimeout(draftSaveTimeout)
   }
-  
+
   draftSaveTimeout = setTimeout(() => {
     if (currentChatId.value) {
       const textarea = document.getElementById('prompt') as HTMLTextAreaElement
       let currentDraft = textarea?.value || ''
-    
+
       const currentPastePreview = pastePreviews.value.get(currentChatId.value)
       if (currentPastePreview?.show) {
         currentDraft += currentPastePreview.content
       }
-      
+
       if (currentDraft.trim().length > 0) {
         chatDrafts.value.set(currentChatId.value, currentDraft)
         saveChatDrafts()
@@ -840,16 +840,16 @@ function switchToChat(chatId: string) {
       toast.error('Chat not found')
       return
     }
-    
+
     if (currentChatId.value) {
       const textarea = document.getElementById('prompt') as HTMLTextAreaElement
       let currentDraft = textarea?.value || ''
-      
+
       const currentPastePreview = pastePreviews.value.get(currentChatId.value)
       if (currentPastePreview?.show && currentPastePreview.content) {
         currentDraft += currentPastePreview.content
       }
-      
+
       if (currentDraft.trim().length === 0) {
         chatDrafts.value.delete(currentChatId.value)
         pastePreviews.value.delete(currentChatId.value)
@@ -870,7 +870,7 @@ function switchToChat(chatId: string) {
 
     nextTick(() => {
       loadChatDrafts()
-      
+
       const textarea = document.getElementById('prompt') as HTMLTextAreaElement
       if (textarea) {
         textarea.focus()
@@ -998,7 +998,7 @@ function deleteMessage(messageIndex: number) {
           }
 
           saveChats()
-          
+
           // Trigger sync after deleting message
           if (isAuthenticated.value && parsedUserDetails.value?.sync_enabled) {
             setTimeout(() => {
@@ -1140,7 +1140,7 @@ async function fetchLinkPreview(url: string): Promise<LinkPreview> {
 
   try {
     const lang = "en"
-    const proxyUrl = `https://spindle.villebiz.com/scrape?url=${encodeURIComponent(url)}&lang=${lang}`
+    const proxyUrl = `${SPINDLE_URL}/scrape?url=${encodeURIComponent(url)}&lang=${lang}`
 
     const response = await fetch(proxyUrl, {
       signal: AbortSignal.timeout(15000)
@@ -1339,7 +1339,7 @@ async function syncFromServer(serverData?: any) {
     // Update user details if provided
     if (data.sync_enabled !== undefined || data.preferences || data.theme ||
       data.work_function || data.phone_number || data.plan) {
-      
+
       const updatedUserDetails = {
         ...parsedUserDetails.value,
         preferences: data.preferences || parsedUserDetails.value.preferences,
@@ -1505,25 +1505,25 @@ async function performSmartSync() {
       }
     } else if (syncStatus.value.hasUnsyncedChanges) {
       console.log('📤 Has unsynced changes - syncing TO server')
-      
+
       const hadUnsyncedChangesBeforeSync = syncStatus.value.hasUnsyncedChanges
-      
+
       // Clear the flag BEFORE attempting sync
       syncStatus.value.hasUnsyncedChanges = false
-      
+
       try {
         syncStatus.value.syncing = true
         await syncToServer()
         console.log('✅ Successfully synced changes to server')
-        
+
       } catch (error: any) {
         console.error('❌ Failed to sync to server:', error)
-        
+
         if (hadUnsyncedChangesBeforeSync) {
           syncStatus.value.hasUnsyncedChanges = true
           console.log('🔄 Marked changes as unsynced due to sync failure')
         }
-        
+
         // Auto-retry for network errors
         if (error.message?.includes('Network') || error.message?.includes('timeout')) {
           console.log('🔄 Network error - will retry sync')
@@ -1696,23 +1696,23 @@ async function handleAuth(data: {
         // Sync first, then save
         await performSmartSync()
         console.log('Initial smart sync completed')
-        
+
         // ✅ ONLY save to localStorage AFTER successful sync
         localStorage.setItem('userdetails', JSON.stringify(userData))
         console.log('User details saved locally after successful sync')
-        
+
       } catch (syncError) {
         console.error('Initial sync failed:', syncError)
 
         // Reset unsynced changes flag
         syncStatus.value.hasUnsyncedChanges = false
-        
+
         // Load local data as fallback
         loadLocalData()
-        
+
         // Still save userData to localStorage as fallback
         localStorage.setItem('userdetails', JSON.stringify(userData))
-        
+
         toast.warning('Synced with server but failed to merge data', {
           duration: 4000,
           description: 'Your local data is preserved'
@@ -1847,7 +1847,7 @@ async function manualSync() {
 
 async function toggleSync(newSyncValue?: boolean) {
   const targetSyncValue = newSyncValue ?? !parsedUserDetails.value?.sync_enabled
-  
+
   // Store original state for rollback
   const originalSyncValue = parsedUserDetails.value.sync_enabled
   const originalUserDetails = { ...parsedUserDetails.value }
@@ -1856,7 +1856,7 @@ async function toggleSync(newSyncValue?: boolean) {
     // Update in-memory state (but NOT localStorage yet)
     parsedUserDetails.value.sync_enabled = targetSyncValue
     syncEnabled.value = targetSyncValue
-    
+
     console.log('Attempting sync toggle:', { current: syncEnabled.value, target: targetSyncValue })
 
     let serverUpdateSuccess = false
@@ -1877,15 +1877,15 @@ async function toggleSync(newSyncValue?: boolean) {
         })
         serverUpdateSuccess = true
         console.log('Sync preference updated on server:', targetSyncValue)
-        
+
         // ✅ ONLY save to localStorage AFTER server confirms
         localStorage.setItem("userdetails", JSON.stringify(parsedUserDetails.value))
         console.log('Sync preference saved locally after server confirmation')
-        
+
       } catch (serverError) {
         retryCount++
         console.warn(`Failed to update sync preference on server (attempt ${retryCount}):`, serverError)
-        
+
         if (retryCount > maxRetries) {
           console.error('All retry attempts failed for server sync update')
           throw new Error('Failed to update sync preference on server')
@@ -1919,13 +1919,13 @@ async function toggleSync(newSyncValue?: boolean) {
 
   } catch (error) {
     console.error('Failed to toggle sync:', error)
-    
+
     // ❌ ROLLBACK: Revert both in-memory AND localStorage
     parsedUserDetails.value.sync_enabled = originalSyncValue
     syncEnabled.value = originalSyncValue
     parsedUserDetails.value = originalUserDetails
     localStorage.setItem("userdetails", JSON.stringify(originalUserDetails))
-    
+
     toast.error('Failed to update sync setting', {
       duration: 4000,
       description: 'Changes have been reverted. Please try again.'
@@ -1939,12 +1939,12 @@ function isLocalDataEmpty(): boolean {
     if (chats.value.length === 0) {
       return true
     }
-    
+
     const hasMeaningfulData = chats.value.some(chat => {
-      return chat.messages.length > 0 || 
-             (chat.title && chat.title !== 'New Chat' && chat.title !== '')
+      return chat.messages.length > 0 ||
+        (chat.title && chat.title !== 'New Chat' && chat.title !== '')
     })
-    
+
     return !hasMeaningfulData
   } catch (error) {
     console.error('Error checking local data state:', error)
@@ -1980,22 +1980,22 @@ function toggleTheme(newTheme?: Theme) {
 async function checkInternetConnection(): Promise<boolean> {
   try {
     connectionStatus.value = 'checking'
-    
+
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 5000)
-    
+
     const response = await fetch(`${API_BASE_URL}/health`, {
       method: 'GET',
       signal: controller.signal,
       cache: 'no-cache'
     })
-    
+
     clearTimeout(timeoutId)
-    
+
     const isConnected = response.status < 400
     isUserOnline.value = isConnected
     connectionStatus.value = isConnected ? 'online' : 'offline'
-    
+
     return isConnected
   } catch (error) {
     console.warn('Internet connection check failed:', error)
@@ -2021,13 +2021,13 @@ function showConnectionStatus() {
 
 function cancelChatRequests(chatId: string) {
   const requestsToCancel: string[] = []
-  
+
   requestChatMap.value.forEach((requestChatId, requestId) => {
     if (requestChatId === chatId) {
       requestsToCancel.push(requestId)
     }
   })
-  
+
   requestsToCancel.forEach(requestId => {
     const controller = activeRequests.value.get(requestId)
     if (controller) {
@@ -2062,7 +2062,7 @@ function setupConnectionListeners() {
     const isActuallyOnline = await checkInternetConnection()
     if (isActuallyOnline) {
       showConnectionStatus()
-      
+
       // Auto-sync when coming back online with retry logic
       if (syncStatus.value.hasUnsyncedChanges && parsedUserDetails.value?.sync_enabled) {
         console.log('Connection restored - syncing unsaved changes')
@@ -2116,54 +2116,54 @@ let previousUserDetails: any = null
 let userDetailsSyncTimeout: any = null
 watch(() => parsedUserDetails.value, (newUserDetails) => {
   if (!isAuthenticated.value || !newUserDetails?.sync_enabled) return
-  
+
   const oldUserDetails = previousUserDetails
-  
+
   if (!oldUserDetails) {
     previousUserDetails = JSON.parse(JSON.stringify(newUserDetails))
     return
   }
-  
-  // ✅ FIX: Clear any pending sync immediately
+
+  // Clear any pending sync immediately
   if (userDetailsSyncTimeout) {
     clearTimeout(userDetailsSyncTimeout)
   }
-  
+
   const hasChanges = hasUserDetailsChangedMeaningfully(newUserDetails, oldUserDetails)
-  
+
   if (!hasChanges) {
     console.log('No meaningful user details changes detected')
     previousUserDetails = JSON.parse(JSON.stringify(newUserDetails))
     return
   }
-  
+
   console.log('User details changed meaningfully')
 
   userDetailsSyncTimeout = setTimeout(async () => {
     // Store the new state temporarily
     const tempNewState = JSON.parse(JSON.stringify(newUserDetails))
-    
+
     try {
       console.log('Syncing user details changes to server...')
-      
+
       // Save to localStorage immediately for good UX
       localStorage.setItem("userdetails", JSON.stringify(tempNewState))
-      
+
       // Mark as having unsynced changes
       syncStatus.value.hasUnsyncedChanges = true
-      
+
       // Attempt sync
       await performSmartSync()
-      
+
       console.log('User details synced successfully')
       previousUserDetails = tempNewState
-      
-    } catch (error:any) {
+
+    } catch (error: any) {
       console.error('Sync after user details change failed:', error)
-      
+
       // On sync failure, we keep the local changes
       previousUserDetails = tempNewState
-      
+
       // Don't show error for lock conflicts - these are temporary
       if (!error.message?.includes('already in progress')) {
         toast.warning('Failed to sync user details', {
@@ -2179,19 +2179,19 @@ watch(() => parsedUserDetails.value, (newUserDetails) => {
 
 function hasUserDetailsChangedMeaningfully(newDetails: any, oldDetails: any): boolean {
   if (!oldDetails || !newDetails) return false
-  
+
   // Ignore timestamp-only changes
   const keysToCheck = ['preferences', 'theme', 'workFunction', 'phone_number', 'sync_enabled', 'response_mode']
-  
+
   return keysToCheck.some(key => {
     const oldValue = oldDetails[key]
     const newValue = newDetails[key]
-    
+
     // Handle undefined/null comparisons properly
     if (oldValue === undefined || oldValue === null) {
       return newValue !== undefined && newValue !== null
     }
-    
+
     return JSON.stringify(newValue) !== JSON.stringify(oldValue)
   })
 }
@@ -2231,36 +2231,42 @@ watch(() => chats.value, (newChats, oldChats) => {
 
 function hasChatsChangedMeaningfully(newChats: Chat[], oldChats: Chat[]): boolean {
   if (!oldChats || !Array.isArray(oldChats)) return true
-  
+
   if (newChats.length !== oldChats.length) return true
-  
+
   for (let i = 0; i < newChats.length; i++) {
     const newChat = newChats[i]
     const oldChat = oldChats[i]
-    
+
     if (!oldChat) return true
-    
+
     if (newChat.messages.length !== oldChat.messages.length) return true
-    
+
     for (let j = 0; j < newChat.messages.length; j++) {
       const newMessage = newChat.messages[j]
       const oldMessage = oldChat.messages[j]
-      
+
       if (!oldMessage) return true
-      
-      if (newMessage.prompt !== oldMessage.prompt || 
-          newMessage.response !== oldMessage.response) {
+
+      if (newMessage.prompt !== oldMessage.prompt ||
+        newMessage.response !== oldMessage.response) {
         return true
       }
     }
   }
-  
+
   return false
 }
+
+let handleResize: (() => void) | null = null
+let systemThemeListener: ((e: MediaQueryListEvent) => void) | null = null
+let darkModeQuery: MediaQueryList | null = null
 
 onMounted(async () => {
   try {
     console.log('App mounting...')
+    
+    // Theme setup
     const savedTheme = localStorage.getItem('theme') || 'system'
     currentTheme.value = savedTheme
 
@@ -2273,7 +2279,8 @@ onMounted(async () => {
       document.documentElement.classList.remove('dark')
     }
 
-    const systemThemeListener: any = (e: MediaQueryListEvent) => {
+    // System theme listener
+    systemThemeListener = (e: MediaQueryListEvent) => {
       const currentTheme = localStorage.getItem('theme')
       if (currentTheme === 'system' || !currentTheme) {
         isDarkMode.value = e.matches
@@ -2285,9 +2292,10 @@ onMounted(async () => {
       }
     }
 
-    const darkModeQuery = window.matchMedia('(prefers-color-scheme: dark)')
+    darkModeQuery = window.matchMedia('(prefers-color-scheme: dark)')
     darkModeQuery.addEventListener('change', systemThemeListener)
 
+    // Collapsed state
     try {
       const storedIsCollapsed = localStorage.getItem("isCollapsed")
       if (storedIsCollapsed !== null) {
@@ -2297,6 +2305,18 @@ onMounted(async () => {
       console.error('Error loading collapsed state:', error)
     }
 
+    // Resize handler
+    screenWidth.value = window.innerWidth
+    handleResize = () => {
+      try {
+        screenWidth.value = window.innerWidth
+      } catch (error) {
+        console.error('Error handling resize:', error)
+      }
+    }
+    window.addEventListener('resize', handleResize)
+
+    // Authentication and data loading
     if (isAuthenticated.value) {
       console.log('User is authenticated, initializing...')
 
@@ -2335,28 +2355,29 @@ onMounted(async () => {
       loadLocalData()
     }
 
-    try {
-      screenWidth.value = window.innerWidth
-
-      const handleResize = () => {
-        try {
-          screenWidth.value = window.innerWidth
-        } catch (error) {
-          console.error('Error handling resize:', error)
-        }
-      }
-
-      window.addEventListener('resize', handleResize)
-
-      onUnmounted(() => {
-        window.removeEventListener('resize', handleResize)
-      })
-    } catch (error) {
-      console.error('Error setting up resize listener:', error)
+    // Chat drafts
+    if (currentChatId.value) {
+      loadChatDrafts()
     }
 
-    onUnmounted(() => {
-      darkModeQuery.removeEventListener('change', systemThemeListener)
+    // Connection setup
+    checkInternetConnection().then(isOnline => {
+      console.log(`Initial connection check: ${isOnline ? 'Online' : 'Offline'}`)
+    })
+
+    setupConnectionListeners()
+
+    if (parsedUserDetails.value) {
+      previousUserDetails = JSON.parse(JSON.stringify(parsedUserDetails.value))
+    }
+
+    // Visibility change listener
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden && !isUserOnline.value) {
+        setTimeout(() => {
+          checkInternetConnection()
+        }, 1000)
+      }
     })
 
     console.log('App mounted successfully')
@@ -2370,34 +2391,23 @@ onMounted(async () => {
   }
 })
 
-onMounted(() => {
-  if(currentChatId.value){
-    loadChatDrafts()
-  }
-
-  checkInternetConnection().then(isOnline => {
-    console.log(`Initial connection check: ${isOnline ? 'Online' : 'Offline'}`)
-  })
-
-  setupConnectionListeners()
-
-  if (parsedUserDetails.value) {
-    previousUserDetails = JSON.parse(JSON.stringify(parsedUserDetails.value))
-  }
-
-  document.addEventListener('visibilitychange', () => {
-    if (!document.hidden && !isUserOnline.value) {
-      setTimeout(() => {
-        checkInternetConnection()
-      }, 1000)
-    }
-  })
-})
-
+// Single onUnmounted hook at the top level
 onUnmounted(() => {
+  // Clean up event listeners
+  if (handleResize) {
+    window.removeEventListener('resize', handleResize)
+  }
+  
+  if (darkModeQuery && systemThemeListener) {
+    darkModeQuery.removeEventListener('change', systemThemeListener)
+  }
+  
   window.removeEventListener('online', setupConnectionListeners)
   window.removeEventListener('offline', setupConnectionListeners)
   
+  document.removeEventListener('visibilitychange', () => {})
+
+  // Clean up intervals and timeouts
   const intervals = Object.values(globalThis).filter(
     value => value && typeof value === 'object' && 'refresh' in value
   )
@@ -2405,6 +2415,18 @@ onUnmounted(() => {
   
   if (draftSaveTimeout) {
     clearTimeout(draftSaveTimeout)
+  }
+  
+  if (userDetailsSyncTimeout) {
+    clearTimeout(userDetailsSyncTimeout)
+  }
+  
+  if (chatsDebounceTimer) {
+    clearTimeout(chatsDebounceTimer)
+  }
+  
+  if (userDetailsDebounceTimer) {
+    clearTimeout(userDetailsDebounceTimer)
   }
 })
 
@@ -2445,7 +2467,7 @@ const globalState = {
   isUserOnline,
   connectionStatus,
   hasActiveRequestsForCurrentChat,
-  
+
   // Core functions
   cancelAllRequests,
   cancelChatRequests,
