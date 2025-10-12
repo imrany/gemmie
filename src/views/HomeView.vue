@@ -1,9 +1,6 @@
 <script lang="ts" setup>
 import type { Ref } from "vue"
 import { ref, onMounted, nextTick, computed, onBeforeUnmount, inject, watch, onUnmounted } from "vue"
-import { marked } from "marked"
-import hljs from "highlight.js"
-import "highlight.js/styles/night-owl.css"
 import SideNav from "../components/SideNav.vue"
 import TopNav from "../components/TopNav.vue"
 import type { Chat, ConfirmDialogOptions, CurrentChat, LinkPreview, Res } from "@/types"
@@ -17,6 +14,7 @@ import { copyPasteContent, detectContentType } from "@/utils/previewPasteContent
 import PastePreviewModal from "@/components/Modals/PastePreviewModal.vue"
 import { useRoute } from "vue-router"
 import type { Theme } from "vue-sonner/src/packages/types.js"
+import { renderMarkdown } from "@/utils/markdownSupport"
 
 type ModeOption = {
   mode: 'light-response' | 'web-search' | 'deep-search',
@@ -646,150 +644,6 @@ function validateCurrentStep(): boolean {
   }
 }
 
-// Enhanced marked configuration with link handling
-marked.use({
-  renderer: {
-    // Links
-    link({ href, title, text }) {
-      return `<a 
-        href="${href}" 
-        target="_blank" 
-        rel="noopener noreferrer" 
-        class="text-blue-600 underline hover:text-blue-800 link-with-preview"
-        data-url="${href}"
-      >${text}</a>`
-    },
-    
-    // Code blocks
-    code({ text, lang }) {
-      let highlighted = lang && hljs.getLanguage(lang)
-        ? hljs.highlight(text, { language: lang }).value
-        : hljs.highlightAuto(text).value
-
-      return `
-        <div class="code-container relative my-4">
-          <pre class="bg-gray-900 rounded-lg p-4 overflow-x-auto"><code class="hljs language-${lang || 'plaintext'} text-sm">${highlighted}</code></pre>
-          <button 
-            class="copy-button absolute top-2 right-2 bg-gray-700 text-white px-3 py-1 rounded text-xs hover:bg-gray-600 transition-colors"
-            data-code="${encodeURIComponent(text)}"
-          >Copy</button>
-        </div>
-      `
-    },
-    
-    // Inline code
-    // codespan({ text }) {
-    //   return `<code class="inline-code bg-gray-100 text-red-600 px-1 py-0.5 rounded text-sm font-mono">${text}</code>`
-    // },
-    
-    // Headings
-    heading({ text, depth }) {
-      const sizes = ['text-3xl', 'text-2xl', 'text-xl', 'text-lg', 'text-base', 'text-sm']
-      const weights = ['font-bold', 'font-bold', 'font-semibold', 'font-semibold', 'font-medium', 'font-medium']
-      return `
-        <h${depth} class="${sizes[depth - 1]} ${weights[depth - 1]} text-inherit mt-6 mb-3 text-gray-900">
-          ${text}
-        </h${depth}>
-      `
-    },
-    
-    // Paragraphs
-    paragraph({ text }) {
-      return `<p class="my-3 text-gray-700 dark:text-gray-200 leading-relaxed">${text}</p>`
-    },
-    
-    // // Blockquotes
-    // blockquote({ text }) {
-    //   return `
-    //     <blockquote class="border-l-4 border-blue-500 pl-4 my-4 text-gray-600 italic bg-blue-50 py-2 rounded-r">
-    //       ${text}
-    //     </blockquote>
-    //   `
-    // },
-    
-    // // Lists
-    // list({ items, ordered }) {
-    //   const listClass = ordered ? 'list-decimal' : 'list-disc'
-    //   return `
-    //     <${ordered ? 'ol' : 'ul'} class="${listClass} my-3 pl-6 space-y-1">
-    //       ${items}
-    //     </${ordered ? 'ol' : 'ul'}>
-    //   `
-    // },
-    
-    // listitem({ text }) {
-    //   return `<li class="my-1 text-gray-700">${text}</li>`
-    // },
-    
-    // Strong/Bold
-    strong({ text }) {
-      return `<strong class="font-bold text-gray-900 dark:text-gray-100">${text}</strong>`
-    },
-    
-    // // Emphasis/Italic
-    // em({ text }) {
-    //   return `<em class="italic text-gray-800">${text}</em>`
-    // },
-    
-    // // Horizontal Rule
-    // hr() {
-    //   return `<hr class="my-6 border-gray-300">`
-    // },
-    
-    // // Tables
-    // table({ header, rows }) {
-    //   return `
-    //     <div class="overflow-x-auto my-4">
-    //       <table class="min-w-full border-collapse border border-gray-300">
-    //         <thead>${header}</thead>
-    //         <tbody>${rows}</tbody>
-    //       </table>
-    //     </div>
-    //   `
-    // },
-    
-    // tablerow({ text }) {
-    //   return `<tr class="border-b border-gray-200">${text}</tr>`
-    // },
-    
-    // tablecell({ text, header }) {
-    //   const cellClass = header 
-    //     ? 'bg-gray-100 font-semibold text-gray-900 px-4 py-2 border border-gray-300'
-    //     : 'px-4 py-2 border border-gray-300 text-gray-700'
-    //   return `
-    //     <${header ? 'th' : 'td'} class="${cellClass}">
-    //       ${text}
-    //     </${header ? 'th' : 'td'}>
-    //   `
-    // },
-    
-    // Images
-    image({ href, title, text }) {
-      return `
-        <div class="my-4">
-          <img 
-            src="${href}" 
-            alt="${text}" 
-            title="${title || ''}"
-            class="max-w-full h-auto rounded-lg shadow-sm border border-gray-200"
-            loading="lazy"
-          />
-        </div>
-      `
-    }
-  }
-})
-
-function renderMarkdown(text?: string) {
-  if (!text || typeof text !== "string") return ""
-  try {
-    return marked.parse(text)
-  } catch (err) {
-    console.error("Markdown parse error:", err)
-    return text
-  }
-}
-
 // Debounced scroll handler to improve performance
 let scrollTimeout: any = null;
 function debouncedHandleScroll() {
@@ -1026,7 +880,7 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
 
   const tempResp: Res = { 
     prompt: promptValue, 
-    response: "...", 
+    response: responseMode?`${responseMode}...`:"...", 
   }
 
   // Add message to submission chat
@@ -1063,11 +917,7 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
         content_depth: responseMode === 'deep-search' ? '2' : '1'
       })
 
-      console.log(`Making ${responseMode} request:`, {
-        query: fabricatedPrompt,
-        mode: responseMode,
-        url: `${SPINDLE_URL}/search?${searchParams}`
-      })
+      console.log(`Making ${responseMode} request`)
 
       response = await fetch(
         `${SPINDLE_URL}/search?${searchParams}`,
@@ -1113,9 +963,14 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
     // Enhanced response processing for search modes
     let finalResponse = parseRes.error ? parseRes.error : parseRes.response
     
-    if (isSearchMode && parseRes.results) {
-      // Format search results nicely
-      finalResponse = formatSearchResults(parseRes, responseMode)
+    if (isSearchMode) {
+      // Check for results in both locations (results or json)
+      const hasResults = parseRes.results || parseRes.json;
+      if (hasResults) {
+        finalResponse = formatSearchResults(parseRes, responseMode)
+      } else {
+        finalResponse = "No search results found for your query."
+      }
     }
 
     // Update the response in chat
@@ -1205,76 +1060,100 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
 
 // Helper function to format search results
 function formatSearchResults(searchData: any, mode: string): string {
-  if (!searchData.results || searchData.results.length === 0) {
+  // Check for results in different possible locations
+  const results = searchData.results || searchData.json || [];
+  if (results.length === 0) {
     return "No search results found for your query."
   }
 
   let formatted = "";
   
   if (mode === 'light-search' || mode === 'web-search') {
-    const { results, total_pages } = searchData
+    const { total_pages } = searchData
     
-    const firstFive = results.length>5?results.slice(0,5):results
-    formatted += `<div class="prose prose-sm max-w-none">`
-    formatted += `<p class="my-3 text-gray-700 dark:text-gray-200 leading-relaxed"><strong class="font-bold text-gray-900 dark:text-gray-100">First Five Top:</strong> ${total_pages || firstFive.length} results</p>`
+    const firstFive = results.length > 5 ? results.slice(0, 5) : results;
+    
+    // Header with result count
+    formatted += `Showing **${firstFive.length}** of **${total_pages || results.length}** total results\n\n`
+    formatted += `\n\n`
     
     firstFive.forEach((result: any, index: number) => {
       const title = result.title || 'No Title'
       const url = result.url || '#'
       const description = result.description || 'No description available'
 
-      formatted += `<h4 class="text-inherit mt-6 mb-3 text-gray-900 text-lg font-semibold">${index + 1}. ${title.lenght>50?title.slice(0, 50) + '...':title}</h4>`
-      formatted += `<p class="my-3 text-gray-700 dark:text-gray-200 leading-relaxed">${description}</p>`
-      formatted += `<a href="${url}" class="text-blue-600 mb-3 underline hover:text-blue-800 link-with-preview" target="_blank" rel="noopener noreferrer">${url.length > 40 ? url.slice(0, 40) + '...' : url}</a>`
+      // Result number and title
+      formatted += `### ${index + 1}. ${title} \n\n`
+      
+      // Description
+      formatted += `${description} \n`
+      
+      // URL link
+      formatted += `[${url.length > 60 ? url.slice(0, 60) + "..." : url}](${url}) \n\n`
+      
+      // Separator between results
+      if (index < firstFive.length - 1) {
+        formatted += `\n\n\n`
+      }
     })
-    formatted += `</div>`
+    
   } else if (mode === 'deep-search') {
-    const { query, search_engine, results, total_pages, content_depth, search_time, timestamp } = searchData
+    const { json, total_pages, content_depth, search_time } = searchData
+
+    const firstFive = json.length > 5 ? json.slice(0, 5) : json;
     
-    formatted += `<div class="prose prose-sm max-w-none">`
-    formatted += `<h3>🔍 Deep Search Results</h3>`
-    formatted += `<p><strong>Query:</strong> "${query}"<br>`
-    formatted += `<strong>Engine:</strong> ${search_engine} | <strong>Mode:</strong> ${mode} | <strong>Depth:</strong> ${content_depth || 1}<br>`
-    formatted += `<strong>Found:</strong> ${total_pages || results.length} results in ${(search_time / 1e9).toFixed(2)}s</p>`
+    // Header for deep search
+    formatted += `**Advanced Analysis** • ${firstFive.length} results analyzed at depth ${content_depth || 1}\n\n`
+    formatted += `\n\n`
     
-    results.forEach((result: any, index: number) => {
+    // Process each result
+    firstFive.forEach((result: any, index: number) => {
       const title = result.title || 'No Title'
       const url = result.url || '#'
-      const description = result.description || 'No description available'
-      const content = result.content ? result.content.substring(0, 300) + '...' : ''
-      const markdownContent = result.markdown_content ? result.markdown_content.substring(0, 250) + '...' : ''
+      const markdownContent = result.markdown_content || ''
       const depth = result.depth || 0
       const source = result.source || 'Unknown'
 
-      formatted += `<h4>${index + 1}. ${title}</h4>`
-      formatted += `<p><strong>URL:</strong> <a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a><br>`
-      formatted += `<strong>Source:</strong> ${source} | <strong>Depth:</strong> ${depth}</p>`
+      // Result header
+      formatted += `### ${index + 1}. ${title}\n\n`
       
-      if (description && description !== 'No description available') {
-        formatted += `<p><strong>Description:</strong> ${description}</p>`
-      }
+      // Metadata in a quote block for styling
+      formatted += `> **Source:** ${source} • **Depth:** ${depth}  \n`
+      formatted += `> **URL:** [${url.length > 60 ? url.slice(0, 60) + "..." : url}](${url}) \n\n`
       
+      // Use the pre-formatted markdown content directly
       if (markdownContent) {
-        formatted += `<p><strong>Content:</strong> ${markdownContent}</p>`
-      } else if (content) {
-        formatted += `<p><strong>Preview:</strong> ${content}</p>`
+        formatted += `${markdownContent} \n\n`
+      } else if (result.content) {
+        // Fallback to plain content if no markdown
+        formatted += `${result.content.substring(0, 500)}... \n\n`
       }
       
-      // Show additional metadata for deep search
-      if (result.timestamp) {
-        const date = new Date(result.timestamp).toLocaleString()
-        formatted += `<p><strong>Crawled:</strong> ${date}</p>`
+      // Separator between results
+      if (index < json.length - 1) {
+        formatted += `\n\n\n`
       }
-      
-      formatted += `<hr/>`
     })
 
-    // Add summary for deep search
-    const totalContentResults = results.filter((r: any) => r.content || r.markdown_content).length
+    // Summary section for deep search
+    const totalContentResults = firstFive.filter((r: any) => r.content || r.markdown_content).length
+    
+    formatted += `\n\n`
+    formatted += `## 📊 Search Summary\n\n`
+    
     if (totalContentResults > 0) {
-      formatted += `<p><em>${totalContentResults} out of ${results.length} results include extracted content.</em></p>`
+      formatted += `- **Content Extracted:** ${totalContentResults} of ${json.length} results\n`
+      formatted += `- **Search Depth:** ${content_depth || 1} level${(content_depth || 1) > 1 ? 's' : ''}\n`
+      formatted += `- **Total Results:** ${json.length} results\n`
+      formatted += `- **Pages Analyzed:** ${total_pages} pages\n`
+      formatted += `- **Processing Time:** ${(search_time / 1e9).toFixed(2)}s\n\n`
+    } else {
+      formatted += `- **Total Results:** ${json.length} results\n`
+      formatted += `- **Pages Analyzed:** ${total_pages} pages\n`
+      formatted += `- **Processing Time:** ${(search_time / 1e9).toFixed(2)}s\n\n`
     }
-    formatted += `</div>`
+    
+    formatted += `> ✨ *All results have been deeply analyzed and formatted for your review.*\n`
   }
 
   return formatted
@@ -1294,10 +1173,9 @@ async function handleLinkOnlyRequest(promptValue: string, chatId: string, reques
   }
 
   try {
-    let combinedResponse = `I've analyzed the link${urls.length > 1 ? "s" : ""} you shared:\n\n`
+    let combinedResponse = `I've analyzed the link${urls.length > 1 ? "s" : ""} you shared:  \n\n`
 
     for (const url of urls) {
-      // Check if request was aborted
       if (abortController.signal.aborted) {
         console.log(`Link request ${requestId} was aborted`)
         return
@@ -1306,15 +1184,33 @@ async function handleLinkOnlyRequest(promptValue: string, chatId: string, reques
       try {
         const linkPreview = await fetchLinkPreview(url)
 
-        combinedResponse += `**${linkPreview.title || 'Untitled'}**\n`
+        // Use proper markdown with double spaces for line breaks
+        combinedResponse += `### ${linkPreview.title || 'Untitled'}  \n\n`
+        
         if (linkPreview.description) {
-          combinedResponse += `Description: ${linkPreview.description}\n`
+          combinedResponse += `${linkPreview.description}  \n\n`
         }
-        combinedResponse += `Domain: ${linkPreview.domain || new URL(url).hostname}\n`
-        combinedResponse += `URL: ${url}\n\n`
+        
+        combinedResponse += `**Source:** ${linkPreview.domain || new URL(url).hostname}  \n`
+        combinedResponse += `**Url:** [${url.length > 60 ? url.slice(0, 60) + "..." : url}](${url})  \n\n`
+        
+        if (urls.length > 1) {
+          combinedResponse += `  \n\n`
+        }
       } catch (err: any) {
-        combinedResponse += `⚠️ Failed to analyze: ${url} (${err.message || "Unknown error"})\n\n`
+        combinedResponse += `### ⚠️ Error  \n\n`
+        combinedResponse += `Failed to analyze: [${url.length > 60 ? url.slice(0, 60) + "..." : url}](${url})  \n\n`
+        combinedResponse += `> ${err.message || 'Unknown error occurred'}  \n\n`
+        
+        if (urls.length > 1) {
+          combinedResponse += `  \n\n`
+        }
       }
+    }
+
+    // Add summary footer for multiple links
+    if (urls.length > 1) {
+      combinedResponse += `> ✨ *Analyzed ${urls.length} links* \n`
     }
 
     // Update the response in chat
@@ -1374,12 +1270,13 @@ async function refreshResponse(oldPrompt?: string) {
   if (msgIndex === -1) return
 
   const oldMessage = chat.messages[msgIndex]
-  const responseUrls = extractUrls(oldMessage.response || '')
-  const promptUrls = extractUrls(oldMessage.prompt || '')
-  const urls = [...new Set([...responseUrls, ...promptUrls])]
+  
+  // Get the original response mode from message metadata or use current
+  const originalMode = parsedUserDetails?.value?.response_mode || 'light-response'
+  const isSearchMode = originalMode === 'web-search' || originalMode === 'deep-search'
 
   let fabricatedPrompt = oldPrompt
-  if (oldPrompt && isPromptTooShort(oldPrompt) && currentMessages.value.length > 1) {
+  if (originalMode === 'light-response' && oldPrompt && isPromptTooShort(oldPrompt) && currentMessages.value.length > 1) {
     const lastMessage = currentMessages.value[msgIndex - 1]
     fabricatedPrompt = `${lastMessage.prompt || ''} ${lastMessage.response || ''}\nUser: ${oldPrompt}`
   }
@@ -1409,10 +1306,14 @@ async function refreshResponse(oldPrompt?: string) {
   // Show placeholder while refreshing
   chat.messages[msgIndex] = {
     ...oldMessage,
-    response: "refreshing...",
+    response: originalMode?`${originalMode}...`:"Refreshing...", 
   }
 
-  // Clean up link previews
+  // Clean up link previews if needed
+  const responseUrls = extractUrls(oldMessage.response || '')
+  const promptUrls = extractUrls(oldMessage.prompt || '')
+  const urls = [...new Set([...responseUrls, ...promptUrls])]
+  
   if (urls.length > 0) {
     urls.forEach(url => {
       linkPreviewCache.value.delete(url)
@@ -1420,25 +1321,38 @@ async function refreshResponse(oldPrompt?: string) {
     saveLinkPreviewCache()
   }
 
-  // handling for link-only prompts
+  // Handle link-only prompts
   if (oldPrompt && isJustLinks(oldPrompt)) {
     const urls = extractUrls(oldPrompt)
 
     try {
-      let combinedResponse = `I've analyzed the link${urls.length > 1 ? "s" : ""} you shared:\n\n`
+      let combinedResponse = `I've analyzed the link${urls.length > 1 ? "s" : ""} you shared:  \n\n`
 
       for (const url of urls) {
         try {
           const linkPreview = await fetchLinkPreview(url)
 
-          combinedResponse += `**${linkPreview.title || 'Untitled'}**\n`
+          // Use proper markdown with double spaces for line breaks
+          combinedResponse += `### ${linkPreview.title || 'Untitled'}  \n\n`
+          
           if (linkPreview.description) {
-            combinedResponse += `Description: ${linkPreview.description}\n`
+            combinedResponse += `${linkPreview.description}  \n\n`
           }
-          combinedResponse += `Domain: ${linkPreview.domain || new URL(url).hostname}\n`
-          combinedResponse += `URL: ${url}\n\n`
+          
+          combinedResponse += `**Source:** ${linkPreview.domain || new URL(url).hostname}  \n`
+          combinedResponse += `**Url:** [${url.length > 60 ? url.slice(0, 60) + "..." : url}](${url})  \n\n`
+          
+          if (urls.length > 1) {
+            combinedResponse += ` \n\n`
+          }
         } catch (err: any) {
-          combinedResponse += `⚠️ Failed to analyze: ${url} (${err.message || "Unknown error"})\n\n`
+          combinedResponse += `### ⚠️ Error  \n\n`
+          combinedResponse += `Failed to analyze: [${url.length > 60 ? url.slice(0, 60) + "..." : url}](${url})  \n\n`
+          combinedResponse += `> ${err.message || 'Unknown error occurred'}  \n\n`
+          
+          if (urls.length > 1) {
+            combinedResponse += ` \n\n`
+          }
         }
       }
 
@@ -1455,7 +1369,6 @@ async function refreshResponse(oldPrompt?: string) {
       // Re-run link previews if needed
       await processLinksInResponse(msgIndex)
 
-      // ✅ ONLY INCREMENT ON SUCCESS for link-only refresh
       incrementRequestCount()
 
     } finally {
@@ -1464,27 +1377,66 @@ async function refreshResponse(oldPrompt?: string) {
       scrollToBottom()
     }
 
-    return // ✅ Exit early for link-only prompts
+    return
   }
 
   try {
-    // Fetch new response using the same prompt
-    let response = await fetch(WRAPPER_URL, {
-      method: "POST",
-      body: JSON.stringify(fabricatedPrompt),
-      headers: { "content-type": "application/json" }
-    })
+    let response: Response
+    let parseRes: any
+
+    if (isSearchMode) {
+      // Refresh search request with same parameters
+      const searchParams = new URLSearchParams({
+        query: encodeURIComponent(fabricatedPrompt || ''),
+        mode: originalMode === 'web-search' ? 'light-search' : 'deep-search',
+        max_results: originalMode === 'deep-search' ? '10' : '5',
+        content_depth: originalMode === 'deep-search' ? '2' : '1'
+      })
+
+      console.log(`Refreshing ${originalMode} request`)
+
+      response = await fetch(
+        `${SPINDLE_URL}/search?${searchParams}`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+          }
+        }
+      )
+    } else {
+      // Standard light-response mode refresh
+      response = await fetch(WRAPPER_URL, {
+        method: "POST",
+        body: JSON.stringify(fabricatedPrompt),
+        headers: { 
+          "Content-Type": "application/json" 
+        }
+      })
+    }
 
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`)
     }
 
-    let parseRes = await response.json()
+    parseRes = await response.json()
+
+    let finalResponse = parseRes.error ? parseRes.error : parseRes.response
+    
+    if (isSearchMode) {
+      // Check for results in both locations (results or json)
+      const hasResults = parseRes.results || parseRes.json;
+      if (hasResults) {
+        finalResponse = formatSearchResults(parseRes, originalMode)
+      } else {
+        finalResponse = "No search results found for your query."
+      }
+    }
 
     // Replace the same message with the refreshed response
     chat.messages[msgIndex] = {
       ...oldMessage,
-      response: parseRes.error ? parseRes.error : parseRes.response,
+      response: finalResponse,
       status: response.status,
     }
 
@@ -1494,13 +1446,24 @@ async function refreshResponse(oldPrompt?: string) {
     // Re-run link previews if needed
     await processLinksInResponse(msgIndex)
 
-    // ✅ ONLY INCREMENT ON SUCCESS for AI refresh
     incrementRequestCount()
 
+    toast.success('Response refreshed', {
+      duration: 2000,
+      description: 'The response has been updated with fresh data'
+    })
+
   } catch (err: any) {
+    console.error('Refresh error:', err)
     toast.error(`Failed to refresh response: ${err.message}`)
+    
+    // Restore original message on error
+    chat.messages[msgIndex] = oldMessage
   } finally {
     saveChats()
+    observeNewVideoContainers()
+    await nextTick()
+    scrollToBottom()
   }
 }
 
@@ -1580,9 +1543,9 @@ const showUpgradeBanner = computed(() => {
 
 const scrollButtonPosition = computed(() => {
   // Base positions
-  const basePosition = 'bottom-[100px] sm:bottom-[140px]'
-  const withScrollButton = 'bottom-[100px] sm:bottom-[140px]'
-  const withBanners = 'bottom-[200px] sm:bottom-[220px]'
+  const basePosition = 'bottom-[130px] sm:bottom-[140px]'
+  const withScrollButton = 'bottom-[130px] sm:bottom-[140px]'
+  const withBanners = 'bottom-[210px] sm:bottom-[220px]'
   const withPastePreview = 'bottom-[300px] sm:bottom-[350px]'
   const withPasteAndBanners = 'bottom-[400px] sm:bottom-[420px]'
 
@@ -1605,7 +1568,7 @@ const scrollContainerPadding = computed(() => {
   if ((isRequestLimitExceeded.value || shouldShowUpgradePrompt.value) && pastePreview.value?.show) {
     return 'pb-[200px] sm:pb-[190px]'
   } else if (isRequestLimitExceeded.value || shouldShowUpgradePrompt.value) {
-    return 'pb-[180px] sm:pb-[200px]'
+    return 'pb-[190px] sm:pb-[200px]'
   } else if (pastePreview.value?.show) {
     return 'pb-[150px] sm:pb-[140px]'
   } else if (showScrollDownButton.value) {
@@ -2908,14 +2871,24 @@ onUnmounted(() => {
 
                 <!-- Loading state -->
                 <div v-if="item.response === '...'"
-                  class="flex w-full items-center gap-2 text-gray-500 dark:text-gray-400">
+                  class="flex w-full items-center animate-pulse gap-2 text-gray-500 dark:text-gray-400">
                   <i class="pi pi-spin pi-spinner"></i>
                   <span class="text-sm">Thinking...</span>
                 </div>
                 <div v-else-if="item.response === 'refreshing...'"
-                  class="flex w-full items-center gap-2 text-gray-500 dark:text-gray-400">
+                  class="flex w-full items-center animate-pulse gap-2 text-gray-500 dark:text-gray-400">
                   <i class="pi pi-spin pi-spinner"></i>
                   <span class="text-sm">Refreshing...</span>
+                </div>
+                <div v-else-if="item.response === 'web-search...' || item.response === 'light-search...'"
+                  class="flex w-full animate-pulse items-center gap-2 text-gray-500 dark:text-gray-400">
+                  <i class="pi pi-spin pi-spinner"></i>
+                  <span class="text-sm">Web searching...</span>
+                </div>
+                <div v-else-if="item.response === 'deep-search...'"
+                  class="flex w-full animate-pulse items-center gap-2 text-gray-500 dark:text-gray-400">
+                  <i class="pi pi-spin pi-spinner"></i>
+                  <span class="text-sm">Deep searching...</span>
                 </div>
 
                 <!-- Regular response with enhanced link handling -->
@@ -2932,7 +2905,7 @@ onUnmounted(() => {
                 </div>
 
                 <!-- Actions - Responsive with fewer labels on mobile -->
-                <div v-if="item.response !== '...' && item.response !== 'refreshing...'"
+                <div v-if="item.response !== '...' && item.response !== 'refreshing...'&& item.response !== 'web-search...' && item.response !== 'light-search...' && item.response !== 'deep-search...'"
                   class="flex flex-wrap gap-2 sm:gap-3 mt-2 text-gray-500 dark:text-gray-400 text-sm">
                   <button @click="copyResponse(item.response, i)"
                     class="flex items-center gap-1 hover:text-blue-600 dark:hover:text-blue-400 transition-colors min-h-[32px]">
