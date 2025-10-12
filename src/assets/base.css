@@ -25,7 +25,6 @@ html {
 /* ==================== CODE BLOCKS ==================== */
 /* Prevent code blocks from stretching bubbles */
 .prose pre {
-  background: #0f172a !important;
   color: #f8fafc;
   border-radius: 8px;
   white-space: pre-wrap;

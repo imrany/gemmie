@@ -286,7 +286,13 @@ function handleChatClick(chatId: string) {
               : 'w-full flex h-[32px] max-md:h-[36px] text-sm items-center hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg relative transition-colors'">
 
             <!-- Chat content area -->
-            <div @click="handleChatClick(chat.id)" class="flex max-md:text-lg items-center h-full flex-grow px-2 cursor-pointer">
+            <div @click="()=>{
+              if(props.data.isCollapsed){
+                props.functions.toggleSidebar()
+                return
+              }
+              handleChatClick(chat.id)
+            }" class="flex max-md:text-lg items-center h-full flex-grow px-2 cursor-pointer">
               <i class="pi pi-comments mr-2 text-gray-500 dark:text-gray-400 mb-[2px]"></i>
 
               <!-- Chat title or rename input -->
@@ -344,7 +350,11 @@ function handleChatClick(chatId: string) {
         }">
         <div class="flex items-center gap-2">
           <div class="w-[35px] h-[35px] flex justify-center items-center bg-gray-300 dark:bg-gray-700 rounded-full relative">
-            <span class="text-sm max-md:text-lg dark:text-gray-200">{{ props.data.parsedUserDetails.username.toUpperCase().slice(0, 2) }}</span>
+            <span @click="()=>{
+              if(props.data.isCollapsed){
+                props.functions.toggleSidebar()
+              }
+            }" class="text-sm max-md:text-lg dark:text-gray-200">{{ props.data.parsedUserDetails.username.toUpperCase().slice(0, 2) }}</span>
             <!-- Plan status indicator -->
             <div v-if="planStatus.isExpired" class="absolute -top-1 -right-1 w-3 h-3 bg-red-500 dark:bg-red-400 rounded-full border-2 border-white dark:border-gray-900"></div>
             <div v-else-if="planStatus.status === 'active'" class="absolute -top-1 -right-1 w-3 h-3 bg-green-500 dark:bg-green-400 rounded-full border-2 border-white dark:border-gray-900"></div>
