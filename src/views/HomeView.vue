@@ -913,7 +913,7 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
       const searchParams = new URLSearchParams({
         query: encodeURIComponent(fabricatedPrompt),
         mode: responseMode === 'web-search' ? 'light-search' : 'deep-search',
-        max_results: responseMode === 'deep-search' ? '10' : '5',
+        max_results: responseMode === 'deep-search' ? '5' : '5',
         content_depth: responseMode === 'deep-search' ? '2' : '1'
       })
 
@@ -1071,28 +1071,26 @@ function formatSearchResults(searchData: any, mode: string): string {
   if (mode === 'light-search' || mode === 'web-search') {
     const { total_pages } = searchData
     
-    const firstFive = results.length > 5 ? results.slice(0, 5) : results;
-    
     // Header with result count
-    formatted += `Showing **${firstFive.length}** of **${total_pages || results.length}** total results\n\n`
+    formatted += `Showing **${results.length}** of **${total_pages || results.length}** total results\n\n`
     formatted += `\n\n`
     
-    firstFive.forEach((result: any, index: number) => {
+    results.forEach((result: any, index: number) => {
       const title = result.title || 'No Title'
       const url = result.url || '#'
       const description = result.description || 'No description available'
 
       // Result number and title
-      formatted += `### ${index + 1}. ${title} \n\n`
+      formatted += `#### ${index + 1}. ${title} \n\n`
       
       // Description
       formatted += `${description} \n`
       
       // URL link
-      formatted += `[${url.length > 60 ? url.slice(0, 60) + "..." : url}](${url}) \n\n`
+      formatted += `[${url}](${url}) \n\n`
       
       // Separator between results
-      if (index < firstFive.length - 1) {
+      if (index < results.length - 1) {
         formatted += `\n\n\n`
       }
     })
@@ -1100,26 +1098,24 @@ function formatSearchResults(searchData: any, mode: string): string {
   } else if (mode === 'deep-search') {
     const { json, total_pages, content_depth, search_time } = searchData
 
-    const firstFive = json.length > 5 ? json.slice(0, 5) : json;
-    
     // Header for deep search
-    formatted += `**Advanced Analysis** • ${firstFive.length} results analyzed at depth ${content_depth || 1}\n\n`
+    formatted += `**Advanced Analysis** • ${json.length} results analyzed at depth ${content_depth || 1}\n\n`
     formatted += `\n\n`
     
     // Process each result
-    firstFive.forEach((result: any, index: number) => {
+    json.forEach((result: any, index: number) => {
       const title = result.title || 'No Title'
       const url = result.url || '#'
       const markdownContent = result.markdown_content || ''
       const depth = result.depth || 0
-      const source = result.source || 'Unknown'
+      const source: string = result.source || 'Unknown'
 
       // Result header
       formatted += `### ${index + 1}. ${title}\n\n`
       
       // Metadata in a quote block for styling
-      formatted += `> **Source:** ${source} • **Depth:** ${depth}  \n`
-      formatted += `> **URL:** [${url.length > 60 ? url.slice(0, 60) + "..." : url}](${url}) \n\n`
+      formatted += `**URL:** [${url}](${url}) \n\n`
+      formatted += `> **Source:** ${source.startsWith('https://') ? `[${source}](${source})` : (source.length > 60 ? source.slice(0, 60) + "..." : source)} • **Depth:** ${depth}  \n`;
       
       // Use the pre-formatted markdown content directly
       if (markdownContent) {
@@ -1136,10 +1132,10 @@ function formatSearchResults(searchData: any, mode: string): string {
     })
 
     // Summary section for deep search
-    const totalContentResults = firstFive.filter((r: any) => r.content || r.markdown_content).length
+    const totalContentResults = json.filter((r: any) => r.content || r.markdown_content).length
     
     formatted += `\n\n`
-    formatted += `## 📊 Search Summary\n\n`
+    formatted += `## Search Summary\n\n`
     
     if (totalContentResults > 0) {
       formatted += `- **Content Extracted:** ${totalContentResults} of ${json.length} results\n`
@@ -1192,14 +1188,14 @@ async function handleLinkOnlyRequest(promptValue: string, chatId: string, reques
         }
         
         combinedResponse += `**Source:** ${linkPreview.domain || new URL(url).hostname}  \n`
-        combinedResponse += `**Url:** [${url.length > 60 ? url.slice(0, 60) + "..." : url}](${url})  \n\n`
+        combinedResponse += `**Url:** [${url}](${url})  \n\n`
         
         if (urls.length > 1) {
           combinedResponse += `  \n\n`
         }
       } catch (err: any) {
         combinedResponse += `### ⚠️ Error  \n\n`
-        combinedResponse += `Failed to analyze: [${url.length > 60 ? url.slice(0, 60) + "..." : url}](${url})  \n\n`
+        combinedResponse += `Failed to analyze: [${url}](${url})  \n\n`
         combinedResponse += `> ${err.message || 'Unknown error occurred'}  \n\n`
         
         if (urls.length > 1) {
@@ -1340,14 +1336,14 @@ async function refreshResponse(oldPrompt?: string) {
           }
           
           combinedResponse += `**Source:** ${linkPreview.domain || new URL(url).hostname}  \n`
-          combinedResponse += `**Url:** [${url.length > 60 ? url.slice(0, 60) + "..." : url}](${url})  \n\n`
+          combinedResponse += `**Url:** [${url}](${url})  \n\n`
           
           if (urls.length > 1) {
             combinedResponse += ` \n\n`
           }
         } catch (err: any) {
           combinedResponse += `### ⚠️ Error  \n\n`
-          combinedResponse += `Failed to analyze: [${url.length > 60 ? url.slice(0, 60) + "..." : url}](${url})  \n\n`
+          combinedResponse += `Failed to analyze: [${url}](${url})  \n\n`
           combinedResponse += `> ${err.message || 'Unknown error occurred'}  \n\n`
           
           if (urls.length > 1) {
@@ -1389,7 +1385,7 @@ async function refreshResponse(oldPrompt?: string) {
       const searchParams = new URLSearchParams({
         query: encodeURIComponent(fabricatedPrompt || ''),
         mode: originalMode === 'web-search' ? 'light-search' : 'deep-search',
-        max_results: originalMode === 'deep-search' ? '10' : '5',
+        max_results: originalMode === 'deep-search' ? '5' : '5',
         content_depth: originalMode === 'deep-search' ? '2' : '1'
       })
 
@@ -2865,7 +2861,7 @@ onUnmounted(() => {
             </div>
 
             <!-- Bot Bubble -->
-            <div class="flex w-full justify-start relative pb-[20px]">
+            <div class="flex md:w-full w-[100vw] justify-start relative pb-[20px]">
               <div
                 class="bg-none dark:bg-gray-800/50 chat-message leading-relaxed text-black dark:text-gray-100 p-3 rounded-2xl prose prose-sm dark:prose-invert w-fit max-w-[95%] sm:max-w-[85%] md:max-w-[80%]">
 
@@ -2893,7 +2889,7 @@ onUnmounted(() => {
 
                 <!-- Regular response with enhanced link handling -->
                 <div v-else>
-                  <div v-html="renderMarkdown(item.response || '')"></div>
+                  <div class="break-words overflow-x-hidden" v-html="renderMarkdown(item.response || '')"></div>
 
                   <!-- Link Previews Section -->
                   <div v-if="extractUrls(item.response || '').length > 0" class="mt-2 sm:mt-3">
