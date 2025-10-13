@@ -136,6 +136,7 @@ function selectPlan(planId: string) {
 function proceedToCheckout(planId: string) {
   if(parsedUserDetails.value){
     selectPlanName.value = planId as 'student' | 'pro' | 'hobbyist'
+    selectPlan(planId)
     setDuration(planId) // Ensure expiry is set when proceeding to checkout
     showCheckout.value = true
     // Update URL without navigation

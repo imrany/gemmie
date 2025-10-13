@@ -515,7 +515,7 @@ const processImages = (content: string): string => {
           return `<div class="image-container my-4">
   <img src="${url}" alt="${
             alt || "Image"
-          }"${titleAttr}${loadingAttr} class="max-w-full h-auto rounded-lg shadow-md hover:shadow-lg transition-all duration-200 cursor-zoom-in border border-gray-200 dark:border-gray-700" onclick="window.open('${url}', '_blank')" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+          }"${titleAttr}${loadingAttr} class="max-w-full max-h-auto max-md:h-[300px] max-md:object-cover rounded-lg shadow-md hover:shadow-lg transition-all duration-200 cursor-zoom-in border border-gray-200 dark:border-gray-700" onclick="window.open('${url}', '_blank')" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
   <div style="display:none;" class="text-gray-600 dark:text-gray-400 p-4 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-800">
     <i class="pi pi-image text-2xl mb-2"></i>
     <p>Failed to load: ${alt || "Image"}</p>
@@ -599,27 +599,27 @@ const processTable = (content: string): string => {
 const processHeaders = (content: string): string =>{
   return content.replace(
       /^###### (.*$)/gm,
-      '<h6 class="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-1 mt-2">$1</h6>'
+      '<h6 class="text-sm text-wrap break-words font-semibold text-gray-900 dark:text-gray-100 mb-1 mt-2">$1</h6>'
     )
     .replace(
       /^##### (.*$)/gm,
-      '<h5 class="text-base font-semibold text-gray-900 dark:text-gray-100 mb-2 mt-3">$1</h5>'
+      '<h5 class="text-base text-wrap break-words font-semibold text-gray-900 dark:text-gray-100 mb-2 mt-3">$1</h5>'
     )
     .replace(
       /^#### (.*$)/gm,
-      '<h4 class="text-base font-semibold text-gray-900 dark:text-gray-100 mb-2 mt-3">$1</h4>'
+      '<h4 class="text-base text-wrap break-words font-semibold text-gray-900 dark:text-gray-100 mb-2 mt-3">$1</h4>'
     )
     .replace(
       /^### (.*$)/gm,
-      '<h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2 mt-4">$1</h3>'
+      '<h3 class="text-lg text-wrap break-words font-semibold text-gray-900 dark:text-gray-100 mb-2 mt-4">$1</h3>'
     )
     .replace(
       /^## (.*$)/gm,
-      '<h2 class="text-xl font-bold text-gray-900 dark:text-gray-100 mb-3 mt-6">$1</h2>'
+      '<h2 class="text-xl text-wrap break-words font-bold text-gray-900 dark:text-gray-100 mb-3 mt-6">$1</h2>'
     )
     .replace(
       /^# (.*$)/gm,
-      '<h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4 mt-8">$1</h1>'
+      '<h1 class="text-2xl text-wrap break-words font-bold text-gray-900 dark:text-gray-100 mb-4 mt-8">$1</h1>'
     );
 }
 
@@ -637,7 +637,7 @@ const processLinks = (content: string): string =>{
     (match, text, url, title) => {
       const titleAttr = title ? ` title="${title}"` : "";
       return `<a href="${url}" class="text-blue-600 underline hover:text-blue-800 link-with-preview" ${titleAttr} target="_blank" rel="noopener noreferrer">${
-        text.length > 60 ? text.slice(0, 60) + "..." : text
+        text.length>60? text.slice(0,60) + "...":text
       }</a>`;
     }
   );
