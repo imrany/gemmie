@@ -1464,7 +1464,10 @@ async function syncToServer() {
       theme: parsedUserDetails.value.theme || 'system',
       sync_enabled: parsedUserDetails.value.sync_enabled,
       response_mode: parsedUserDetails.value.response_mode || 'light-response',
-      request_count: parsedUserDetails.value.request_count || { count: 0, timestamp: Date.now() }
+      request_count: {
+        count: parsedUserDetails.value.request_count?.count || 0,
+        timestamp: parsedUserDetails.value.request_count?.timestamp || Date.now()
+      }
     }
 
     const syncDataSize = JSON.stringify(syncData).length
