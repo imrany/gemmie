@@ -75,7 +75,7 @@ let props = defineProps<{
           </div>
         </div>
         <button @click="props.functions.hideSidebar" title="Toggle Sidebar"
-          class="w-9 h-9 flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full cursor-pointer transition-colors">
+          class="w-9 h-9 flex items-center justify-center text-lg hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full cursor-pointer transition-colors">
           <span v-if="props.data.isSidebarHidden" class="pi pi-bars text-lg text-gray-700 dark:text-gray-300"></span>
           <span v-else class="pi pi-times text-lg text-gray-700 dark:text-gray-300"></span>
         </button>

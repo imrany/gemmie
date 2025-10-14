@@ -57,6 +57,7 @@ type SyncRequest struct {
 	ExternalReference string `json:"external_reference,omitempty"` // For payment tracking
 	EmailVerified   bool      `json:"email_verified"`      // Whether email is verified
 	EmailSubscribed bool      `json:"email_subscribed"`    // Whether user subscribed to promotional emails
+	RequestCount store.RequestCount `json:"request_count,omitempty"`
 }
 
 // Update AuthResponse struct
@@ -83,6 +84,7 @@ type AuthResponse struct {
 	Price           string    `json:"price,omitempty"`
 	EmailVerified   bool      `json:"email_verified"`
 	EmailSubscribed bool      `json:"email_subscribed"`
+	RequestCount store.RequestCount `json:"request_count,omitempty"`
 }
 
 type ProfileUpdateRequest struct {
@@ -257,6 +259,10 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		UnsubscribeToken:    unsubscribeToken,
 		VerificationToken:   "",     // Will be set when verification email is sent
 		VerificationTokenExpiry: time.Time{},
+		RequestCount: store.RequestCount{
+			Count: 0,
+			Timestamp: time.Now(),
+		},
 	}
 
 	// Create empty user data record
@@ -312,6 +318,7 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 			ExpireDuration:  user.ExpireDuration,
 			EmailVerified: user.EmailVerified,
 			EmailSubscribed: user.EmailSubscribed,
+			RequestCount: user.RequestCount,
 		},
 	})
 }
@@ -450,6 +457,7 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 			ResponseMode: user.ResponseMode,
 			EmailVerified:   user.EmailVerified,
 			EmailSubscribed: user.EmailSubscribed,
+			RequestCount: user.RequestCount,
 		},
 	})
 }
@@ -482,6 +490,7 @@ func SyncHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	slog.Debug("Debugging", "Sync req", r)
 	switch r.Method {
 	case "GET":
 		// Get user data
@@ -523,6 +532,7 @@ func SyncHandler(w http.ResponseWriter, r *http.Request) {
 				"response_mode":     user.ResponseMode,
 				"email_verified": user.EmailVerified,
 				"email_subscribed": user.EmailSubscribed,
+				"request_count": user.RequestCount,
 			},
 		})
 
@@ -537,6 +547,8 @@ func SyncHandler(w http.ResponseWriter, r *http.Request) {
 			})
 			return
 		}
+
+		slog.Debug("Debugging", "Sync req", req)
 
 		// Sanitize string inputs
 		req.Username = sanitizeString(req.Username)
@@ -620,6 +632,9 @@ func SyncHandler(w http.ResponseWriter, r *http.Request) {
 			}
 			if req.EmailSubscribed != existingUser.EmailSubscribed {
 				existingUser.EmailSubscribed = req.EmailSubscribed
+			}
+			if req.RequestCount != existingUser.RequestCount {
+				existingUser.RequestCount = req.RequestCount
 			}
 			// Always update the timestamp
 			existingUser.UpdatedAt = time.Now()
