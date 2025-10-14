@@ -65,7 +65,7 @@ type User struct {
 
 type RequestCount struct {
 	Count int `json:"count"`
-	Timestamp time.Time `json:"timestamp"`
+	Timestamp int64 `json:"timestamp"`
 }
 
 type UserData struct {
@@ -121,7 +121,7 @@ func loadStorage() {
 			slog.Error("Failed to create initial storage file", "error", err)
 			os.Exit(1)
 		}
-		return
+		return 
 	}
 
 	data, err := os.ReadFile(storageFile)
@@ -172,10 +172,10 @@ func loadStorage() {
 		}
 
 		// Add more migrations for any new fields here, e.g.:
-		if user.RequestCount.Timestamp.IsZero() {
+		if user.RequestCount.Timestamp == 0 {
 			user.RequestCount = RequestCount{
 				Count:     0,
-				Timestamp: time.Now(),
+				Timestamp: time.Now().UnixNano() / int64(time.Millisecond),
 			}
 			updated = true
 		}

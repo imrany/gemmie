@@ -261,7 +261,7 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		VerificationTokenExpiry: time.Time{},
 		RequestCount: store.RequestCount{
 			Count: 0,
-			Timestamp: time.Now(),
+			Timestamp: time.Now().UnixNano() / int64(time.Millisecond),
 		},
 	}
 
@@ -490,7 +490,6 @@ func SyncHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	slog.Debug("Debugging", "Sync req", r)
 	switch r.Method {
 	case "GET":
 		// Get user data
@@ -547,8 +546,6 @@ func SyncHandler(w http.ResponseWriter, r *http.Request) {
 			})
 			return
 		}
-
-		slog.Debug("Debugging", "Sync req", req)
 
 		// Sanitize string inputs
 		req.Username = sanitizeString(req.Username)
@@ -633,9 +630,18 @@ func SyncHandler(w http.ResponseWriter, r *http.Request) {
 			if req.EmailSubscribed != existingUser.EmailSubscribed {
 				existingUser.EmailSubscribed = req.EmailSubscribed
 			}
-			if req.RequestCount != existingUser.RequestCount {
-				existingUser.RequestCount = req.RequestCount
-			}
+			if req.RequestCount.Count != 0 || req.RequestCount.Timestamp != 0 {
+				incomingTime := time.Unix(0, req.RequestCount.Timestamp*int64(time.Millisecond))
+    			existingTime := time.Unix(0, existingUser.RequestCount.Timestamp*int64(time.Millisecond))
+
+				if incomingTime.After(existingTime) || req.RequestCount.Count != existingUser.RequestCount.Count {
+					existingUser.RequestCount = req.RequestCount
+					slog.Debug("RequestCount updated", 
+						"new_count", existingUser.RequestCount.Count,
+						"new_timestamp", time.Unix(0, existingUser.RequestCount.Timestamp*int64(time.Millisecond)),
+					)
+				}
+        	}
 			// Always update the timestamp
 			existingUser.UpdatedAt = time.Now()
 			

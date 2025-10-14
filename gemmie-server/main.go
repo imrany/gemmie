@@ -21,6 +21,41 @@ import (
 	"github.com/spf13/viper"
 )
 
+// setupLogging configures slog with proper output and level
+func setupLogging() {
+	// Determine log level from environment or default to info
+	logLevel := slog.LevelInfo
+	if levelStr := os.Getenv("LOG_LEVEL"); levelStr != "" {
+		switch levelStr {
+		case "DEBUG":
+			logLevel = slog.LevelDebug
+		case "WARN":
+			logLevel = slog.LevelWarn
+		case "ERROR":
+			logLevel = slog.LevelError
+		}
+	}
+
+	// Create handler with options
+	handler := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+		Level: logLevel,
+		ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
+			// Format time for better readability
+			if a.Key == slog.TimeKey {
+				if t, ok := a.Value.Any().(time.Time); ok {
+					a.Value = slog.StringValue(t.Format("2006-01-02 15:04:05.000"))
+				}
+			}
+			return a
+		},
+	})
+
+	// Set as default logger
+	slog.SetDefault(slog.New(handler))
+
+	slog.Info("Logging configured", "level", logLevel.String())
+}
+
 // loggingResponseWriter captures status code for logging.
 type loggingResponseWriter struct {
 	http.ResponseWriter
@@ -53,9 +88,14 @@ func loggingMiddleware(next http.Handler) http.Handler {
 }
 
 func main() {
+	// Setup logging first so we can log everything
+	setupLogging()
+
 	// Load .env if present
 	if err := godotenv.Load(); err != nil {
 		slog.Warn("No .env file found, using defaults")
+	} else {
+		slog.Info(".env file loaded successfully")
 	}
 
 	// Root command with Cobra
@@ -79,7 +119,7 @@ func main() {
 	rootCmd.PersistentFlags().String("SMTP_USERNAME", "", "SMTP Username (env: SMTP_USERNAME)")
 	rootCmd.PersistentFlags().String("SMTP_PASSWORD", "", "SMTP Password (env: SMTP_PASSWORD)")
 	rootCmd.PersistentFlags().String("SMTP_EMAIL", "", "SMTP Email (env: SMTP_EMAIL)")
-	
+	rootCmd.PersistentFlags().String("log-level", "info", "Log level (debug, info, warn, error) (env: LOG_LEVEL)")
 
 	// Bind flags to viper
 	viper.BindPFlag("PORT", rootCmd.PersistentFlags().Lookup("port"))
@@ -93,7 +133,7 @@ func main() {
 	viper.BindPFlag("SMTP_USERNAME", rootCmd.PersistentFlags().Lookup("SMTP_USERNAME"))
 	viper.BindPFlag("SMTP_PASSWORD", rootCmd.PersistentFlags().Lookup("SMTP_PASSWORD"))
 	viper.BindPFlag("SMTP_EMAIL", rootCmd.PersistentFlags().Lookup("SMTP_EMAIL"))
-	
+	viper.BindPFlag("LOG_LEVEL", rootCmd.PersistentFlags().Lookup("log-level"))
 
 	// Bind env variables
 	viper.AutomaticEnv()
@@ -108,6 +148,8 @@ func runServer() {
 	port := viper.GetString("PORT")
 	dataFile := viper.GetString("DATA_FILE")
 
+	slog.Info("Starting server", "port", port, "data_file", dataFile)
+
 	// Configure SMTP settings
 	smtpConfig := mailer.SMTPConfig{
 		Host:     viper.GetString("SMTP_HOST"),
@@ -119,7 +161,11 @@ func runServer() {
 
 	// Validate SMTP configuration and log status
 	if smtpConfig.Host == "" || smtpConfig.Username == "" || smtpConfig.Password == "" {
-		slog.Warn("SMTP not fully configured, email features will be disabled")
+		slog.Warn("SMTP not fully configured, email features will be disabled", 
+			"host_set", smtpConfig.Host != "",
+			"username_set", smtpConfig.Username != "",
+			"password_set", smtpConfig.Password != "",
+		)
 	} else {
 		slog.Info("SMTP configured successfully", "host", smtpConfig.Host, "email", smtpConfig.Email)
 	}
@@ -135,7 +181,15 @@ func runServer() {
 	v1.StartEmailScheduler(schedulerConfig)
 
 	// Initialize storage
-	store.InitStorage(dataFile)
+	store.InitStorage(dataFile);
+
+	// Log storage status
+	store.Storage.Mu.RLock()
+	userCount := len(store.Storage.Users)
+	transactionCount := len(store.Storage.Transactions)
+	store.Storage.Mu.RUnlock()
+	
+	slog.Info("Storage initialized", "users", userCount, "transactions", transactionCount)
 
 	// Router setup
 	r := mux.NewRouter()
@@ -154,22 +208,16 @@ func runServer() {
 	r.HandleFunc("/api/transactions/{external_reference}", v1.GetTransactionByRefHandler).Methods(http.MethodGet)
 	r.HandleFunc("/api/callback", v1.StoreTransactionHandler).Methods(http.MethodPost)
 	
-	// NEW: Email management routes
-	// Unsubscribe from promotional emails (supports both GET from email link and POST from API)
+	// Email management routes
 	r.HandleFunc("/unsubscribe", v1.UnsubscribeHandler).Methods(http.MethodGet, http.MethodPost)
-	
-	// Resubscribe to promotional emails (requires authentication)
 	r.HandleFunc("/resubscribe", v1.ResubscribeHandler).Methods(http.MethodGet, http.MethodPost)
-	
-	// Update email subscription preference (requires authentication)
 	r.HandleFunc("/api/email-subscription", v1.UpdateEmailSubscriptionHandler).Methods(http.MethodPut)
 	
-	// Send email verification link (requires authentication)
+	// Email verification routes
 	r.HandleFunc("/api/send-verification", func(w http.ResponseWriter, r *http.Request) {
 		v1.SendVerificationEmailHandler(w, r, smtpConfig)
 	}).Methods(http.MethodPost)
 	
-	// Verify email with token (supports both GET from email link and POST from API)
 	r.HandleFunc("/api/verify-email", v1.VerifyEmailHandler).Methods(http.MethodGet, http.MethodPost)
 	
 	// Handle CORS preflight
@@ -197,7 +245,7 @@ func runServer() {
 
 	// Start server in goroutine
 	go func() {
-		slog.Info("Server starting", "port", port)
+		slog.Info("Server starting", "port", port, "address", srv.Addr)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			slog.Error("ListenAndServe failed", "error", err)
 			os.Exit(1)
@@ -207,10 +255,11 @@ func runServer() {
 	// Graceful shutdown on SIGINT/SIGTERM
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
-	<-quit
-	slog.Info("Shutdown signal received, shutting down gracefully...")
+	
+	sig := <-quit
+	slog.Info("Shutdown signal received", "signal", sig, "shutting down gracefully...")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	if err := srv.Shutdown(ctx); err != nil {
