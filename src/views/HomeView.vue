@@ -2553,14 +2553,7 @@ onUnmounted(() => {
         }" />
 
         <div v-else-if="isAuthenticated && currentMessages.length === 0">
-          <!-- Loading Overlay -->
-          <div v-if="isLoading"
-            class="absolute md:max-w-3xl w-full h-full bg-white dark:bg-gray-900 bg-opacity-80 dark:bg-opacity-80 z-10 flex flex-col items-center justify-center">
-            <i class="pi pi-spin pi-spinner text-4xl text-gray-500 dark:text-gray-400 mb-4"></i>
-            <p class="text-gray-700 dark:text-gray-300">Loading...</p>
-          </div>
-
-          <div v-else class="flex max-w-3xl flex-col md:flex-grow items-center gap-3 text-gray-600 dark:text-gray-400">
+          <div class="flex md:max-w-3xl max-w-[100vw] flex-col md:flex-grow items-center gap-3 text-gray-600 dark:text-gray-400">
             <img :src="currentTheme === 'dark' || (currentTheme === 'system' && isDarkMode) ?
               '/logo-light.svg' : '/logo.svg'" alt="Gemmie Logo" class="w-[60px] h-[60px] rounded-md" />
 
@@ -2612,8 +2605,8 @@ onUnmounted(() => {
                 <div
                   class="flex items-start gap-2 font-medium bg-gray-100 dark:bg-gray-800 text-black dark:text-gray-100 px-4 rounded-2xl prose prose-sm dark:prose-invert chat-bubble w-fit max-w-full">
                   <!-- Avatar container -->
-                  <div class="flex-shrink-0 py-2">
-                    <div class="flex items-center justify-center w-8 h-8 text-gray-100 dark:text-gray-800 bg-gray-700 dark:bg-gray-200 rounded-full text-sm font-semibold">
+                  <div class="flex-shrink-0 py-3">
+                    <div class="flex items-center justify-center w-7 h-7 text-gray-100 dark:text-gray-800 bg-gray-700 dark:bg-gray-200 rounded-full text-sm font-semibold">
                       {{ parsedUserDetails.username.toUpperCase().slice(0, 2) }}
                     </div>
                   </div>
@@ -2655,7 +2648,6 @@ onUnmounted(() => {
             <div class="flex w-full md:max-w-3xl max-w-full relative pb-[20px]">
               <div
                 class="bg-none max-w-full w-full chat-message leading-relaxed text-black dark:text-gray-100 p-1 rounded-2xl prose prose-sm dark:prose-invert">
-
                 <!-- Loading state -->
                 <div v-if="item.response === '...'"
                   class="flex w-full rounded-lg bg-gray-50 dark:bg-gray-800 p-2 items-center animate-pulse gap-2 text-gray-500 dark:text-gray-400">
@@ -2694,7 +2686,7 @@ onUnmounted(() => {
                 <!-- Actions - Responsive with fewer labels on mobile -->
                 <div
                   v-if="item.response !== '...' && item.response !== 'refreshing...' && item.response !== 'web-search...' && item.response !== 'light-search...' && item.response !== 'deep-search...'"
-                  class="flex flex-wrap gap-2 sm:gap-3 mt-2 text-gray-500 dark:text-gray-400 text-sm">
+                  class="flex flex-wrap justify-end gap-2 sm:gap-3 mt-2 text-gray-500 dark:text-gray-400 text-sm">
                   <button @click="copyResponse(item.response, i)"
                     class="flex items-center gap-1 hover:text-blue-600 dark:hover:text-blue-400 transition-colors min-h-[32px]">
                     <i class="pi pi-copy"></i>

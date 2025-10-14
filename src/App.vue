@@ -58,8 +58,6 @@ const syncStatus = ref({
   syncProgress: 0
 })
 
-const syncQueue: Array<{ type: string, data?: any }> = []
-let isProcessingSyncQueue = false
 
 const currentChat: ComputedRef<CurrentChat | undefined> = computed(() => {
   return chats.value.find(chat => chat.id === currentChatId.value)
@@ -143,41 +141,6 @@ const showInput = ref(false)
 const activeChatMenu = ref<string | null>(null)
 const showProfileMenu = ref(false)
 const now = ref(Date.now())
-
-const localStorageQueue: Array<() => void> = []
-let isWritingToStorage = false
-
-async function queueLocalStorageWrite(key: string, value: string) {
-  return new Promise<void>((resolve) => {
-    localStorageQueue.push(() => {
-      try {
-        localStorage.setItem(key, value)
-        resolve()
-      } catch (error) {
-        console.error(`Failed to write ${key} to localStorage:`, error)
-        resolve() // Resolve anyway to continue queue
-      }
-    })
-
-    processLocalStorageQueue()
-  })
-}
-
-async function processLocalStorageQueue() {
-  if (isWritingToStorage || localStorageQueue.length === 0) return
-
-  isWritingToStorage = true
-
-  while (localStorageQueue.length > 0) {
-    const write = localStorageQueue.shift()
-    if (write) {
-      write()
-      await new Promise(resolve => setTimeout(resolve, 10)) // Small delay
-    }
-  }
-
-  isWritingToStorage = false
-}
 
 const planStatus = computed(() => {
   if (!parsedUserDetails.value || !parsedUserDetails.value.expiry_timestamp) {
