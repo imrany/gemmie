@@ -32,16 +32,16 @@ const globalState = inject('globalState') as {
     password: string;
   }) => any,
   chatDrafts: Ref<Map<string, string>>,
-  userDetailsDebounceTimer:any,
-  chatsDebounceTimer:any,
+  userDetailsDebounceTimer: any,
+  chatsDebounceTimer: any,
   screenWidth: Ref<number>,
   confirmDialog: Ref<ConfirmDialogOptions>,
   isCollapsed: Ref<boolean>,
   isSidebarHidden: Ref<boolean>,
   authData: Ref<{ username: string; email: string; password: string; agreeToTerms: boolean; }>,
-  syncStatus: Ref<{ 
-    lastSync: Date | null; 
-    syncing: boolean; 
+  syncStatus: Ref<{
+    lastSync: Date | null;
+    syncing: boolean;
     hasUnsyncedChanges: boolean;
     showSyncIndicator: boolean;
     syncMessage: string;
@@ -98,6 +98,7 @@ const globalState = inject('globalState') as {
   manualSync: () => Promise<any>
   toggleSidebar: () => void,
   isFreeUser: Ref<boolean>,
+  FREE_REQUEST_LIMIT: number,
   currentTheme: Ref<Theme>,
   isDarkMode: Ref<boolean>,
   hasActiveRequestsForCurrentChat: Ref<boolean>,
@@ -112,6 +113,14 @@ const globalState = inject('globalState') as {
   activeRequests: Ref<Map<string, AbortController>>,
   requestChatMap: Ref<Map<string, string>>,
   pendingResponses: Ref<Map<string, { prompt: string; chatId: string }>>,
+  requestCount: Ref<number>,
+  resetRequestCount: () => void,
+  incrementRequestCount: () => void,
+  loadRequestCount: () => void,
+  checkRequestLimitBeforeSubmit: () => boolean,
+  requestsRemaining: Ref<boolean>,
+  shouldShowUpgradePrompt: Ref<boolean>,
+  isRequestLimitExceeded: Ref<boolean>,
 }
 
 const {
@@ -137,6 +146,7 @@ const {
   showConfirmDialog,
   cancelAllRequests,
   cancelChatRequests,
+  checkRequestLimitBeforeSubmit,
   hideSidebar,
   setShowInput,
   clearAllChats,
@@ -178,6 +188,14 @@ const {
   requestChatMap,
   pendingResponses,
   performSmartSync,
+  requestCount,
+  resetRequestCount,
+  incrementRequestCount,
+  loadRequestCount,
+  FREE_REQUEST_LIMIT,
+  requestsRemaining,
+  shouldShowUpgradePrompt,
+  isRequestLimitExceeded,
 } = globalState
 let parsedUserDetails: Ref<any> = globalState.parsedUserDetails
 
@@ -186,8 +204,6 @@ const route = useRoute()
 const authStep = ref(1)
 const showCreateSession = ref(false)
 const copiedIndex = ref<number | null>(null)
-const requestCount = ref(0)
-const FREE_REQUEST_LIMIT = 5
 const now = ref(Date.now())
 const showInputModeDropdown = ref(false)
 
@@ -211,151 +227,6 @@ const currentPasteContent = ref<{
   type: 'text' | 'code' | 'json' | 'markdown' | 'xml' | 'html';
 } | null>(null)
 
-// ---------- Request Limit Functions ----------
-function loadRequestCount() {
-  try {
-    if (!parsedUserDetails.value) {
-      requestCount.value = 0
-      return
-    }
-
-    // Check if user should have request limits
-    const shouldHaveLimit = isFreeUser.value ||
-      planStatus.value.isExpired ||
-      planStatus.value.status === 'no-plan' ||
-      planStatus.value.status === 'expired'
-
-    if (!shouldHaveLimit) {
-      requestCount.value = 0
-      try {
-        localStorage.removeItem('requestCount')
-      } catch (error) {
-        console.error('Failed to clear request count for unlimited user:', error)
-      }
-      return
-    }
-
-    const saved = localStorage.getItem('requestCount')
-    if (saved) {
-      try {
-        const data = JSON.parse(saved)
-        const now = new Date().getTime()
-
-        if (typeof data !== 'object' || typeof data.timestamp !== 'number' || typeof data.count !== 'number') {
-          console.warn('Invalid request count data format, resetting')
-          requestCount.value = 0
-          saveRequestCount()
-          return
-        }
-
-        // Check if 24 hours have passed since last timestamp
-        const timeDiff = now - data.timestamp
-        const twentyFourHours = 24 * 60 * 60 * 1000
-
-        if (timeDiff > twentyFourHours) {
-          // Reset count after 24 hours
-          requestCount.value = 0
-          saveRequestCount() // Save with new timestamp
-        } else {
-          requestCount.value = Math.max(0, Math.min(data.count, FREE_REQUEST_LIMIT))
-        }
-      } catch (parseError) {
-        console.error('Failed to parse request count data:', parseError)
-        requestCount.value = 0
-        localStorage.removeItem('requestCount')
-        saveRequestCount() // Initialize with current timestamp
-      }
-    } else {
-      // No saved data, initialize
-      requestCount.value = 0
-      saveRequestCount()
-    }
-  } catch (error) {
-    console.error('Failed to load request count:', error)
-    requestCount.value = 0
-  }
-}
-
-// Updated saveRequestCount function for better logic
-function saveRequestCount() {
-  try {
-    // Save if user has limitations (free, expired, or no plan)
-    const shouldHaveLimit = isFreeUser.value ||
-      planStatus.value?.isExpired ||
-      planStatus.value?.status === 'expired' ||
-      planStatus.value?.status === 'no-plan'
-
-    if (shouldHaveLimit) {
-      const data = {
-        count: Math.max(0, Math.min(requestCount.value, FREE_REQUEST_LIMIT)),
-        timestamp: Date.now() // Always update timestamp when saving
-      }
-
-      localStorage.setItem('requestCount', JSON.stringify(data))
-    } else {
-      // Remove limits for unlimited users
-      localStorage.removeItem('requestCount')
-    }
-  } catch (error) {
-    console.error('Failed to save request count:', error)
-  }
-}
-
-// Updated incrementRequestCount function
-function incrementRequestCount() {
-  try {
-    const shouldHaveLimit = isFreeUser.value ||
-      planStatus.value?.isExpired ||
-      planStatus.value?.status === 'expired' ||
-      planStatus.value?.status === 'no-plan'
-
-    if (!shouldHaveLimit) {
-      return // No limits for unlimited users
-    }
-
-    if (requestCount.value < FREE_REQUEST_LIMIT) {
-      requestCount.value++
-      saveRequestCount()
-    }
-  } catch (error) {
-    console.error('Failed to increment request count:', error)
-  }
-}
-
-// Add a function to check and reset count if needed (call this periodically)
-function checkAndResetDailyCount() {
-  try {
-    const saved = localStorage.getItem('requestCount')
-    if (!saved) return
-
-    const data = JSON.parse(saved)
-    const now = new Date().getTime()
-    const timeDiff = now - data.timestamp
-    const twentyFourHours = 24 * 60 * 60 * 1000
-
-    if (timeDiff > twentyFourHours) {
-      requestCount.value = 0
-      saveRequestCount()
-
-      // Optionally notify user
-      toast.success('Daily request limit reset!', {
-        duration: 4000,
-        description: `You have ${FREE_REQUEST_LIMIT} new requests available.`
-      })
-    }
-  } catch (error) {
-    console.error('Failed to check daily reset:', error)
-  }
-}
-
-function resetRequestCount() {
-  try {
-    requestCount.value = 0
-    localStorage.removeItem('requestCount')
-  } catch (error) {
-    console.error('Failed to reset request count:', error)
-  }
-}
 
 // Load chats from localStorage
 function loadChats() {
@@ -782,7 +653,7 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
   // Check if we have paste preview content
   const currentPastePreview = pastePreviews.value.get(currentChatId.value)
   const hasPastePreview = currentPastePreview && currentPastePreview.show && !retryPrompt
-  
+
   if (hasPastePreview) {
     promptValue += currentPastePreview.content
     pastePreviews.value.delete(currentChatId.value)
@@ -799,27 +670,8 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
     return
   }
 
-  // Check request limits using global state
-  checkAndResetDailyCount()
-  const shouldHaveLimit = isFreeUser.value ||
-    planStatus.value.isExpired ||
-    planStatus.value.status === 'no-plan' ||
-    planStatus.value.status === 'expired'
-
-  if (shouldHaveLimit && requestCount.value >= FREE_REQUEST_LIMIT) {
-    if (planStatus.value.isExpired) {
-      toast.error('Your plan has expired', {
-        duration: 5000,
-        description: 'Please renew your plan to continue using the service.'
-      })
-    } else {
-      toast.warning('Free requests exhausted', {
-        duration: 4000,
-        description: 'Please upgrade to continue chatting.'
-      })
-    }
-    return
-  }
+  // Check request limits
+  loadRequestCount()
 
   // Clear draft for current chat
   clearCurrentDraft()
@@ -849,24 +701,24 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
   }
 
   isLoading.value = true
-  
+
   // Determine response mode - use light-response for pasted content, otherwise user preference
   let responseMode = parsedUserDetails?.value?.response_mode || 'light-response'
-  
+
   // Override to light-response if pasted content is detected
   if (hasPastePreview) {
     responseMode = 'light-response'
     console.log('Pasted content detected - using light-response mode')
   }
-  
+
   const isSearchMode = responseMode === 'web-search' || responseMode === 'deep-search'
-  
+
   // Merge with context for short prompts in non-search modes
   if (responseMode === 'light-response' && isPromptTooShort(promptValue) && currentMessages.value.length > 0) {
     const lastMessage = currentMessages.value[currentMessages.value.length - 1]
     fabricatedPrompt = `${lastMessage.prompt || ''} ${lastMessage.response || ''}\nUser: ${promptValue}`
   }
-  
+
   // Clear input field
   if (!retryPrompt && e?.target?.prompt) {
     e.target.prompt.value = ""
@@ -878,9 +730,9 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
     transcribedText.value = ''
   }
 
-  const tempResp: Res = { 
-    prompt: promptValue, 
-    response: responseMode?`${responseMode}...`:"...", 
+  const tempResp: Res = {
+    prompt: promptValue,
+    response: responseMode ? `${responseMode}...` : "...",
   }
 
   // Add message to submission chat
@@ -897,12 +749,6 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
 
   updateExpandedArray()
   processLinksInUserPrompt(promptValue)
-
-  // Scroll to bottom
-  if (currentChatId.value === submissionChatId) {
-    await nextTick()
-    scrollToBottom()
-  }
 
   try {
     let response: Response
@@ -936,12 +782,12 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
         hasPastePreview: hasPastePreview,
         originalMode: parsedUserDetails?.value?.response_mode
       })
-      
+
       response = await fetch(WRAPPER_URL, {
         method: "POST",
         body: JSON.stringify(fabricatedPrompt),
-        headers: { 
-          "Content-Type": "application/json" 
+        headers: {
+          "Content-Type": "application/json"
         },
         signal: abortController.signal
       })
@@ -962,7 +808,7 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
 
     // Enhanced response processing for search modes
     let finalResponse = parseRes.error ? parseRes.error : parseRes.response
-    
+
     if (isSearchMode) {
       // Check for results in both locations (results or json)
       const hasResults = parseRes.results || parseRes.json;
@@ -985,7 +831,7 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
         }
         updatedTargetChat.messages[lastMessageIndex] = updatedMessage
         updatedTargetChat.updatedAt = new Date().toISOString()
-        
+
         // Process links in the response
         await processLinksInResponse(lastMessageIndex)
       }
@@ -1046,15 +892,9 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
         console.error('Background sync failed:', error);
       });
     }, 500);
-   
+
     // Observe new video containers
     observeNewVideoContainers();
-
-    // Scroll to bottom if still in same chat
-    if (currentChatId.value === submissionChatId) {
-      await nextTick()
-      scrollToBottom()
-    }
   }
 }
 
@@ -1067,14 +907,14 @@ function formatSearchResults(searchData: any, mode: string): string {
   }
 
   let formatted = "";
-  
+
   if (mode === 'light-search' || mode === 'web-search') {
     const { total_pages } = searchData
-    
+
     // Header with result count
     formatted += `Showing **${results.length}** of **${total_pages || results.length}** total results\n\n`
     formatted += `\n\n`
-    
+
     results.forEach((result: any, index: number) => {
       const title = result.title || 'No Title'
       const url = result.url || '#'
@@ -1082,26 +922,26 @@ function formatSearchResults(searchData: any, mode: string): string {
 
       // Result number and title
       formatted += `#### ${index + 1}. ${title} \n\n`
-      
+
       // Description
       formatted += `${description} \n`
-      
+
       // URL link
       formatted += `[${url}](${url}) \n\n`
-      
+
       // Separator between results
       if (index < results.length - 1) {
         formatted += `\n\n\n`
       }
     })
-    
+
   } else if (mode === 'deep-search') {
     const { json, total_pages, content_depth, search_time } = searchData
 
     // Header for deep search
     formatted += `**Advanced Analysis** • ${json.length} results analyzed at depth ${content_depth || 1}\n\n`
     formatted += `\n\n`
-    
+
     // Process each result
     json.forEach((result: any, index: number) => {
       const title = result.title || 'No Title'
@@ -1112,11 +952,11 @@ function formatSearchResults(searchData: any, mode: string): string {
 
       // Result header
       formatted += `### ${index + 1}. ${title}\n\n`
-      
+
       // Metadata in a quote block for styling
       formatted += `**URL:** [${url}](${url}) \n\n`
       formatted += `> **Source:** ${source.startsWith('https://') ? `[${source}](${source})` : (source.length > 60 ? source.slice(0, 60) + "..." : source)} • **Depth:** ${depth}  \n`;
-      
+
       // Use the pre-formatted markdown content directly
       if (markdownContent) {
         formatted += `${markdownContent} \n\n`
@@ -1124,7 +964,7 @@ function formatSearchResults(searchData: any, mode: string): string {
         // Fallback to plain content if no markdown
         formatted += `${result.content.substring(0, 500)}... \n\n`
       }
-      
+
       // Separator between results
       if (index < json.length - 1) {
         formatted += `\n\n\n`
@@ -1133,10 +973,10 @@ function formatSearchResults(searchData: any, mode: string): string {
 
     // Summary section for deep search
     const totalContentResults = json.filter((r: any) => r.content || r.markdown_content).length
-    
+
     formatted += `\n\n`
     formatted += `## Search Summary\n\n`
-    
+
     if (totalContentResults > 0) {
       formatted += `- **Content Extracted:** ${totalContentResults} of ${json.length} results\n`
       formatted += `- **Search Depth:** ${content_depth || 1} level${(content_depth || 1) > 1 ? 's' : ''}\n`
@@ -1148,7 +988,7 @@ function formatSearchResults(searchData: any, mode: string): string {
       formatted += `- **Pages Analyzed:** ${total_pages} pages\n`
       formatted += `- **Processing Time:** ${(search_time / 1e9).toFixed(2)}s\n\n`
     }
-    
+
     formatted += `> ✨ *All results have been deeply analyzed and formatted for your review.*\n`
   }
 
@@ -1182,14 +1022,14 @@ async function handleLinkOnlyRequest(promptValue: string, chatId: string, reques
 
         // Use proper markdown with double spaces for line breaks
         combinedResponse += `### ${linkPreview.title || 'Untitled'}  \n\n`
-        
+
         if (linkPreview.description) {
           combinedResponse += `${linkPreview.description}  \n\n`
         }
-        
+
         combinedResponse += `**Source:** ${linkPreview.domain || new URL(url).hostname}  \n`
         combinedResponse += `**Url:** [${url}](${url})  \n\n`
-        
+
         if (urls.length > 1) {
           combinedResponse += `  \n\n`
         }
@@ -1197,7 +1037,7 @@ async function handleLinkOnlyRequest(promptValue: string, chatId: string, reques
         combinedResponse += `### ⚠️ Error  \n\n`
         combinedResponse += `Failed to analyze: [${url}](${url})  \n\n`
         combinedResponse += `> ${err.message || 'Unknown error occurred'}  \n\n`
-        
+
         if (urls.length > 1) {
           combinedResponse += `  \n\n`
         }
@@ -1237,12 +1077,6 @@ async function handleLinkOnlyRequest(promptValue: string, chatId: string, reques
     requestChatMap.value.delete(requestId)
     isLoading.value = false
     saveChats()
-
-    if (currentChatId.value === chatId) {
-      observeNewVideoContainers()
-      await nextTick()
-      scrollToBottom()
-    }
   }
 }
 
@@ -1266,7 +1100,7 @@ async function refreshResponse(oldPrompt?: string) {
   if (msgIndex === -1) return
 
   const oldMessage = chat.messages[msgIndex]
-  
+
   // Get the original response mode from message metadata or use current
   const originalMode = parsedUserDetails?.value?.response_mode || 'light-response'
   const isSearchMode = originalMode === 'web-search' || originalMode === 'deep-search'
@@ -1278,38 +1112,21 @@ async function refreshResponse(oldPrompt?: string) {
   }
 
   // Check request limits for refresh too
-  checkAndResetDailyCount()
-  const shouldHaveLimit = isFreeUser.value ||
-    planStatus.value.isExpired ||
-    planStatus.value.status === 'no-plan' ||
-    planStatus.value.status === 'expired'
-
-  if (shouldHaveLimit && requestCount.value >= FREE_REQUEST_LIMIT) {
-    if (planStatus.value.isExpired) {
-      toast.error('Your plan has expired', {
-        duration: 5000,
-        description: 'Please renew your plan to continue using the service.'
-      })
-    } else {
-      toast.warning('Free requests exhausted', {
-        duration: 4000,
-        description: 'Please upgrade to continue chatting.'
-      })
-    }
+  if (!checkRequestLimitBeforeSubmit()) {
     return
   }
 
   // Show placeholder while refreshing
   chat.messages[msgIndex] = {
     ...oldMessage,
-    response: originalMode?`${originalMode}...`:"Refreshing...", 
+    response: originalMode ? `${originalMode}...` : "Refreshing...",
   }
 
   // Clean up link previews if needed
   const responseUrls = extractUrls(oldMessage.response || '')
   const promptUrls = extractUrls(oldMessage.prompt || '')
   const urls = [...new Set([...responseUrls, ...promptUrls])]
-  
+
   if (urls.length > 0) {
     urls.forEach(url => {
       linkPreviewCache.value.delete(url)
@@ -1330,14 +1147,14 @@ async function refreshResponse(oldPrompt?: string) {
 
           // Use proper markdown with double spaces for line breaks
           combinedResponse += `### ${linkPreview.title || 'Untitled'}  \n\n`
-          
+
           if (linkPreview.description) {
             combinedResponse += `${linkPreview.description}  \n\n`
           }
-          
+
           combinedResponse += `**Source:** ${linkPreview.domain || new URL(url).hostname}  \n`
           combinedResponse += `**Url:** [${url}](${url})  \n\n`
-          
+
           if (urls.length > 1) {
             combinedResponse += ` \n\n`
           }
@@ -1345,7 +1162,7 @@ async function refreshResponse(oldPrompt?: string) {
           combinedResponse += `### ⚠️ Error  \n\n`
           combinedResponse += `Failed to analyze: [${url}](${url})  \n\n`
           combinedResponse += `> ${err.message || 'Unknown error occurred'}  \n\n`
-          
+
           if (urls.length > 1) {
             combinedResponse += ` \n\n`
           }
@@ -1369,8 +1186,6 @@ async function refreshResponse(oldPrompt?: string) {
 
     } finally {
       observeNewVideoContainers()
-      await nextTick()
-      scrollToBottom()
     }
 
     return
@@ -1405,8 +1220,8 @@ async function refreshResponse(oldPrompt?: string) {
       response = await fetch(WRAPPER_URL, {
         method: "POST",
         body: JSON.stringify(fabricatedPrompt),
-        headers: { 
-          "Content-Type": "application/json" 
+        headers: {
+          "Content-Type": "application/json"
         }
       })
     }
@@ -1418,7 +1233,7 @@ async function refreshResponse(oldPrompt?: string) {
     parseRes = await response.json()
 
     let finalResponse = parseRes.error ? parseRes.error : parseRes.response
-    
+
     if (isSearchMode) {
       // Check for results in both locations (results or json)
       const hasResults = parseRes.results || parseRes.json;
@@ -1452,45 +1267,15 @@ async function refreshResponse(oldPrompt?: string) {
   } catch (err: any) {
     console.error('Refresh error:', err)
     toast.error(`Failed to refresh response: ${err.message}`)
-    
+
     // Restore original message on error
     chat.messages[msgIndex] = oldMessage
   } finally {
     saveChats()
     observeNewVideoContainers()
-    await nextTick()
-    scrollToBottom()
   }
 }
 
-// computed properties for better logic
-const isRequestLimitExceeded = computed(() => {
-  const shouldHaveLimit = isFreeUser.value ||
-    planStatus.value.isExpired ||
-    planStatus.value.status === 'no-plan' ||
-    planStatus.value.status === 'expired'
-
-  return shouldHaveLimit && requestCount.value >= FREE_REQUEST_LIMIT
-})
-
-const shouldShowUpgradePrompt = computed(() => {
-  const shouldHaveLimit = isFreeUser.value ||
-    planStatus.value.isExpired ||
-    planStatus.value.status === 'no-plan' ||
-    planStatus.value.status === 'expired'
-
-  return shouldHaveLimit && requestCount.value >= 3 && requestCount.value < FREE_REQUEST_LIMIT
-})
-
-const requestsRemaining = computed(() => {
-  const shouldHaveLimit = isFreeUser.value ||
-    planStatus.value.isExpired ||
-    planStatus.value.status === 'no-plan' ||
-    planStatus.value.status === 'expired'
-
-  if (!shouldHaveLimit) return Infinity
-  return Math.max(0, FREE_REQUEST_LIMIT - requestCount.value)
-})
 
 // input area template logic
 const inputPlaceholderText = computed(() => {
@@ -2228,13 +2013,13 @@ function clearVoiceTranscription() {
 async function selectInputMode(mode: 'web-search' | 'deep-search' | 'light-response') {
   // Store original value for rollback
   const originalMode = parsedUserDetails.value.response_mode
-  
+
   // Don't do anything if same mode
   if (originalMode === mode) {
     showInputModeDropdown.value = false
     return
   }
-  
+
   try {
     // Update in-memory state - the watch will handle syncing
     parsedUserDetails.value.response_mode = mode
@@ -2258,7 +2043,7 @@ async function selectInputMode(mode: 'web-search' | 'deep-search' | 'light-respo
   } catch (error) {
     console.error('Error selecting input mode:', error)
     parsedUserDetails.value.response_mode = originalMode
-    
+
     toast.error('Failed to change mode', {
       duration: 3000,
       description: 'An error occurred'
@@ -2576,8 +2361,7 @@ onMounted(() => {
   }, 1000);
 
   // Check for daily reset on app start
-  checkAndResetDailyCount();
-  const resetCheckInterval = setInterval(checkAndResetDailyCount, 5 * 60 * 1000);
+  const resetCheckInterval = setInterval(loadRequestCount, 5 * 60 * 1000);
 
   // 10. Setup DOM-dependent functionality
   nextTick(() => {
@@ -2771,12 +2555,12 @@ onUnmounted(() => {
         <div v-else-if="isAuthenticated && currentMessages.length === 0">
           <!-- Loading Overlay -->
           <div v-if="isLoading"
-            class="absolute w-full h-full bg-white dark:bg-gray-900 bg-opacity-80 dark:bg-opacity-80 z-10 flex flex-col items-center justify-center">
+            class="absolute md:max-w-3xl w-full h-full bg-white dark:bg-gray-900 bg-opacity-80 dark:bg-opacity-80 z-10 flex flex-col items-center justify-center">
             <i class="pi pi-spin pi-spinner text-4xl text-gray-500 dark:text-gray-400 mb-4"></i>
             <p class="text-gray-700 dark:text-gray-300">Loading...</p>
           </div>
 
-          <div v-else class="flex flex-col md:flex-grow items-center gap-3 text-gray-600 dark:text-gray-400">
+          <div v-else class="flex max-w-3xl flex-col md:flex-grow items-center gap-3 text-gray-600 dark:text-gray-400">
             <img :src="currentTheme === 'dark' || (currentTheme === 'system' && isDarkMode) ?
               '/logo-light.svg' : '/logo.svg'" alt="Gemmie Logo" class="w-[60px] h-[60px] rounded-md" />
 
@@ -2817,20 +2601,28 @@ onUnmounted(() => {
 
         <!-- Chat Messages Container -->
         <div ref="scrollableElem" v-else-if="currentMessages.length !== 0 && isAuthenticated"
-          class="relative flex-grow no-scrollbar overflow-y-auto px-2 sm:px-4 w-full space-y-3 sm:space-y-4 mt-[55px]  scroll-container"
+          class="relative md:max-w-3xl max-w-[100vw] flex-grow no-scrollbar overflow-y-auto px-2 w-full space-y-3 sm:space-y-4 mt-[55px] pt-8  scroll-container"
           :class="scrollContainerPadding">
           <div v-if="currentMessages.length !== 0" v-for="(item, i) in currentMessages" :key="`chat-${i}`"
-            class="flex flex-col gap-2">
+            class="flex flex-col gap-1">
             <!-- User Bubble -->
-            <div class="flex w-full justify-end chat-message">
-              <div class="flex flex-col items-end max-w-[85%] sm:max-w-[75%] md:max-w-[70%]">
+            <div class="flex w-full chat-message">
+              <div class="flex flex-col w-full">
                 <!-- User message bubble -->
                 <div
-                  class="bg-gray-50 dark:bg-gray-800 text-black dark:text-gray-100 p-3 rounded-2xl prose prose-sm dark:prose-invert max-w-none chat-bubble w-fit">
-                  <p class="text-xs opacity-80 text-right mb-1 dark:text-gray-400">{{ parsedUserDetails?.username ||
-                    "You" }}</p>
-                  <div class="break-words"
-                    v-html="renderMarkdown((item && item?.prompt && item?.prompt?.length > 800) ? item?.prompt?.trim().split('#pastedText#')[0] : item.prompt || '')">
+                  class="flex items-start gap-2 font-medium bg-gray-100 dark:bg-gray-800 text-black dark:text-gray-100 px-4 rounded-2xl prose prose-sm dark:prose-invert chat-bubble w-fit max-w-full">
+                  <!-- Avatar container -->
+                  <div class="flex-shrink-0 py-2">
+                    <div class="flex items-center justify-center w-8 h-8 text-gray-100 dark:text-gray-800 bg-gray-700 dark:bg-gray-200 rounded-full text-sm font-semibold">
+                      {{ parsedUserDetails.username.toUpperCase().slice(0, 2) }}
+                    </div>
+                  </div>
+
+                  <!-- Message content container -->
+                  <div class="flex-1 min-w-0">
+                    <div class="break-words text-base leading-relaxed"
+                      v-html="renderMarkdown((item && item?.prompt && item?.prompt?.length > 800) ? item?.prompt?.trim().split('#pastedText#')[0] : item.prompt || '')">
+                    </div>
                   </div>
                 </div>
                 <div class="flex flex-col gap-3 mt-2">
@@ -2856,33 +2648,32 @@ onUnmounted(() => {
                   </div>
 
                 </div>
-
               </div>
             </div>
 
             <!-- Bot Bubble -->
-            <div class="flex md:w-full w-[100vw] justify-start relative pb-[20px]">
+            <div class="flex w-full md:max-w-3xl max-w-full relative pb-[20px]">
               <div
-                class="bg-none dark:bg-gray-800/50 chat-message leading-relaxed text-black dark:text-gray-100 p-3 rounded-2xl prose prose-sm dark:prose-invert w-fit max-w-[95%] sm:max-w-[85%] md:max-w-[80%]">
+                class="bg-none max-w-full w-full chat-message leading-relaxed text-black dark:text-gray-100 p-1 rounded-2xl prose prose-sm dark:prose-invert">
 
                 <!-- Loading state -->
                 <div v-if="item.response === '...'"
-                  class="flex w-full items-center animate-pulse gap-2 text-gray-500 dark:text-gray-400">
+                  class="flex w-full rounded-lg bg-gray-50 dark:bg-gray-800 p-2 items-center animate-pulse gap-2 text-gray-500 dark:text-gray-400">
                   <i class="pi pi-spin pi-spinner"></i>
                   <span class="text-sm">Thinking...</span>
                 </div>
-                <div v-else-if="item.response === 'refreshing...'"
-                  class="flex w-full items-center animate-pulse gap-2 text-gray-500 dark:text-gray-400">
+                <div v-if="item.response === 'refreshing...'"
+                  class="flex w-full rounded-lg bg-gray-50 dark:bg-gray-800 p-2 items-center animate-pulse gap-2 text-gray-500 dark:text-gray-400">
                   <i class="pi pi-spin pi-spinner"></i>
                   <span class="text-sm">Refreshing...</span>
                 </div>
                 <div v-else-if="item.response === 'web-search...' || item.response === 'light-search...'"
-                  class="flex w-full animate-pulse items-center gap-2 text-gray-500 dark:text-gray-400">
+                  class="flex w-full rounded-lg bg-gray-50 dark:bg-gray-800 p-2 items-center animate-pulse gap-2 text-gray-500 dark:text-gray-400">
                   <i class="pi pi-spin pi-spinner"></i>
                   <span class="text-sm">Web searching...</span>
                 </div>
                 <div v-else-if="item.response === 'deep-search...'"
-                  class="flex w-full animate-pulse items-center gap-2 text-gray-500 dark:text-gray-400">
+                  class="flex w-full rounded-lg bg-gray-50 dark:bg-gray-800 p-2 items-center animate-pulse gap-2 text-gray-500 dark:text-gray-400">
                   <i class="pi pi-spin pi-spinner"></i>
                   <span class="text-sm">Deep searching...</span>
                 </div>
@@ -2901,7 +2692,8 @@ onUnmounted(() => {
                 </div>
 
                 <!-- Actions - Responsive with fewer labels on mobile -->
-                <div v-if="item.response !== '...' && item.response !== 'refreshing...'&& item.response !== 'web-search...' && item.response !== 'light-search...' && item.response !== 'deep-search...'"
+                <div
+                  v-if="item.response !== '...' && item.response !== 'refreshing...' && item.response !== 'web-search...' && item.response !== 'light-search...' && item.response !== 'deep-search...'"
                   class="flex flex-wrap gap-2 sm:gap-3 mt-2 text-gray-500 dark:text-gray-400 text-sm">
                   <button @click="copyResponse(item.response, i)"
                     class="flex items-center gap-1 hover:text-blue-600 dark:hover:text-blue-400 transition-colors min-h-[32px]">
@@ -2945,15 +2737,11 @@ onUnmounted(() => {
         <!-- Input Area -->
         <div v-if="(currentMessages.length !== 0 || showInput === true) && isAuthenticated" :style="screenWidth > 720 && !isCollapsed ? 'left:270px;' :
           screenWidth > 720 && isCollapsed ? 'left:60px;' : 'left:0px;'"
-          class="bg-white dark:bg-gray-900 z-20 bottom-0 right-0 fixed pb-3 sm:pb-5 px-2 sm:px-5"
-          :class="pastePreview?.show ? 'pt-2' : ''">
+          class="bg-white dark:bg-gray-900 z-20 bottom-0 right-0 fixed" :class="pastePreview?.show ? 'pt-2' : ''">
 
-          <div class="flex items-center justify-center w-full">
+          <div class="flex items-center justify-center pb-3 sm:pb-5 px-2 sm:px-5">
             <form @submit="handleSubmit"
-              :class="screenWidth > 720 ? isCollapsed ?
-                'relative flex bg-gray-50 dark:bg-gray-800 flex-col border-2 dark:border-gray-700 shadow rounded-2xl items-center w-[85%] max-w-6xl' :
-                'relative flex bg-gray-50 dark:bg-gray-800 flex-col border-2 dark:border-gray-700 shadow rounded-2xl items-center w-[85%] max-w-4xl' :
-                'relative flex flex-col border-2 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 shadow rounded-2xl w-full max-w-full items-center'">
+              class="w-full md:max-w-3xl relative flex bg-gray-50 dark:bg-gray-800 flex-col border-2 dark:border-gray-700 shadow rounded-2xl items-center">
 
               <!-- Paste Preview inside form - above other content -->
               <div v-if="pastePreview && pastePreview.show" class="w-full p-3 border-b dark:border-gray-700">
@@ -3107,10 +2895,10 @@ onUnmounted(() => {
                         : 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-200',
                       'disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none'
                     ]" :title="microphonePermission === 'denied'
-              ? 'Microphone access denied'
-              : isRecording
-                ? 'Stop voice input'
-                : 'Start voice input'">
+                      ? 'Microphone access denied'
+                      : isRecording
+                        ? 'Stop voice input'
+                        : 'Start voice input'">
 
                       <!-- Microphone Icon -->
                       <svg v-if="microphonePermission === 'prompt'" class="w-4 h-4 sm:w-5 sm:h-5" fill="currentColor"
@@ -3175,9 +2963,9 @@ onUnmounted(() => {
                               : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200'
                           ]">
                           <i :class="[option.icon,
-                            parsedUserDetails?.response_mode === option.mode
+                          parsedUserDetails?.response_mode === option.mode
                             ? ' text-green-600 dark:text-green-400'
-                            :' text-gray-600 dark:text-gray-400'
+                            : ' text-gray-600 dark:text-gray-400'
                           ]"></i>
                           <div class="flex-1 min-w-0">
                             <div class="font-semibold">{{ option.label }}</div>

@@ -54,12 +54,18 @@ type User struct {
 	Price        string    `json:"price,omitempty"`
 	ResponseMode Modes    `json:"response_mode,omitempty"`
 	AgreeToTerms bool      `json:"agree_to_terms"`
+	RequestCount RequestCount `json:"request_count,omitempty"`
 	
 	EmailVerified   bool      `json:"email_verified"`      // Whether email is verified
 	EmailSubscribed bool      `json:"email_subscribed"`    // Whether user subscribed to promotional emails
 	VerificationToken string  `json:"verification_token,omitempty"` // Token for email verification
 	VerificationTokenExpiry time.Time `json:"verification_token_expiry,omitempty"` // Token expiry
 	UnsubscribeToken string   `json:"unsubscribe_token,omitempty"` // Secure token for unsubscribe
+}
+
+type RequestCount struct {
+	Count int `json:"count"`
+	Timestamp time.Time `json:"timestamp"`
 }
 
 type UserData struct {
@@ -166,7 +172,13 @@ func loadStorage() {
 		}
 
 		// Add more migrations for any new fields here, e.g.:
-		// if user.NewField == "" { user.NewField = "defaultValue"; updated = true }
+		if user.RequestCount.Timestamp.IsZero() {
+			user.RequestCount = RequestCount{
+				Count:     0,
+				Timestamp: time.Now(),
+			}
+			updated = true
+		}
 
 		if updated {
 			slog.Debug("Migrating user", "user_id", userID, "email", user.Email)

@@ -220,26 +220,67 @@ const planStatus = computed(() => {
   return { status: 'active', timeLeft, expiryDate, isExpired: false }
 })
 
-const isFreeUser = computed(() => {
-  try {
-    if (!parsedUserDetails.value) {
-      return true
-    }
+const FREE_REQUEST_LIMIT = 5
 
-    const hasFreePlan = !parsedUserDetails.value.plan ||
-      parsedUserDetails.value.plan === 'free' ||
-      parsedUserDetails.value.plan === '' ||
-      planStatus.value.status === 'no-plan'
+const userPlanStatus = computed(() => {
+  if (!parsedUserDetails.value || !parsedUserDetails.value.expiry_timestamp) {
+    return { status: 'no-plan', isExpired: false }
+  }
 
-    const planExpired = planStatus.value.isExpired
+  const expiryMs = parsedUserDetails.value.expiry_timestamp < 1e12
+    ? parsedUserDetails.value.expiry_timestamp * 1000
+    : parsedUserDetails.value.expiry_timestamp
 
-    return hasFreePlan || planExpired
+  const diff = expiryMs - now.value
+  const isExpired = diff <= 0
 
-  } catch (error) {
-    console.error('Error checking user plan:', error)
-    return true
+  if (isExpired) {
+    return { status: 'expired', isExpired: true }
+  }
+
+  return { status: 'active', isExpired: false }
+})
+
+// Single computed property to determine if user has limits
+const userHasRequestLimits = computed(() => {
+  if (!parsedUserDetails.value) return true
+  
+  const hasFreePlan = !parsedUserDetails.value.plan ||
+    parsedUserDetails.value.plan === 'free' ||
+    parsedUserDetails.value.plan === '' ||
+    userPlanStatus.value.status === 'no-plan'
+
+  return hasFreePlan || userPlanStatus.value.isExpired
+})
+
+// Consolidated request limit computations
+const requestLimitInfo = computed(() => {
+  const hasLimits = userHasRequestLimits.value
+  const currentCount = parsedUserDetails.value?.request_count?.count || 0
+  
+  return {
+    // Core limits
+    hasLimits,
+    currentCount,
+    limit: FREE_REQUEST_LIMIT,
+    
+    // Derived states
+    isExceeded: hasLimits && currentCount >= FREE_REQUEST_LIMIT,
+    shouldShowUpgradePrompt: hasLimits && currentCount >= 3 && currentCount < FREE_REQUEST_LIMIT,
+    remaining: hasLimits ? Math.max(0, FREE_REQUEST_LIMIT - currentCount) : Infinity,
+    
+    // Status messages
+    status: hasLimits ? 
+      (currentCount >= FREE_REQUEST_LIMIT ? 'exceeded' : 
+       currentCount >= 3 ? 'warning' : 'normal') : 'unlimited'
   }
 })
+
+const isRequestLimitExceeded = computed(() => requestLimitInfo.value.isExceeded)
+const shouldShowUpgradePrompt = computed(() => requestLimitInfo.value.shouldShowUpgradePrompt)
+const requestsRemaining = computed(() => requestLimitInfo.value.remaining)
+const isFreeUser = computed(() => userHasRequestLimits.value)
+const requestCount = computed(() => requestLimitInfo.value.currentCount)
 
 function showSyncIndicator(message: string, progress: number = 0) {
   syncStatus.value.showSyncIndicator = true
@@ -1352,6 +1393,7 @@ async function syncFromServer(serverData?: any) {
         duration: data.duration || parsedUserDetails.value.duration,
         price: data.price || parsedUserDetails.value.price,
         response_mode: data.response_mode || parsedUserDetails.value.response_mode,
+        request_count : data.request_count || parsedUserDetails.value.request_count,
         expiry_timestamp: data.expiry_timestamp || parsedUserDetails.value.expiry_timestamp,
         expire_duration: data.expire_duration || parsedUserDetails.value.expire_duration,
         sync_enabled: data.sync_enabled !== undefined ? data.sync_enabled : parsedUserDetails.value.sync_enabled
@@ -1422,6 +1464,7 @@ async function syncToServer() {
       theme: parsedUserDetails.value.theme || 'system',
       sync_enabled: parsedUserDetails.value.sync_enabled,
       response_mode: parsedUserDetails.value.response_mode || 'light-response',
+      request_count: parsedUserDetails.value.request_count || { count: 0, timestamp: Date.now() }
     }
 
     const syncDataSize = JSON.stringify(syncData).length
@@ -1447,12 +1490,12 @@ async function syncToServer() {
       hideSyncIndicator()
     }, 1000)
 
-    console.log('Successfully synced data to server') // ✅ This only logs on ACTUAL success
+    console.log('✅ Successfully synced data to server')
 
     return response
 
   } catch (error: any) {
-    console.error('Sync to server failed:', error)
+    console.error('❌ Sync to server failed:', error)
     syncStatus.value.lastError = error.message
     syncStatus.value.hasUnsyncedChanges = true
     hideSyncIndicator()
@@ -1464,7 +1507,10 @@ async function syncToServer() {
         duration: 5000,
         description: error.message
       })
-    } else if (!error.message.includes('NetworkError') && !error.message.includes('TypeError') && !error.message.includes('already in progress')) {
+    } else if (!error.message.includes('NetworkError') && 
+               !error.message.includes('TypeError') && 
+               !error.message.includes('already in progress') &&
+               !error.message.includes('AbortError')) {
       toast.error('Failed to sync data to server', {
         duration: 3000,
         description: 'Your data is saved locally'
@@ -1829,13 +1875,7 @@ async function manualSync() {
     showSyncIndicator('Starting manual sync...', 10)
 
     await performSmartSync()
-
-    toast.success('Data synced successfully', {
-      duration: 3000,
-      description: 'Your data is up to date across all devices'
-    })
     console.log('Manual smart sync completed successfully')
-
   } catch (error: any) {
     console.error('Manual sync failed:', error)
     toast.error('Sync failed', {
@@ -2109,6 +2149,115 @@ function setupConnectionListeners() {
   window.addEventListener('offline', startConnectionMonitoring)
 }
 
+// ---------- Request Limit Functions ----------
+function loadRequestCount() {
+  try {
+    if (!parsedUserDetails.value) return
+
+    // Initialize if doesn't exist
+    if (!parsedUserDetails.value.request_count) {
+      parsedUserDetails.value.request_count = { count: 0, timestamp: Date.now() }
+      return
+    }
+
+    const data = parsedUserDetails.value.request_count
+
+    // Validate data structure
+    if (typeof data !== 'object' || typeof data.timestamp !== 'number' || typeof data.count !== 'number') {
+      console.warn('Invalid request count data format, resetting')
+      parsedUserDetails.value.request_count = { count: 0, timestamp: Date.now() }
+      return
+    }
+
+    // Check if 24 hours have passed
+    const now = Date.now()
+    const timeDiff = now - data.timestamp
+    const twentyFourHours = 24 * 60 * 60 * 1000
+
+    if (timeDiff > twentyFourHours) {
+      // Reset count after 24 hours
+      parsedUserDetails.value.request_count = { count: 0, timestamp: now }
+    } else {
+      // Ensure count doesn't exceed limit
+      parsedUserDetails.value.request_count.count = Math.max(0, Math.min(data.count, FREE_REQUEST_LIMIT))
+    }
+  } catch (error) {
+    console.error('Failed to load request count:', error)
+    if (parsedUserDetails.value) {
+      parsedUserDetails.value.request_count = { count: 0, timestamp: Date.now() }
+    }
+  }
+}
+
+function checkRequestLimitBeforeSubmit(): boolean {
+  try {
+    if (!userHasRequestLimits.value) {
+      return true // Unlimited user - allow
+    }
+
+    if (!parsedUserDetails.value?.request_count) {
+      return true // No limit data - allow (safety)
+    }
+
+    const currentCount = parsedUserDetails.value.request_count.count || 0
+
+    if (currentCount >= FREE_REQUEST_LIMIT) {
+      // Show error toast here (at submit time, not load time)
+      if (userPlanStatus.value.isExpired) {
+        toast.error('Your plan has expired', {
+          duration: 5000,
+          description: 'Please renew your plan to continue using the service.'
+        })
+      } else {
+        toast.warning('Free requests exhausted', {
+          duration: 4000,
+          description: 'Please upgrade to continue chatting.'
+        })
+      }
+      return false // Block submission
+    }
+
+    return true // Allow submission
+  } catch (error) {
+    console.error('Error checking request limit:', error)
+    return true // Allow on error (safety)
+  }
+}
+
+function incrementRequestCount() {
+  try {
+    if (!userHasRequestLimits.value) {
+      return // No limits for unlimited users
+    }
+
+    if (!parsedUserDetails.value) {
+      return
+    }
+
+    if (!parsedUserDetails.value.request_count) {
+      parsedUserDetails.value.request_count = { count: 0, timestamp: Date.now() }
+    }
+
+    const currentCount = parsedUserDetails.value.request_count.count || 0
+
+    if (currentCount < FREE_REQUEST_LIMIT) {
+      parsedUserDetails.value.request_count.count = currentCount + 1
+    }
+  } catch (error) {
+    console.error('Failed to increment request count:', error)
+  }
+}
+
+function resetRequestCount() {
+  try {
+    if (parsedUserDetails.value) {
+      parsedUserDetails.value.request_count = { count: 0, timestamp: Date.now() }
+    }
+  } catch (error) {
+    console.error('Failed to reset request count:', error)
+  }
+}
+
 let userDetailsDebounceTimer: any = null
 let chatsDebounceTimer: any = null
 let previousUserDetails: any = null
@@ -2181,7 +2330,7 @@ function hasUserDetailsChangedMeaningfully(newDetails: any, oldDetails: any): bo
   if (!oldDetails || !newDetails) return false
 
   // Ignore timestamp-only changes
-  const keysToCheck = ['preferences', 'theme', 'workFunction', 'phone_number', 'sync_enabled', 'response_mode']
+  const keysToCheck = ['preferences', 'theme', 'workFunction', 'phone_number', 'sync_enabled', 'response_mode', 'request_count']
 
   return keysToCheck.some(key => {
     const oldValue = oldDetails[key]
@@ -2368,6 +2517,7 @@ onMounted(async () => {
     setupConnectionListeners()
 
     if (parsedUserDetails.value) {
+      loadRequestCount()
       previousUserDetails = JSON.parse(JSON.stringify(parsedUserDetails.value))
     }
 
@@ -2433,6 +2583,8 @@ onUnmounted(() => {
 // Global state object with all functions and reactive references
 const globalState = {
   // Reactive references
+  FREE_REQUEST_LIMIT,
+  requestCount,
   userDetailsDebounceTimer,
   chatsDebounceTimer,
   activeRequests,
@@ -2449,6 +2601,9 @@ const globalState = {
   isAuthenticated,
   parsedUserDetails,
   currentChatId,
+  requestsRemaining,
+  shouldShowUpgradePrompt,
+  isRequestLimitExceeded,
   chats,
   isLoading,
   expanded,
@@ -2487,6 +2642,10 @@ const globalState = {
   clearCurrentDraft,
   saveChatDrafts,
   autoSaveDraft,
+  resetRequestCount,
+  incrementRequestCount,
+  loadRequestCount,
+  checkRequestLimitBeforeSubmit,
 
   // UI functions
   toggleTheme,

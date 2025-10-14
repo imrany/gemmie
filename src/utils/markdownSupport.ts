@@ -372,7 +372,7 @@ const processImages = (content: string): string => {
       .replace(
         /!\[([^\]]*)\]\(([^)\s]+)\)\{\.float-right\}/g,
         (match, alt, url) => {
-          return `<div class="image-container my-2 float-right ml-4 mb-4 max-w-xs">
+          return `<div class="image-container my-2 float-right ml-3 mb-4 max-w-xs">
   <img src="${url}" alt="${
             alt || "Image"
           }" loading="lazy" class="w-full h-auto rounded-lg shadow-md hover:shadow-lg transition-all duration-200 cursor-zoom-in border border-gray-200 dark:border-gray-700" onclick="window.open('${url}', '_blank')" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
@@ -797,21 +797,21 @@ function renderMarkdown(text: string): string {
   // Lists  
   html = html.replace(
     /^[\*\-\+] (.+$)/gm,
-    '<li class="ml-4 leading-relaxed">• $1</li>'
+    '<li class="ml-3 leading-relaxed">• $1</li>'
   );
   html = html.replace(
     /^\d+\. (.+$)/gm,
-    '<li class="ml-4 list-decimal leading-relaxed">$1</li>'
+    '<li class="ml-3 list-decimal leading-relaxed">$1</li>'
   );
 
   // Wrap lists
   html = html.replace(
-    /(<li class="ml-4 leading-relaxed">• .*?<\/li>(?:\s*<li class="ml-4 leading-relaxed">• .*?<\/li>)*)/gs,
+    /(<li class="ml-3 leading-relaxed">• .*?<\/li>(?:\s*<li class="ml-3 leading-relaxed">• .*?<\/li>)*)/gs,
     '<ul class="my-3 space-y-1 text-gray-700 dark:text-gray-300">$1</ul>'
   );
   html = html.replace(
-    /(<li class="ml-4 list-decimal leading-relaxed">.*?<\/li>(?:\s*<li class="ml-4 list-decimal leading-relaxed">.*?<\/li>)*)/gs,
-    '<ol class="my-3 ml-8 space-y-1 text-gray-700 dark:text-gray-300">$1</ol>'
+    /(<li class="ml-3 list-decimal leading-relaxed">.*?<\/li>(?:\s*<li class="ml-3 list-decimal leading-relaxed">.*?<\/li>)*)/gs,
+    '<ol class="my-3 ml-4 space-y-1 text-gray-700 dark:text-gray-300">$1</ol>'
   );
 
   // Paragraphs
