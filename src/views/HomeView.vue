@@ -216,6 +216,8 @@ const transcriptionDuration = ref(0)
 let transcriptionTimer: number | null = null
 let updateTimeout: number | null = null
 
+const showSuggestionsDropup = ref(false)
+
 const showPasteModal = ref(false)
 const pastePreview = computed(() => {
   return pastePreviews.value.get(currentChatId.value) || null
@@ -227,6 +229,48 @@ const currentPasteContent = ref<{
   type: 'text' | 'code' | 'json' | 'markdown' | 'xml' | 'html';
 } | null>(null)
 
+const suggestionPrompts = [
+  {
+    icon: 'pi pi-pencil',
+    title: 'Write',
+    prompt: 'Write a short story about a time traveler who accidentally changes history',
+  },
+  {
+    icon: 'pi pi-code',
+    title: 'Code',
+    prompt: 'Help me debug a JavaScript function that\'s not working as expected',
+  },
+  {
+    icon: 'pi pi-book',
+    title: 'Learn',
+    prompt: 'Explain quantum computing in simple terms',
+  },
+  {
+    icon: 'pi pi-globe',
+    title: 'Events',
+    prompt: 'What are the latest global events?',
+  }
+]
+
+// Handle suggestion selection
+function selectSuggestion(prompt: string) {
+  showSuggestionsDropup.value = false
+  setShowInput()
+
+  nextTick(() => {
+    const textarea = document.getElementById('prompt') as HTMLTextAreaElement
+    if (textarea) {
+      textarea.value = prompt
+      autoGrow({ target: textarea } as any)
+      textarea.focus()
+    }
+  })
+
+  toast.info('Suggestion loaded', {
+    duration: 2000,
+    description: 'Feel free to edit before sending'
+  })
+}
 
 // Load chats from localStorage
 function loadChats() {
@@ -2060,6 +2104,15 @@ const handleClickOutside = (e: MouseEvent) => {
     button && !button.contains(e.target as Node)) {
     showInputModeDropdown.value = false
   }
+
+  // Close suggestions dropup
+  const suggestionsDropup = document.querySelector('.suggestions-dropup')
+  const suggestionsButton = document.querySelector('.suggestions-button')
+
+  if (suggestionsDropup && !suggestionsDropup.contains(e.target as Node) &&
+    suggestionsButton && !suggestionsButton.contains(e.target as Node)) {
+    showSuggestionsDropup.value = false
+  }
 }
 
 const modeOptions: Record<string, ModeOption> = {
@@ -2315,6 +2368,7 @@ onMounted(() => {
     }
 
     loadChats();
+    setShowInput()
 
     // Initial sync from server (delayed to avoid conflicts)
     setTimeout(() => {
@@ -2553,7 +2607,8 @@ onUnmounted(() => {
         }" />
 
         <div v-else-if="isAuthenticated && currentMessages.length === 0">
-          <div class="flex md:max-w-3xl max-w-[100vw] flex-col md:flex-grow items-center gap-3 text-gray-600 dark:text-gray-400">
+          <div
+            class="flex md:max-w-3xl max-w-[100vw] flex-col md:flex-grow items-center gap-3 text-gray-600 dark:text-gray-400">
             <img :src="currentTheme === 'dark' || (currentTheme === 'system' && isDarkMode) ?
               '/logo-light.svg' : '/logo.svg'" alt="Gemmie Logo" class="w-[60px] h-[60px] rounded-md" />
 
@@ -2580,7 +2635,24 @@ onUnmounted(() => {
                 </div>
               </div>
             </div>
-            <div class="flex flex-col gap-3 w-full max-w-xs">
+            
+            <div class="flex flex-col gap-4 w-full max-w-2xl relative">
+              <!-- Suggestion Chips Grid -->
+              <div class="w-full flex justify-center">
+                <div class="flex flex-wrap justify-center gap-2">
+                  <button v-for="(suggestion, index) in suggestionPrompts" :key="index" type="button"
+                    @click="selectSuggestion(suggestion.prompt)"
+                    class="group flex w-[100px] items-center gap-2 justify-center h-9 bg-white dark:bg-gray-800 border-[1px] border-gray-200 dark:border-gray-700 rounded-lg hover:border-blue-500 dark:hover:border-blue-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-200 transform hover:scale-105 shadow-sm hover:shadow-md">
+                    <i
+                      :class="[suggestion.icon, 'text-gray-500 dark:text-gray-300 text-sm group-hover:scale-110 transition-transform']"></i>
+                    <span class="text-xs font-medium text-gray-700 dark:text-gray-300">
+                      {{ suggestion.title }}
+                    </span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Start Writing Button -->
               <button v-if="!showInput" @click="setShowInput"
                 class="group px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 dark:from-blue-600 dark:to-purple-700 text-white rounded-lg hover:from-blue-600 hover:to-purple-700 dark:hover:from-blue-700 dark:hover:to-purple-800 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl font-medium">
                 <span class="flex items-center justify-center gap-2">
@@ -2606,7 +2678,8 @@ onUnmounted(() => {
                   class="flex items-start gap-2 font-medium bg-gray-100 dark:bg-gray-800 text-black dark:text-gray-100 px-4 rounded-2xl prose prose-sm dark:prose-invert chat-bubble w-fit max-w-full">
                   <!-- Avatar container -->
                   <div class="flex-shrink-0 py-3">
-                    <div class="flex items-center justify-center w-7 h-7 text-gray-100 dark:text-gray-800 bg-gray-700 dark:bg-gray-200 rounded-full text-sm font-semibold">
+                    <div
+                      class="flex items-center justify-center w-7 h-7 text-gray-100 dark:text-gray-800 bg-gray-700 dark:bg-gray-200 rounded-full text-sm font-semibold">
                       {{ parsedUserDetails.username.toUpperCase().slice(0, 2) }}
                     </div>
                   </div>
