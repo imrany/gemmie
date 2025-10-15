@@ -636,9 +636,9 @@ const processLinks = (content: string): string =>{
     /\[([^\]]+)\]\(([^)"]+)(?:\s+"([^"]+)")?\)/g,
     (match, text, url, title) => {
       const titleAttr = title ? ` title="${title}"` : "";
-      return `<a href="${url}" class="text-blue-600 underline hover:text-blue-800 link-with-preview" ${titleAttr} target="_blank" rel="noopener noreferrer">${
+      return `<div onclick="openWebPreview('${url}')"  class="text-blue-600 underline hover:text-blue-800 link-with-preview" ${titleAttr}>${
         text.length>60? text.slice(0,60) + "...":text
-      }</a>`;
+      }</div>`;
     }
   );
 }
