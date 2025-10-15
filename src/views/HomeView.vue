@@ -15,7 +15,6 @@ import PastePreviewModal from "@/components/Modals/PastePreviewModal.vue"
 import { useRoute } from "vue-router"
 import type { Theme } from "vue-sonner/src/packages/types.js"
 import { renderMarkdown } from "@/utils/markdownSupport"
-import WebPreviewModal from "@/components/Modals/WebPreviewModal.vue"
 
 type ModeOption = {
   mode: 'light-response' | 'web-search' | 'deep-search',
@@ -217,8 +216,6 @@ const transcriptionDuration = ref(0)
 let transcriptionTimer: number | null = null
 let updateTimeout: number | null = null
 
-const showWebPreview = ref(false)
-const previewUrl = ref<string | null>(null)
 const showSuggestionsDropup = ref(false)
 
 const showPasteModal = ref(false)
@@ -318,10 +315,10 @@ function LinkPreviewComponent({ preview }: { preview: LinkPreview }) {
       <div class="link-preview error border border-gray-200 dark:border-gray-700 rounded-lg p-3 my-2 bg-gray-50 dark:bg-gray-800 max-w-full transition-colors duration-200">
         <div class="flex items-center gap-2 min-w-0">
           <i class="pi pi-external-link text-gray-400 dark:text-gray-500 flex-shrink-0"></i>
-          <div onclick="openWebPreview('${preview.url}')" 
-             class="text-black cursor-pointer dark:text-white hover:text-blue-800 dark:hover:text-blue-300 text-sm font-medium truncate min-w-0 flex-1 transition-colors duration-200">
+          <a href="${preview.url}" target="_blank" rel="noopener noreferrer" 
+             class="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 text-sm font-medium truncate min-w-0 flex-1 transition-colors duration-200">
             ${preview.domain}
-          </div>
+          </a>
         </div>
       </div>
     `
@@ -497,8 +494,7 @@ function LinkPreviewComponent({ preview }: { preview: LinkPreview }) {
         </div>
       ` : `
         <!-- Regular link preview -->
-        <div 
-          onclick="openWebPreview('${preview.url}')" class="cursor-pointer block w-full max-w-[400px]">
+        <a href="${preview.url}" class="block w-full max-w-[400px]" target="_blank" rel="noopener noreferrer">
           ${preview.previewImage ? `
             <div class="aspect-video overflow-hidden bg-gray-100 dark:bg-gray-700 transition-colors duration-200">
               <img src="${preview.previewImage}" alt="${preview.title}" 
@@ -522,7 +518,7 @@ function LinkPreviewComponent({ preview }: { preview: LinkPreview }) {
               </div>
             </div>
           </div>
-        </div>
+        </a>
       `}
     </div>
   `
@@ -2148,22 +2144,6 @@ const modeOptions: Record<string, ModeOption> = {
   }
 }
 
-function openWebPreview(url: string) {
-  previewUrl.value = url
-  showWebPreview.value = true
-  
-  // Prevent body scroll
-  document.body.style.overflow = 'hidden'
-}
-
-function closeWebPreview() {
-  showWebPreview.value = false
-  previewUrl.value = null
-  
-  // Restore body scroll
-  document.body.style.overflow = 'auto'
-}
-
 onUpdated(() => {
   // Check for new video containers after DOM updates
   observeNewVideoContainers();
@@ -2317,11 +2297,6 @@ onBeforeUnmount(() => {
   if (userDetailsDebounceTimer) {
     clearTimeout(userDetailsDebounceTimer)
   }
-
-  // Clean up web preview
-  if (showWebPreview.value) {
-    document.body.style.overflow = 'auto'
-  }
 })
 
 // Consolidated onMounted hook for better organization
@@ -2347,10 +2322,6 @@ onMounted(() => {
 
   // 2. Load cached previews
   loadLinkPreviewCache();
-
-  if (typeof window !== 'undefined') {
-    (window as any).openWebPreview = openWebPreview
-  }
 
   // 3. Setup paste preview handlers
   setupPastePreviewHandlers();
@@ -2568,13 +2539,6 @@ onUnmounted(() => {
 
 <template>
   <div class="flex h-[100vh] bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
-    <WebPreviewModal
-      :data="{
-        showWebPreview,
-        previewUrl,
-      }" 
-      :closeWebPreview="closeWebPreview" 
-    />
     <!-- Sidebar -->
     <SideNav v-if="isAuthenticated" :data="{
       chats,
