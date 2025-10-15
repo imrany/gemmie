@@ -2636,7 +2636,7 @@ onUnmounted(() => {
               </div>
             </div>
             
-            <div class="flex flex-col gap-4 w-full max-w-2xl relative">
+            <div class="flex flex-col gap-4 w-full mb-[100px] max-w-2xl relative">
               <!-- Suggestion Chips Grid -->
               <div class="w-full flex justify-center">
                 <div class="flex flex-wrap justify-center gap-2">
