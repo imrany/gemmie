@@ -321,6 +321,14 @@ async function sendSTK(paymentData: any) {
   }
 }
 
+function handleBack(){
+  if(window.history.state.back){
+    router.back()
+    return
+  }
+  router.push("/")
+}
+
 watch(selectPlanName, (newVal) => {
   if (!showCheckout.value) {
     router.replace({ name: 'upgrade', params: { plan: newVal } })
@@ -378,7 +386,7 @@ onMounted(() => {
   <div class="min-h-screen py-6 px-4 sm:px-6 lg:px-8 bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
     <!-- Back Button -->
     <div class="flex w-full mb-6">
-      <button @click="showCheckout ? goBackToPlans() : $router.back()"
+      <button @click="showCheckout ? goBackToPlans() : handleBack()"
         class="text-gray-600 dark:text-gray-400 hover:bg-gray-400 dark:hover:bg-gray-600 rounded-md hover:text-white w-[35px] h-[35px] flex items-center justify-center transition-colors duration-200"
         :title="showCheckout ? 'Back to Plans' : 'Go Back'">
         <i class="pi pi-arrow-left text-lg font-semibold"></i>
