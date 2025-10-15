@@ -246,6 +246,11 @@ const suggestionPrompts = [
     prompt: 'Explain quantum computing in simple terms',
   },
   {
+    icon: 'pi pi-heart',
+    title: 'Health',
+    prompt: 'Get me daily healthy routines',
+  },
+  {
     icon: 'pi pi-globe',
     title: 'Events',
     prompt: 'What are the latest global events?',
