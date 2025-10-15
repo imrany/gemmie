@@ -319,7 +319,7 @@ function LinkPreviewComponent({ preview }: { preview: LinkPreview }) {
         <div class="flex items-center gap-2 min-w-0">
           <i class="pi pi-external-link text-gray-400 dark:text-gray-500 flex-shrink-0"></i>
           <div onclick="openWebPreview('${preview.url}')" 
-             class="text-blue-600 cursor-pointer dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 text-sm font-medium truncate min-w-0 flex-1 transition-colors duration-200">
+             class="text-black cursor-pointer dark:text-white hover:text-blue-800 dark:hover:text-blue-300 text-sm font-medium truncate min-w-0 flex-1 transition-colors duration-200">
             ${preview.domain}
           </div>
         </div>

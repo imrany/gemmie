@@ -631,17 +631,44 @@ const horizontalRules=(content: string): string =>{
 }
 
 // Links with title support 
-const processLinks = (content: string): string =>{
+const processLinks = (content: string): string => {
   return content.replace(
     /\[([^\]]+)\]\(([^)"]+)(?:\s+"([^"]+)")?\)/g,
     (match, text, url, title) => {
       const titleAttr = title ? ` title="${title}"` : "";
-      return `<div onclick="openWebPreview('${url}')"  class="text-blue-600 cursor-pointer underline hover:text-blue-800 link-with-preview" ${titleAttr}>${
-        text.length>60? text.slice(0,60) + "...":text
-      }</div>`;
+      
+      // Check if it's an external link (starts with http/https and is not your domain)
+      const isExternalLink = (url: string): boolean => {
+        if (!url.startsWith('http')) return false;
+        
+        try {
+          const urlObj = new URL(url);
+          const currentDomain = window.location.hostname;
+          return urlObj.hostname !== currentDomain && 
+                 !urlObj.hostname.endsWith('.' + currentDomain);
+        } catch {
+          return url.startsWith('http');
+        }
+      };
+
+      let linkElement = '';
+      
+      if (!isExternalLink(url)) {
+        // External link - open in new tab
+        linkElement = `<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-blue-600 cursor-pointer underline hover:text-blue-800" ${titleAttr}>${
+          text.length > 60 ? text.slice(0, 60) + "..." : text
+        }</a>`;
+      } else {
+        // Internal link - open in web preview modal
+        linkElement = `<div onclick="openWebPreview('${url}')" class="text-blue-600 cursor-pointer underline hover:text-blue-800 link-with-preview" ${titleAttr}>${
+          text.length > 60 ? text.slice(0, 60) + "..." : text
+        }</div>`;
+      }
+      
+      return linkElement;
     }
   );
-}
+};
 
 const inlineCode =(escapeHtml: (unsafe: string)=> string,inlineCodePlaceholders: string[],content: string): string=>{
   return content.replace(/`([^`]+)`/g, (match, code) => {
