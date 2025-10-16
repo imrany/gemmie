@@ -1682,10 +1682,6 @@ function shareResponse(text: string, prompt?: string) {
       console.log("Share successful")
     }).catch(err => {
       console.log("Share canceled", err)
-      toast.warning('Share Cancelled', {
-        duration: 2000,
-        description: "Cannot Share at the moment, copying instead."
-      })
     })
   } else {
     copyCode(text)
@@ -2049,7 +2045,7 @@ function stopTimer() {
 // Clear voice transcription
 function clearVoiceTranscription() {
   transcribedText.value = ''
-  transcriptionDuration.value = 0 // FIX 8: Reset duration
+  transcriptionDuration.value = 0 // Reset duration
   const textarea = document.getElementById('prompt') as HTMLTextAreaElement
   if (textarea) {
     textarea.value = ''
@@ -2727,7 +2723,7 @@ onUnmounted(() => {
               <div
                 class="bg-none max-w-full w-full chat-message leading-relaxed text-black dark:text-gray-100 p-1 rounded-2xl prose prose-sm dark:prose-invert">
                 <!-- Loading state -->
-                <div v-if="item.response === '...'"
+                <div v-if="item.response === '...' || item.response === 'light-response...'"
                   class="flex w-full rounded-lg bg-gray-50 dark:bg-gray-800 p-2 items-center animate-pulse gap-2 text-gray-500 dark:text-gray-400">
                   <i class="pi pi-spin pi-spinner"></i>
                   <span class="text-sm">Thinking...</span>
@@ -2763,7 +2759,7 @@ onUnmounted(() => {
 
                 <!-- Actions - Responsive with fewer labels on mobile -->
                 <div
-                  v-if="item.response !== '...' && item.response !== 'refreshing...' && item.response !== 'web-search...' && item.response !== 'light-search...' && item.response !== 'deep-search...'"
+                  v-if="item.response !== '...' && item.response !== 'light-response...' && item.response !== 'refreshing...' && (item.response !== 'web-search...' && item.response !== 'light-search...') && item.response !== 'deep-search...'"
                   class="flex flex-wrap justify-end gap-2 sm:gap-3 mt-2 text-gray-500 dark:text-gray-400 text-sm">
                   <button @click="copyResponse(item.response, i)"
                     class="flex items-center gap-1 hover:text-blue-600 dark:hover:text-blue-400 transition-colors min-h-[32px]">
