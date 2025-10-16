@@ -1,0 +1,66 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: gemmie-postgres
+    environment:
+      POSTGRES_DB: gemmie
+      POSTGRES_USER: gemmie_user
+      POSTGRES_PASSWORD: gemmie_password
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --lc-collate=C --lc-ctype=C"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    networks:
+      - gemmie-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gemmie_user -d gemmie"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: gemmie-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@gemmie.com
+      PGADMIN_DEFAULT_PASSWORD: admin123
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    networks:
+      - gemmie-network
+    depends_on:
+      - postgres
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5050"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  gemmie-server:
+    image: ghcr.io/imrany/gemmie-server:latest
+    container_name: gemmie-server
+    env_file:
+      - .env
+    ports:
+      - "8081:8081"
+    networks:
+      - gemmie-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  pgadmin_data:
+
+networks:
+  gemmie-network:
+    driver: bridge

@@ -50,12 +50,7 @@ USER gemmie
 EXPOSE 8081
 
 # Default envs (override in docker-compose or runtime)
-ENV DATA_FILE=/var/opt/gemmie-server/gemmie_data.json \
-    PORT=8081
-#    PAYHERO_USERNAME= 
-#    PAYHERO_PASSWORD=
-    # PAYHERO_CHANNEL_ID =
-    #   CALLBACK_URL = http://localhost:8081/api/callback"
+ENV PORT=8081
 
 LABEL org.opencontainers.image.title="gemmie-server" \
       org.opencontainers.image.description="gemmie's server side program." \

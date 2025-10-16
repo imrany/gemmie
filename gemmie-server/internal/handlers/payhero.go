@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
-	"github.com/imrany/gemmie/gemmie-server/internal/encrypt"
 	"github.com/imrany/gemmie/gemmie-server/store"
 	"github.com/spf13/viper"
 )
@@ -62,45 +61,6 @@ var planConfigs = map[int]PlanConfig{
 	},
 }
 
-// Data access functions
-func findTransactionByRef(ref string) (*store.Transaction, bool) {
-	store.Storage.Mu.RLock()
-	defer store.Storage.Mu.RUnlock()
-
-	for _, transaction := range store.Storage.Transactions {
-		if transaction.ExternalReference == ref {
-			return &transaction, true
-		}
-	}
-	return nil, false
-}
-
-func createTransaction(t store.Transaction) error {
-	t.ID = encrypt.GenerateID("txn")
-	t.CreatedAt = time.Now()
-	t.UpdatedAt = time.Now()
-
-	store.Storage.Mu.Lock()
-	store.Storage.Transactions[t.ID] = t
-	store.Storage.Mu.Unlock()
-
-	return store.SaveStorage()
-}
-
-// findUserByEmailOrUsername tries to find user by email or username in storage
-func findUserByEmailOrUsername(identifier string) (*store.User, string, bool) {
-	store.Storage.Mu.RLock()
-	defer store.Storage.Mu.RUnlock()
-
-	for id, u := range store.Storage.Users {
-		if strings.EqualFold(u.Email, identifier) || strings.EqualFold(u.Username, identifier) {
-			userCopy := u
-			return &userCopy, id, true
-		}
-	}
-	return nil, "", false
-}
-
 // validatePayHeroConfig checks if all required PayHero configuration is present
 func validatePayHeroConfig() error {
 	required := []string{"PAYHERO_USERNAME", "PAYHERO_PASSWORD", "PAYHERO_CHANNEL_ID", "CALLBACK_URL"}
@@ -126,10 +86,12 @@ func updateUserPlan(userID string, transaction store.Transaction) error {
 		return nil // Don't fail, just log warning
 	}
 
-	store.Storage.Mu.Lock()
+	user, err := store.GetUserByID(userID)
+	if err != nil {
+		slog.Error("Error finding user by id", "user_id", userID, "error", err)
+	}
 
-	u, exists := store.Storage.Users[userID]
-	if !exists {
+	if user == nil {
 		return fmt.Errorf("user not found: %s", userID)
 	}
 
@@ -140,11 +102,12 @@ func updateUserPlan(userID string, transaction store.Transaction) error {
 		"amount", transaction.Amount,
 		"planKey", planKey,
 		"planName", plan.Name,
-		"oldPlan", u.Plan,
+		"oldPlan", user.Plan,
 	)
 
 	// Update user plan
 	now := time.Now()
+	var u store.User
 	u.Plan = planKey
 	u.PlanName = plan.Name
 	u.Price = plan.Price
@@ -155,7 +118,10 @@ func updateUserPlan(userID string, transaction store.Transaction) error {
 	u.ExpiryTimestamp = now.Add(plan.ExpireDuration).Unix()
 	u.UpdatedAt = now
 
-	store.Storage.Users[userID] = u
+	if err = store.UpdateUser(u); err != nil {
+		slog.Error("Error updating user plan", "error", err)
+		return err
+	}
 	
 	// Log after update for confirmation
 	slog.Info("User plan updated", 
@@ -164,8 +130,7 @@ func updateUserPlan(userID string, transaction store.Transaction) error {
 		"expiryTimestamp", u.ExpiryTimestamp,
 	)
 	
-	store.Storage.Mu.Unlock()
-	return store.SaveStorage()
+	return nil
 }
 
 func getPlanKey(amount int) string {
@@ -195,14 +160,12 @@ func checkAndUpdateUserFromTransaction(transaction store.Transaction) {
 	}
 
 	identifier := parts[0]
-	_, userID, found := findUserByEmailOrUsername(identifier)
+	_, userID, found := store.FindUserByEmailOrUsername(identifier)
 	if !found {
 		return
 	}
 
-	store.Storage.Mu.RLock()
-	user := store.Storage.Users[userID]
-	store.Storage.Mu.RUnlock()
+	user, _ := store.GetUserByID(userID)
 
 	// Check if user needs plan update
 	shouldUpdate := false
@@ -297,7 +260,7 @@ func SendSTKHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check if transaction already exists
-	if _, exists := findTransactionByRef(stkReq.ExternalReference); exists {
+	if tranx, _ := store.GetTransactionByExtRef(stkReq.ExternalReference); tranx != nil {
 		w.WriteHeader(http.StatusConflict)
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
@@ -443,7 +406,7 @@ func StoreTransactionHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check if transaction already exists
-	if _, exists := findTransactionByRef(transaction.ExternalReference); exists {
+	if tranx, _ := store.GetTransactionByExtRef(transaction.ExternalReference); tranx != nil {
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
 			Message: fmt.Sprintf("Transaction with reference %s already exists", transaction.ExternalReference),
@@ -453,7 +416,7 @@ func StoreTransactionHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Store the transaction regardless of status for audit trail
-	if err := createTransaction(transaction); err != nil {
+	if err := store.CreateTransaction(transaction); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
@@ -468,7 +431,7 @@ func StoreTransactionHandler(w http.ResponseWriter, r *http.Request) {
 		parts := strings.Split(transaction.ExternalReference, "-")
 		if len(parts) > 0 {
 			identifier := parts[0]
-			if _, userID, found := findUserByEmailOrUsername(identifier); found {
+			if _, userID, found := store.FindUserByEmailOrUsername(identifier); found {
 				if err := updateUserPlan(userID, transaction); err != nil {
 					slog.Error("Failed to update user plan", 
 						"error", err, 
@@ -501,16 +464,23 @@ func StoreTransactionHandler(w http.ResponseWriter, r *http.Request) {
 func GetTransactionsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	store.Storage.Mu.RLock()
-	transactions := make([]store.Transaction, 0, len(store.Storage.Transactions))
-	for _, transaction := range store.Storage.Transactions {
+	transactions, err := store.GetTransactions()
+	if err != nil {
+		slog.Error("Error getting transaction", "error", err)
+		json.NewEncoder(w).Encode(store.Response{
+			Success: false,
+			Message: "Transactions retrieved unsuccessfully",
+		})
+		return
+	}
+
+	for _, transaction := range transactions {
 		transactions = append(transactions, transaction)
 		
 		// Check and update user from existing transaction if needed
 		// This runs in the background and doesn't affect the response
 		go checkAndUpdateUserFromTransaction(transaction)
 	}
-	store.Storage.Mu.RUnlock()
 
 	json.NewEncoder(w).Encode(store.Response{
 		Success: true,
@@ -537,8 +507,8 @@ func GetTransactionByRefHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	transaction, exists := findTransactionByRef(externalReference)
-	if !exists {
+	transaction, _ := store.GetTransactionByExtRef(externalReference); 
+	if transaction == nil {
 		w.WriteHeader(http.StatusNotFound)
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
