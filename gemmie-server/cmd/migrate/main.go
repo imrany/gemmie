@@ -2,14 +2,17 @@ package main
 
 import (
 	"encoding/json"
-	"flag"
 	"fmt"
 	"log"
+	"log/slog"
 	"os"
 	"sync"
 	"time"
 
 	"github.com/imrany/gemmie/gemmie-server/store"
+	"github.com/joho/godotenv"
+	"github.com/spf13/pflag"
+	"github.com/spf13/viper"
 )
 
 // Legacy JSON storage structure
@@ -21,26 +24,52 @@ type LegacyStorage struct {
 }
 
 func main() {
-	// Command line flags
-	jsonFile := flag.String("json", "./gemmie_data.json", "Path to JSON file")
-	dbHost := flag.String("db-host", "localhost", "Database host")
-	dbPort := flag.String("db-port", "5432", "Database port")
-	dbUser := flag.String("db-user", "", "Database user")
-	dbPassword := flag.String("db-password", "", "Database password")
-	dbName := flag.String("db-name", "gemmie", "Database name")
-	dbSSLMode := flag.String("db-sslmode", "disable", "Database SSL mode")
-	dryRun := flag.Bool("dry-run", false, "Perform a dry run without inserting data")
-	
-	flag.Parse()
+	// Load .env if present
+	if err := godotenv.Load(); err != nil {
+		slog.Warn("No .env file found, using defaults")
+	} else {
+		slog.Info(".env file loaded successfully")
+	}
 
-	// Validate required flags
-	if *dbUser == "" || *dbPassword == "" {
-		log.Fatal("Database user and password are required")
+	// Command line flags
+	jsonFile := pflag.String("json", "./gemmie_data.json", "Path to JSON file")
+	pflag.String("db-host", "localhost", "Database host")
+	pflag.String("db-port", "5432", "Database port")
+	pflag.String("db-user", "", "Database user")
+	pflag.String("db-password", "", "Database password")
+	pflag.String("db-name", "gemmie", "Database name")
+	pflag.String("db-sslmode", "disable", "Database SSL mode")
+	dryRun := pflag.Bool("dry-run", false, "Perform a dry run without inserting data")
+
+	pflag.Parse()
+
+	// Set up viper to read from environment
+	viper.AutomaticEnv()
+	
+	// Bind flags to viper, but environment variables take precedence
+	viper.BindPFlag("DB_HOST", pflag.Lookup("db-host"))
+	viper.BindPFlag("DB_PORT", pflag.Lookup("db-port"))
+	viper.BindPFlag("DB_USER", pflag.Lookup("db-user"))
+	viper.BindPFlag("DB_PASSWORD", pflag.Lookup("db-password"))
+	viper.BindPFlag("DB_NAME", pflag.Lookup("db-name"))
+	viper.BindPFlag("DB_SSLMODE", pflag.Lookup("db-sslmode"))
+
+	// Get values from viper (which checks env vars first, then flags)
+	finalDBHost := viper.GetString("DB_HOST")
+	finalDBPort := viper.GetString("DB_PORT")
+	finalDBUser := viper.GetString("DB_USER")
+	finalDBPassword := viper.GetString("DB_PASSWORD")
+	finalDBName := viper.GetString("DB_NAME")
+	finalDBSSLMode := viper.GetString("DB_SSLMODE")
+
+	// Validate required parameters
+	if finalDBUser == "" || finalDBPassword == "" {
+		log.Fatal("Database user and password are required (via flags or environment variables)")
 	}
 
 	fmt.Println("=== JSON to PostgreSQL Migration Tool ===")
 	fmt.Printf("JSON File: %s\n", *jsonFile)
-	fmt.Printf("Database: %s@%s:%s/%s\n", *dbUser, *dbHost, *dbPort, *dbName)
+	fmt.Printf("Database: %s@%s:%s/%s\n", finalDBUser, finalDBHost, finalDBPort, finalDBName)
 	fmt.Printf("Dry Run: %v\n\n", *dryRun)
 
 	// Step 1: Read JSON file
@@ -68,11 +97,11 @@ func main() {
 		return
 	}
 
-	// Step 3: Connect to PostgreSQL
+	// Step 3: Connect to PostgreSQL using viper values
 	fmt.Println("Step 3: Connecting to PostgreSQL...")
 	connString := fmt.Sprintf(
 		"host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
-		*dbHost, *dbPort, *dbUser, *dbPassword, *dbName, *dbSSLMode,
+		finalDBHost, finalDBPort, finalDBUser, finalDBPassword, finalDBName, finalDBSSLMode,
 	)
 
 	if err := store.InitStorage(connString); err != nil {

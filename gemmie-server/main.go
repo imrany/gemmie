@@ -286,7 +286,7 @@ func runServer() {
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 	
 	sig := <-quit
-	slog.Info("Shutdown signal received", "signal", sig, "shutting down gracefully...")
+	slog.Info("Shutdown signal received", "signal", sig, "shutting down gracefully...", "")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
