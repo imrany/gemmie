@@ -116,28 +116,28 @@ func sanitizeString(input string) string {
 
 // findUserByEmail finds a user by email
 func FindUserByEmail(email string) (*store.User, bool) {
-	store.Storage.Mu.RLock()
-	defer store.Storage.Mu.RUnlock()
-
-	for _, user := range store.Storage.Users {
-		if user.Email == email {
-			return &user, true
-		}
+	user, err := store.GetUserByEmail(email)
+	if err != nil {
+		slog.Error("Error finding user by email", "email", email, "error", err)
+		return nil, false
 	}
-	return nil, false
+	if user == nil {
+		return nil, false
+	}
+	return user, true
 }
 
 // findUserByUsername finds a user by username
 func findUserByUsername(username string) (*store.User, bool) {
-	store.Storage.Mu.RLock()
-	defer store.Storage.Mu.RUnlock()
-
-	for _, user := range store.Storage.Users {
-		if user.Username == username {
-			return &user, true
-		}
+	user, err := store.GetUserByUsername(username)
+	if err != nil {
+		slog.Error("Error finding user by username", "username", username, "error", err)
+		return nil, false
 	}
-	return nil, false
+	if user == nil {
+		return nil, false
+	}
+	return user, true
 }
 
 func RegisterHandler(w http.ResponseWriter, r *http.Request) {
@@ -157,7 +157,7 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	req.Username = sanitizeString(req.Username)
 	req.Email = sanitizeString(req.Email)
 
-	// Enhanced validation (existing validation code...)
+	// Validation 
 	if req.Username == "" || req.Email == "" || req.Password == "" {
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(store.Response{
@@ -167,7 +167,6 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate email format
 	emailRegex := regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
 	if !emailRegex.MatchString(req.Email) {
 		w.WriteHeader(http.StatusBadRequest)
@@ -178,7 +177,6 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate username
 	usernameRegex := regexp.MustCompile(`^[a-zA-Z0-9_-]{3,30}$`)
 	if !usernameRegex.MatchString(req.Username) {
 		w.WriteHeader(http.StatusBadRequest)
@@ -189,7 +187,6 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate password strength
 	if len(req.Password) < 8 {
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(store.Response{
@@ -227,7 +224,7 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create new user with email fields
+	// Create new user
 	userID := encrypt.GenerateUserID()
 	passwordHash := encrypt.HashCredentials(req.Username, req.Email, req.Password)
 	unsubscribeToken := encrypt.GenerateUnsubscribeToken(userID)
@@ -239,30 +236,30 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		PasswordHash:    passwordHash,
 		CreatedAt:       time.Now(),
 		UpdatedAt:       time.Now(),
-		Preferences:     "",
-		WorkFunction:    "",
 		Theme:           "system",
 		SyncEnabled:     true,
 		Plan:            "free",
 		PlanName:        "Free",
-		Amount:          0,
-		Duration:        "",
-		PhoneNumber:     "",
-		ExpiryTimestamp: 0,
-		ExpireDuration:  0,
-		Price:           "",
-		ResponseMode: "light-response",
+		ResponseMode:    "light-response",
 		AgreeToTerms:    req.AgreeToTerms,
-		
-		EmailVerified:       false,  // Will be verified after clicking link
-		EmailSubscribed:     true,   // Default: subscribed to promotional emails
-		UnsubscribeToken:    unsubscribeToken,
-		VerificationToken:   "",     // Will be set when verification email is sent
-		VerificationTokenExpiry: time.Time{},
+		EmailVerified:   false,
+		EmailSubscribed: true,
+		UnsubscribeToken: unsubscribeToken,
 		RequestCount: store.RequestCount{
-			Count: 0,
+			Count:     0,
 			Timestamp: time.Now().UnixNano() / int64(time.Millisecond),
 		},
+	}
+
+	// Save to database
+	if err := store.CreateUser(user); err != nil {
+		slog.Error("Failed to create user", "error", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(store.Response{
+			Success: false,
+			Message: "Failed to create user",
+		})
+		return
 	}
 
 	// Create empty user data record
@@ -274,56 +271,50 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		UpdatedAt:     time.Now(),
 	}
 
-	// Store in memory and save to file
-	store.Storage.Mu.Lock()
-	store.Storage.Users[userID] = user
-	store.Storage.UserData[userID] = userData
-	store.Storage.Mu.Unlock()
-
-	if err := store.SaveStorage(); err != nil {
-		slog.Error("Failed to save storage after registration", "error", err)
+	// Save user data to database
+	if err := store.CreateUserData(userData); err != nil {
+		slog.Error("Failed to create user data", "error", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
-			Message: "Failed to save user data",
+			Message: "Failed to create user data",
 		})
 		return
 	}
 
-	// Return response with user data (including new fields)
+	// Return response
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(store.Response{
 		Success: true,
 		Message: "User registered successfully. Please check your email to verify your account.",
 		Data: AuthResponse{
-			UserID:        user.ID,
-			Username:      user.Username,
-			Email:         user.Email,
-			CreatedAt:     user.CreatedAt,
-			Chats:         userData.Chats,
-			LinkPreviews:  userData.LinkPreviews,
-			CurrentChatID: userData.CurrentChatID,
-			Preferences:   user.Preferences,
-			WorkFunction:  user.WorkFunction,
-			Theme:         user.Theme,
-			SyncEnabled:   user.SyncEnabled,
-			PhoneNumber:   user.PhoneNumber,
-			Plan:          user.Plan,
-			PlanName:      user.PlanName,
-			Amount:        user.Amount,
-			Duration:      user.Duration,
-			Price:         user.Price,
-			ResponseMode: user.ResponseMode,
+			UserID:          user.ID,
+			Username:        user.Username,
+			Email:           user.Email,
+			CreatedAt:       user.CreatedAt,
+			Chats:           userData.Chats,
+			LinkPreviews:    userData.LinkPreviews,
+			CurrentChatID:   userData.CurrentChatID,
+			Preferences:     user.Preferences,
+			WorkFunction:    user.WorkFunction,
+			Theme:           user.Theme,
+			SyncEnabled:     user.SyncEnabled,
+			PhoneNumber:     user.PhoneNumber,
+			Plan:            user.Plan,
+			PlanName:        user.PlanName,
+			Amount:          user.Amount,
+			Duration:        user.Duration,
+			Price:           user.Price,
+			ResponseMode:    user.ResponseMode,
 			ExpiryTimestamp: user.ExpiryTimestamp,
 			ExpireDuration:  user.ExpireDuration,
-			EmailVerified: user.EmailVerified,
+			EmailVerified:   user.EmailVerified,
 			EmailSubscribed: user.EmailSubscribed,
-			RequestCount: user.RequestCount,
+			RequestCount:    user.RequestCount,
 		},
 	})
 }
 
-// loginHandler handles user login
 func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
@@ -371,7 +362,7 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verify credentials hash
+	// Verify credentials
 	expectedHash := encrypt.HashCredentials(req.Username, req.Email, req.Password)
 	if user.PasswordHash != expectedHash {
 		w.WriteHeader(http.StatusUnauthorized)
@@ -382,35 +373,31 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get user data
-	store.Storage.Mu.RLock()
-	userData, hasData := store.Storage.UserData[user.ID]
-	existingUser := store.Storage.Users[user.ID]
-	store.Storage.Mu.RUnlock()
-
-	//Use the existingUser we already have, don't get a fresh copy
-	if existingUser.AgreeToTerms != req.AgreeToTerms {
-		store.Storage.Mu.Lock()
-		// Update the existingUser we already checked (not a fresh copy)
-		updatedUser := existingUser // Use the user we already have
-		updatedUser.AgreeToTerms = req.AgreeToTerms
-		updatedUser.UpdatedAt = time.Now()
-		store.Storage.Users[user.ID] = updatedUser // Update map
-		store.Storage.Mu.Unlock()
-		
-		if err := store.SaveStorage(); err != nil {
-			slog.Error("Failed to save storage after terms update",
-				"user_id", user.ID,
-				"error", err,
-			)
-		}
-		
-		user = &updatedUser 
+	//  Get user data from database
+	userData, err := store.GetUserData(user.ID)
+	if err != nil {
+		slog.Error("Failed to get user data", "user_id", user.ID, "error", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(store.Response{
+			Success: false,
+			Message: "Failed to retrieve user data",
+		})
+		return
 	}
 
-	if !hasData {
-		// Create empty user data if doesn't exist
-		userData = store.UserData{
+	// Update terms acceptance if needed
+	if user.AgreeToTerms != req.AgreeToTerms {
+		user.AgreeToTerms = req.AgreeToTerms
+		user.UpdatedAt = time.Now()
+		
+		if err := store.UpdateUser(*user); err != nil {
+			slog.Error("Failed to update terms acceptance", "user_id", user.ID, "error", err)
+		}
+	}
+
+	// Create user data if doesn't exist
+	if userData == nil {
+		userData = &store.UserData{
 			UserID:        user.ID,
 			Chats:         "[]",
 			LinkPreviews:  "{}",
@@ -418,19 +405,12 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 			UpdatedAt:     time.Now(),
 		}
 		
-		store.Storage.Mu.Lock()
-		store.Storage.UserData[user.ID] = userData
-		store.Storage.Mu.Unlock()
-		
-		if err := store.SaveStorage(); err != nil {
-			slog.Error("Failed to save storage after user data creation",
-				"user_id", user.ID,
-				"error", err,
-			)
+		if err := store.CreateUserData(*userData); err != nil {
+			slog.Error("Failed to create user data", "user_id", user.ID, "error", err)
 		}
 	}
 
-	// Return response with user data
+	// Return response
 	json.NewEncoder(w).Encode(store.Response{
 		Success: true,
 		Message: "Login successful",
@@ -454,15 +434,15 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 			ExpiryTimestamp: user.ExpiryTimestamp,
 			ExpireDuration:  user.ExpireDuration,
 			Price:           user.Price,
-			ResponseMode: user.ResponseMode,
+			ResponseMode:    user.ResponseMode,
 			EmailVerified:   user.EmailVerified,
 			EmailSubscribed: user.EmailSubscribed,
-			RequestCount: user.RequestCount,
+			RequestCount:    user.RequestCount,
 		},
 	})
 }
 
-// syncHandler handles data synchronization
+// SyncHandler
 func SyncHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
@@ -477,11 +457,18 @@ func SyncHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Verify user exists
-	store.Storage.Mu.RLock()
-	_, userExists := store.Storage.Users[userID]
-	store.Storage.Mu.RUnlock()
+	user, err := store.GetUserByID(userID)
+	if err != nil {
+		slog.Error("Database error", "error", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(store.Response{
+			Success: false,
+			Message: "Database error",
+		})
+		return
+	}
 
-	if !userExists {
+	if user == nil {
 		w.WriteHeader(http.StatusNotFound)
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
@@ -492,13 +479,19 @@ func SyncHandler(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case "GET":
-		// Get user data
-		store.Storage.Mu.RLock()
-		userData, exists := store.Storage.UserData[userID]
-		user := store.Storage.Users[userID]
-		store.Storage.Mu.RUnlock()
+		// Get user data from database
+		userData, err := store.GetUserData(userID)
+		if err != nil {
+			slog.Error("Failed to get user data", "error", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(store.Response{
+				Success: false,
+				Message: "Failed to retrieve data",
+			})
+			return
+		}
 
-		if !exists {
+		if userData == nil {
 			w.WriteHeader(http.StatusNotFound)
 			json.NewEncoder(w).Encode(store.Response{
 				Success: false,
@@ -524,19 +517,18 @@ func SyncHandler(w http.ResponseWriter, r *http.Request) {
 				"plan_name":         user.PlanName,
 				"amount":            user.Amount,
 				"duration":          user.Duration,
-				"phone_number":      user.PhoneNumber,      // Consistent naming
+				"phone_number":      user.PhoneNumber,
 				"expiry_timestamp":  user.ExpiryTimestamp,
 				"expire_duration":   user.ExpireDuration,
 				"price":             user.Price,
 				"response_mode":     user.ResponseMode,
-				"email_verified": user.EmailVerified,
-				"email_subscribed": user.EmailSubscribed,
-				"request_count": user.RequestCount,
+				"email_verified":    user.EmailVerified,
+				"email_subscribed":  user.EmailSubscribed,
+				"request_count":     user.RequestCount,
 			},
 		})
 
 	case "POST":
-		// Update user data
 		var req SyncRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			w.WriteHeader(http.StatusBadRequest)
@@ -547,13 +539,13 @@ func SyncHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Sanitize string inputs
+		// Sanitize inputs
 		req.Username = sanitizeString(req.Username)
 		req.PhoneNumber = sanitizeString(req.PhoneNumber)
 		req.Plan = sanitizeString(req.Plan)
 		req.PlanName = sanitizeString(req.PlanName)
 
-		// Validate phone number if provided
+		// Validate phone number
 		if req.PhoneNumber != "" && !validatePhoneNumber(req.PhoneNumber) {
 			w.WriteHeader(http.StatusBadRequest)
 			json.NewEncoder(w).Encode(store.Response{
@@ -563,7 +555,7 @@ func SyncHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Update UserData
+		// Update user data in database
 		userData := store.UserData{
 			UserID:        userID,
 			Chats:         req.Chats,
@@ -572,91 +564,8 @@ func SyncHandler(w http.ResponseWriter, r *http.Request) {
 			UpdatedAt:     time.Now(),
 		}
 
-		// Get existing user and update only profile fields
-		store.Storage.Mu.Lock()
-		
-		// Update UserData
-		store.Storage.UserData[userID] = userData
-		
-		
-		// Update User profile fields while preserving existing data
-		if existingUser, exists := store.Storage.Users[userID]; exists {
-			// Only update fields if they're provided in the request
-			if req.Username != "" {
-				existingUser.Username = req.Username
-			}
-			if req.Preferences != "" {
-				existingUser.Preferences = req.Preferences
-			}
-			if req.WorkFunction != "" {
-				existingUser.WorkFunction = req.WorkFunction
-			}
-			if req.Theme != "" {
-				existingUser.Theme = req.Theme
-			}
-			if req.SyncEnabled != existingUser.SyncEnabled {
-				existingUser.SyncEnabled = req.SyncEnabled
-			}
-			if req.Amount != 0 {
-				existingUser.Amount = req.Amount
-			}
-			if req.Plan != "" {
-				existingUser.Plan = req.Plan
-			}
-			if req.PlanName != "" {
-				existingUser.PlanName = req.PlanName
-			}
-			if req.Duration != "" {
-				existingUser.Duration = req.Duration
-			}
-			if req.PhoneNumber != "" {
-				existingUser.PhoneNumber = req.PhoneNumber // Consistent naming
-			}
-			if req.ExpiryTimestamp != 0 {
-				existingUser.ExpiryTimestamp = req.ExpiryTimestamp
-			}
-			if req.ExpireDuration != 0 {
-				existingUser.ExpireDuration = req.ExpireDuration
-			}
-			if req.Price != "" {
-				existingUser.Price = req.Price
-			}
-			if req.ResponseMode != existingUser.ResponseMode {
-				existingUser.ResponseMode = req.ResponseMode
-			}
-			if req.EmailVerified != existingUser.EmailVerified {
-				existingUser.EmailVerified = req.EmailVerified
-			}
-			if req.EmailSubscribed != existingUser.EmailSubscribed {
-				existingUser.EmailSubscribed = req.EmailSubscribed
-			}
-			if req.RequestCount.Count != 0 || req.RequestCount.Timestamp != 0 {
-				incomingTime := time.Unix(0, req.RequestCount.Timestamp*int64(time.Millisecond))
-    			existingTime := time.Unix(0, existingUser.RequestCount.Timestamp*int64(time.Millisecond))
-
-				if incomingTime.After(existingTime) || req.RequestCount.Count != existingUser.RequestCount.Count {
-					existingUser.RequestCount = req.RequestCount
-					slog.Debug("RequestCount updated", 
-						"new_count", existingUser.RequestCount.Count,
-						"new_timestamp", time.Unix(0, existingUser.RequestCount.Timestamp*int64(time.Millisecond)),
-					)
-				}
-        	}
-			// Always update the timestamp
-			existingUser.UpdatedAt = time.Now()
-			
-			// Save the updated user back to storage
-			store.Storage.Users[userID] = existingUser
-		}
-		
-		store.Storage.Mu.Unlock()
-
-		// Save to persistent storage
-		if err := store.SaveStorage(); err != nil {
-			slog.Error("Failed to save storage after sync", 
-				"user_id", userID, 
-				"error", err,
-			)
+		if err := store.UpdateUserData(userData); err != nil {
+			slog.Error("Failed to update user data", "error", err)
 			w.WriteHeader(http.StatusInternalServerError)
 			json.NewEncoder(w).Encode(store.Response{
 				Success: false,
@@ -665,11 +574,76 @@ func SyncHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		// Update user profile fields
+		if req.Username != "" {
+			user.Username = req.Username
+		}
+		if req.Preferences != "" {
+			user.Preferences = req.Preferences
+		}
+		if req.WorkFunction != "" {
+			user.WorkFunction = req.WorkFunction
+		}
+		if req.Theme != "" {
+			user.Theme = req.Theme
+		}
+		user.SyncEnabled = req.SyncEnabled
+		if req.Amount != 0 {
+			user.Amount = req.Amount
+		}
+		if req.Plan != "" {
+			user.Plan = req.Plan
+		}
+		if req.PlanName != "" {
+			user.PlanName = req.PlanName
+		}
+		if req.Duration != "" {
+			user.Duration = req.Duration
+		}
+		if req.PhoneNumber != "" {
+			user.PhoneNumber = req.PhoneNumber
+		}
+		if req.ExpiryTimestamp != 0 {
+			user.ExpiryTimestamp = req.ExpiryTimestamp
+		}
+		if req.ExpireDuration != 0 {
+			user.ExpireDuration = req.ExpireDuration
+		}
+		if req.Price != "" {
+			user.Price = req.Price
+		}
+		if req.ResponseMode != "" {
+			user.ResponseMode = req.ResponseMode
+		}
+		user.EmailVerified = req.EmailVerified
+		user.EmailSubscribed = req.EmailSubscribed
+		
+		if req.RequestCount.Count != 0 || req.RequestCount.Timestamp != 0 {
+			incomingTime := time.Unix(0, req.RequestCount.Timestamp*int64(time.Millisecond))
+			existingTime := time.Unix(0, user.RequestCount.Timestamp*int64(time.Millisecond))
+
+			if incomingTime.After(existingTime) || req.RequestCount.Count != user.RequestCount.Count {
+				user.RequestCount = req.RequestCount
+			}
+		}
+		
+		user.UpdatedAt = time.Now()
+
+		if err := store.UpdateUser(*user); err != nil {
+			slog.Error("Failed to update user", "error", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(store.Response{
+				Success: false,
+				Message: "Failed to save user data",
+			})
+			return
+		}
+
 		json.NewEncoder(w).Encode(store.Response{
 			Success: true,
 			Message: "Data synchronized successfully",
 			Data: map[string]interface{}{
-				"updated_at":        userData.UpdatedAt,
+				"updated_at": userData.UpdatedAt,
 			},
 		})
 
@@ -682,11 +656,10 @@ func SyncHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// ProfileHandler handles profile updates
+// ProfileHandler
 func ProfileHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	// Only allow PUT method
 	if r.Method != http.MethodPut {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		json.NewEncoder(w).Encode(store.Response{
@@ -706,12 +679,19 @@ func ProfileHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verify user exists
-	store.Storage.Mu.RLock()
-	existingUser, userExists := store.Storage.Users[userID]
-	store.Storage.Mu.RUnlock()
+	// Get user from database
+	existingUser, err := store.GetUserByID(userID)
+	if err != nil {
+		slog.Error("Failed to get user", "error", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(store.Response{
+			Success: false,
+			Message: "Failed to retrieve user",
+		})
+		return
+	}
 
-	if !userExists {
+	if existingUser == nil {
 		w.WriteHeader(http.StatusNotFound)
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
@@ -720,7 +700,6 @@ func ProfileHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Parse request body
 	var req ProfileUpdateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -735,7 +714,7 @@ func ProfileHandler(w http.ResponseWriter, r *http.Request) {
 	req.Username = sanitizeString(req.Username)
 	req.PhoneNumber = sanitizeString(req.PhoneNumber)
 
-	// Validate phone number if provided
+	// Validate phone number
 	if req.PhoneNumber != "" && !validatePhoneNumber(req.PhoneNumber) {
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(store.Response{
@@ -745,55 +724,44 @@ func ProfileHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Update user profile fields
-	store.Storage.Mu.Lock()
-	updatedUser := existingUser // Copy existing user data
-	
-	if req.Username != "" {
-		// Check if username is already taken by another user
-		for otherUserID, otherUser := range store.Storage.Users {
-			if otherUserID != userID && otherUser.Username == req.Username {
-				store.Storage.Mu.Unlock()
-				w.WriteHeader(http.StatusConflict)
-				json.NewEncoder(w).Encode(store.Response{
-					Success: false,
-					Message: "Username is already taken",
-				})
-				return
-			}
+	// Check username uniqueness if changing
+	if req.Username != "" && req.Username != existingUser.Username {
+		if otherUser, _ := findUserByUsername(req.Username); otherUser != nil {
+			w.WriteHeader(http.StatusConflict)
+			json.NewEncoder(w).Encode(store.Response{
+				Success: false,
+				Message: "Username is already taken",
+			})
+			return
 		}
-		updatedUser.Username = req.Username
+		existingUser.Username = req.Username
 	}
-	
+
+	// Update fields
 	if req.WorkFunction != "" {
-		updatedUser.WorkFunction = req.WorkFunction
+		existingUser.WorkFunction = req.WorkFunction
 	}
-	
 	if req.Preferences != "" {
-		updatedUser.Preferences = req.Preferences
+		existingUser.Preferences = req.Preferences
 	}
-	
 	if req.Theme != "" {
-		updatedUser.Theme = req.Theme
+		existingUser.Theme = req.Theme
 	}
-	
 	if req.SyncEnabled != nil {
-		updatedUser.SyncEnabled = *req.SyncEnabled
+		existingUser.SyncEnabled = *req.SyncEnabled
 	}
-
 	if req.PhoneNumber != "" {
-		updatedUser.PhoneNumber = req.PhoneNumber // Consistent naming
+		existingUser.PhoneNumber = req.PhoneNumber
+	}
+	if req.ResponseMode != "" {
+		existingUser.ResponseMode = req.ResponseMode
 	}
 	
-	// Always update the timestamp
-	updatedUser.UpdatedAt = time.Now()
-	
-	// Save back to storage
-	store.Storage.Users[userID] = updatedUser
-	store.Storage.Mu.Unlock()
+	existingUser.UpdatedAt = time.Now()
 
-	// Save to persistent storage
-	if err := store.SaveStorage(); err != nil {
+	// Save to database
+	if err := store.UpdateUser(*existingUser); err != nil {
+		slog.Error("Failed to update user", "error", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
@@ -802,173 +770,144 @@ func ProfileHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Return success response with consistent naming
 	json.NewEncoder(w).Encode(store.Response{
 		Success: true,
 		Message: "Profile updated successfully",
 		Data: map[string]interface{}{
-			"username":      updatedUser.Username,
-			"work_function": updatedUser.WorkFunction,
-			"preferences":   updatedUser.Preferences,
-			"theme":         updatedUser.Theme,
-			"sync_enabled":  updatedUser.SyncEnabled,
-			"phone_number":  updatedUser.PhoneNumber, // Consistent naming
-			"updated_at":    updatedUser.UpdatedAt,
+			"username":      existingUser.Username,
+			"work_function": existingUser.WorkFunction,
+			"preferences":   existingUser.Preferences,
+			"theme":         existingUser.Theme,
+			"sync_enabled":  existingUser.SyncEnabled,
+			"phone_number":  existingUser.PhoneNumber,
+			"updated_at":    existingUser.UpdatedAt,
 		},
 	})
 }
 
-// Health check handler
+// HealthHandler
 func HealthHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	store.Storage.Mu.RLock()
-	userCount := len(store.Storage.Users)
-	transactionCount := len(store.Storage.Transactions)
-	store.Storage.Mu.RUnlock()
-
-	version := "unknown"
-	if v := store.GetVersion(); v != "" {
-		version = v
-	}
+	version := store.GetVersion()
+	
 	json.NewEncoder(w).Encode(store.Response{
 		Success: true,
 		Message: "Server is healthy",
 		Data: map[string]interface{}{
-			"timestamp":         time.Now(),
-			"user_count":        userCount,
-			"transaction_count": transactionCount,
-			"version":           version,
+			"timestamp": time.Now(),
+			"version":   version,
+			"database":  "connected",
 		},
 	})
 }
 
-// DeleteAccountHandler handles account deletion securely
+// DeleteAccountHandler
 func DeleteAccountHandler(w http.ResponseWriter, r *http.Request) {
-    w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", "application/json")
 
-    // Only allow DELETE method
-    if r.Method != http.MethodDelete {
-        w.WriteHeader(http.StatusMethodNotAllowed)
-        json.NewEncoder(w).Encode(store.Response{
-            Success: false,
-            Message: "Method not allowed",
-        })
-        return
-    }
+	if r.Method != http.MethodDelete {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		json.NewEncoder(w).Encode(store.Response{
+			Success: false,
+			Message: "Method not allowed",
+		})
+		return
+	}
 
-    // Get user ID from header
-    userID := r.Header.Get("X-User-ID")
-    if userID == "" {
-        w.WriteHeader(http.StatusUnauthorized)
-        json.NewEncoder(w).Encode(store.Response{
-            Success: false,
-            Message: "User ID header required",
-        })
-        return
-    }
+	userID := r.Header.Get("X-User-ID")
+	if userID == "" {
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(store.Response{
+			Success: false,
+			Message: "User ID header required",
+		})
+		return
+	}
 
-    // Parse request body
-    var req DeleteAccountRequest
-    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-        w.WriteHeader(http.StatusBadRequest)
-        json.NewEncoder(w).Encode(store.Response{
-            Success: false,
-            Message: "Invalid request body",
-        })
-        return
-    }
+	var req DeleteAccountRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(store.Response{
+			Success: false,
+			Message: "Invalid request body",
+		})
+		return
+	}
 
-    // Sanitize inputs
-    req.Email = sanitizeString(req.Email)
-    req.Username = sanitizeString(req.Username)
+	req.Email = sanitizeString(req.Email)
+	req.Username = sanitizeString(req.Username)
 
-    // Validate input
-    if req.Email == "" || req.Username == "" || req.Password == "" {
-        w.WriteHeader(http.StatusBadRequest)
-        json.NewEncoder(w).Encode(store.Response{
-            Success: false,
-            Message: "Username, email, and password are required",
-        })
-        return
-    }
+	if req.Email == "" || req.Username == "" || req.Password == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(store.Response{
+			Success: false,
+			Message: "Username, email, and password are required",
+		})
+		return
+	}
 
-    // Verify user exists and userID matches
-    store.Storage.Mu.RLock()
-    user, userExists := store.Storage.Users[userID]
-    store.Storage.Mu.RUnlock()
+	// Get user from database
+	user, err := store.GetUserByID(userID)
+	if err != nil {
+		slog.Error("Failed to get user", "error", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(store.Response{
+			Success: false,
+			Message: "Failed to retrieve user",
+		})
+		return
+	}
 
-    if !userExists {
-        w.WriteHeader(http.StatusNotFound)
-        json.NewEncoder(w).Encode(store.Response{
-            Success: false,
-            Message: "User not found",
-        })
-        return
-    }
+	if user == nil {
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(store.Response{
+			Success: false,
+			Message: "User not found",
+		})
+		return
+	}
 
-    // Verify the email matches the user ID (additional security check)
-    if user.Email != req.Email {
-        w.WriteHeader(http.StatusUnauthorized)
-        json.NewEncoder(w).Encode(store.Response{
-            Success: false,
-            Message: "Invalid credentials",
-        })
-        return
-    }
+	// Verify credentials
+	if user.Email != req.Email || user.Username != req.Username {
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(store.Response{
+			Success: false,
+			Message: "Invalid credentials",
+		})
+		return
+	}
 
-    // Verify username matches
-    if user.Username != req.Username {
-        w.WriteHeader(http.StatusUnauthorized)
-        json.NewEncoder(w).Encode(store.Response{
-            Success: false,
-            Message: "Invalid credentials",
-        })
-        return
-    }
-
-    // Verify password
 	expectedHash := encrypt.HashCredentials(user.Username, user.Email, req.Password)
-    if user.PasswordHash != expectedHash {
-        w.WriteHeader(http.StatusUnauthorized)
-        json.NewEncoder(w).Encode(store.Response{
-            Success: false,
-            Message: "Invalid credentials",
-        })
-        return
-    }
+	if user.PasswordHash != expectedHash {
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(store.Response{
+			Success: false,
+			Message: "Invalid credentials",
+		})
+		return
+	}
 
-    // Log the deletion attempt (for audit purposes)
-    slog.Info("Account deletion requested", 
-        "user_id", userID,
-        "username", user.Username,
-        "email", user.Email,
-        "timestamp", time.Now(),
-    )
+	slog.Info("Account deletion requested",
+		"user_id", userID,
+		"username", user.Username,
+		"email", user.Email,
+		"timestamp", time.Now(),
+	)
 
-    // Delete user and associated data
-    store.Storage.Mu.Lock()
-    delete(store.Storage.Users, userID)
-    delete(store.Storage.UserData, userID)
-    store.Storage.Mu.Unlock()
+	// Delete from database (CASCADE will delete user_data)
+	if err := store.DeleteUser(userID); err != nil {
+		slog.Error("Failed to delete user", "user_id", userID, "error", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(store.Response{
+			Success: false,
+			Message: "Failed to complete account deletion",
+		})
+		return
+	}
 
-    // Save changes to persistent storage
-    if err := store.SaveStorage(); err != nil {
-        slog.Error("Failed to save storage after account deletion", 
-            "user_id", userID, 
-            "error", err,
-        )
-        // Note: At this point the user is deleted from memory but not from disk
-        w.WriteHeader(http.StatusInternalServerError)
-        json.NewEncoder(w).Encode(store.Response{
-            Success: false,
-            Message: "Failed to complete account deletion",
-        })
-        return
-    }
-
-    json.NewEncoder(w).Encode(store.Response{
-        Success: true,
-        Message: "Account deleted successfully",
-    })
+	json.NewEncoder(w).Encode(store.Response{
+		Success: true,
+		Message: "Account deleted successfully",
+	})
 }

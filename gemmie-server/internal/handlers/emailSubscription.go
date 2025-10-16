@@ -103,19 +103,12 @@ func UnsubscribeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Update subscription status
-	store.Storage.Mu.Lock()
-	user.EmailSubscribed = false
-	user.EmailVerified = true
-	user.UpdatedAt = time.Now()
-	store.Storage.Users[user.ID] = *user
-	store.Storage.Mu.Unlock()
-
-	// Save to storage
-	if err := store.SaveStorage(); err != nil {
-		slog.Error("Failed to save storage after unsubscribe",
-			"user_id", user.ID,
-			"error", err,
-		)
+	var u store.User
+	u.EmailSubscribed = false
+	u.EmailVerified = true
+	u.UpdatedAt = time.Now()
+	if err := store.UpdateUser(u); err != nil {
+		slog.Error("Error updating user subscription status", "user_id", user.ID, "error", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
@@ -220,16 +213,15 @@ func ResubscribeHandler(w http.ResponseWriter, r *http.Request) {
 	var user store.User
 	var userFound bool
 
-	store.Storage.Mu.RLock()
-	for id, u := range store.Storage.Users {
+	users, _ := store.GetUsers()
+	for _, u := range users {
 		if u.Email == req.Email {
-			userID = id
+			userID = u.ID
 			user = u
 			userFound = true
 			break
 		}
 	}
-	store.Storage.Mu.RUnlock()
 
 	if !userFound {
 		w.WriteHeader(http.StatusNotFound)
@@ -260,14 +252,10 @@ func ResubscribeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Update subscription status
-	store.Storage.Mu.Lock()
-	user.EmailSubscribed = true
-	user.UpdatedAt = time.Now()
-	store.Storage.Users[userID] = user
-	store.Storage.Mu.Unlock()
-
-	// Save to storage
-	if err := store.SaveStorage(); err != nil {
+	var u store.User
+	u.EmailSubscribed = true
+	u.UpdatedAt = time.Now()
+	if err := store.UpdateUser(u); err != nil {
 		slog.Error("Failed to save storage after resubscribe",
 			"user_id", userID,
 			"email", req.Email,
@@ -357,11 +345,9 @@ func UpdateEmailSubscriptionHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Verify user exists
-	store.Storage.Mu.RLock()
-	user, userExists := store.Storage.Users[userID]
-	store.Storage.Mu.RUnlock()
+	user, _ := store.GetUserByID(userID)
 
-	if !userExists {
+	if user == nil {
 		w.WriteHeader(http.StatusNotFound)
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
@@ -371,14 +357,10 @@ func UpdateEmailSubscriptionHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Update subscription status
-	store.Storage.Mu.Lock()
-	user.EmailSubscribed = req.EmailSubscribed
-	user.UpdatedAt = time.Now()
-	store.Storage.Users[userID] = user
-	store.Storage.Mu.Unlock()
-
-	// Save to storage
-	if err := store.SaveStorage(); err != nil {
+	var u store.User
+	u.EmailSubscribed = req.EmailSubscribed
+	u.UpdatedAt = time.Now()
+	if err := store.UpdateUser(u); err != nil{
 		slog.Error("Failed to save storage after subscription update",
 			"user_id", userID,
 			"error", err,
@@ -436,11 +418,9 @@ func SendVerificationEmailHandler(w http.ResponseWriter, r *http.Request, smtpCo
 	}
 
 	// Verify user exists
-	store.Storage.Mu.RLock()
-	user, userExists := store.Storage.Users[userID]
-	store.Storage.Mu.RUnlock()
+	user, _ := store.GetUserByID(userID)
 
-	if !userExists {
+	if user == nil {
 		w.WriteHeader(http.StatusNotFound)
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
@@ -463,14 +443,10 @@ func SendVerificationEmailHandler(w http.ResponseWriter, r *http.Request, smtpCo
 	expiry := time.Now().Add(24 * time.Hour) // Token valid for 24 hours
 
 	// Update user with token
-	store.Storage.Mu.Lock()
-	user.VerificationToken = token
-	user.VerificationTokenExpiry = expiry
-	store.Storage.Users[userID] = user
-	store.Storage.Mu.Unlock()
-
-	// Save to storage
-	if err := store.SaveStorage(); err != nil {
+	var u store.User
+	u.VerificationToken = token
+	u.VerificationTokenExpiry = expiry
+	if err := store.UpdateUser(u); err != nil{
 		slog.Error("Failed to save verification token",
 			"user_id", userID,
 			"error", err,
@@ -482,6 +458,7 @@ func SendVerificationEmailHandler(w http.ResponseWriter, r *http.Request, smtpCo
 		})
 		return
 	}
+
 
 	// Send verification email
 	verifyURL := fmt.Sprintf("https://gemmie-ai.web.app/verify-email?token=%s", token)
@@ -562,16 +539,15 @@ func VerifyEmailHandler(w http.ResponseWriter, r *http.Request) {
 	var foundUser *store.User
 	var foundUserID string
 
-	store.Storage.Mu.RLock()
-	for userID, user := range store.Storage.Users {
+	users, _ := store.GetUsers()
+	for _, user := range users {
 		if user.VerificationToken == token {
 			userCopy := user
 			foundUser = &userCopy
-			foundUserID = userID
+			foundUserID = user.ID
 			break
 		}
 	}
-	store.Storage.Mu.RUnlock()
 
 	if foundUser == nil {
 		w.WriteHeader(http.StatusNotFound)
@@ -602,15 +578,11 @@ func VerifyEmailHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Mark email as verified
-	store.Storage.Mu.Lock()
-	foundUser.EmailVerified = true
-	foundUser.VerificationToken = "" // Clear token after use
-	foundUser.UpdatedAt = time.Now()
-	store.Storage.Users[foundUserID] = *foundUser
-	store.Storage.Mu.Unlock()
-
-	// Save to storage
-	if err := store.SaveStorage(); err != nil {
+	var u store.User
+	u.EmailVerified = true
+	u.VerificationToken = "" // Clear token after use
+	u.UpdatedAt = time.Now()
+	if err := store.UpdateUser(u); err != nil {
 		slog.Error("Failed to save email verification",
 			"user_id", foundUserID,
 			"error", err,

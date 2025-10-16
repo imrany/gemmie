@@ -107,9 +107,14 @@ func main() {
 		},
 	}
 
-	// Flags
+	// Flags - UPDATED: Replace data file with database connection
 	rootCmd.PersistentFlags().String("port", "8081", "Port to run the server on")
-	rootCmd.PersistentFlags().String("data", "./gemmie_data.json", "Path to data file")
+	rootCmd.PersistentFlags().String("db-host", "localhost", "Database host (env: DB_HOST)")
+	rootCmd.PersistentFlags().String("db-port", "5432", "Database port (env: DB_PORT)")
+	rootCmd.PersistentFlags().String("db-user", "", "Database user (env: DB_USER)")
+	rootCmd.PersistentFlags().String("db-password", "", "Database password (env: DB_PASSWORD)")
+	rootCmd.PersistentFlags().String("db-name", "gemmie", "Database name (env: DB_NAME)")
+	rootCmd.PersistentFlags().String("db-sslmode", "disable", "Database SSL mode (env: DB_SSLMODE)")
 	rootCmd.PersistentFlags().String("PAYHERO_USERNAME", "", "PayHero username (env: PAYHERO_USERNAME)")
 	rootCmd.PersistentFlags().String("PAYHERO_PASSWORD", "", "PayHero password (env: PAYHERO_PASSWORD)")
 	rootCmd.PersistentFlags().String("PAYHERO_CHANNEL_ID", "", "PayHero channel ID (env: PAYHERO_CHANNEL_ID)")
@@ -121,9 +126,14 @@ func main() {
 	rootCmd.PersistentFlags().String("SMTP_EMAIL", "", "SMTP Email (env: SMTP_EMAIL)")
 	rootCmd.PersistentFlags().String("log-level", "info", "Log level (debug, info, warn, error) (env: LOG_LEVEL)")
 
-	// Bind flags to viper
+	// Bind flags to viper - UPDATED: Database flags instead of data file
 	viper.BindPFlag("PORT", rootCmd.PersistentFlags().Lookup("port"))
-	viper.BindPFlag("DATA_FILE", rootCmd.PersistentFlags().Lookup("data"))
+	viper.BindPFlag("DB_HOST", rootCmd.PersistentFlags().Lookup("db-host"))
+	viper.BindPFlag("DB_PORT", rootCmd.PersistentFlags().Lookup("db-port"))
+	viper.BindPFlag("DB_USER", rootCmd.PersistentFlags().Lookup("db-user"))
+	viper.BindPFlag("DB_PASSWORD", rootCmd.PersistentFlags().Lookup("db-password"))
+	viper.BindPFlag("DB_NAME", rootCmd.PersistentFlags().Lookup("db-name"))
+	viper.BindPFlag("DB_SSLMODE", rootCmd.PersistentFlags().Lookup("db-sslmode"))
 	viper.BindPFlag("PAYHERO_USERNAME", rootCmd.PersistentFlags().Lookup("PAYHERO_USERNAME"))
 	viper.BindPFlag("PAYHERO_PASSWORD", rootCmd.PersistentFlags().Lookup("PAYHERO_PASSWORD"))
 	viper.BindPFlag("PAYHERO_CHANNEL_ID", rootCmd.PersistentFlags().Lookup("PAYHERO_CHANNEL_ID"))
@@ -146,9 +156,23 @@ func main() {
 
 func runServer() {
 	port := viper.GetString("PORT")
-	dataFile := viper.GetString("DATA_FILE")
 
-	slog.Info("Starting server", "port", port, "data_file", dataFile)
+	dbHost := viper.GetString("DB_HOST")
+	dbPort := viper.GetString("DB_PORT")
+	dbUser := viper.GetString("DB_USER")
+	dbPassword := viper.GetString("DB_PASSWORD")
+	dbName := viper.GetString("DB_NAME")
+	dbSSLMode := viper.GetString("DB_SSLMODE")
+
+	// Build connection string
+	connString := "host=" + dbHost +
+		" port=" + dbPort +
+		" user=" + dbUser +
+		" password=" + dbPassword +
+		" dbname=" + dbName +
+		" sslmode=" + dbSSLMode
+
+	slog.Info("Starting server", "port", port, "db_host", dbHost, "db_name", dbName)
 
 	// Configure SMTP settings
 	smtpConfig := mailer.SMTPConfig{
@@ -180,16 +204,21 @@ func runServer() {
 	// Start the email scheduler in background
 	v1.StartEmailScheduler(schedulerConfig)
 
-	// Initialize storage
-	store.InitStorage(dataFile);
-
-	// Log storage status
-	store.Storage.Mu.RLock()
-	userCount := len(store.Storage.Users)
-	transactionCount := len(store.Storage.Transactions)
-	store.Storage.Mu.RUnlock()
+	if err := store.InitStorage(connString); err != nil {
+		slog.Error("Failed to initialize database", "error", err)
+		os.Exit(1)
+	}
 	
-	slog.Info("Storage initialized", "users", userCount, "transactions", transactionCount)
+	// Register cleanup on shutdown
+	defer func() {
+		if err := store.Close(); err != nil {
+			slog.Error("Failed to close database connection", "error", err)
+		} else {
+			slog.Info("Database connection closed")
+		}
+	}()
+
+	slog.Info("Database storage initialized successfully")
 
 	// Router setup
 	r := mux.NewRouter()

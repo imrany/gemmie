@@ -42,12 +42,10 @@ func StartEmailScheduler(config EmailSchedulerConfig) {
 func sendUpgradeEmails(smtpConfig mailer.SMTPConfig) {
 	slog.Info("Starting upgrade email batch send", "timestamp", time.Now())
 
-	store.Storage.Mu.RLock()
-	users := make([]store.User, 0)
-	for _, user := range store.Storage.Users {
-		users = append(users, user)
+	users, err := store.GetUsers()
+	if err != nil {
+		slog.Error("Error getting users", "error", err)
 	}
-	store.Storage.Mu.RUnlock()
 
 	sentCount := 0
 	failedCount := 0

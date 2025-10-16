@@ -42,11 +42,7 @@ go build -o gemmie-server
 ```
 
 ```bash
-sudo mkdir -p ~/.gemmie-server
-sudo touch ~/.gemmie-server/gemmie_data.json
-sudo chmod 666 ~/.gemmie-server/gemmie_data.json
-
-docker run -d --name gemmie-server --env-file .env -p 8081:8081  -v ~/.gemmie-server:/var/opt/gemmie-server ghcr.io/imrany/gemmie-server:latest
+docker run -d --name gemmie-server --env-file .env -p 8081:8081 ghcr.io/imrany/gemmie-server:latest
 ```
 
 The server will start on `http://localhost:8081`
