@@ -229,6 +229,23 @@ const currentPasteContent = ref<{
   type: 'text' | 'code' | 'json' | 'markdown' | 'xml' | 'html';
 } | null>(null)
 
+const isLoadingState = (response: string): boolean => {
+  return response.endsWith('...') || 
+         response === '...' ||
+         response.includes('web-search...') || response.includes('light-search...') ||
+         response.includes('deep-search...') ||
+         response.includes('light-response...') ||
+         response === 'refreshing...'
+}
+
+const getLoadingMessage = (response: string): string => {
+  if (response === 'web-search...' || response === 'light-search...') return 'Web searching...'
+  if (response === 'deep-search...') return 'Deep searching...'
+  if (response === 'light-response...') return 'Thinking...'
+  if (response === 'refreshing...') return 'Refreshing...'
+  return 'Thinking...'
+}
+
 const suggestionPrompts = [
   {
     icon: 'pi pi-pencil',
@@ -750,6 +767,7 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
   }
 
   isLoading.value = true
+  scrollToBottom();
 
   // Determine response mode - use light-response for pasted content, otherwise user preference
   let responseMode = parsedUserDetails?.value?.response_mode || 'light-response'
@@ -2723,25 +2741,10 @@ onUnmounted(() => {
               <div
                 class="bg-none max-w-full w-full chat-message leading-relaxed text-black dark:text-gray-100 p-1 rounded-2xl prose prose-sm dark:prose-invert">
                 <!-- Loading state -->
-                <div v-if="item.response === '...' || item.response === 'light-response...'"
-                  class="flex w-full rounded-lg bg-gray-50 dark:bg-gray-800 p-2 items-center animate-pulse gap-2 text-gray-500 dark:text-gray-400">
+                <div v-if="isLoadingState(item.response)" 
+                    class="flex w-full rounded-lg bg-gray-50 dark:bg-gray-800 p-2 items-center animate-pulse gap-2 text-gray-500 dark:text-gray-400">
                   <i class="pi pi-spin pi-spinner"></i>
-                  <span class="text-sm">Thinking...</span>
-                </div>
-                <div v-if="item.response === 'refreshing...'"
-                  class="flex w-full rounded-lg bg-gray-50 dark:bg-gray-800 p-2 items-center animate-pulse gap-2 text-gray-500 dark:text-gray-400">
-                  <i class="pi pi-spin pi-spinner"></i>
-                  <span class="text-sm">Refreshing...</span>
-                </div>
-                <div v-else-if="item.response === 'web-search...' || item.response === 'light-search...'"
-                  class="flex w-full rounded-lg bg-gray-50 dark:bg-gray-800 p-2 items-center animate-pulse gap-2 text-gray-500 dark:text-gray-400">
-                  <i class="pi pi-spin pi-spinner"></i>
-                  <span class="text-sm">Web searching...</span>
-                </div>
-                <div v-else-if="item.response === 'deep-search...'"
-                  class="flex w-full rounded-lg bg-gray-50 dark:bg-gray-800 p-2 items-center animate-pulse gap-2 text-gray-500 dark:text-gray-400">
-                  <i class="pi pi-spin pi-spinner"></i>
-                  <span class="text-sm">Deep searching...</span>
+                  <span class="text-sm">{{ getLoadingMessage(item.response) }}</span>
                 </div>
 
                 <!-- Regular response with enhanced link handling -->
@@ -2759,7 +2762,7 @@ onUnmounted(() => {
 
                 <!-- Actions - Responsive with fewer labels on mobile -->
                 <div
-                  v-if="item.response !== '...' && item.response !== 'light-response...' && item.response !== 'refreshing...' && (item.response !== 'web-search...' && item.response !== 'light-search...') && item.response !== 'deep-search...'"
+                  v-if="!isLoadingState(item.response)"
                   class="flex flex-wrap justify-end gap-2 sm:gap-3 mt-2 text-gray-500 dark:text-gray-400 text-sm">
                   <button @click="copyResponse(item.response, i)"
                     class="flex items-center gap-1 hover:text-blue-600 dark:hover:text-blue-400 transition-colors min-h-[32px]">

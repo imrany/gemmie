@@ -1,8 +1,8 @@
-
-export type Res = {
-  response: string,
-  prompt?: string,
-  status?: number,
+export interface Res {
+  prompt?: string
+  response: string
+  status?: number
+  requestId?: string 
 }
 
 export type Chat = {
