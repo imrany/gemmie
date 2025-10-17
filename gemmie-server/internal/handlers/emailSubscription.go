@@ -199,7 +199,7 @@ func getUnsubscribeSuccessHTML(email, token string) string {
 		<p>You will no longer receive upgrade notifications and marketing emails.</p>
 		<div class="resubscribe">
 			<p><strong>Changed your mind?</strong></p>
-			<a href="https://gemmie.villebz.com/resubscribe?email=` + email + `&token=` + token + `" class="button">Click here to resubscribe</a>
+			<a href="https://gemmie.villebiz.com/resubscribe?email=` + email + `&token=` + token + `" class="button">Click here to resubscribe</a>
 		</div>
 	</div>
 </body>
@@ -230,7 +230,7 @@ func getAlreadyUnsubscribedHTML(email, token string) string {
 		<h1>Already Unsubscribed</h1>
 		<p>You are already unsubscribed from promotional emails.</p>
 		<p>Want to receive updates again?</p>
-		<a href="https://gemmie.villebz.com/resubscribe?email=` + email + `&token=` + token + `" class="button">Resubscribe</a>
+		<a href="https://gemmie.villebiz.com/resubscribe?email=` + email + `&token=` + token + `" class="button">Resubscribe</a>
 	</div>
 </body>
 </html>
