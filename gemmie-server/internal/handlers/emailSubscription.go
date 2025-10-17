@@ -130,8 +130,7 @@ func UnsubscribeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Update subscription status
-	var u store.User
-	u.ID = user.ID
+	u := *user
 	u.EmailSubscribed = false
 	u.EmailVerified = true
 	u.UpdatedAt = time.Now()
@@ -372,8 +371,7 @@ func ResubscribeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Update subscription status
-	var u store.User
-	u.ID = user.ID
+	u := *user
 	u.EmailSubscribed = true
 	u.UpdatedAt = time.Now()
 	if err := store.UpdateUser(u); err != nil {
@@ -529,8 +527,7 @@ func VerifyEmailHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Mark email as verified
-	var u store.User
-	u.ID = foundUserID
+	u := *foundUser
 	u.EmailVerified = true
 	u.VerificationToken = "" // Clear token after use
 	u.UpdatedAt = time.Now()
@@ -746,8 +743,7 @@ func UpdateEmailSubscriptionHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Update subscription status
-	var u store.User
-	u.ID = user.ID
+	u := *user
 	u.EmailSubscribed = req.EmailSubscribed
 	u.UpdatedAt = time.Now()
 	if err := store.UpdateUser(u); err != nil{
