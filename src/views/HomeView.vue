@@ -1512,12 +1512,6 @@ async function handleFinalAuthStep() {
 }
 
 async function handleAuthSuccess(response: any) {
-  // Show success feedback
-  toast.success('Welcome!', {
-    duration: 2000,
-    description: `Successfully signed in as ${authData.value.username}`
-  })
-
   // Reset form state
   setShowCreateSession(false)
   authStep.value = 1
