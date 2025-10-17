@@ -1,17 +1,16 @@
 <script lang="ts" setup>
 import { computed, inject, ref, type Ref, onMounted, onUnmounted } from 'vue'
-import type { Chat } from '@/types'
-import type { Theme } from 'vue-sonner/src/packages/types.js'
+import type { Chat, UserDetails } from '@/types'
 
 const globalState = inject('globalState') as {
   isDarkMode: Ref<boolean>,
-  currentTheme: Ref<Theme>,
-  isAuthenticated: Ref<boolean>
+  isAuthenticated: Ref<boolean>,
+  parsedUserDetails:Ref<UserDetails>
 }
 const { 
   isAuthenticated,
   isDarkMode,
-  currentTheme
+  parsedUserDetails
 } = globalState
 
 // Carousel state
@@ -300,7 +299,7 @@ onUnmounted(() => {
             :class="currentSlide === 0 ? 'translate-x-0 opacity-100' : currentSlide > 0 ? '-translate-x-full opacity-0' : 'translate-x-full opacity-0'"
             class="absolute inset-0 transition-all duration-700 ease-in-out transform p-12 flex flex-col items-center justify-center">
             <div class="text-center">
-              <img :src="currentTheme === 'dark' || (currentTheme === 'system' && isDarkMode) ?
+              <img :src="parsedUserDetails?.theme === 'dark' || (parsedUserDetails?.theme === 'system' && isDarkMode) ?
               '/logo-light.svg' : '/logo.svg'" alt="Gemmie Logo" class="w-[60px] h-[60px] mx-auto mb-5 rounded-md" />
 
               <h2 class="text-4xl font-bold text-gray-900 dark:text-white mb-4">
@@ -634,7 +633,7 @@ onUnmounted(() => {
             :class="currentSlide === 0 ? 'translate-x-0 opacity-100' : currentSlide > 0 ? '-translate-x-full opacity-0' : 'translate-x-full opacity-0'"
             class="absolute inset-0 transition-all duration-700 ease-in-out transform p-6 flex flex-col items-center justify-center">
             <div class="text-center">
-              <img :src="currentTheme === 'dark' || (currentTheme === 'system' && isDarkMode) ?
+              <img :src="parsedUserDetails?.theme === 'dark' || (parsedUserDetails?.theme === 'system' && isDarkMode) ?
               '/logo-light.svg' : '/logo.svg'" alt="Gemmie Logo" class="w-[60px] h-[60px] mx-auto mb-5 rounded-md" />
 
               <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-2">

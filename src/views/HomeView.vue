@@ -3,7 +3,7 @@ import type { Ref } from "vue"
 import { ref, onMounted, nextTick, computed, onBeforeUnmount, inject, watch, onUnmounted } from "vue"
 import SideNav from "../components/SideNav.vue"
 import TopNav from "../components/TopNav.vue"
-import type { Chat, ConfirmDialogOptions, CurrentChat, LinkPreview, Res } from "@/types"
+import type { Chat, ConfirmDialogOptions, CurrentChat, LinkPreview, Res, UserDetails } from "@/types"
 import { toast } from 'vue-sonner'
 import { destroyVideoLazyLoading, initializeVideoLazyLoading, observeNewVideoContainers, pauseVideo, playEmbeddedVideo, playSocialVideo, resumeVideo, showVideoControls, stopDirectVideo, stopVideo, toggleDirectVideo, updateVideoControls } from "@/utils/videoProcessing"
 import { onUpdated } from "vue"
@@ -13,7 +13,6 @@ import router from "@/router"
 import { copyPasteContent, detectContentType } from "@/utils/previewPasteContent"
 import PastePreviewModal from "@/components/Modals/PastePreviewModal.vue"
 import { useRoute } from "vue-router"
-import type { Theme } from "vue-sonner/src/packages/types.js"
 import { renderMarkdown } from "@/utils/markdownSupport"
 
 type ModeOption = {
@@ -51,7 +50,7 @@ const globalState = inject('globalState') as {
     maxRetries: number;
   }>,
   isAuthenticated: Ref<boolean>,
-  parsedUserDetails: any,
+  parsedUserDetails: Ref<UserDetails>,
   planStatus: Ref<{ status: string; timeLeft: string; expiryDate: string; isExpired: boolean; }>,
   currentChatId: Ref<string>,
   pastePreviews: Ref<Map<string, {
@@ -99,7 +98,6 @@ const globalState = inject('globalState') as {
   toggleSidebar: () => void,
   isFreeUser: Ref<boolean>,
   FREE_REQUEST_LIMIT: number,
-  currentTheme: Ref<Theme>,
   isDarkMode: Ref<boolean>,
   hasActiveRequestsForCurrentChat: Ref<boolean>,
   isUserOnline: Ref<boolean>,
@@ -172,7 +170,6 @@ const {
   currentChat,
   linkPreview,
   currentMessages,
-  currentTheme,
   isDarkMode,
   updateExpandedArray,
   apiCall,
@@ -196,8 +193,8 @@ const {
   requestsRemaining,
   shouldShowUpgradePrompt,
   isRequestLimitExceeded,
+  parsedUserDetails,
 } = globalState
-let parsedUserDetails: Ref<any> = globalState.parsedUserDetails
 
 const route = useRoute()
 // ---------- State ----------
@@ -286,11 +283,6 @@ function selectSuggestion(prompt: string) {
       autoGrow({ target: textarea } as any)
       textarea.focus()
     }
-  })
-
-  toast.info('Suggestion loaded', {
-    duration: 2000,
-    description: 'Feel free to edit before sending'
   })
 }
 
@@ -770,7 +762,7 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
   scrollToBottom();
 
   // Determine response mode - use light-response for pasted content, otherwise user preference
-  let responseMode = parsedUserDetails?.value?.response_mode || 'light-response'
+  let responseMode = parsedUserDetails?.value.responseMode || 'light-response'
 
   // Override to light-response if pasted content is detected
   if (hasPastePreview) {
@@ -844,11 +836,7 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
       )
     } else {
       // Standard light-response mode
-      console.log('Making light-response request:', {
-        prompt: fabricatedPrompt,
-        hasPastePreview: hasPastePreview,
-        originalMode: parsedUserDetails?.value?.response_mode
-      })
+      console.log('Making light-response request')
 
       response = await fetch(WRAPPER_URL, {
         method: "POST",
@@ -1169,7 +1157,7 @@ async function refreshResponse(oldPrompt?: string) {
   const oldMessage = chat.messages[msgIndex]
 
   // Get the original response mode from message metadata or use current
-  const originalMode = parsedUserDetails?.value?.response_mode || 'light-response'
+  const originalMode = parsedUserDetails?.value?.responseMode || 'light-response'
   const isSearchMode = originalMode === 'web-search' || originalMode === 'deep-search'
 
   let fabricatedPrompt = oldPrompt
@@ -2063,7 +2051,7 @@ function clearVoiceTranscription() {
 // Select input mode and handle special actions
 async function selectInputMode(mode: 'web-search' | 'deep-search' | 'light-response') {
   // Store original value for rollback
-  const originalMode = parsedUserDetails.value.response_mode
+  const originalMode = parsedUserDetails.value.responseMode
 
   // Don't do anything if same mode
   if (originalMode === mode) {
@@ -2073,7 +2061,7 @@ async function selectInputMode(mode: 'web-search' | 'deep-search' | 'light-respo
 
   try {
     // Update in-memory state - the watch will handle syncing
-    parsedUserDetails.value.response_mode = mode
+    parsedUserDetails.value.responseMode = mode
     showInputModeDropdown.value = false
 
     const modeNames = {
@@ -2093,7 +2081,7 @@ async function selectInputMode(mode: 'web-search' | 'deep-search' | 'light-respo
     })
   } catch (error) {
     console.error('Error selecting input mode:', error)
-    parsedUserDetails.value.response_mode = originalMode
+    parsedUserDetails.value.responseMode = originalMode
 
     toast.error('Failed to change mode', {
       duration: 3000,
@@ -2192,7 +2180,7 @@ watch(isAuthenticated, (newVal) => {
 // watch for user plan changes
 watch(() => ({
   isFree: isFreeUser.value,
-  planName: parsedUserDetails.value?.plan_name,
+  planName: parsedUserDetails.value?.planName,
   planStatus: planStatus.value.status
 }), (newValue, oldValue) => {
   if (!oldValue) return // Skip initial call
@@ -2616,7 +2604,7 @@ onUnmounted(() => {
         <div v-else-if="isAuthenticated && currentMessages.length === 0">
           <div
             class="flex md:max-w-3xl max-w-[100vw] max-md:px-4 flex-col md:flex-grow items-center gap-3 text-gray-600 dark:text-gray-400">
-            <img :src="currentTheme === 'dark' || (currentTheme === 'system' && isDarkMode) ?
+            <img :src="parsedUserDetails?.theme=== 'dark' || (parsedUserDetails?.theme=== 'system' && isDarkMode) ?
               '/logo-light.svg' : '/logo.svg'" alt="Gemmie Logo" class="w-[60px] h-[60px] rounded-md" />
 
             <p class="text-3xl text-black dark:text-white font-semibold">{{ parsedUserDetails?.username || 'Gemmie' }}
@@ -2992,14 +2980,14 @@ onUnmounted(() => {
                       <button type="button" @click.stop="showInputModeDropdown = !showInputModeDropdown"
                         :disabled="inputDisabled" :class="[
                           'rounded-lg w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm border',
-                          parsedUserDetails?.response_mode === 'web-search'
+                          parsedUserDetails?.responseMode === 'web-search'
                             ? 'border-green-300 bg-green-50 hover:bg-green-100 dark:border-green-600 dark:bg-green-900/30 dark:hover:bg-green-900/50 text-green-700 dark:text-green-300'
-                            : parsedUserDetails?.response_mode === 'deep-search'
+                            : parsedUserDetails?.responseMode === 'deep-search'
                               ? 'border-orange-300 bg-orange-50 hover:bg-orange-100 dark:border-orange-600 dark:bg-orange-900/30 dark:hover:bg-orange-900/50 text-orange-700 dark:text-orange-300'
                               : 'border-blue-300 bg-blue-50 hover:bg-blue-100 dark:border-blue-600 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 text-blue-700 dark:text-blue-300'
-                        ]" :title="modeOptions[parsedUserDetails?.response_mode].title">
+                        ]" :title="modeOptions[parsedUserDetails.responseMode || ''].title">
                         <!-- Dynamic icon based on selected mode -->
-                        <i :class="modeOptions[parsedUserDetails?.response_mode].icon" class="text-xs sm:text-sm"></i>
+                        <i :class="modeOptions[parsedUserDetails.responseMode || ''].icon" class="text-xs sm:text-sm"></i>
                       </button>
 
                       <!-- Dropdown Menu -->
@@ -3015,12 +3003,12 @@ onUnmounted(() => {
                         <button v-for="(option, key) in modeOptions" :key="option.mode" type="button"
                           @click="selectInputMode(option.mode)" :class="[
                             'w-full px-3 py-2.5 text-left text-sm flex items-center gap-3 transition-colors',
-                            parsedUserDetails?.response_mode === option.mode
+                            parsedUserDetails?.responseMode === option.mode
                               ? 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 border-r-2 border-green-500'
                               : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200'
                           ]">
                           <i :class="[option.icon,
-                          parsedUserDetails?.response_mode === option.mode
+                          parsedUserDetails?.responseMode === option.mode
                             ? ' text-green-600 dark:text-green-400'
                             : ' text-gray-600 dark:text-gray-400'
                           ]"></i>
@@ -3028,7 +3016,7 @@ onUnmounted(() => {
                             <div class="font-semibold">{{ option.label }}</div>
                             <div class="text-xs opacity-70">{{ option.description }}</div>
                           </div>
-                          <i v-if="parsedUserDetails?.response_mode === option.mode"
+                          <i v-if="parsedUserDetails?.responseMode === option.mode"
                             class="pi pi-check text-green-600 dark:text-green-400 text-sm font-bold"></i>
                         </button>
                       </div>

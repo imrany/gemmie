@@ -24,20 +24,20 @@ import { useFileUpload } from '@/composables/useFileUpload'
 import { useDocumentTemplates } from '@/composables/useDocumentTemplates'
 import { useExport } from '@/composables/useExport'
 import { extractPdfContent } from '@/utils/pdfHelpers'
-import type { Theme } from 'vue-sonner/src/packages/types.js'
+import type { UserDetails } from '@/types'
 
 // Global state
 const globalState = inject('globalState') as {
   screenWidth: Ref<number>,
   toggleTheme: () => void
   isDarkMode: Ref<boolean>,
-  currentTheme: Ref<Theme>
+  parsedUserDetails: Ref<UserDetails>
 }
 const {
   screenWidth,
   isDarkMode,
   toggleTheme,
-  currentTheme
+  parsedUserDetails
 } = globalState
 const router = useRouter()
 
@@ -745,9 +745,9 @@ function duplicateDocument(file: UploadedFile) {
 function getThemeTitle(): string {
   const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
 
-  if (currentTheme.value === 'system') {
+  if (parsedUserDetails.value.theme === 'system') {
     return `System Theme (${prefersDark ? 'Dark' : 'Light'})`
-  } else if (currentTheme.value === 'light') {
+  } else if (parsedUserDetails.value.theme === 'light') {
     return 'Light Theme'
   } else {
     return 'Dark Theme'
@@ -1146,7 +1146,7 @@ onUnmounted(() => {
           <div class="flex items-center justify-between p-3 xl:p-4 border-b border-gray-300 dark:border-gray-600">
             <div class="flex items-center gap-3 min-w-0 flex-1">
               <img
-                :src="currentTheme === 'dark' || (currentTheme === 'system' && isDarkMode) ? '/favicon-light.svg' : '/favicon.svg'"
+                :src="parsedUserDetails?.theme === 'dark' || (parsedUserDetails?.theme === 'system' && isDarkMode) ? '/favicon-light.svg' : '/favicon.svg'"
                 alt="Gemmie Logo" class="w-8 h-8 rounded-md bg-gray-50 dark:bg-gray-700/50" />
 
               <div class="min-w-0 flex-1">
@@ -1226,7 +1226,7 @@ onUnmounted(() => {
                 class="w-8 xl:w-10 h-8 xl:h-10 rounded-md bg-white hover:bg-gray-50 transition-colors text-gray-700 flex items-center justify-center border border-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-300 dark:border-gray-600"
                 :title="getThemeTitle()">
                 <!-- System icon (shown when theme is system) -->
-                <svg v-if="currentTheme === 'system'" class="w-4 xl:w-5 h-4 xl:h-5" fill="none" stroke="currentColor"
+                <svg v-if="parsedUserDetails?.theme === 'system'" class="w-4 xl:w-5 h-4 xl:h-5" fill="none" stroke="currentColor"
                   viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                     d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
@@ -1234,7 +1234,7 @@ onUnmounted(() => {
                     d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
                 <!-- Sun icon (shown in light mode) -->
-                <svg v-else-if="currentTheme === 'light'" class="w-4 xl:w-5 h-4 xl:h-5" fill="none"
+                <svg v-else-if="parsedUserDetails?.theme=== 'light'" class="w-4 xl:w-5 h-4 xl:h-5" fill="none"
                   stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                     d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />

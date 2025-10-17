@@ -3,6 +3,7 @@ import { inject, onMounted, ref, watch, type Ref } from "vue";
 import { toast } from "vue-sonner";
 import { API_BASE_URL } from "../utils/globals";
 import { useRouter } from "vue-router";
+import type { UserDetails } from "@/types";
 
 const username = ref("");
 const email = ref("");
@@ -18,7 +19,7 @@ const {
     parsedUserDetails,
     isAuthenticated
 }=globalState as {
-    parsedUserDetails: Ref<any>,
+    parsedUserDetails: Ref<UserDetails>,
     isAuthenticated: Ref<boolean>
 }
 

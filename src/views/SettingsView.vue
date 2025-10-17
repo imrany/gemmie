@@ -1,11 +1,10 @@
 <script lang="ts" setup>
 import router from '@/router';
-import type { Chat, ConfirmDialogOptions } from '@/types';
+import type { Chat, ConfirmDialogOptions, UserDetails } from '@/types';
 import { inject, ref, reactive, type Ref, computed, watch, onMounted } from 'vue';
 import SideNav from '@/components/SideNav.vue';
 import { toast } from 'vue-sonner';
 import { useRoute } from 'vue-router';
-import type { Theme } from 'vue-sonner/src/packages/types.js';
 
 const globalState = inject('globalState') as {
   screenWidth: Ref<number>,
@@ -21,7 +20,7 @@ const globalState = inject('globalState') as {
   }>,
   syncStatus: Ref<{ lastSync: Date | null; syncing: boolean; hasUnsyncedChanges: boolean; }>,
   isAuthenticated: Ref<boolean>,
-  parsedUserDetails: Ref<any>,
+  parsedUserDetails: Ref<UserDetails>,
   currentChatId: Ref<string>,
   chats: Ref<Chat[]>
   logout: () => void,
@@ -29,7 +28,6 @@ const globalState = inject('globalState') as {
   showInput: Ref<boolean>,
   planStatus: Ref<{ status: string; timeLeft: string; expiryDate: string; isExpired: boolean; }>,
   isDarkMode: Ref<boolean>,
-  currentTheme: Ref<Theme>,
   syncEnabled: Ref<boolean>, // Add this
 
   toggleTheme: (theme: string) => void,
@@ -68,7 +66,6 @@ const {
   renameChat,
   apiCall,
   isDarkMode,
-  currentTheme,
   toggleTheme,
   isLocalDataEmpty,
   toggleSync,
@@ -141,7 +138,7 @@ watch(activeTab, (newVal, oldVal) => {
 })
 
 // Fix the watch function - watch the actual sync_enabled property
-watch(() => parsedUserDetails.value?.sync_enabled, (newVal) => {
+watch(() => parsedUserDetails.value?.syncEnabled, (newVal) => {
   console.log('Sync enabled changed:', newVal)
   // The toggleSync function will handle the UI updates
 }, { deep: true })
@@ -285,7 +282,7 @@ watch(isAuthenticated, (val) => {
                   <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <!-- Light Theme -->
                     <button type="button" @click="toggleTheme('light')"
-                      :class="currentTheme === 'light'
+                      :class="parsedUserDetails?.theme=== 'light'
                         ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 ring-2 ring-blue-500 ring-opacity-50'
                         : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600'"
                       class="flex flex-col items-center p-4 border rounded-lg transition-all duration-200 group">
@@ -299,7 +296,7 @@ watch(isAuthenticated, (val) => {
 
                     <!-- Dark Theme -->
                     <button type="button" @click="toggleTheme('dark')"
-                      :class="currentTheme === 'dark'
+                      :class="parsedUserDetails?.theme=== 'dark'
                         ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 ring-2 ring-blue-500 ring-opacity-50'
                         : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600'"
                       class="flex flex-col items-center p-4 border rounded-lg transition-all duration-200 group">
@@ -313,7 +310,7 @@ watch(isAuthenticated, (val) => {
 
                     <!-- System Theme -->
                     <button type="button" @click="toggleTheme('system')"
-                      :class="currentTheme === 'system'
+                      :class="parsedUserDetails?.theme=== 'system'
                         ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 ring-2 ring-blue-500 ring-opacity-50'
                         : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600'"
                       class="flex flex-col items-center p-4 border rounded-lg transition-all duration-200 group">
@@ -338,7 +335,7 @@ watch(isAuthenticated, (val) => {
                     Theme Preference
                   </label>
                   <div class="flex gap-2 p-1 bg-gray-100 dark:bg-gray-700 rounded-lg w-fit">
-                    <button type="button" @click="toggleTheme('light')" :class="currentTheme === 'light'
+                    <button type="button" @click="toggleTheme('light')" :class="parsedUserDetails?.theme=== 'light'
                       ? 'bg-white dark:bg-gray-600 text-blue-600 shadow-sm'
                       : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'"
                       class="flex items-center gap-2 px-4 py-2 rounded-md transition-all duration-200 text-sm font-medium">
@@ -346,7 +343,7 @@ watch(isAuthenticated, (val) => {
                       <span>Light</span>
                     </button>
 
-                    <button type="button" @click="toggleTheme('dark')" :class="currentTheme === 'dark'
+                    <button type="button" @click="toggleTheme('dark')" :class="parsedUserDetails?.theme=== 'dark'
                       ? 'bg-white dark:bg-gray-600 text-blue-600 shadow-sm'
                       : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'"
                       class="flex items-center gap-2 px-4 py-2 rounded-md transition-all duration-200 text-sm font-medium">
@@ -354,7 +351,7 @@ watch(isAuthenticated, (val) => {
                       <span>Dark</span>
                     </button>
 
-                    <button type="button" @click="toggleTheme('system')" :class="currentTheme === 'system'
+                    <button type="button" @click="toggleTheme('system')" :class="parsedUserDetails?.theme=== 'system'
                       ? 'bg-white dark:bg-gray-600 text-blue-600 shadow-sm'
                       : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'"
                       class="flex items-center gap-2 px-4 py-2 rounded-md transition-all duration-200 text-sm font-medium">
@@ -424,20 +421,20 @@ watch(isAuthenticated, (val) => {
                   <div>
                     <h3 class="text-sm font-medium text-gray-800 dark:text-gray-200">Auto Sync</h3>
                     <p class="text-xs max-w-[150px] text-gray-500 dark:text-gray-400">
-                      {{ parsedUserDetails?.sync_enabled ? 'Data is synced across all your devices automatically' :
+                      {{ parsedUserDetails?.syncEnabled ? 'Data is synced across all your devices automatically' :
                         'Data is only stored locally on this device' }}
                     </p>
                   </div>
                   <button @click="() => toggleSync()"
                     class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200"
-                    :class="parsedUserDetails?.sync_enabled ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'">
+                    :class="parsedUserDetails?.syncEnabled ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'">
                     <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200"
-                      :class="parsedUserDetails?.sync_enabled ? 'translate-x-6' : 'translate-x-1'" />
+                      :class="parsedUserDetails?.syncEnabled ? 'translate-x-6' : 'translate-x-1'" />
                   </button>
                 </div>
 
                 <!-- Manual Sync Button (only show if sync is enabled) -->
-                <div v-if="parsedUserDetails?.sync_enabled" class="flex flex-wrap gap-3 items-center justify-between">
+                <div v-if="parsedUserDetails?.syncEnabled" class="flex flex-wrap gap-3 items-center justify-between">
                   <div>
                     <h3 class="text-sm font-medium text-gray-800 dark:text-gray-200">Manual Sync</h3>
                     <p class="text-xs text-gray-500 dark:text-gray-400">Force sync your data now</p>
@@ -482,7 +479,7 @@ watch(isAuthenticated, (val) => {
                 </div>
 
                 <!-- Sync Status -->
-                <div v-if="parsedUserDetails?.sync_enabled" class="space-y-2">
+                <div v-if="parsedUserDetails?.syncEnabled" class="space-y-2">
                   <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Sync Status</label>
                   <div class="text-sm text-gray-600 dark:text-gray-400">
                     <div class="flex items-center gap-2">
@@ -508,7 +505,7 @@ watch(isAuthenticated, (val) => {
               <h2 class="text-xl font-medium mb-6 text-gray-900 dark:text-white">Billing</h2>
 
               <!-- Show M-Pesa number if available -->
-              <div v-if="parsedUserDetails?.phone_number" class="mb-6">
+              <div v-if="parsedUserDetails?.phoneNumber" class="mb-6">
                 <div
                   class="flex items-center justify-between p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
                   <div class="flex items-center gap-3">
@@ -517,7 +514,7 @@ watch(isAuthenticated, (val) => {
                     </div>
                     <div>
                       <h3 class="text-sm font-medium text-gray-900 dark:text-white">M-Pesa Number</h3>
-                      <p class="text-sm text-gray-600 dark:text-gray-300">{{ parsedUserDetails.phone_number }}</p>
+                      <p class="text-sm text-gray-600 dark:text-gray-300">{{ parsedUserDetails.phoneNumber }}</p>
                     </div>
                   </div>
                   <div
@@ -527,7 +524,7 @@ watch(isAuthenticated, (val) => {
                   </div>
                 </div>
               </div>
-              <div v-if="!parsedUserDetails?.phone_number" class="text-center py-12">
+              <div v-if="!parsedUserDetails?.phoneNumber" class="text-center py-12">
                 <i class="pi pi-credit-card text-4xl text-gray-300 dark:text-gray-600 mb-4"></i>
                 <p class="text-gray-600 dark:text-gray-400 mb-2">No billing information available</p>
                 <p class="text-sm text-gray-500 dark:text-gray-500">Your billing details will appear here when you
@@ -580,7 +577,7 @@ watch(isAuthenticated, (val) => {
                     </div>
                     <div class="flex justify-between text-sm">
                       <span class="text-gray-600 dark:text-gray-400">Phone Number</span>
-                      <span class="font-medium text-gray-900 dark:text-white">{{ parsedUserDetails.phone_number
+                      <span class="font-medium text-gray-900 dark:text-white">{{ parsedUserDetails.phoneNumber
                         }}</span>
                     </div>
                     <div class="flex justify-between text-sm">

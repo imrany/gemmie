@@ -42,9 +42,9 @@ const props = defineProps<{
     parsedUserDetails: {
       username: string
       email: string
-      sync_enabled: boolean,
-      plan_name: string,
-      expiry_timestamp?: number
+      syncEnabled: boolean,
+      planName?: string,
+      expiryTimestamp?: number
     }
     screenWidth: number,
   }
@@ -98,7 +98,7 @@ const profileOptions = [
   },
   {
     id: 'upgrade',
-    label: props.data.parsedUserDetails?.plan_name ? 'Manage Plan' : 'Upgrade Plan',
+    label: props.data.parsedUserDetails?.planName ? 'Manage Plan' : 'Upgrade Plan',
     action: () => router.push('/upgrade')
   },
   { id: 'learn', label: 'Learn more', action: () => { /* Add your learn more action */ } }
@@ -208,7 +208,7 @@ function handleChatClick(chatId: string) {
         <div v-if="isAuthenticated">
           <!-- Sync button -->
           <button title="Sync Data" @click="props.functions.manualSync"
-            :disabled="syncStatus.syncing || !props.data.parsedUserDetails.sync_enabled"
+            :disabled="syncStatus.syncing || !props.data.parsedUserDetails.syncEnabled"
             class="w-full flex items-center gap-2 h-[40px] hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg px-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
             <i :class="[
               syncStatus.syncing ? 'pi pi-spin pi-spinner' : 'pi pi-refresh',
@@ -218,7 +218,7 @@ function handleChatClick(chatId: string) {
               {{ syncStatus.syncing ? 'Syncing...' : 'Sync Data' }}
             </span>
             <div
-              v-if="syncStatus.hasUnsyncedChanges && props.data.parsedUserDetails.sync_enabled && (!props.data.isCollapsed || props.data.screenWidth < 720)"
+              v-if="syncStatus.hasUnsyncedChanges && props.data.parsedUserDetails.syncEnabled && (!props.data.isCollapsed || props.data.screenWidth < 720)"
               class="ml-auto w-2 h-2 bg-orange-500 dark:bg-orange-400 rounded-full"></div>
           </button>
 
@@ -334,8 +334,8 @@ function handleChatClick(chatId: string) {
             <p class="text-base max-md:text-lg font-light dark:text-gray-200">
               {{ props.data.parsedUserDetails.username }}
             </p>
-            <p v-if="props.data.parsedUserDetails.plan_name" class="text-xs text-gray-500 dark:text-gray-400">
-              {{ props.data.parsedUserDetails.plan_name }}
+            <p v-if="props.data.parsedUserDetails.planName" class="text-xs text-gray-500 dark:text-gray-400">
+              {{ props.data.parsedUserDetails.planName }}
             </p>
           </div>
         </div>
@@ -362,9 +362,9 @@ function handleChatClick(chatId: string) {
                 || 'No email' }}
             </p>
             <!-- Plan info in dropdown -->
-            <div v-if="props.data.parsedUserDetails.plan_name" class="mt-1 text-xs"
+            <div v-if="props.data.parsedUserDetails.planName" class="mt-1 text-xs"
               :class="planStatus.isExpired ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'">
-              {{ props.data.parsedUserDetails.plan_name }}
+              {{ props.data.parsedUserDetails.planName }}
               <span v-if="planStatus.status === 'active'">- {{ planStatus.timeLeft }}</span>
               <span v-else-if="planStatus.isExpired">- Expired</span>
             </div>

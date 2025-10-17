@@ -1,8 +1,9 @@
+fix this 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, provide, ref, watch, type ComputedRef } from 'vue';
 import { toast, Toaster } from 'vue-sonner'
 import 'vue-sonner/style.css'
-import type { Chat, ConfirmDialogOptions, CurrentChat, LinkPreview } from './types';
+import type { Chat, ConfirmDialogOptions, CurrentChat, LinkPreview, UserDetails } from './types';
 import { API_BASE_URL, generateChatId, generateChatTitle, extractUrls, validateCredentials, getTransaction, WRAPPER_URL, detectLargePaste, SPINDLE_URL } from './utils/globals';
 import { nextTick } from 'vue';
 import { detectAndProcessVideo } from './utils/videoProcessing';
@@ -13,7 +14,6 @@ const isUserOnline = ref(navigator.onLine)
 const connectionStatus = ref<'online' | 'offline' | 'checking'>('online')
 const screenWidth = ref(screen.width)
 const isDarkMode = ref(false)
-const currentTheme = ref<Theme | any>("system")
 const scrollableElem = ref<HTMLElement | null>(null)
 const showScrollDownButton = ref(false)
 const activeRequests = ref<Map<string, AbortController>>(new Map())
@@ -67,6 +67,18 @@ const currentMessages = computed(() => {
   return currentChat.value?.messages || []
 })
 
+const parsedUserDetailsNullValues: UserDetails = {
+  agreeToTerms: false,
+  createdAt: new Date,
+  email: '',
+  emailSubscribed: false,
+  emailVerified: false,
+  userId: '',
+  syncEnabled: true,
+  username:"",
+  theme: 'system'
+}
+
 const linkPreviewCache = ref<Map<string, LinkPreview>>(new Map())
 
 function loadLinkPreviewCache() {
@@ -106,7 +118,7 @@ function saveLinkPreviewCache() {
 }
 
 let userDetails: any = localStorage.getItem("userdetails")
-const parsedUserDetails = ref<any>(
+const parsedUserDetails = ref<UserDetails>(
   (() => {
     try {
       return userDetails ? JSON.parse(userDetails) : null
@@ -118,7 +130,7 @@ const parsedUserDetails = ref<any>(
   })()
 )
 
-const syncEnabled = ref(parsedUserDetails.value?.sync_enabled !== false)
+const syncEnabled = ref(parsedUserDetails.value?.syncEnabled !== false)
 
 const isAuthenticated = computed(() => {
   const user = parsedUserDetails.value
@@ -127,7 +139,6 @@ const isAuthenticated = computed(() => {
   return !!(
     user.email &&
     user.username &&
-    user.user_id &&
     user.sessionId &&
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(user.email)
   )
@@ -143,13 +154,13 @@ const showProfileMenu = ref(false)
 const now = ref(Date.now())
 
 const planStatus = computed(() => {
-  if (!parsedUserDetails.value || !parsedUserDetails.value.expiry_timestamp) {
+  if (!parsedUserDetails.value || !parsedUserDetails.value.expiryTimestamp) {
     return { status: 'no-plan', timeLeft: '', expiryDate: '', isExpired: false }
   }
 
-  const expiryMs = parsedUserDetails.value.expiry_timestamp < 1e12
-    ? parsedUserDetails.value.expiry_timestamp * 1000
-    : parsedUserDetails.value.expiry_timestamp
+  const expiryMs = parsedUserDetails.value.expiryTimestamp < 1e12
+    ? parsedUserDetails.value.expiryTimestamp * 1000
+    : parsedUserDetails.value.expiryTimestamp
 
   const diff = expiryMs - now.value
   const isExpired = diff <= 0
@@ -186,13 +197,13 @@ const planStatus = computed(() => {
 const FREE_REQUEST_LIMIT = 5
 
 const userPlanStatus = computed(() => {
-  if (!parsedUserDetails.value || !parsedUserDetails.value.expiry_timestamp) {
+  if (!parsedUserDetails.value || !parsedUserDetails.value.expiryTimestamp) {
     return { status: 'no-plan', isExpired: false }
   }
 
-  const expiryMs = parsedUserDetails.value.expiry_timestamp < 1e12
-    ? parsedUserDetails.value.expiry_timestamp * 1000
-    : parsedUserDetails.value.expiry_timestamp
+  const expiryMs = parsedUserDetails.value.expiryTimestamp < 1e12
+    ? parsedUserDetails.value.expiryTimestamp * 1000
+    : parsedUserDetails.value.expiryTimestamp
 
   const diff = expiryMs - now.value
   const isExpired = diff <= 0
@@ -219,7 +230,7 @@ const userHasRequestLimits = computed(() => {
 // Consolidated request limit computations
 const requestLimitInfo = computed(() => {
   const hasLimits = userHasRequestLimits.value
-  const currentCount = parsedUserDetails.value?.request_count?.count || 0
+  const currentCount = parsedUserDetails.value.requestCount?.count || 0
   
   return {
     // Core limits
@@ -302,7 +313,7 @@ async function apiCall(endpoint: string, options: RequestInit = {}, retryCount =
   const retryDelay = Math.pow(2, retryCount) * 1000
 
   try {
-    if (!parsedUserDetails.value?.user_id && !endpoint.includes('/login') && !endpoint.includes('/register')) {
+    if (!parsedUserDetails.value?.userId && !endpoint.includes('/login') && !endpoint.includes('/register')) {
       throw new Error('User not authenticated')
     }
 
@@ -313,7 +324,7 @@ async function apiCall(endpoint: string, options: RequestInit = {}, retryCount =
       ...options,
       headers: {
         'Content-Type': 'application/json',
-        ...(parsedUserDetails.value?.user_id ? { 'X-User-ID': parsedUserDetails.value.user_id } : {}),
+        ...(parsedUserDetails.value?.userId ? { 'X-User-ID': parsedUserDetails.value.userId } : {}),
         ...options.headers,
       },
       signal: controller.signal
@@ -469,7 +480,7 @@ function deleteChat(chatId: string) {
           saveChats()
 
           // Trigger sync after deleting chat
-          if (isAuthenticated.value && parsedUserDetails.value?.sync_enabled) {
+          if (isAuthenticated.value && parsedUserDetails.value?.syncEnabled) {
             setTimeout(() => {
               performSmartSync()
             }, 1000)
@@ -495,7 +506,8 @@ async function logout() {
   showConfirmDialog({
     visible: true,
     title: 'Logout Confirmation',
-    message: 'Are you sure you want to logout? Your unsynced data will be saved locally.',
+    message: 'Are you sure you want to logout?' + 
+    (parsedUserDetails.value?.syncEnabled ? '' : ' Your unsynced data will permanently lost.'),
     type: 'warning',
     confirmText: 'Logout',
     cancelText: 'Cancel',
@@ -503,7 +515,7 @@ async function logout() {
       try {
         isLoading.value = true
 
-        const syncEnabled = parsedUserDetails.value?.sync_enabled
+        const syncEnabled = parsedUserDetails.value?.syncEnabled
         const hasUnsyncedChanges = syncStatus.value.hasUnsyncedChanges
 
         if (hasUnsyncedChanges && syncEnabled && !syncStatus.value.syncing) {
@@ -539,26 +551,26 @@ async function logout() {
             syncProgress: 0
           }
 
-          parsedUserDetails.value = null
+          parsedUserDetails.value = parsedUserDetailsNullValues
 
+          let keysToRemove = [
+            'userdetails', 'chatDrafts', 'pastePreviews', 'linkPreviews'
+          ]
           if (syncEnabled) {
-            try {
-              localStorage.removeItem('userdetails')
-            } catch (error) {
-              console.error('Failed to remove userdetails from localStorage:', error)
-            }
+            keysToRemove.push('chats', 'currentChatId')
           } else {
-            const keysToRemove = ['userdetails', 'chats', 'currentChatId', 'linkPreviews']
-            keysToRemove.forEach(key => {
-              try {
-                localStorage.removeItem(key)
-              } catch (error) {
-                console.error(`Failed to remove ${key} from localStorage:`, error)
-              }
-            })
-            linkPreviewCache.value.clear()
+            keysToRemove.push('chats', 'currentChatId')
           }
 
+          linkPreviewCache.value.clear()
+          
+          keysToRemove.forEach(key => {
+            try {
+              localStorage.removeItem(key)
+            } catch (error) {
+              console.error(`Failed to remove ${key} from localStorage:`, error)
+            }
+          })
         } catch (stateError) {
           console.error('Error clearing application state:', stateError)
           try {
@@ -925,7 +937,7 @@ function createNewChat(firstMessage?: string): string {
     saveChats()
 
     // Trigger sync after creating new chat
-    if (isAuthenticated.value && parsedUserDetails.value?.sync_enabled) {
+    if (isAuthenticated.value && parsedUserDetails.value?.syncEnabled) {
       setTimeout(() => {
         performSmartSync()
       }, 1000)
@@ -1004,7 +1016,7 @@ function deleteMessage(messageIndex: number) {
           saveChats()
 
           // Trigger sync after deleting message
-          if (isAuthenticated.value && parsedUserDetails.value?.sync_enabled) {
+          if (isAuthenticated.value && parsedUserDetails.value?.syncEnabled) {
             setTimeout(() => {
               performSmartSync()
             }, 1000)
@@ -1051,7 +1063,7 @@ function renameChat(chatId: string, newTitle: string) {
     saveChats()
 
     // Trigger sync after renaming chat
-    if (isAuthenticated.value && parsedUserDetails.value?.sync_enabled) {
+    if (isAuthenticated.value && parsedUserDetails.value?.syncEnabled) {
       setTimeout(() => {
         performSmartSync()
       }, 1000)
@@ -1240,7 +1252,7 @@ function saveChats() {
     localStorage.setItem('chats', chatsJson)
     localStorage.setItem('currentChatId', currentChatId.value)
 
-    if (isAuthenticated.value && parsedUserDetails.value?.sync_enabled) {
+    if (isAuthenticated.value && parsedUserDetails.value?.syncEnabled) {
       syncStatus.value.hasUnsyncedChanges = true
     }
   } catch (error) {
@@ -1253,12 +1265,12 @@ function saveChats() {
 }
 
 async function syncFromServer(serverData?: any) {
-  if (!parsedUserDetails.value?.user_id) {
+  if (!parsedUserDetails.value?.userId) {
     console.log('❌ syncFromServer: No user ID')
     return
   }
 
-  const shouldSync = parsedUserDetails.value?.sync_enabled !== false || serverData
+  const shouldSync = parsedUserDetails.value?.syncEnabled !== false || serverData
   if (!shouldSync) {
     console.log('❌ syncFromServer: Sync disabled')
     return
@@ -1341,25 +1353,25 @@ async function syncFromServer(serverData?: any) {
     updateSyncProgress('Updating preferences...', 95)
 
     // Update user details if provided
-    if (data.sync_enabled !== undefined || data.preferences || data.theme ||
+    if (data.syncEnabled !== undefined || data.preferences || data.theme ||
       data.work_function || data.phone_number || data.plan) {
 
       const updatedUserDetails = {
         ...parsedUserDetails.value,
         preferences: data.preferences || parsedUserDetails.value.preferences,
-        theme: data.theme || parsedUserDetails.value.theme,
+        theme: data.theme || parsedUserDetails?.value?.theme,
         workFunction: data.work_function || parsedUserDetails.value.workFunction,
-        phone_number: data.phone_number || parsedUserDetails.value.phone_number,
+        phone_number: data.phone_number || parsedUserDetails.value.phoneNumber,
         plan: data.plan || parsedUserDetails.value.plan,
-        plan_name: data.plan_name || parsedUserDetails.value.plan_name,
+        plan_name: data.plan_name || parsedUserDetails.value.planName,
         amount: data.amount ?? parsedUserDetails.value.amount,
         duration: data.duration || parsedUserDetails.value.duration,
         price: data.price || parsedUserDetails.value.price,
-        response_mode: data.response_mode || parsedUserDetails.value.response_mode,
-        request_count : data.request_count || parsedUserDetails.value.request_count,
-        expiry_timestamp: data.expiry_timestamp || parsedUserDetails.value.expiry_timestamp,
-        expire_duration: data.expire_duration || parsedUserDetails.value.expire_duration,
-        sync_enabled: data.sync_enabled !== undefined ? data.sync_enabled : parsedUserDetails.value.sync_enabled
+        response_mode: data.response_mode || parsedUserDetails.value.responseMode,
+        request_count : data.request_count || parsedUserDetails.value.requestCount,
+        expiry_timestamp: data.expiry_timestamp || parsedUserDetails.value.expiryTimestamp,
+        expire_duration: data.expire_duration || parsedUserDetails.value.expireDuration,
+        syncEnabled: data.syncEnabled !== undefined ? data.syncEnabled : parsedUserDetails.value.syncEnabled
       }
 
       parsedUserDetails.value = updatedUserDetails
@@ -1398,7 +1410,7 @@ async function syncFromServer(serverData?: any) {
 }
 
 async function syncToServer() {
-  if (!parsedUserDetails.value?.user_id || parsedUserDetails.value.sync_enabled === false) {
+  if (!parsedUserDetails.value?.userId || parsedUserDetails.value.syncEnabled === false) {
     return
   }
 
@@ -1424,12 +1436,12 @@ async function syncToServer() {
       username: parsedUserDetails.value.username,
       preferences: parsedUserDetails.value.preferences || '',
       work_function: parsedUserDetails.value.workFunction || '',
-      theme: parsedUserDetails.value.theme || 'system',
-      sync_enabled: parsedUserDetails.value.sync_enabled,
-      response_mode: parsedUserDetails.value.response_mode || 'light-response',
+      theme: parsedUserDetails?.value?.theme || 'system',
+      syncEnabled: parsedUserDetails.value.syncEnabled,
+      response_mode: parsedUserDetails.value.responseMode || 'light-response',
       request_count: {
-        count: parsedUserDetails.value.request_count?.count || 0,
-        timestamp: parsedUserDetails.value.request_count?.timestamp || Date.now()
+        count: parsedUserDetails.value.requestCount?.count || 0,
+        timestamp: parsedUserDetails.value.requestCount?.timestamp || Date.now()
       }
     }
 
@@ -1497,7 +1509,7 @@ async function performSmartSync() {
 
   console.log('🔄 Performing SmartSync')
 
-  if (!isAuthenticated.value || !parsedUserDetails.value?.user_id) {
+  if (!isAuthenticated.value || !parsedUserDetails.value?.userId) {
     console.log('❌ Sync skipped: not authenticated or no user ID')
     return
   }
@@ -1641,10 +1653,6 @@ async function handleAuth(data: {
       })
       isLogin = true
 
-      toast.success('Welcome back!', {
-        duration: 3000,
-        description: `Logged in as ${response.data.username}`
-      })
     } catch (loginError: any) {
       console.log('Login failed, attempting registration...')
 
@@ -1666,44 +1674,47 @@ async function handleAuth(data: {
         }
       }
     }
-
+    
     if (!response || !response.data) {
       throw new Error('Invalid response from server')
     }
 
-    if (!response.data.user_id || !response.data.username || !response.data.email) {
-      throw new Error('Incomplete user data received from server')
+    if (isLogin) {
+      toast.success('Welcome back!', {
+        duration: 3000,
+        description: `Logged in as ${response.data.username}`
+      })
     }
 
-    const userData = {
-      user_id: response.data.user_id,
+    const userData: UserDetails = {
+      userId: response.data.user_id,
       username: response.data.username,
       email: response.data.email,
-      created_at: response.data.created_at,
+      createdAt: response.data.created_at,
       sessionId: btoa(email + ':' + password + ':' + username),
       workFunction: response.data.work_function || "",
       preferences: response.data.preferences || "",
       theme: response.data.theme || "system",
-      sync_enabled: response.data.sync_enabled !== false,
-      phone_number: response.data.phone_number || "",
+      syncEnabled: response.data.syncEnabled !== false,
+      phoneNumber: response.data.phone_number || "",
       plan: response.data.plan || "free",
-      plan_name: response.data.plan_name || "",
+      planName: response.data.plan_name || "",
       amount: response.data.amount || 0,
       duration: response.data.duration || "",
       price: response.data.price || 0,
-      response_mode: response.data.response_mode || "light-response",
-      expiry_timestamp: response.data.expiry_timestamp || null,
-      expire_duration: response.data.expire_duration || "",
-      email_verified: response.email_verified || false,
-      email_subscribed: response.email_subscribed || true,
+      responseMode: response.data.response_mode || "light-response",
+      expiryTimestamp: response.data.expiry_timestamp || null,
+      expireDuration: response.data.expire_duration || "",
+      emailVerified: response.email_verified || false,
+      emailSubscribed: response.email_subscribed || true,
     }
 
     // ✅ Set in-memory state first
     parsedUserDetails.value = userData
 
-    console.log(`Authentication successful for user: ${userData.username} (sync: ${userData.sync_enabled})`)
+    console.log(`Authentication successful for user: ${userData.username} (sync: ${userData.syncEnabled})`)
 
-    if (userData.sync_enabled) {
+    if (userData.syncEnabled) {
       try {
         // Sync first, then save
         await performSmartSync()
@@ -1812,7 +1823,7 @@ async function manualSync() {
     }
   }
 
-  if (!parsedUserDetails.value?.user_id) {
+  if (!parsedUserDetails.value?.userId) {
     toast.warning('Please log in to sync data', {
       duration: 3000,
       description: 'Authentication required for syncing'
@@ -1820,7 +1831,7 @@ async function manualSync() {
     return
   }
 
-  if (parsedUserDetails.value.sync_enabled === false) {
+  if (parsedUserDetails.value.syncEnabled === false) {
     toast.info('Sync is disabled', {
       duration: 3000,
       description: 'Enable sync in settings to sync your data'
@@ -1852,15 +1863,15 @@ async function manualSync() {
 }
 
 async function toggleSync(newSyncValue?: boolean) {
-  const targetSyncValue = newSyncValue ?? !parsedUserDetails.value?.sync_enabled
+  const targetSyncValue = newSyncValue ?? !parsedUserDetails.value.syncEnabled
 
   // Store original state for rollback
-  const originalSyncValue = parsedUserDetails.value.sync_enabled
+  const originalSyncValue = parsedUserDetails.value.syncEnabled
   const originalUserDetails = { ...parsedUserDetails.value }
 
   try {
     // Update in-memory state (but NOT localStorage yet)
-    parsedUserDetails.value.sync_enabled = targetSyncValue
+    parsedUserDetails.value.syncEnabled = targetSyncValue
     syncEnabled.value = targetSyncValue
 
     console.log('Attempting sync toggle:', { current: syncEnabled.value, target: targetSyncValue })
@@ -1874,8 +1885,8 @@ async function toggleSync(newSyncValue?: boolean) {
         await apiCall('/sync', {
           method: 'POST',
           body: JSON.stringify({
-            username: parsedUserDetails.value.username,
-            sync_enabled: targetSyncValue,
+            username: parsedUserDetails?.value?.username,
+            syncEnabled: targetSyncValue,
             chats: targetSyncValue ? JSON.stringify(chats.value) : "[]",
             link_previews: "{}",
             current_chat_id: targetSyncValue ? currentChatId.value : "",
@@ -1927,8 +1938,8 @@ async function toggleSync(newSyncValue?: boolean) {
     console.error('Failed to toggle sync:', error)
 
     // ❌ ROLLBACK: Revert both in-memory AND localStorage
-    parsedUserDetails.value.sync_enabled = originalSyncValue
-    syncEnabled.value = originalSyncValue
+    parsedUserDetails.value.syncEnabled = originalSyncValue || true
+    syncEnabled.value = originalSyncValue || true
     parsedUserDetails.value = originalUserDetails
     localStorage.setItem("userdetails", JSON.stringify(originalUserDetails))
 
@@ -2045,7 +2056,7 @@ function setupConnectionListeners() {
       showConnectionStatus()
 
       // Auto-sync when coming back online with retry logic
-      if (syncStatus.value.hasUnsyncedChanges && parsedUserDetails.value?.sync_enabled) {
+      if (syncStatus.value.hasUnsyncedChanges && parsedUserDetails.value?.syncEnabled) {
         console.log('Connection restored - syncing unsaved changes')
         setTimeout(() => {
           performSmartSync().catch(error => {
@@ -2096,17 +2107,17 @@ function loadRequestCount() {
     if (!parsedUserDetails.value) return
 
     // Initialize if doesn't exist
-    if (!parsedUserDetails.value.request_count) {
-      parsedUserDetails.value.request_count = { count: 0, timestamp: Date.now() }
+    if (!parsedUserDetails.value.requestCount) {
+      parsedUserDetails.value.requestCount = { count: 0, timestamp: Date.now() }
       return
     }
 
-    const data = parsedUserDetails.value.request_count
+    const data = parsedUserDetails.value.requestCount
 
     // Validate data structure
     if (typeof data !== 'object' || typeof data.timestamp !== 'number' || typeof data.count !== 'number') {
       console.warn('Invalid request count data format, resetting')
-      parsedUserDetails.value.request_count = { count: 0, timestamp: Date.now() }
+      parsedUserDetails.value.requestCount = { count: 0, timestamp: Date.now() }
       return
     }
 
@@ -2117,15 +2128,15 @@ function loadRequestCount() {
 
     if (timeDiff > twentyFourHours) {
       // Reset count after 24 hours
-      parsedUserDetails.value.request_count = { count: 0, timestamp: now }
+      parsedUserDetails.value.requestCount = { count: 0, timestamp: now }
     } else {
       // Ensure count doesn't exceed limit
-      parsedUserDetails.value.request_count.count = Math.max(0, Math.min(data.count, FREE_REQUEST_LIMIT))
+      parsedUserDetails.value.requestCount.count = Math.max(0, Math.min(data.count, FREE_REQUEST_LIMIT))
     }
   } catch (error) {
     console.error('Failed to load request count:', error)
     if (parsedUserDetails.value) {
-      parsedUserDetails.value.request_count = { count: 0, timestamp: Date.now() }
+      parsedUserDetails.value.requestCount = { count: 0, timestamp: Date.now() }
     }
   }
 }
@@ -2136,11 +2147,11 @@ function checkRequestLimitBeforeSubmit(): boolean {
       return true // Unlimited user - allow
     }
 
-    if (!parsedUserDetails.value?.request_count) {
+    if (!parsedUserDetails.value.requestCount) {
       return true // No limit data - allow (safety)
     }
 
-    const currentCount = parsedUserDetails.value.request_count.count || 0
+    const currentCount = parsedUserDetails.value.requestCount?.count || 0
 
     if (currentCount >= FREE_REQUEST_LIMIT) {
       // Show error toast here (at submit time, not load time)
@@ -2175,14 +2186,14 @@ function incrementRequestCount() {
       return
     }
 
-    if (!parsedUserDetails.value.request_count) {
-      parsedUserDetails.value.request_count = { count: 0, timestamp: Date.now() }
+    if (!parsedUserDetails.value.requestCount) {
+      parsedUserDetails.value.requestCount = { count: 0, timestamp: Date.now() }
     }
 
-    const currentCount = parsedUserDetails.value.request_count.count || 0
+    const currentCount = parsedUserDetails.value.requestCount.count || 0
 
     if (currentCount < FREE_REQUEST_LIMIT) {
-      parsedUserDetails.value.request_count.count = currentCount + 1
+      parsedUserDetails.value.requestCount.count = currentCount + 1
     }
   } catch (error) {
     console.error('Failed to increment request count:', error)
@@ -2192,7 +2203,7 @@ function incrementRequestCount() {
 function resetRequestCount() {
   try {
     if (parsedUserDetails.value) {
-      parsedUserDetails.value.request_count = { count: 0, timestamp: Date.now() }
+      parsedUserDetails.value.requestCount = { count: 0, timestamp: Date.now() }
     }
   } catch (error) {
     console.error('Failed to reset request count:', error)
@@ -2205,7 +2216,7 @@ let previousUserDetails: any = null
 
 let userDetailsSyncTimeout: any = null
 watch(() => parsedUserDetails.value, (newUserDetails) => {
-  if (!isAuthenticated.value || !newUserDetails?.sync_enabled) return
+  if (!isAuthenticated.value || !newUserDetails?.syncEnabled) return
 
   const oldUserDetails = previousUserDetails
 
@@ -2271,7 +2282,7 @@ function hasUserDetailsChangedMeaningfully(newDetails: any, oldDetails: any): bo
   if (!oldDetails || !newDetails) return false
 
   // Ignore timestamp-only changes
-  const keysToCheck = ['preferences', 'theme', 'workFunction', 'phone_number', 'sync_enabled', 'response_mode', 'request_count']
+  const keysToCheck = ['preferences', 'theme', 'workFunction', 'phoneNumber', 'syncEnabled', 'responseMode', 'requestCount']
 
   return keysToCheck.some(key => {
     const oldValue = oldDetails[key]
@@ -2287,7 +2298,7 @@ function hasUserDetailsChangedMeaningfully(newDetails: any, oldDetails: any): bo
 }
 
 watch(() => chats.value, (newChats, oldChats) => {
-  if (!isAuthenticated.value || !parsedUserDetails.value?.sync_enabled) {
+  if (!isAuthenticated.value || !parsedUserDetails.value?.syncEnabled) {
     console.log('🔕 Sync disabled - skipping chat change detection');
     return;
   }
@@ -2362,30 +2373,24 @@ function applyTheme(theme: Theme) {
 
 function toggleTheme(newTheme?: Theme) {
   if (newTheme && ['light', 'dark', 'system'].includes(newTheme)) {
-    currentTheme.value = newTheme
+    parsedUserDetails.value.theme = newTheme
   } else {
-    if (currentTheme.value === 'system') {
-      currentTheme.value = 'light'
-    } else if (currentTheme.value === 'light') {
-      currentTheme.value = 'dark'
+    if (parsedUserDetails.value.theme === 'system') {
+      parsedUserDetails.value.theme = 'light'
+    } else if (parsedUserDetails.value?.theme === 'light') {
+      parsedUserDetails.value.theme = 'dark'
     } else {
-      currentTheme.value = 'system'
+      parsedUserDetails.value.theme = 'system'
     }
   }
 
   // Apply the theme
-  applyTheme(currentTheme.value)
-
-  // Save to user details if user is authenticated
-  if (parsedUserDetails.value) {
-    parsedUserDetails.value.theme = currentTheme.value
-  }
+  applyTheme(parsedUserDetails?.value?.theme || 'system')
 }
 
 // Update the watch for parsedUserDetails to handle theme changes:
 watch(() => parsedUserDetails.value?.theme, (newTheme) => {
   if (newTheme && ['light', 'dark', 'system'].includes(newTheme)) {
-    currentTheme.value = newTheme
     applyTheme(newTheme)
   }
 }, { immediate: true })
@@ -2400,14 +2405,13 @@ onMounted(async () => {
     
     // Theme setup
     const savedTheme = parsedUserDetails.value?.theme || 'system'
-    currentTheme.value = savedTheme
 
     // Apply theme immediately
-    applyTheme(currentTheme.value)
+    applyTheme(savedTheme)
 
     // System theme listener
     systemThemeListener = (e: MediaQueryListEvent) => {
-      const currentTheme = parsedUserDetails.value.theme
+      const currentTheme = parsedUserDetails?.value?.theme
       if (currentTheme === 'system' || !currentTheme) {
         isDarkMode.value = e.matches
         if (e.matches) {
@@ -2464,7 +2468,7 @@ onMounted(async () => {
           }
         }
 
-        if (parsedUserDetails.value?.sync_enabled !== false) {
+        if (parsedUserDetails.value?.syncEnabled !== false) {
           await syncFromServer()
         } else {
           loadLocalData()
@@ -2595,7 +2599,6 @@ const globalState = {
   showProfileMenu,
   planStatus,
   isDarkMode,
-  currentTheme,
   isUserOnline,
   connectionStatus,
   hasActiveRequestsForCurrentChat,
@@ -2666,7 +2669,7 @@ provide("globalState", globalState)
 
 <template>
   <div @click="handleClickOutside">
-    <Toaster position="top-right" :closeButton="true" closeButtonPosition="top-left" :theme="currentTheme" />
+    <Toaster position="top-right" :closeButton="true" closeButtonPosition="top-left" :theme="parsedUserDetails?parsedUserDetails.theme : 'system'" />
     <ConfirmDialog v-if="confirmDialog.visible" :confirmDialog="confirmDialog" />
     <RouterView />
   </div>
