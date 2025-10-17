@@ -1958,31 +1958,6 @@ function isLocalDataEmpty(): boolean {
   }
 }
 
-function toggleTheme(newTheme?: Theme) {
-  if (newTheme && ['light', 'dark', 'system'].includes(newTheme)) {
-    currentTheme.value = newTheme
-  } else {
-    if (currentTheme.value === 'system') {
-      currentTheme.value = 'light'
-    } else if (currentTheme.value === 'light') {
-      currentTheme.value = 'dark'
-    } else {
-      currentTheme.value = 'system'
-    }
-  }
-
-  parsedUserDetails.value.theme = currentTheme.value
-
-  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-  if (currentTheme.value === 'dark' || (currentTheme.value === 'system' && prefersDark)) {
-    isDarkMode.value = true
-    document.documentElement.classList.add('dark')
-  } else {
-    isDarkMode.value = false
-    document.documentElement.classList.remove('dark')
-  }
-}
-
 async function checkInternetConnection(): Promise<boolean> {
   try {
     connectionStatus.value = 'checking'
@@ -2373,6 +2348,48 @@ function hasChatsChangedMeaningfully(newChats: Chat[], oldChats: Chat[]): boolea
   return false
 }
 
+function applyTheme(theme: Theme) {
+  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+  
+  if (theme === 'dark' || (theme === 'system' && prefersDark)) {
+    isDarkMode.value = true
+    document.documentElement.classList.add('dark')
+  } else {
+    isDarkMode.value = false
+    document.documentElement.classList.remove('dark')
+  }
+}
+
+function toggleTheme(newTheme?: Theme) {
+  if (newTheme && ['light', 'dark', 'system'].includes(newTheme)) {
+    currentTheme.value = newTheme
+  } else {
+    if (currentTheme.value === 'system') {
+      currentTheme.value = 'light'
+    } else if (currentTheme.value === 'light') {
+      currentTheme.value = 'dark'
+    } else {
+      currentTheme.value = 'system'
+    }
+  }
+
+  // Apply the theme
+  applyTheme(currentTheme.value)
+
+  // Save to user details if user is authenticated
+  if (parsedUserDetails.value) {
+    parsedUserDetails.value.theme = currentTheme.value
+  }
+}
+
+// Update the watch for parsedUserDetails to handle theme changes:
+watch(() => parsedUserDetails.value?.theme, (newTheme) => {
+  if (newTheme && ['light', 'dark', 'system'].includes(newTheme)) {
+    currentTheme.value = newTheme
+    applyTheme(newTheme)
+  }
+}, { immediate: true })
+
 let handleResize: (() => void) | null = null
 let systemThemeListener: ((e: MediaQueryListEvent) => void) | null = null
 let darkModeQuery: MediaQueryList | null = null
@@ -2382,17 +2399,11 @@ onMounted(async () => {
     console.log('App mounting...')
     
     // Theme setup
-    const savedTheme = parsedUserDetails.value.theme || 'system'
+    const savedTheme = parsedUserDetails.value?.theme || 'system'
     currentTheme.value = savedTheme
 
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-    if (currentTheme.value === 'dark' || (currentTheme.value === 'system' && prefersDark)) {
-      isDarkMode.value = true
-      document.documentElement.classList.add('dark')
-    } else {
-      isDarkMode.value = false
-      document.documentElement.classList.remove('dark')
-    }
+    // Apply theme immediately
+    applyTheme(currentTheme.value)
 
     // System theme listener
     systemThemeListener = (e: MediaQueryListEvent) => {
