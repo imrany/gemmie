@@ -28,20 +28,18 @@ type VerifyEmailRequest struct {
 	Token string `json:"token"`
 }
 
-// UnsubscribeHandler handles unsubscribing users from promotional emails
+// UnsubscribeHandler
 func UnsubscribeHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
 	// Support both GET (from email link) and POST (from API)
 	var req UnsubscribeRequest
+	isGetRequest := r.Method == http.MethodGet
 
 	switch r.Method {
 	case http.MethodGet:
-		// Parse query parameters for email link
 		req.Email = r.URL.Query().Get("email")
 		req.Token = r.URL.Query().Get("token")
 	case http.MethodPost:
-		// Parse JSON body for API call
+		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			json.NewEncoder(w).Encode(store.Response{
@@ -51,6 +49,7 @@ func UnsubscribeHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	default:
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
@@ -64,6 +63,13 @@ func UnsubscribeHandler(w http.ResponseWriter, r *http.Request) {
 	req.Token = sanitizeString(req.Token)
 
 	if req.Email == "" || req.Token == "" {
+		if isGetRequest {
+			w.Header().Set("Content-Type", "text/html")
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Fprintf(w, "%s", getErrorHTML("Missing Information", "Email and token are required"))
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
@@ -75,6 +81,13 @@ func UnsubscribeHandler(w http.ResponseWriter, r *http.Request) {
 	// Find user by email
 	user, exists := FindUserByEmail(req.Email)
 	if !exists {
+		if isGetRequest {
+			w.Header().Set("Content-Type", "text/html")
+			w.WriteHeader(http.StatusNotFound)
+			fmt.Fprintf(w, "%s", getErrorHTML("User Not Found", "We couldn't find an account with that email address"))
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusNotFound)
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
@@ -85,6 +98,13 @@ func UnsubscribeHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Verify token (unsubscribe token)
 	if req.Token != user.UnsubscribeToken {
+		if isGetRequest {
+			w.Header().Set("Content-Type", "text/html")
+			w.WriteHeader(http.StatusUnauthorized)
+			fmt.Fprintf(w, "%s", getErrorHTML("Invalid Token", "The unsubscribe link is invalid or has expired"))
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
@@ -95,6 +115,13 @@ func UnsubscribeHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Check if already unsubscribed
 	if !user.EmailSubscribed {
+		if isGetRequest {
+			w.Header().Set("Content-Type", "text/html")
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprintf(w, "%s", getAlreadyUnsubscribedHTML(user.Email, user.UnsubscribeToken))
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(store.Response{
 			Success: true,
 			Message: "You are already unsubscribed from promotional emails",
@@ -109,6 +136,13 @@ func UnsubscribeHandler(w http.ResponseWriter, r *http.Request) {
 	u.UpdatedAt = time.Now()
 	if err := store.UpdateUser(u); err != nil {
 		slog.Error("Error updating user subscription status", "user_id", user.ID, "error", err)
+		if isGetRequest {
+			w.Header().Set("Content-Type", "text/html")
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprintf(w, "%s", getErrorHTML("Update Failed", "Failed to update subscription status. Please try again later."))
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
@@ -123,38 +157,14 @@ func UnsubscribeHandler(w http.ResponseWriter, r *http.Request) {
 	)
 
 	// Return success response
-	if r.Method == http.MethodGet {
+	if isGetRequest {
 		// For email links, return HTML page
 		w.Header().Set("Content-Type", "text/html")
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprintf(w, `%s`, `
-<!DOCTYPE html>
-<html>
-<head>
-	<title>Unsubscribed</title>
-	<style>
-		body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; text-align: center; }
-		.success { color: #5cb85c; font-size: 48px; }
-		h1 { color: #333; }
-		p { color: #666; line-height: 1.6; }
-		.resubscribe { margin-top: 30px; }
-		.button { display: inline-block; background: #667eea; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; margin-top: 10px; }
-	</style>
-</head>
-<body>
-	<div class="success">✓</div>
-	<h1>Successfully Unsubscribed</h1>
-	<p>You have been unsubscribed from Gemmie promotional emails.</p>
-	<p>You will no longer receive upgrade notifications and marketing emails.</p>
-	<div class="resubscribe">
-		<p>Changed your mind?</p>
-		<a href="https://gemmie.villebz.com/resubscribe?email=` + user.Email + `&token=` + user.UnsubscribeToken + `" class="button">Click here to resubscribe</a>
-	</div>
-</body>
-</html>
-		`)
+		fmt.Fprintf(w, "%s", getUnsubscribeSuccessHTML(user.Email, user.UnsubscribeToken))
 	} else {
 		// For API calls, return JSON
+		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(store.Response{
 			Success: true,
 			Message: "Successfully unsubscribed from promotional emails",
@@ -162,17 +172,113 @@ func UnsubscribeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// Helper functions for HTML responses
+func getUnsubscribeSuccessHTML(email, token string) string {
+	return `
+<!DOCTYPE html>
+<html>
+<head>
+	<title>Unsubscribed</title>
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<style>
+		body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; text-align: center; background-color: #f4f4f4; }
+		.container { background: white; padding: 40px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+		.success { color: #5cb85c; font-size: 48px; }
+		h1 { color: #333; margin: 20px 0; }
+		p { color: #666; line-height: 1.6; margin: 15px 0; }
+		.resubscribe { margin-top: 30px; padding: 20px; background-color: #f8f9fa; border-radius: 5px; }
+		.button { display: inline-block; background: #667eea; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; margin-top: 10px; transition: background 0.3s; }
+		.button:hover { background: #5568d3; }
+	</style>
+</head>
+<body>
+	<div class="container">
+		<div class="success">✓</div>
+		<h1>Successfully Unsubscribed</h1>
+		<p>You have been unsubscribed from Gemmie promotional emails.</p>
+		<p>You will no longer receive upgrade notifications and marketing emails.</p>
+		<div class="resubscribe">
+			<p><strong>Changed your mind?</strong></p>
+			<a href="https://gemmie.villebz.com/resubscribe?email=` + email + `&token=` + token + `" class="button">Click here to resubscribe</a>
+		</div>
+	</div>
+</body>
+</html>
+	`
+}
+
+func getAlreadyUnsubscribedHTML(email, token string) string {
+	return `
+<!DOCTYPE html>
+<html>
+<head>
+	<title>Already Unsubscribed</title>
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<style>
+		body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; text-align: center; background-color: #f4f4f4; }
+		.container { background: white; padding: 40px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+		.info { color: #0275d8; font-size: 48px; }
+		h1 { color: #333; margin: 20px 0; }
+		p { color: #666; line-height: 1.6; margin: 15px 0; }
+		.button { display: inline-block; background: #667eea; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; margin-top: 20px; transition: background 0.3s; }
+		.button:hover { background: #5568d3; }
+	</style>
+</head>
+<body>
+	<div class="container">
+		<div class="info">ℹ</div>
+		<h1>Already Unsubscribed</h1>
+		<p>You are already unsubscribed from promotional emails.</p>
+		<p>Want to receive updates again?</p>
+		<a href="https://gemmie.villebz.com/resubscribe?email=` + email + `&token=` + token + `" class="button">Resubscribe</a>
+	</div>
+</body>
+</html>
+	`
+}
+
+func getErrorHTML(title, message string) string {
+	return `
+<!DOCTYPE html>
+<html>
+<head>
+	<title>` + title + `</title>
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<style>
+		body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; text-align: center; background-color: #f4f4f4; }
+		.container { background: white; padding: 40px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+		.error { color: #d9534f; font-size: 48px; }
+		h1 { color: #333; margin: 20px 0; }
+		p { color: #666; line-height: 1.6; margin: 15px 0; }
+		.button { display: inline-block; background: #667eea; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; margin-top: 20px; transition: background 0.3s; }
+		.button:hover { background: #5568d3; }
+	</style>
+</head>
+<body>
+	<div class="container">
+		<div class="error">✗</div>
+		<h1>` + title + `</h1>
+		<p>` + message + `</p>
+		<a href="https://gemmie-ai.web.app" class="button">Go to Gemmie</a>
+	</div>
+</body>
+</html>
+	`
+}
+
 // ResubscribeHandler handles resubscribing users to promotional emails
 func ResubscribeHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
+	// DON'T set Content-Type here
+	
 	var req struct {
 		Email string `json:"email"`
 		Token string `json:"token"`
 	}
+	isGetRequest := r.Method == http.MethodGet
 
 	switch r.Method {
 	case http.MethodPost:
+		w.Header().Set("Content-Type", "application/json")
 		// Handle JSON body for API calls
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			w.WriteHeader(http.StatusBadRequest)
@@ -187,6 +293,7 @@ func ResubscribeHandler(w http.ResponseWriter, r *http.Request) {
 		req.Email = r.URL.Query().Get("email")
 		req.Token = r.URL.Query().Get("token")
 	default:
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
@@ -200,6 +307,13 @@ func ResubscribeHandler(w http.ResponseWriter, r *http.Request) {
 	req.Token = sanitizeString(req.Token)
 
 	if req.Email == "" || req.Token == "" {
+		if isGetRequest {
+			w.Header().Set("Content-Type", "text/html")
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Fprintf(w, "%s", getErrorHTML("Missing Information", "Email and token are required"))
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
@@ -224,6 +338,13 @@ func ResubscribeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !userFound {
+		if isGetRequest {
+			w.Header().Set("Content-Type", "text/html")
+			w.WriteHeader(http.StatusNotFound)
+			fmt.Fprintf(w, "%s", getErrorHTML("User Not Found", "We couldn't find an account with that email address"))
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusNotFound)
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
@@ -234,6 +355,13 @@ func ResubscribeHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Verify unsubscribe token matches
 	if user.UnsubscribeToken != req.Token {
+		if isGetRequest {
+			w.Header().Set("Content-Type", "text/html")
+			w.WriteHeader(http.StatusUnauthorized)
+			fmt.Fprintf(w, "%s", getErrorHTML("Invalid Token", "The resubscribe link is invalid or has expired"))
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
@@ -244,6 +372,13 @@ func ResubscribeHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Check if already subscribed
 	if user.EmailSubscribed {
+		if isGetRequest {
+			w.Header().Set("Content-Type", "text/html")
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprintf(w, "%s", getAlreadySubscribedHTML())
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(store.Response{
 			Success: true,
 			Message: "You are already subscribed to promotional emails",
@@ -261,6 +396,13 @@ func ResubscribeHandler(w http.ResponseWriter, r *http.Request) {
 			"email", req.Email,
 			"error", err,
 		)
+		if isGetRequest {
+			w.Header().Set("Content-Type", "text/html")
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprintf(w, "%s", getErrorHTML("Update Failed", "Failed to update subscription status. Please try again later."))
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
@@ -275,38 +417,301 @@ func ResubscribeHandler(w http.ResponseWriter, r *http.Request) {
 	)
 
 	// Return appropriate response based on method
-	if r.Method == http.MethodGet {
+	if isGetRequest {
 		// For email links, return HTML page
 		w.Header().Set("Content-Type", "text/html")
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprintf(w, `
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Resubscribed</title>
-    <style>
-        body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; text-align: center; }
-        .success { color: #5cb85c; font-size: 48px; }
-        h1 { color: #333; }
-        p { color: #666; line-height: 1.6; }
-    </style>
-</head>
-<body>
-    <div class="success">✓</div>
-    <h1>Successfully Resubscribed</h1>
-    <p>You have been resubscribed to Gemmie promotional emails.</p>
-    <p>You will now receive upgrade notifications and marketing emails.</p>
-    <p><a href="https://gemmie-ai.web.app">Return to Gemmie</a></p>
-</body>
-</html>
-		`)
+		fmt.Fprintf(w, "%s", getResubscribeSuccessHTML())
 	} else {
 		// For API calls, return JSON
+		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(store.Response{
 			Success: true,
 			Message: "Successfully resubscribed to promotional emails",
 		})
 	}
+}
+
+// VerifyEmailHandler verifies user's email with token
+func VerifyEmailHandler(w http.ResponseWriter, r *http.Request) {
+	// DON'T set Content-Type here
+	
+	// Support both GET (from email link) and POST (from API)
+	var token string
+	isGetRequest := r.Method == http.MethodGet
+
+	switch r.Method {
+	case http.MethodGet:
+		token = r.URL.Query().Get("token")
+	case http.MethodPost:
+		w.Header().Set("Content-Type", "application/json")
+		var req VerifyEmailRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(store.Response{
+				Success: false,
+				Message: "Invalid request body",
+			})
+			return
+		}
+		token = req.Token
+	default:
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		json.NewEncoder(w).Encode(store.Response{
+			Success: false,
+			Message: "Method not allowed",
+		})
+		return
+	}
+
+	token = sanitizeString(token)
+	if token == "" {
+		if isGetRequest {
+			w.Header().Set("Content-Type", "text/html")
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Fprintf(w, "%s", getErrorHTML("Missing Token", "Verification token is required"))
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(store.Response{
+			Success: false,
+			Message: "Verification token is required",
+		})
+		return
+	}
+
+	// Find user with this token
+	var foundUser *store.User
+	var foundUserID string
+
+	users, _ := store.GetUsers()
+	for _, user := range users {
+		if user.VerificationToken == token {
+			userCopy := user
+			foundUser = &userCopy
+			foundUserID = user.ID
+			break
+		}
+	}
+
+	if foundUser == nil {
+		if isGetRequest {
+			w.Header().Set("Content-Type", "text/html")
+			w.WriteHeader(http.StatusNotFound)
+			fmt.Fprintf(w, "%s", getErrorHTML("Invalid Token", "The verification link is invalid or has already been used"))
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(store.Response{
+			Success: false,
+			Message: "Invalid verification token",
+		})
+		return
+	}
+
+	// Check if token expired
+	if time.Now().After(foundUser.VerificationTokenExpiry) {
+		if isGetRequest {
+			w.Header().Set("Content-Type", "text/html")
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Fprintf(w, "%s", getErrorHTML("Token Expired", "This verification link has expired. Please request a new one."))
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(store.Response{
+			Success: false,
+			Message: "Verification token has expired",
+		})
+		return
+	}
+
+	// Check if already verified
+	if foundUser.EmailVerified {
+		if isGetRequest {
+			w.Header().Set("Content-Type", "text/html")
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprintf(w, "%s", getAlreadyVerifiedHTML())
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(store.Response{
+			Success: true,
+			Message: "Email is already verified",
+		})
+		return
+	}
+
+	// Mark email as verified
+	var u store.User
+	u.EmailVerified = true
+	u.VerificationToken = "" // Clear token after use
+	u.UpdatedAt = time.Now()
+	if err := store.UpdateUser(u); err != nil {
+		slog.Error("Failed to save email verification",
+			"user_id", foundUserID,
+			"error", err,
+		)
+		if isGetRequest {
+			w.Header().Set("Content-Type", "text/html")
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprintf(w, "%s", getErrorHTML("Verification Failed", "Failed to verify email. Please try again later."))
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(store.Response{
+			Success: false,
+			Message: "Failed to verify email",
+		})
+		return
+	}
+
+	slog.Info("Email verified successfully",
+		"user_id", foundUserID,
+		"email", foundUser.Email,
+	)
+
+	// Return response based on request method
+	if isGetRequest {
+		// For email links, return HTML page
+		w.Header().Set("Content-Type", "text/html")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintf(w, "%s", getVerifySuccessHTML())
+	} else {
+		// For API calls, return JSON
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(store.Response{
+			Success: true,
+			Message: "Email verified successfully",
+			Data: map[string]interface{}{
+				"email_verified": true,
+			},
+		})
+	}
+}
+
+// Additional HTML helper functions
+func getResubscribeSuccessHTML() string {
+	return `
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Resubscribed</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; text-align: center; background-color: #f4f4f4; }
+        .container { background: white; padding: 40px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .success { color: #5cb85c; font-size: 48px; }
+        h1 { color: #333; margin: 20px 0; }
+        p { color: #666; line-height: 1.6; margin: 15px 0; }
+        .button { display: inline-block; background: #667eea; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; margin-top: 20px; transition: background 0.3s; }
+        .button:hover { background: #5568d3; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="success">✓</div>
+        <h1>Successfully Resubscribed</h1>
+        <p>You have been resubscribed to Gemmie promotional emails.</p>
+        <p>You will now receive upgrade notifications and marketing emails.</p>
+        <a href="https://gemmie-ai.web.app" class="button">Return to Gemmie</a>
+    </div>
+</body>
+</html>
+	`
+}
+
+func getAlreadySubscribedHTML() string {
+	return `
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Already Subscribed</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; text-align: center; background-color: #f4f4f4; }
+        .container { background: white; padding: 40px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .info { color: #0275d8; font-size: 48px; }
+        h1 { color: #333; margin: 20px 0; }
+        p { color: #666; line-height: 1.6; margin: 15px 0; }
+        .button { display: inline-block; background: #667eea; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; margin-top: 20px; transition: background 0.3s; }
+        .button:hover { background: #5568d3; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="info">ℹ</div>
+        <h1>Already Subscribed</h1>
+        <p>You are already subscribed to promotional emails.</p>
+        <p>You'll continue receiving updates from Gemmie.</p>
+        <a href="https://gemmie-ai.web.app" class="button">Return to Gemmie</a>
+    </div>
+</body>
+</html>
+	`
+}
+
+func getVerifySuccessHTML() string {
+	return `
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Email Verified</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; text-align: center; background-color: #f4f4f4; }
+        .container { background: white; padding: 40px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .success { color: #5cb85c; font-size: 48px; }
+        h1 { color: #333; margin: 20px 0; }
+        p { color: #666; line-height: 1.6; margin: 15px 0; }
+        .button { display: inline-block; background: #667eea; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; margin-top: 20px; transition: background 0.3s; }
+        .button:hover { background: #5568d3; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="success">✓</div>
+        <h1>Email Verified Successfully!</h1>
+        <p>Your email has been verified. You can now enjoy all features of Gemmie.</p>
+        <a href="https://gemmie-ai.web.app" class="button">Go to Gemmie</a>
+    </div>
+</body>
+</html>
+	`
+}
+
+func getAlreadyVerifiedHTML() string {
+	return `
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Already Verified</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; text-align: center; background-color: #f4f4f4; }
+        .container { background: white; padding: 40px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .info { color: #0275d8; font-size: 48px; }
+        h1 { color: #333; margin: 20px 0; }
+        p { color: #666; line-height: 1.6; margin: 15px 0; }
+        .button { display: inline-block; background: #667eea; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; margin-top: 20px; transition: background 0.3s; }
+        .button:hover { background: #5568d3; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="info">ℹ</div>
+        <h1>Email Already Verified</h1>
+        <p>Your email address is already verified.</p>
+        <p>You're all set to use Gemmie!</p>
+        <a href="https://gemmie-ai.web.app" class="button">Go to Gemmie</a>
+    </div>
+</body>
+</html>
+	`
 }
 
 // UpdateEmailSubscriptionHandler updates user's email subscription preference
@@ -493,149 +898,6 @@ func SendVerificationEmailHandler(w http.ResponseWriter, r *http.Request, smtpCo
 		Success: true,
 		Message: "Verification email sent successfully",
 	})
-}
-
-// VerifyEmailHandler verifies user's email with token
-func VerifyEmailHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
-	// Support both GET (from email link) and POST (from API)
-	var token string
-
-	switch r.Method {
-	case http.MethodGet:
-		token = r.URL.Query().Get("token")
-	case http.MethodPost:
-		var req VerifyEmailRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(store.Response{
-				Success: false,
-				Message: "Invalid request body",
-			})
-			return
-		}
-		token = req.Token
-	default:
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		json.NewEncoder(w).Encode(store.Response{
-			Success: false,
-			Message: "Method not allowed",
-		})
-		return
-	}
-
-	token = sanitizeString(token)
-	if token == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(store.Response{
-			Success: false,
-			Message: "Verification token is required",
-		})
-		return
-	}
-
-	// Find user with this token
-	var foundUser *store.User
-	var foundUserID string
-
-	users, _ := store.GetUsers()
-	for _, user := range users {
-		if user.VerificationToken == token {
-			userCopy := user
-			foundUser = &userCopy
-			foundUserID = user.ID
-			break
-		}
-	}
-
-	if foundUser == nil {
-		w.WriteHeader(http.StatusNotFound)
-		json.NewEncoder(w).Encode(store.Response{
-			Success: false,
-			Message: "Invalid verification token",
-		})
-		return
-	}
-
-	// Check if token expired
-	if time.Now().After(foundUser.VerificationTokenExpiry) {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(store.Response{
-			Success: false,
-			Message: "Verification token has expired",
-		})
-		return
-	}
-
-	// Check if already verified
-	if foundUser.EmailVerified {
-		json.NewEncoder(w).Encode(store.Response{
-			Success: true,
-			Message: "Email is already verified",
-		})
-		return
-	}
-
-	// Mark email as verified
-	var u store.User
-	u.EmailVerified = true
-	u.VerificationToken = "" // Clear token after use
-	u.UpdatedAt = time.Now()
-	if err := store.UpdateUser(u); err != nil {
-		slog.Error("Failed to save email verification",
-			"user_id", foundUserID,
-			"error", err,
-		)
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(store.Response{
-			Success: false,
-			Message: "Failed to verify email",
-		})
-		return
-	}
-
-	slog.Info("Email verified successfully",
-		"user_id", foundUserID,
-		"email", foundUser.Email,
-	)
-
-	// Return response based on request method
-	if r.Method == http.MethodGet {
-		// For email links, return HTML page
-		w.Header().Set("Content-Type", "text/html")
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprintf(w, `
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Email Verified</title>
-    <style>
-        body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; text-align: center; }
-        .success { color: #5cb85c; font-size: 48px; }
-        h1 { color: #333; }
-        p { color: #666; line-height: 1.6; }
-        .button { display: inline-block; background: #667eea; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; margin-top: 20px; }
-    </style>
-</head>
-<body>
-    <div class="success">✓</div>
-    <h1>Email Verified Successfully!</h1>
-    <p>Your email has been verified. You can now enjoy all features of Gemmie.</p>
-    <a href="https://gemmie-ai.web.app" class="button">Go to Gemmie</a>
-</body>
-</html>
-		`)
-	} else {
-		// For API calls, return JSON
-		json.NewEncoder(w).Encode(store.Response{
-			Success: true,
-			Message: "Email verified successfully",
-			Data: map[string]interface{}{
-				"email_verified": true,
-			},
-		})
-	}
 }
 
 func buildVerificationEmailBody(username, verifyURL string) string {
