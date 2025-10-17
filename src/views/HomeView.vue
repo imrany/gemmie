@@ -1480,11 +1480,6 @@ function handleValidationError() {
 }
 
 async function handleFinalAuthStep() {
-  // Show connection status
-  const connectionToast = toast.loading('Establishing secure connection...', {
-    duration: 3000
-  })
-
   try {
     isLoading.value = true
 
@@ -1513,7 +1508,6 @@ async function handleFinalAuthStep() {
     await handleAuthError(err)
   } finally {
     isLoading.value = false
-    toast.dismiss(connectionToast)
   }
 }
 

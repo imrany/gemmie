@@ -171,6 +171,11 @@ async function handlePayment() {
   isProcessing.value = true
   clearIntervals() // Clear any existing intervals
 
+  // Show initial connection status
+  let processingToast = toast.loading('Establishing secure connection...', {
+    duration: Infinity // Keep it showing until we update or dismiss it
+  })
+
   try {
     // Get the actual expiry timestamp for submission
     const actualExpiryTimestamp = now.value + (planDuration.value || 0)
@@ -190,15 +195,26 @@ async function handlePayment() {
     }
 
     console.log('Initiating M-Pesa payment')
+    
+    // Update toast to show we're sending STK push
+    toast.loading('Sending M-Pesa prompt to your phone...', {
+      id: processingToast,
+      duration: Infinity
+    })
+
     const stkResults = await sendSTK(paymentData)
     
     if (!stkResults || !stkResults.data || stkResults.data.success === false) {
+      toast.dismiss(processingToast)
       isProcessing.value = false
       toast.error('Failed to initiate payment. Please try again.', { duration: 5000 })
       return
     }
 
     console.log('STK Push sent successfully:', stkResults)
+    
+    // Dismiss the loading toast and show success
+    toast.dismiss(processingToast)
     toast.success(`M-Pesa prompt sent to ${paymentForm.phone}. Please check your phone and enter your M-Pesa PIN to complete the payment.`, { duration: 8000 })
     
     // Store external reference safely
@@ -206,6 +222,12 @@ async function handlePayment() {
     if (externalRef) {
       localStorage.setItem("external_reference", JSON.stringify(externalRef))
     }
+
+    // Show waiting for confirmation toast
+    let confirmationToast = toast.loading('Waiting for payment confirmation...', {
+      duration: Infinity,
+      description: 'Please complete the payment on your phone'
+    })
 
     // Payment confirmation logic with better error handling
     let attempts = 0;
@@ -220,6 +242,7 @@ async function handlePayment() {
         if (!ext) {
           console.error('No external reference found')
           clearIntervals()
+          toast.dismiss(confirmationToast)
           isProcessing.value = false
           toast.error("Payment reference lost. Please try again.", { duration: 6000 })
           return
@@ -231,7 +254,7 @@ async function handlePayment() {
         // Check for successful payment
         if (transResults?.data?.Status === "Success" || transResults?.success === true) {
           clearIntervals()
-          // localStorage.removeItem("external_reference") // Clean up
+          toast.dismiss(confirmationToast)
           
           toast.success(`Payment successful! Your ${selectedPlan.value?.name} plan is now active until ${expiryDate.value}.`, { 
             duration: 10000,
@@ -250,6 +273,7 @@ async function handlePayment() {
         // Check for failed payment
         if (transResults?.data?.Status === "Failed" || transResults?.success === false) {
           clearIntervals()
+          toast.dismiss(confirmationToast)
           localStorage.removeItem("external_reference")
           
           toast.error("Payment failed. Please try again or contact support.", { duration: 8000 })
@@ -257,10 +281,11 @@ async function handlePayment() {
           return
         }
         
-        // Still pending - show progress
+        // Still pending - update the toast with progress
         if (attempts <= 3) {
-          toast.info(`Waiting for payment confirmation... (${attempts}/${maxAttempts})`, { 
-            duration: 3000,
+          toast.loading(`Waiting for payment confirmation... (${attempts}/${maxAttempts})`, {
+            id: confirmationToast,
+            duration: Infinity,
             description: "Please complete the payment on your phone"
           })
         }
@@ -272,6 +297,7 @@ async function handlePayment() {
       // Max attempts reached
       if (attempts >= maxAttempts) { 
         clearIntervals()
+        toast.dismiss(confirmationToast)
         toast.error("Payment confirmation timeout. If you completed the payment, please refresh this page or contact support.", { 
           duration: 10000,
           action: {
@@ -286,6 +312,7 @@ async function handlePayment() {
   } catch (error) {
     console.error('Payment error:', error)
     clearIntervals()
+    toast.dismiss(processingToast)
     isProcessing.value = false
     toast.error('Payment failed. Please try again.', {
       duration: 5000,
