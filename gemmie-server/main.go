@@ -204,6 +204,7 @@ func runServer() {
 	// Start the email scheduler in background
 	v1.StartEmailScheduler(schedulerConfig)
 
+	//migrations run automatically
 	if err := store.InitStorage(connString); err != nil {
 		slog.Error("Failed to initialize database", "error", err)
 		os.Exit(1)
