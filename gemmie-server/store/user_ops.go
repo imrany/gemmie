@@ -96,6 +96,14 @@ func GetUsers() ([]User, error) {
 		if err != nil {
 			return nil, err
 		}
+		
+		// Get user transactions
+		transactions, err := GetUserTransactions(user.PhoneNumber)
+		if err != nil {
+			slog.Error("Error getting user transactions", "user_id", user.ID, "error", err)
+		}
+		user.UserTransactions = transactions
+
 		users = append(users, user)
 	}
 
@@ -141,6 +149,13 @@ func GetUserByID(userID string) (*User, error) {
 		return nil, nil
 	}
 
+	// Get user transactions
+	transactions, err := GetUserTransactions(user.PhoneNumber)
+	if err != nil {
+		slog.Error("Error getting user transactions", "user_id", user.ID, "error", err)
+	}
+	user.UserTransactions = transactions
+
 	return user, err
 }
 
@@ -177,6 +192,13 @@ func GetUserByUsername(username string) (*User, error) {
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
+
+	// Get user transactions
+	transactions, err := GetUserTransactions(user.PhoneNumber)
+	if err != nil {
+		slog.Error("Error getting user transactions", "user_id", user.ID, "error", err)
+	}
+	user.UserTransactions = transactions
 
 	return user, err
 }
@@ -215,7 +237,98 @@ func GetUserByEmail(email string) (*User, error) {
 		return nil, nil
 	}
 
+	// Get user transactions
+	transactions, err := GetUserTransactions(user.PhoneNumber)
+	if err != nil {
+		slog.Error("Error getting user transactions", "user_id", user.ID, "error", err)
+	}
+	user.UserTransactions = transactions
+
 	return user, err
+}
+
+// GetUserTransactions retrieves all transactions for a user based on their phone number
+func GetUserTransactions(phoneNumber string) ([]Transaction, error) {
+	query := `
+		SELECT 
+			t.id, t.external_reference, t.mpesa_receipt_number, 
+			t.checkout_request_id, t.merchant_request_id, t.amount,
+			t.phone_number, t.result_code, t.result_description,
+			t.status, t.created_at, t.updated_at
+		FROM transactions t
+		INNER JOIN users u ON t.phone_number = u.phone_number
+		WHERE u.phone_number = $1
+		ORDER BY t.created_at DESC
+	`
+
+	rows, err := DB.Query(query, phoneNumber)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var transactions []Transaction
+	for rows.Next() {
+		var tx Transaction
+		err := rows.Scan(
+			&tx.ID, &tx.ExternalReference, &tx.MpesaReceiptNumber,
+			&tx.CheckoutRequestID, &tx.MerchantRequestID, &tx.Amount,
+			&tx.PhoneNumber, &tx.ResultCode, &tx.ResultDescription,
+			&tx.Status, &tx.CreatedAt, &tx.UpdatedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+		transactions = append(transactions, tx)
+	}
+
+	return transactions, rows.Err()
+}
+
+// GetUserByPhoneWithTransactions retrieves a user and their transactions
+func GetUserByPhoneWithTransactions(phoneNumber string) (*User, error) {
+	// First get the user
+	query := `
+		SELECT 
+			id, username, email, password_hash, created_at, updated_at,
+			preferences, work_function, theme, sync_enabled, plan, plan_name,
+			amount, duration, phone_number, expiry_timestamp, expire_duration,
+			price, response_mode, agree_to_terms, request_count_value,
+			request_count_timestamp, email_verified, email_subscribed,
+			verification_token, verification_token_expiry, unsubscribe_token
+		FROM users
+		WHERE phone_number = $1
+	`
+
+	var user User
+	var verificationTokenExpiry sql.NullTime
+	
+	err := DB.QueryRow(query, phoneNumber).Scan(
+		&user.ID, &user.Username, &user.Email, &user.PasswordHash,
+		&user.CreatedAt, &user.UpdatedAt, &user.Preferences, &user.WorkFunction,
+		&user.Theme, &user.SyncEnabled, &user.Plan, &user.PlanName,
+		&user.Amount, &user.Duration, &user.PhoneNumber, &user.ExpiryTimestamp,
+		&user.ExpireDuration, &user.Price, &user.ResponseMode, &user.AgreeToTerms,
+		&user.RequestCount.Count, &user.RequestCount.Timestamp,
+		&user.EmailVerified, &user.EmailSubscribed, &user.VerificationToken,
+		&verificationTokenExpiry, &user.UnsubscribeToken,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	if verificationTokenExpiry.Valid {
+		user.VerificationTokenExpiry = verificationTokenExpiry.Time
+	}
+
+	// Get user transactions
+	transactions, err := GetUserTransactions(phoneNumber)
+	if err != nil {
+		return nil, err
+	}
+	user.UserTransactions = transactions
+
+	return &user, nil
 }
 
 // findUserByEmailOrUsername tries to find user by email or username in storage
@@ -226,6 +339,12 @@ func FindUserByEmailOrUsername(identifier string) (*User, string, bool) {
 	}
 
 	if userByEmail != nil {
+		// Get user transactions
+		transactions, err := GetUserTransactions(userByEmail.PhoneNumber)
+		if err != nil {
+			slog.Error("Error getting user transactions", "user_id", userByEmail.ID, "error", err)
+		}
+		userByEmail.UserTransactions = transactions
 		return userByEmail, userByEmail.ID, true
 	}
 
@@ -235,6 +354,12 @@ func FindUserByEmailOrUsername(identifier string) (*User, string, bool) {
 	}
 
 	if userByUsername != nil {
+		// Get user transactions
+		transactions, err := GetUserTransactions(userByUsername.PhoneNumber)
+		if err != nil {
+			slog.Error("Error getting user transactions", "user_id", userByUsername.ID, "error", err)
+		}
+		userByUsername.UserTransactions = transactions
 		return userByUsername, userByUsername.ID, true
 	}
 	

@@ -1,40 +1,20 @@
-1. First, do a dry run to see what data will be migrated:
+### 1. Manual Control with CLI
 ```bash
-go run cmd/migrate/main.go \
-  --json ./gemmie_data.json \
-  --db-host localhost \
-  --db-port 5432 \
-  --db-user gemmie_user \
-  --db-password your_password \
-  --db-name gemmie \
-  --dry-run
-```
+# Check current version
+go run cmd/migrate/main.go -command=version
 
-This will show you:
+# Apply all pending migrations
+go run cmd/migrate/main.go -command=up
 
-- How many records of each type exist
-- Sample data preview
-- No actual data insertion
+# Rollback last migration
+go run cmd/migrate/main.go -command=down
 
-2. Run Actual Migration
+# Rollback 2 migrations
+go run cmd/migrate/main.go -command=steps -steps=-2
 
-Once you're satisfied, run the real migration:
-```bash
-go run cmd/migrate/main.go  --json ./gemmie_data.json --db-host localhost --db-port 5432 --db-user gemmie_user --db-password your_password --db-name gemmie
-```
+# Go to specific version (e.g., version 1)
+go run cmd/migrate/main.go -command=goto -target=1
 
-Or
-
-```bash
-# Create a migration.env file
-DB_HOST=localhost
-DB_PORT=5432
-DB_USER=gemmie_user
-DB_PASSWORD=your_password
-DB_NAME=gemmie
-```
-
-Then run
-```bash
-export $(cat migration.env | xargs) && go run cmd/migrate/main.go --json ./gemmie_data.json
+# Fix dirty state (force to version 2)
+go run cmd/migrate/main.go -command=force -version=2
 ```
