@@ -268,8 +268,6 @@ func getErrorHTML(title, message string) string {
 
 // ResubscribeHandler handles resubscribing users to promotional emails
 func ResubscribeHandler(w http.ResponseWriter, r *http.Request) {
-	// DON'T set Content-Type here
-	
 	var req struct {
 		Email string `json:"email"`
 		Token string `json:"token"`
@@ -289,7 +287,6 @@ func ResubscribeHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	case http.MethodGet:
-		// Handle query parameters for email links
 		req.Email = r.URL.Query().Get("email")
 		req.Token = r.URL.Query().Get("token")
 	default:
@@ -323,20 +320,7 @@ func ResubscribeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Find user by email
-	var userID string
-	var user store.User
-	var userFound bool
-
-	users, _ := store.GetUsers()
-	for _, u := range users {
-		if u.Email == req.Email {
-			userID = u.ID
-			user = u
-			userFound = true
-			break
-		}
-	}
-
+	user, userFound := FindUserByEmail(req.Email)
 	if !userFound {
 		if isGetRequest {
 			w.Header().Set("Content-Type", "text/html")
@@ -392,7 +376,7 @@ func ResubscribeHandler(w http.ResponseWriter, r *http.Request) {
 	u.UpdatedAt = time.Now()
 	if err := store.UpdateUser(u); err != nil {
 		slog.Error("Failed to save storage after resubscribe",
-			"user_id", userID,
+			"user_id", user.ID,
 			"email", req.Email,
 			"error", err,
 		)
@@ -412,7 +396,7 @@ func ResubscribeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	slog.Info("User resubscribed to promotional emails",
-		"user_id", userID,
+		"user_id", user.ID,
 		"email", req.Email,
 	)
 
