@@ -1,3 +1,5 @@
+import type { Theme } from "vue-sonner/src/packages/types.js"
+
 export interface Res {
   prompt?: string
   response: string
@@ -48,4 +50,50 @@ export type ConfirmDialogOptions = {
     cancelText?: string
     onConfirm: () => void
     onCancel?: () => void
+}
+
+export type RequestCount ={
+	count: number,
+	timestamp: number
+}
+
+export interface Transaction {
+  ID: string;
+  ExternalReference?: string;
+  MpesaReceiptNumber?: string;
+  CheckoutRequestID?: string;
+  MerchantRequestID?: string;
+  Amount: number;
+  PhoneNumber: string;
+  ResultCode: number;
+  ResultDescription: string;
+  Status: string;
+  CreatedAt: Date;
+  UpdatedAt: Date;
+}
+
+export interface UserDetails {
+  userId: string;
+  username: string;
+  email: string;
+  createdAt: Date;
+  preferences?: string;
+  workFunction?: string;
+  theme?: Theme;
+  syncEnabled: boolean;
+  plan?: string;
+  planName?: string;
+  amount?: number;
+  duration?: string;
+  phoneNumber?: string;
+  expiryTimestamp?: number;
+  expireDuration?: number;
+  price?: string;
+  responseMode?: string;
+  agreeToTerms?: boolean;
+  requestCount?: RequestCount;
+  emailVerified: boolean;
+  emailSubscribed: boolean;
+  sessionId?: string,
+  userTransactions?: Transaction[];
 }

@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import type { UserDetails } from '@/types';
 import { API_BASE_URL, getTransaction, plans } from '@/utils/globals';
 import type { Ref } from 'vue';
 import { onMounted, ref, watch, computed, inject, onUnmounted, reactive } from 'vue';
@@ -11,9 +12,9 @@ const router = useRouter()
 const planName = route.params.plan as 'student' | 'pro' | 'hobbyist' | undefined
 const selectPlanName = ref<'student' | 'pro' | 'hobbyist'>(planName ?? 'pro')
 const globalState = inject("globalState") as {
-  parsedUserDetails: Ref<any>,
+  parsedUserDetails: Ref<UserDetails>,
 }
-const parsedUserDetails = globalState.parsedUserDetails
+const { parsedUserDetails } = globalState
 const showCheckout = ref(false)
 const isProcessing = ref(false)
 
@@ -38,11 +39,11 @@ const expiryDate = computed(() => {
 
 // Current plan time left (for existing active plan)
 const currentPlanTimeLeft = computed(() => {
-  if (!parsedUserDetails?.value.expiry_timestamp) return ''
+  if (!parsedUserDetails?.value.expiryTimestamp) return ''
   const expiryMs =
-    parsedUserDetails.value.expiry_timestamp < 1e12
-      ? parsedUserDetails.value.expiry_timestamp * 1000
-      : parsedUserDetails.value.expiry_timestamp
+    parsedUserDetails.value.expiryTimestamp < 1e12
+      ? parsedUserDetails.value.expiryTimestamp * 1000
+      : parsedUserDetails.value.expiryTimestamp
 
   const diff = expiryMs - now.value
   if (diff <= 0) return 'Expired'
@@ -105,23 +106,23 @@ const selectedPlan = computed(() => {
 
 // Check if user details are pre-filled (for UI state)
 const isUsernamePrefilled = computed(() => {
-  return parsedUserDetails.value?.username && parsedUserDetails.value?.username.trim() !== ''
+  return parsedUserDetails.value && parsedUserDetails.value?.username.trim() !== ''
 })
 
 const isEmailPrefilled = computed(() => {
-  return parsedUserDetails.value?.email && parsedUserDetails.value?.email.trim() !== ''
+  return parsedUserDetails.value && parsedUserDetails.value?.email.trim() !== ''
 })
 
 const isPhonePrefilled = computed(() => {
-  return !!(parsedUserDetails.value?.phone_number && parsedUserDetails.value?.phone_number.trim() !== '')
+  return !!(parsedUserDetails.value?.phoneNumber && parsedUserDetails.value?.phoneNumber.trim() !== '')
 })
 
 // Check if user has an active plan
 const hasActivePlan = computed(() => {
-  if (!parsedUserDetails.value?.expiry_timestamp) return false
-  const expiryMs = parsedUserDetails.value.expiry_timestamp < 1e12
-    ? parsedUserDetails.value.expiry_timestamp * 1000
-    : parsedUserDetails.value.expiry_timestamp
+  if (!parsedUserDetails.value?.expiryTimestamp) return false
+  const expiryMs = parsedUserDetails.value.expiryTimestamp < 1e12
+    ? parsedUserDetails.value.expiryTimestamp * 1000
+    : parsedUserDetails.value.expiryTimestamp
   return expiryMs > now.value
 })
 
@@ -376,9 +377,9 @@ onMounted(() => {
     return
   }
   // Check if user has an active plan
-  const expiry = parsedUserDetails?.value.expiry_timestamp
+  const expiry = parsedUserDetails?.value.expiryTimestamp
   if (expiry && expiry * 1000 > Date.now()) {
-    toast.info(`You currently have an active ${parsedUserDetails.value.plan_name} plan.`, {
+    toast.info(`You currently have an active ${parsedUserDetails.value.planName} plan.`, {
       duration: Infinity,
       description: `Time remaining: ${currentPlanTimeLeft.value}`,
       action: {
@@ -396,7 +397,7 @@ onMounted(() => {
   // Pre-fill user info
   paymentForm.username = parsedUserDetails.value?.username || ''
   paymentForm.email = parsedUserDetails.value?.email || ''
-  paymentForm.phone = parsedUserDetails.value?.phone_number || ''
+  paymentForm.phone = parsedUserDetails.value?.phoneNumber || ''
 
   // Select plan from URL or default
   if (planName) {
@@ -428,7 +429,7 @@ onMounted(() => {
           <div>
             <h3 class="text-blue-900 dark:text-blue-300 font-medium">Current Active Plan</h3>
             <p class="text-blue-700 dark:text-blue-400 text-sm">
-              You have an active {{ parsedUserDetails.plan_name }} plan with {{ currentPlanTimeLeft }} remaining.
+              You have an active {{ parsedUserDetails.planName }} plan with {{ currentPlanTimeLeft }} remaining.
               Purchasing a new plan will replace your current one.
             </p>
           </div>
@@ -461,7 +462,7 @@ onMounted(() => {
           </div>
 
           <!-- Current Plan Badge -->
-          <div v-if="hasActivePlan && parsedUserDetails.plan_name?.toLowerCase().includes(plan.name.toLowerCase())"
+          <div v-if="hasActivePlan && parsedUserDetails.planName?.toLowerCase().includes(plan.name.toLowerCase())"
             class="absolute top-0 left-0 bg-green-600 dark:bg-green-500 text-white px-3 py-1 text-xs font-semibold rounded-br-lg">
             CURRENT
           </div>
@@ -490,7 +491,7 @@ onMounted(() => {
                 ? 'bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 shadow-md'
                 : 'bg-gray-800 hover:bg-gray-900 dark:bg-gray-700 dark:hover:bg-gray-600 shadow-md'
                 ">
-              {{ hasActivePlan && parsedUserDetails.plan_name?.toLowerCase().includes(plan.name.toLowerCase()) 
+              {{ hasActivePlan && parsedUserDetails.planName?.toLowerCase().includes(plan.name.toLowerCase()) 
                 ? `Renew ${plan.name} Plan` 
                 : `Get ${plan.name} Plan` }}
             </button>
@@ -516,7 +517,7 @@ onMounted(() => {
             <i class="pi pi-exclamation-triangle text-yellow-600 dark:text-yellow-400 mr-3"></i>
             <div>
               <p class="text-yellow-800 dark:text-yellow-300 text-sm">
-                <strong>Note:</strong> You currently have {{ currentPlanTimeLeft }} remaining on your {{ parsedUserDetails.plan_name }} plan. 
+                <strong>Note:</strong> You currently have {{ currentPlanTimeLeft }} remaining on your {{ parsedUserDetails.planName }} plan. 
                 This purchase will replace your current plan immediately.
               </p>
             </div>
@@ -593,9 +594,9 @@ onMounted(() => {
                 placeholder="0712345678 or +254712345678" />
               <div class="flex items-center gap-2 mt-1" v-if="isPhonePrefilled && !paymentForm.phone">
                 <p class="text-xs text-gray-500 dark:text-gray-400">
-                  Using your account phone number: {{ parsedUserDetails.phone_number }}
+                  Using your account phone number: {{ parsedUserDetails.phoneNumber }}
                 </p>
-                <button type="button" class="text-blue-600 dark:text-blue-400 hover:underline text-xs" @click="paymentForm.phone = parsedUserDetails.phone_number">
+                <button type="button" class="text-blue-600 dark:text-blue-400 hover:underline text-xs" @click="paymentForm.phone = parsedUserDetails?.phoneNumber || ''">
                   Use Account Phone
                 </button>
               </div>
