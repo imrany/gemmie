@@ -2627,7 +2627,7 @@ onUnmounted(() => {
 
         <div v-else-if="isAuthenticated && currentMessages.length === 0">
           <div
-            class="flex md:max-w-3xl max-w-[100vw] flex-col md:flex-grow items-center gap-3 text-gray-600 dark:text-gray-400">
+            class="flex md:max-w-3xl max-w-[100vw] max-md:px-4 flex-col md:flex-grow items-center gap-3 text-gray-600 dark:text-gray-400">
             <img :src="currentTheme === 'dark' || (currentTheme === 'system' && isDarkMode) ?
               '/logo-light.svg' : '/logo.svg'" alt="Gemmie Logo" class="w-[60px] h-[60px] rounded-md" />
 
