@@ -118,6 +118,14 @@ function startRename(chatId: string, currentTitle: string) {
   }, 50)
 }
 
+function openEditor() {
+  if (router.currentRoute.value.path !== '/editor') {
+    // router.push('/editor')
+    window.open('/editor', '_blank')
+  }
+  if (props.data.screenWidth < 720) props.functions.hideSidebar()
+}
+
 function submitRename(chatId: string) {
   if (renameValue.value.trim()) {
     props.functions.renameChat(chatId, renameValue.value.trim())
@@ -222,14 +230,7 @@ function handleChatClick(chatId: string) {
               class="ml-auto w-2 h-2 bg-orange-500 dark:bg-orange-400 rounded-full"></div>
           </button>
 
-          <button v-if="props.data.screenWidth > 720" @click="
-            () => {
-              if (router.currentRoute.value.path !== '/editor') {
-                router.push('/editor')
-              }
-              if (props.data.screenWidth < 720) props.functions.hideSidebar()
-            }
-          " title="Open Editor"
+          <button v-if="props.data.screenWidth > 720" @click="openEditor" title="Open Editor"
             class="w-full flex items-center gap-2 h-[40px] hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg px-2 transition-colors">
             <i class="pi pi-pencil text-gray-500 dark:text-gray-400 mb-[2px]"></i>
             <p v-if="!props.data.isCollapsed || props.data.screenWidth < 720" class="dark:text-gray-200">Editor</p>
