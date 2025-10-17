@@ -1356,26 +1356,28 @@ async function syncFromServer(serverData?: any) {
     if (data.syncEnabled !== undefined || data.preferences || data.theme ||
       data.work_function || data.phone_number || data.plan) {
 
-      const updatedUserDetails = {
+      const updatedUserDetails: UserDetails = {
         ...parsedUserDetails.value,
         preferences: data.preferences || parsedUserDetails.value.preferences,
         theme: data.theme || parsedUserDetails?.value?.theme,
         workFunction: data.work_function || parsedUserDetails.value.workFunction,
-        phone_number: data.phone_number || parsedUserDetails.value.phoneNumber,
+        phoneNumber: data.phone_number || parsedUserDetails.value.phoneNumber,
         plan: data.plan || parsedUserDetails.value.plan,
-        plan_name: data.plan_name || parsedUserDetails.value.planName,
+        planName: data.plan_name || parsedUserDetails.value.planName,
         amount: data.amount ?? parsedUserDetails.value.amount,
         duration: data.duration || parsedUserDetails.value.duration,
         price: data.price || parsedUserDetails.value.price,
-        response_mode: data.response_mode || parsedUserDetails.value.responseMode,
-        request_count : data.request_count || parsedUserDetails.value.requestCount,
-        expiry_timestamp: data.expiry_timestamp || parsedUserDetails.value.expiryTimestamp,
-        expire_duration: data.expire_duration || parsedUserDetails.value.expireDuration,
-        syncEnabled: data.syncEnabled !== undefined ? data.syncEnabled : parsedUserDetails.value.syncEnabled
+        responseMode: data.response_mode || parsedUserDetails.value.responseMode,
+        requestCount : data.request_count || parsedUserDetails.value.requestCount,
+        expiryTimestamp: data.expiry_timestamp || parsedUserDetails.value.expiryTimestamp,
+        expireDuration: data.expire_duration || parsedUserDetails.value.expireDuration,
+        syncEnabled: data.sync_enabled || parsedUserDetails.value.syncEnabled,
       }
-
+      
       parsedUserDetails.value = updatedUserDetails
       localStorage.setItem("userdetails", JSON.stringify(updatedUserDetails))
+
+      parsedUserDetails.value.userTransactions = data.user_transactions || []
       console.log('✅ User details updated from server')
     }
 
@@ -1437,7 +1439,7 @@ async function syncToServer() {
       preferences: parsedUserDetails.value.preferences || '',
       work_function: parsedUserDetails.value.workFunction || '',
       theme: parsedUserDetails?.value?.theme || 'system',
-      syncEnabled: parsedUserDetails.value.syncEnabled,
+      sync_enabled: parsedUserDetails?.value?.syncEnabled,
       response_mode: parsedUserDetails.value.responseMode || 'light-response',
       request_count: {
         count: parsedUserDetails.value.requestCount?.count || 0,
@@ -1695,7 +1697,7 @@ async function handleAuth(data: {
       workFunction: response.data.work_function || "",
       preferences: response.data.preferences || "",
       theme: response.data.theme || "system",
-      syncEnabled: response.data.syncEnabled !== false,
+      syncEnabled: response.data.sync_enabled,
       phoneNumber: response.data.phone_number || "",
       plan: response.data.plan || "free",
       planName: response.data.plan_name || "",
@@ -1705,8 +1707,8 @@ async function handleAuth(data: {
       responseMode: response.data.response_mode || "light-response",
       expiryTimestamp: response.data.expiry_timestamp || null,
       expireDuration: response.data.expire_duration || "",
-      emailVerified: response.email_verified || false,
-      emailSubscribed: response.email_subscribed || true,
+      emailVerified: response.data.email_verified || false,
+      emailSubscribed: response.data.email_subscribed || true,
     }
 
     // ✅ Set in-memory state first
@@ -1862,84 +1864,102 @@ async function manualSync() {
   }
 }
 
-async function toggleSync(newSyncValue?: boolean) {
-  const targetSyncValue = newSyncValue ?? !parsedUserDetails.value.syncEnabled
+async function toggleSync() {
+  const targetSyncValue = !parsedUserDetails.value.syncEnabled
 
   // Store original state for rollback
   const originalSyncValue = parsedUserDetails.value.syncEnabled
   const originalUserDetails = { ...parsedUserDetails.value }
 
   try {
-    // Update in-memory state (but NOT localStorage yet)
+    // Update in-memory state
     parsedUserDetails.value.syncEnabled = targetSyncValue
     syncEnabled.value = targetSyncValue
 
     console.log('Attempting sync toggle:', { current: syncEnabled.value, target: targetSyncValue })
 
-    let serverUpdateSuccess = false
-    let retryCount = 0
-    const maxRetries = 2
-
-    while (!serverUpdateSuccess && retryCount <= maxRetries) {
-      try {
-        await apiCall('/sync', {
-          method: 'POST',
-          body: JSON.stringify({
-            username: parsedUserDetails?.value?.username,
-            syncEnabled: targetSyncValue,
-            chats: targetSyncValue ? JSON.stringify(chats.value) : "[]",
-            link_previews: "{}",
-            current_chat_id: targetSyncValue ? currentChatId.value : "",
-          })
-        })
-        serverUpdateSuccess = true
-        console.log('Sync preference updated on server:', targetSyncValue)
-
-        // ✅ ONLY save to localStorage AFTER server confirms
-        localStorage.setItem("userdetails", JSON.stringify(parsedUserDetails.value))
-        console.log('Sync preference saved locally after server confirmation')
-
-      } catch (serverError) {
-        retryCount++
-        console.warn(`Failed to update sync preference on server (attempt ${retryCount}):`, serverError)
-
-        if (retryCount > maxRetries) {
-          console.error('All retry attempts failed for server sync update')
-          throw new Error('Failed to update sync preference on server')
-        } else {
-          await new Promise(resolve => setTimeout(resolve, 1000 * retryCount))
-        }
-      }
-    }
-
-    // Proceed with sync operations if enabled
     if (targetSyncValue) {
+      // ENABLING sync - sync TO server first to preserve local data
       try {
-        await performSmartSync()
+        showSyncIndicator('Uploading your local data...', 20)
+        
+        // Always sync TO server first when enabling sync
+        await syncToServer()
+        
+        console.log('Local data uploaded to server successfully')
+        
+        // Then optionally sync FROM server to get any additional server data
+        updateSyncProgress('Checking for server updates...', 70)
+        await syncFromServer()
+        
+        hideSyncIndicator()
+        
         toast.success('Sync enabled and data synchronized', {
           duration: 3000,
           description: 'Your data is now syncing across devices'
         })
       } catch (error) {
-        console.warn('Initial sync failed:', error)
-        toast.success('Sync enabled', {
-          duration: 3000,
-          description: 'Initial sync failed, but sync is now active'
+        console.error('Failed to sync when enabling:', error)
+        hideSyncIndicator()
+        
+        // Rollback on failure
+        parsedUserDetails.value.syncEnabled = originalSyncValue
+        syncEnabled.value = originalSyncValue
+        parsedUserDetails.value = originalUserDetails
+        localStorage.setItem("userdetails", JSON.stringify(originalUserDetails))
+        
+        toast.error('Failed to enable sync', {
+          duration: 4000,
+          description: 'Could not upload your data. Please try again.'
         })
+        throw error
       }
     } else {
-      toast.info('Sync disabled', {
-        duration: 3000,
-        description: 'Your data will only be saved locally on this device'
-      })
+      // DISABLING sync - just update server preference
+      try {
+        showSyncIndicator('Updating sync preference...', 50)
+        
+        // Update server to disable sync (with empty data)
+        await apiCall('/sync', {
+          method: 'POST',
+          body: JSON.stringify({
+            username: parsedUserDetails.value.username,
+            sync_enabled: false,
+            chats: "[]",
+            link_previews: "{}",
+            current_chat_id: "",
+          })
+        })
+        
+        hideSyncIndicator()
+        
+        // Save to localStorage after successful server update
+        localStorage.setItem('userdetails', JSON.stringify(parsedUserDetails.value))
+        
+        toast.info('Sync disabled', {
+          duration: 3000,
+          description: 'Your data will only be saved locally on this device'
+        })
+      } catch (error) {
+        console.error('Failed to disable sync on server:', error)
+        hideSyncIndicator()
+        
+        // Even if server update fails, allow local disable
+        localStorage.setItem('userdetails', JSON.stringify(parsedUserDetails.value))
+        
+        toast.warning('Sync disabled locally', {
+          duration: 3000,
+          description: 'Server update failed, but sync is disabled on this device'
+        })
+      }
     }
 
   } catch (error) {
     console.error('Failed to toggle sync:', error)
 
-    // ❌ ROLLBACK: Revert both in-memory AND localStorage
-    parsedUserDetails.value.syncEnabled = originalSyncValue || true
-    syncEnabled.value = originalSyncValue || true
+    // Rollback: Revert both in-memory AND localStorage
+    parsedUserDetails.value.syncEnabled = originalSyncValue
+    syncEnabled.value = originalSyncValue
     parsedUserDetails.value = originalUserDetails
     localStorage.setItem("userdetails", JSON.stringify(originalUserDetails))
 
@@ -2282,7 +2302,10 @@ function hasUserDetailsChangedMeaningfully(newDetails: any, oldDetails: any): bo
   if (!oldDetails || !newDetails) return false
 
   // Ignore timestamp-only changes
-  const keysToCheck = ['preferences', 'theme', 'workFunction', 'phoneNumber', 'syncEnabled', 'responseMode', 'requestCount']
+  const keysToCheck = ['preferences', 
+    'theme', 'workFunction', 'phoneNumber', 'syncEnabled', 'responseMode', 
+    'requestCount'
+  ]
 
   return keysToCheck.some(key => {
     const oldValue = oldDetails[key]
