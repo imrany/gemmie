@@ -48,7 +48,6 @@ const globalState = inject('globalState') as {
 const {
   screenWidth,
   isCollapsed,
-  authData,
   planStatus,
   isAuthenticated,
   currentChatId,
@@ -64,16 +63,12 @@ const {
   createNewChat,
   deleteChat,
   renameChat,
-  apiCall,
-  isDarkMode,
   toggleTheme,
-  isLocalDataEmpty,
   toggleSync,
-  syncEnabled, // Add this
+  parsedUserDetails,
 } = globalState
 
 const route = useRoute()
-const parsedUserDetails = globalState.parsedUserDetails
 const tabParam = route.params.tab as 'profile' | 'account' | 'billing' | undefined
 
 // Local form state
@@ -139,7 +134,7 @@ watch(activeTab, (newVal, oldVal) => {
 
 // Fix the watch function - watch the actual sync_enabled property
 watch(() => parsedUserDetails.value?.syncEnabled, (newVal) => {
-  console.log('Sync enabled changed:', newVal)
+  parsedUserDetails.value.syncEnabled = newVal
   // The toggleSync function will handle the UI updates
 }, { deep: true })
 

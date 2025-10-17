@@ -587,7 +587,11 @@ func SyncHandler(w http.ResponseWriter, r *http.Request) {
 		if req.Theme != "" {
 			user.Theme = req.Theme
 		}
-		user.SyncEnabled = req.SyncEnabled
+
+		if user.SyncEnabled != req.SyncEnabled {
+			user.SyncEnabled = req.SyncEnabled
+		}
+		
 		if req.Amount != 0 {
 			user.Amount = req.Amount
 		}
@@ -615,8 +619,6 @@ func SyncHandler(w http.ResponseWriter, r *http.Request) {
 		if req.ResponseMode != "" {
 			user.ResponseMode = req.ResponseMode
 		}
-		user.EmailVerified = req.EmailVerified
-		user.EmailSubscribed = req.EmailSubscribed
 		
 		if req.RequestCount.Count != 0 || req.RequestCount.Timestamp != 0 {
 			incomingTime := time.Unix(0, req.RequestCount.Timestamp*int64(time.Millisecond))

@@ -130,11 +130,10 @@ func UnsubscribeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Update subscription status
-	u := *user
-	u.EmailSubscribed = false
-	u.EmailVerified = true
-	u.UpdatedAt = time.Now()
-	if err := store.UpdateUser(u); err != nil {
+	user.EmailSubscribed = false
+	user.EmailVerified = true
+	user.UpdatedAt = time.Now()
+	if err := store.UpdateUser(*user); err != nil {
 		slog.Error("Error updating user subscription status", "user_id", user.ID, "error", err)
 		if isGetRequest {
 			w.Header().Set("Content-Type", "text/html")
@@ -371,10 +370,10 @@ func ResubscribeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Update subscription status
-	u := *user
-	u.EmailSubscribed = true
-	u.UpdatedAt = time.Now()
-	if err := store.UpdateUser(u); err != nil {
+	user.EmailSubscribed = true
+	user.EmailVerified = true
+	user.UpdatedAt = time.Now()
+	if err := store.UpdateUser(*user); err != nil {
 		slog.Error("Failed to save storage after resubscribe",
 			"user_id", user.ID,
 			"email", req.Email,
@@ -527,11 +526,11 @@ func VerifyEmailHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Mark email as verified
-	u := *foundUser
-	u.EmailVerified = true
-	u.VerificationToken = "" // Clear token after use
-	u.UpdatedAt = time.Now()
-	if err := store.UpdateUser(u); err != nil {
+	foundUser.EmailVerified = true
+	foundUser.EmailSubscribed = true
+	foundUser.VerificationToken = "" // Clear token after use
+	foundUser.UpdatedAt = time.Now()
+	if err := store.UpdateUser(*foundUser); err != nil {
 		slog.Error("Failed to save email verification",
 			"user_id", foundUserID,
 			"error", err,
@@ -743,10 +742,10 @@ func UpdateEmailSubscriptionHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Update subscription status
-	u := *user
-	u.EmailSubscribed = req.EmailSubscribed
-	u.UpdatedAt = time.Now()
-	if err := store.UpdateUser(u); err != nil{
+	user.EmailSubscribed = req.EmailSubscribed
+	user.EmailVerified = true
+	user.UpdatedAt = time.Now()
+	if err := store.UpdateUser(*user); err != nil{
 		slog.Error("Failed to save storage after subscription update",
 			"user_id", userID,
 			"error", err,
