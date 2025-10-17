@@ -500,6 +500,11 @@ func SyncHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		userTranx, err := store.GetUserTransactions(user.PhoneNumber)
+		if err != nil {
+			slog.Error("Failed to get user transactions", "user_id", user.ID, "error", err)
+		}
+
 		json.NewEncoder(w).Encode(store.Response{
 			Success: true,
 			Message: "Data retrieved successfully",
@@ -525,6 +530,7 @@ func SyncHandler(w http.ResponseWriter, r *http.Request) {
 				"email_verified":    user.EmailVerified,
 				"email_subscribed":  user.EmailSubscribed,
 				"request_count":     user.RequestCount,
+				"user_transactions": userTranx,
 			},
 		})
 

@@ -58,15 +58,15 @@ export type RequestCount ={
 }
 
 export interface Transaction {
-  ID: string;
+  id: string;
   ExternalReference?: string;
   MpesaReceiptNumber?: string;
   CheckoutRequestID?: string;
   MerchantRequestID?: string;
   Amount: number;
-  PhoneNumber: string;
+  Phone: string;
   ResultCode: number;
-  ResultDescription: string;
+  ResultDesc: string;
   Status: string;
   CreatedAt: Date;
   UpdatedAt: Date;

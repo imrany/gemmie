@@ -82,6 +82,19 @@ const profileData = reactive({
 const activeTab = ref<'profile' | 'account' | 'billing'>(tabParam ?? 'profile')
 const isSaving = ref(false)
 
+const isTogglingSync = ref(false)
+
+async function handleToggleSync() {
+  try {
+    isTogglingSync.value = true
+    await toggleSync()
+  } catch (error: any) {
+    console.error('Failed to toggle sync:', error)
+  } finally {
+    isTogglingSync.value = false
+  }
+}
+
 // Save profile changes - only sync to server if sync is enabled
 async function saveProfile() {
   if (!profileData.username.trim()) {
@@ -95,7 +108,7 @@ async function saveProfile() {
     // Update global state
     parsedUserDetails.value.username = profileData.username.trim()
     parsedUserDetails.value.workFunction = profileData.workFunction
-    parsedUserDetails.value.preferences = profileData.preferences   
+    parsedUserDetails.value.preferences = profileData.preferences
   } catch (error) {
     console.error('Failed to save profile:', error)
     toast.error('Failed to save profile changes')
@@ -131,12 +144,6 @@ watch(activeTab, (newVal, oldVal) => {
   }
   router.push({ name: 'settings', params: { tab: newVal } })
 })
-
-// Fix the watch function - watch the actual sync_enabled property
-watch(() => parsedUserDetails.value?.syncEnabled, (newVal) => {
-  parsedUserDetails.value.syncEnabled = newVal
-  // The toggleSync function will handle the UI updates
-}, { deep: true })
 
 // Lifecycle hooks
 onMounted(() => {
@@ -277,7 +284,7 @@ watch(isAuthenticated, (val) => {
                   <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <!-- Light Theme -->
                     <button type="button" @click="toggleTheme('light')"
-                      :class="parsedUserDetails?.theme=== 'light'
+                      :class="parsedUserDetails?.theme === 'light'
                         ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 ring-2 ring-blue-500 ring-opacity-50'
                         : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600'"
                       class="flex flex-col items-center p-4 border rounded-lg transition-all duration-200 group">
@@ -291,7 +298,7 @@ watch(isAuthenticated, (val) => {
 
                     <!-- Dark Theme -->
                     <button type="button" @click="toggleTheme('dark')"
-                      :class="parsedUserDetails?.theme=== 'dark'
+                      :class="parsedUserDetails?.theme === 'dark'
                         ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 ring-2 ring-blue-500 ring-opacity-50'
                         : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600'"
                       class="flex flex-col items-center p-4 border rounded-lg transition-all duration-200 group">
@@ -305,7 +312,7 @@ watch(isAuthenticated, (val) => {
 
                     <!-- System Theme -->
                     <button type="button" @click="toggleTheme('system')"
-                      :class="parsedUserDetails?.theme=== 'system'
+                      :class="parsedUserDetails?.theme === 'system'
                         ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 ring-2 ring-blue-500 ring-opacity-50'
                         : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600'"
                       class="flex flex-col items-center p-4 border rounded-lg transition-all duration-200 group">
@@ -330,7 +337,7 @@ watch(isAuthenticated, (val) => {
                     Theme Preference
                   </label>
                   <div class="flex gap-2 p-1 bg-gray-100 dark:bg-gray-700 rounded-lg w-fit">
-                    <button type="button" @click="toggleTheme('light')" :class="parsedUserDetails?.theme=== 'light'
+                    <button type="button" @click="toggleTheme('light')" :class="parsedUserDetails?.theme === 'light'
                       ? 'bg-white dark:bg-gray-600 text-blue-600 shadow-sm'
                       : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'"
                       class="flex items-center gap-2 px-4 py-2 rounded-md transition-all duration-200 text-sm font-medium">
@@ -338,7 +345,7 @@ watch(isAuthenticated, (val) => {
                       <span>Light</span>
                     </button>
 
-                    <button type="button" @click="toggleTheme('dark')" :class="parsedUserDetails?.theme=== 'dark'
+                    <button type="button" @click="toggleTheme('dark')" :class="parsedUserDetails?.theme === 'dark'
                       ? 'bg-white dark:bg-gray-600 text-blue-600 shadow-sm'
                       : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'"
                       class="flex items-center gap-2 px-4 py-2 rounded-md transition-all duration-200 text-sm font-medium">
@@ -346,7 +353,7 @@ watch(isAuthenticated, (val) => {
                       <span>Dark</span>
                     </button>
 
-                    <button type="button" @click="toggleTheme('system')" :class="parsedUserDetails?.theme=== 'system'
+                    <button type="button" @click="toggleTheme('system')" :class="parsedUserDetails?.theme === 'system'
                       ? 'bg-white dark:bg-gray-600 text-blue-600 shadow-sm'
                       : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'"
                       class="flex items-center gap-2 px-4 py-2 rounded-md transition-all duration-200 text-sm font-medium">
@@ -420,8 +427,8 @@ watch(isAuthenticated, (val) => {
                         'Data is only stored locally on this device' }}
                     </p>
                   </div>
-                  <button @click="() => toggleSync()"
-                    class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200"
+                  <button @click="handleToggleSync" :disabled="isTogglingSync"
+                    class="disabled:opacity-50 disabled:cursor-not-allowed relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200"
                     :class="parsedUserDetails?.syncEnabled ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'">
                     <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200"
                       :class="parsedUserDetails?.syncEnabled ? 'translate-x-6' : 'translate-x-1'" />
@@ -553,12 +560,126 @@ watch(isAuthenticated, (val) => {
                   </div>
                 </div>
 
-                <!-- Payment History (placeholder) -->
+                <!-- Replace the entire "Payment History (placeholder)" section in your settings component with this -->
+
+                <!-- Payment History -->
                 <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
                   <h3 class="font-medium text-gray-900 dark:text-white mb-3">Payment History</h3>
-                  <div class="text-center py-8">
+
+                  <!-- No Transactions -->
+                  <div v-if="!parsedUserDetails?.userTransactions || parsedUserDetails.userTransactions.length === 0"
+                    class="text-center py-8">
                     <i class="pi pi-history text-2xl text-gray-300 dark:text-gray-600 mb-2"></i>
                     <p class="text-sm text-gray-500 dark:text-gray-400">No payment history available</p>
+                  </div>
+
+                  <!-- Transactions List -->
+                  <div v-else class="space-y-3">
+                    <details v-for="transaction in parsedUserDetails.userTransactions" :key="transaction.id"
+                      class="border border-gray-200 dark:border-gray-700 rounded-lg p-2 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors cursor-pointer group">
+
+                      <!-- Summary (Always Visible) -->
+                      <summary class="flex items-start justify-between select-none font-medium">
+                        <div class="flex items-center gap-3 flex-1">
+                          <!-- Status Icon -->
+                          <div :class="transaction.Status === 'Success'
+                            ? 'bg-green-100 dark:bg-green-900/30'
+                            : transaction.Status === 'Pending'
+                              ? 'bg-yellow-100 dark:bg-yellow-900/30'
+                              : 'bg-red-100 dark:bg-red-900/30'"
+                            class="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0">
+                            <i :class="transaction.Status === 'Success'
+                              ? 'pi pi-check-circle text-green-600 dark:text-green-400'
+                              : transaction.Status === 'Pending'
+                                ? 'pi pi-clock text-yellow-600 dark:text-yellow-400'
+                                : 'pi pi-times-circle text-red-600 dark:text-red-400'"></i>
+                          </div>
+
+                          <!-- Transaction Info -->
+                          <div class="flex-1 min-w-0">
+                            <p class="text-sm text-gray-900 dark:text-white">
+                              Payment
+                              <span :class="transaction.Status === 'Success'
+                                ? 'text-green-600 dark:text-green-400'
+                                : transaction.Status === 'Pending'
+                                  ? 'text-yellow-600 dark:text-yellow-400'
+                                  : 'text-red-600 dark:text-red-400'" class="font-semibold">
+                                {{ transaction.Status }}
+                              </span>
+                            </p>
+                            <p class="text-xs text-gray-500 dark:text-gray-400">
+                              {{ new Date(transaction.CreatedAt).toLocaleString() }}
+                            </p>
+                          </div>
+                        </div>
+
+                        <!-- Amount -->
+                        <div class="text-right flex-shrink-0 ml-2">
+                          <p class="font-semibold text-gray-900 dark:text-white text-sm">
+                            KES {{ transaction.Amount }}
+                          </p>
+                        </div>
+                      </summary>
+
+                      <!-- Details (Collapsible) -->
+                      <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700 space-y-2">
+                        <!-- M-Pesa Receipt -->
+                        <div class="flex justify-between text-xs">
+                          <span class="text-gray-600 dark:text-gray-400">M-Pesa Receipt</span>
+                          <span class="font-mono text-gray-900 dark:text-white font-medium">
+                            {{ transaction.MpesaReceiptNumber }}
+                          </span>
+                        </div>
+
+                        <!-- Phone Number -->
+                        <div class="flex justify-between text-xs">
+                          <span class="text-gray-600 dark:text-gray-400">Phone Number</span>
+                          <span class="font-mono text-gray-900 dark:text-white font-medium">
+                            {{ transaction.Phone }}
+                          </span>
+                        </div>
+
+                        <!-- Checkout Request ID -->
+                        <div class="flex justify-between text-xs">
+                          <span class="text-gray-600 dark:text-gray-400">Checkout ID</span>
+                          <span class="font-mono text-gray-900 dark:text-white font-medium truncate max-w-[200px]">
+                            {{ transaction.CheckoutRequestID }}
+                          </span>
+                        </div>
+
+                        <!-- Merchant Request ID -->
+                        <div class="flex justify-between text-xs">
+                          <span class="text-gray-600 dark:text-gray-400">Merchant ID</span>
+                          <span class="font-mono text-gray-900 dark:text-white font-medium truncate max-w-[200px]">
+                            {{ transaction.MerchantRequestID }}
+                          </span>
+                        </div>
+
+                        <!-- External Reference -->
+                        <div class="flex justify-between text-xs">
+                          <span class="text-gray-600 dark:text-gray-400">Reference</span>
+                          <span class="font-mono text-gray-900 dark:text-white font-medium">
+                            {{ transaction.ExternalReference }}
+                          </span>
+                        </div>
+
+                        <!-- Result Description -->
+                        <div class="flex justify-between text-xs">
+                          <span class="text-gray-600 dark:text-gray-400">Result</span>
+                          <span class="text-gray-900 dark:text-white">
+                            {{ transaction.ResultDesc }}
+                          </span>
+                        </div>
+
+                        <!-- Updated Timestamp -->
+                        <div class="flex justify-between text-xs pt-2 border-t border-gray-200 dark:border-gray-700">
+                          <span class="text-gray-600 dark:text-gray-400">Updated</span>
+                          <span class="text-gray-900 dark:text-white">
+                            {{ new Date(transaction.UpdatedAt).toLocaleString() }}
+                          </span>
+                        </div>
+                      </div>
+                    </details>
                   </div>
                 </div>
 
@@ -573,7 +694,7 @@ watch(isAuthenticated, (val) => {
                     <div class="flex justify-between text-sm">
                       <span class="text-gray-600 dark:text-gray-400">Phone Number</span>
                       <span class="font-medium text-gray-900 dark:text-white">{{ parsedUserDetails.phoneNumber
-                        }}</span>
+                      }}</span>
                     </div>
                     <div class="flex justify-between text-sm">
                       <span class="text-gray-600 dark:text-gray-400">Currency</span>
