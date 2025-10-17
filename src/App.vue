@@ -1878,7 +1878,7 @@ async function toggleSync(newSyncValue?: boolean) {
             sync_enabled: targetSyncValue,
             chats: targetSyncValue ? JSON.stringify(chats.value) : "[]",
             link_previews: "{}",
-            current_chat_id: targetSyncValue ? currentChatId.value : ""
+            current_chat_id: targetSyncValue ? currentChatId.value : "",
           })
         })
         serverUpdateSuccess = true
@@ -1971,7 +1971,7 @@ function toggleTheme(newTheme?: Theme) {
     }
   }
 
-  localStorage.setItem('theme', currentTheme.value)
+  parsedUserDetails.value.theme = currentTheme.value
 
   const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
   if (currentTheme.value === 'dark' || (currentTheme.value === 'system' && prefersDark)) {
@@ -2382,7 +2382,7 @@ onMounted(async () => {
     console.log('App mounting...')
     
     // Theme setup
-    const savedTheme = localStorage.getItem('theme') || 'system'
+    const savedTheme = parsedUserDetails.value.theme || 'system'
     currentTheme.value = savedTheme
 
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
@@ -2396,7 +2396,7 @@ onMounted(async () => {
 
     // System theme listener
     systemThemeListener = (e: MediaQueryListEvent) => {
-      const currentTheme = localStorage.getItem('theme')
+      const currentTheme = parsedUserDetails.value.theme
       if (currentTheme === 'system' || !currentTheme) {
         isDarkMode.value = e.matches
         if (e.matches) {
