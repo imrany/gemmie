@@ -131,6 +131,7 @@ func UnsubscribeHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Update subscription status
 	var u store.User
+	u.ID = user.ID
 	u.EmailSubscribed = false
 	u.EmailVerified = true
 	u.UpdatedAt = time.Now()
@@ -372,6 +373,7 @@ func ResubscribeHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Update subscription status
 	var u store.User
+	u.ID = user.ID
 	u.EmailSubscribed = true
 	u.UpdatedAt = time.Now()
 	if err := store.UpdateUser(u); err != nil {
@@ -418,9 +420,6 @@ func ResubscribeHandler(w http.ResponseWriter, r *http.Request) {
 
 // VerifyEmailHandler verifies user's email with token
 func VerifyEmailHandler(w http.ResponseWriter, r *http.Request) {
-	// DON'T set Content-Type here
-	
-	// Support both GET (from email link) and POST (from API)
 	var token string
 	isGetRequest := r.Method == http.MethodGet
 
@@ -531,6 +530,7 @@ func VerifyEmailHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Mark email as verified
 	var u store.User
+	u.ID = foundUserID
 	u.EmailVerified = true
 	u.VerificationToken = "" // Clear token after use
 	u.UpdatedAt = time.Now()
@@ -747,6 +747,7 @@ func UpdateEmailSubscriptionHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Update subscription status
 	var u store.User
+	u.ID = user.ID
 	u.EmailSubscribed = req.EmailSubscribed
 	u.UpdatedAt = time.Now()
 	if err := store.UpdateUser(u); err != nil{
@@ -833,6 +834,7 @@ func SendVerificationEmailHandler(w http.ResponseWriter, r *http.Request, smtpCo
 
 	// Update user with token
 	var u store.User
+	u.ID = user.ID
 	u.VerificationToken = token
 	u.VerificationTokenExpiry = expiry
 	if err := store.UpdateUser(u); err != nil{
