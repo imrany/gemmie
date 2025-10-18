@@ -1,11 +1,35 @@
 <script lang="ts" setup>
 import type { Chat } from '@/types'
-import { ref, inject, computed, onMounted, onUnmounted, nextTick } from 'vue';
+import { ref, inject, computed, onMounted, onUnmounted, nextTick, type Ref } from 'vue';
 import { useRouter } from 'vue-router';
 import ChatDropdown from './Dropdowns/ChatDropdown.vue';
 import ProfileDropdown from './Dropdowns/ProfileDropdown.vue';
 
-const globalState = inject('globalState') as any;
+const globalState = inject('globalState') as {
+  currentChatId: Ref<string>,
+  activeChatMenu: Ref<string | null>,
+  toggleChatMenu: (chatId: string, evenet: Event) => void,
+  showProfileMenu: Ref<boolean>,
+  handleClickOutside: () => void,
+  isAuthenticated: Ref<boolean>,
+  planStatus: Ref<{
+    status: string, timeLeft: string, expiryDate: string, isExpired: boolean
+  }>,
+  syncStatus: Ref<{
+    lastSync: Date | null,
+    syncing: boolean,
+    hasUnsyncedChanges: boolean,
+    lastError: string | null,
+    retryCount: number,
+    maxRetries: number,
+    showSyncIndicator: boolean,
+    syncMessage: string,
+    syncProgress: number
+  }>,
+  hideSidebar: () => void,
+  isSidebarHidden: Ref<boolean>,
+  screenWidth: Ref<number>,
+};
 const {
   activeChatMenu,
   toggleChatMenu,
@@ -16,12 +40,13 @@ const {
   syncStatus,
   hideSidebar,
   isSidebarHidden,
+  screenWidth,
+  currentChatId
 } = globalState
 
 const props = defineProps<{
   data: {
     chats: Chat[]
-    currentChatId: string
     isCollapsed?: boolean
     parsedUserDetails: {
       username: string
@@ -30,7 +55,6 @@ const props = defineProps<{
       planName?: string,
       expiryTimestamp?: number
     }
-    screenWidth: number,
   }
   functions: {
     setShowInput: () => void
@@ -49,6 +73,7 @@ const router = useRouter()
 const isRenaming = ref<string | null>(null)
 const renameValue = ref('')
 const now = ref(Date.now())
+const hoveredChatId = ref<string | null>(null)
 
 let timer: number | null = null
 
@@ -61,7 +86,7 @@ onUnmounted(() => {
 })
 
 // Computed
-const showFullSidebar = computed(() => !props.data.isCollapsed || props.data.screenWidth < 720)
+const showFullSidebar = computed(() => !props.data.isCollapsed || screenWidth.value < 720)
 const planColor = computed(() => {
   if (planStatus.value.isExpired) return 'text-red-600 bg-red-50 dark:bg-red-900/20 dark:text-red-400'
   if (planStatus.value.status === 'no-plan') return 'text-gray-600 bg-gray-50'
@@ -70,13 +95,13 @@ const planColor = computed(() => {
 
 const sidebarIconClass = computed(() => {
   const classes = ['text-gray-500 dark:text-gray-400'];
-  
-  if (props.data.screenWidth > 720) {
+
+  if (screenWidth.value > 720) {
     classes.push(props.data.isCollapsed ? 'pi pi-align-justify' : 'pi pi-align-left');
   } else {
     classes.push('pi pi-times text-lg font-bold');
   }
-  
+
   return classes;
 });
 
@@ -107,7 +132,7 @@ function startRename(chatId: string, currentTitle: string) {
 
 function openWorkplace() {
   window.open('/workplace', '_blank')
-  if (props.data.screenWidth < 720) hideSidebar()
+  if (screenWidth.value < 720) hideSidebar()
 }
 
 function submitRename(chatId: string) {
@@ -127,16 +152,16 @@ function handleChatClick(chatId: string) {
   props.functions.switchToChat(chatId)
   props.functions.setShowInput()
   if (router.currentRoute.value.path !== '/') router.push('/')
-  if (props.data.screenWidth < 720) hideSidebar()
+  if (screenWidth.value < 720) hideSidebar()
 }
 
 function handleNavAction(action: () => void) {
   action()
-  if (props.data.screenWidth < 720) hideSidebar()
+  if (screenWidth.value < 720) hideSidebar()
 }
 
 const handleSidebarToggle = () => {
-  if (props.data.screenWidth > 720) {
+  if (screenWidth.value > 720) {
     props.functions.toggleSidebar();
   } else {
     hideSidebar();
@@ -146,43 +171,44 @@ const handleSidebarToggle = () => {
 
 <template>
   <div id="side_nav" :class="[
-      props.data.screenWidth > 720
-        ? props.data.isCollapsed
-          ? 'w-[60px] border-r z-40 fixed top-0 left-0 bottom-0 flex flex-col'
-          : 'w-[270px] border-r z-40 fixed top-0 left-0 bottom-0 flex flex-col'
-        : isSidebarHidden ? 'none' : 'w-full z-40 fixed top-0 left-0 bottom-0 flex flex-col',
-      'bg-gray-100 dark:bg-gray-800 dark:border-gray-700 transition-all duration-300 ease-in-out'
-    ]" @click="handleClickOutside">
+    screenWidth > 720
+      ? props.data.isCollapsed
+        ? 'w-[60px] border-r z-30 fixed top-0 left-0 bottom-0 flex flex-col'
+        : 'w-[270px] border-r z-30 fixed top-0 left-0 bottom-0 flex flex-col'
+      : isSidebarHidden ? 'w-0' : 'w-full z-40 fixed top-0 left-0 bottom-0 flex flex-col',
+    'bg-gray-100 dark:bg-gray-800 dark:border-gray-700 transition-all duration-300 ease-in-out'
+  ]" @click="handleClickOutside">
     <!-- Scrollable area -->
     <div class="flex-1 overflow-y-auto custom-scrollbar">
       <!-- Top Header -->
       <div class="flex items-center p-3">
-        <p v-if="showFullSidebar" class="text-gray-700 dark:text-gray-300 text-xl max-md:text-2xl font-semibold tracking-wide select-none">
+        <p v-if="showFullSidebar"
+          class="text-gray-700 dark:text-gray-300 text-xl max-md:text-2xl font-semibold tracking-wide select-none">
           Gemmie
         </p>
 
         <div class="flex ml-auto gap-2 items-center justify-center">
-          <div v-if="isAuthenticated&&props.data.screenWidth < 720" class="relative">
+          <div v-if="isAuthenticated && screenWidth < 720" class="relative">
             <div v-if="syncStatus.syncing"
               class="flex items-center gap-2 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 px-3 py-1.5 rounded-full text-xs border border-blue-200 dark:border-blue-800 shadow-sm animate-pulse">
               <i class="pi pi-spin pi-spinner"></i>
               <span>Syncing...</span>
             </div>
-  
+
             <div v-else-if="syncStatus.hasUnsyncedChanges"
               class="flex items-center gap-2 bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-400 px-3 py-1.5 rounded-full text-xs border border-orange-200 dark:border-orange-800 shadow-sm cursor-pointer hover:bg-orange-100 dark:hover:bg-orange-900/30 transition"
               @click="props.functions.manualSync">
               <i class="pi pi-cloud-upload"></i>
               <span>Sync pending</span>
             </div>
-  
+
             <div v-else-if="syncStatus.lastSync"
               class="flex items-center gap-2 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 px-3 py-1.5 rounded-full text-xs border border-green-200 dark:border-green-800 shadow-sm">
               <i class="pi pi-check-circle"></i>
               <span>Synced</span>
             </div>
           </div>
-  
+
           <button @click="handleSidebarToggle" title="Toggle Sidebar"
             class="w-8 h-8 flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full cursor-pointer transition-colors">
             <i :class="sidebarIconClass"></i>
@@ -199,14 +225,14 @@ const handleSidebarToggle = () => {
           <span v-if="showFullSidebar" class="dark:text-gray-200">New Chat</span>
         </button>
 
-        <button @click="handleNavAction(() => router.push('/new'))" title="Recent Chats"
+        <button @click="handleNavAction(() => router.push('/chats'))" title="Recent Chats"
           class="w-full font-normal flex items-center gap-2 h-[40px] hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg px-2 transition-colors">
           <i class="pi pi-comments text-gray-500 dark:text-gray-400"></i>
           <span v-if="showFullSidebar" class="dark:text-gray-200">Chats</span>
         </button>
 
         <div v-if="isAuthenticated">
-          <button v-if="props.data.screenWidth > 720" @click="openWorkplace" title="Workplace"
+          <button v-if="screenWidth > 720" @click="openWorkplace" title="Workplace"
             class="w-full font-normal flex items-center gap-2 h-[40px] hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg px-2 transition-colors">
             <i class="pi pi-pencil text-gray-500 dark:text-gray-400"></i>
             <span v-if="showFullSidebar" class="dark:text-gray-200">Workplace</span>
@@ -234,12 +260,13 @@ const handleSidebarToggle = () => {
         class="flex flex-col px-2 mb-2 py-4">
         <p class="text-sm text-gray-600 dark:text-gray-400 mb-2">Chats</p>
         <div class="flex flex-col gap-2">
-          <div v-for="chat in props.data.chats" :key="chat.id" :class="[
-            'w-full flex h-[32px] max-md:h-[36px] text-sm items-center rounded-lg relative transition-colors',
-            chat.id === props.data.currentChatId
-              ? 'bg-gray-300 dark:bg-gray-700'
-              : 'hover:bg-gray-100 dark:hover:bg-gray-800'
-          ]">
+          <div v-for="chat in props.data.chats" :key="chat.id" @mouseover="hoveredChatId = chat.id"
+            @mouseleave="hoveredChatId = null" :class="[
+              'w-full flex h-[32px] max-md:h-[36px] text-sm items-center rounded-lg relative transition-colors',
+              chat.id === currentChatId
+                ? 'bg-gray-300 dark:bg-gray-700'
+                : 'hover:bg-gray-300 dark:hover:bg-gray-700'
+            ]">
             <!-- Chat content area -->
             <div @click="() => handleChatClick(chat.id)"
               class="flex max-md:text-lg items-center h-full flex-grow px-2 cursor-pointer relative">
@@ -254,12 +281,20 @@ const handleSidebarToggle = () => {
             </div>
 
             <!-- Menu button -->
-            <div v-if="showFullSidebar" @click="toggleChatMenu(chat.id, $event)"
-              class="flex items-center justify-center h-full hover:bg-blue-600 hover:text-white dark:hover:bg-blue-500 rounded-r-lg flex-shrink px-3 cursor-pointer transition-colors">
-              <i class="pi pi-ellipsis-h dark:text-gray-300"></i>
+            <div v-if="showFullSidebar && (currentChatId === chat.id || hoveredChatId === chat.id)"
+              @click="toggleChatMenu(chat.id, $event)"
+              class="flex items-center justify-center h-full pr-1 rounded-r-lg flex-shrink cursor-pointer transition-colors">
+              <div
+                :class="[hoveredChatId === chat.id?
+                ' text-white bg-gray-500 dark:bg-gray-900'
+                :'bg-transparent',
+                'rounded-md text-center p-1 w-6 h-6 flex items-center justify-center'
+              ]">
+                <i class="pi pi-ellipsis-h dark:text-gray-300 text-xs"></i>
+              </div>
             </div>
 
-            <ChatDropdown :data="{ activeChatMenu, chat, screenWidth: props.data.screenWidth }"
+            <ChatDropdown :data="{ activeChatMenu, chat, screenWidth }"
               :functions="{ deleteChat: props.functions.deleteChat, startRename, hideSidebar }" />
           </div>
         </div>
@@ -268,7 +303,9 @@ const handleSidebarToggle = () => {
 
     <!-- Fixed Bottom User Profile -->
     <div :class="[
-      showFullSidebar ? 'border-t' : '',
+      screenWidth > 720
+        ? (showFullSidebar ? 'border-t' : '')
+        : isSidebarHidden ? 'none' : '',
       'border-gray-200 dark:border-gray-700 p-3 sticky bottom-0 bg-gray-100 dark:bg-gray-800'
     ]">
       <!-- Plan Status -->
@@ -281,8 +318,12 @@ const handleSidebarToggle = () => {
       </div>
 
       <!-- Profile -->
-      <div class="flex items-center justify-between cursor-pointer mr-1"
-        @click.stop="showProfileMenu = !showProfileMenu">
+      <div class="flex items-center justify-between cursor-pointer mr-1" @click.stop="() => {
+        if (props.data.isCollapsed && screenWidth > 720) {
+          handleSidebarToggle()
+        }
+        showProfileMenu = !showProfileMenu
+      }">
         <div class="flex items-center gap-2">
           <div
             class="w-[35px] h-[35px] flex justify-center items-center bg-gray-300 dark:bg-gray-700 rounded-full relative">

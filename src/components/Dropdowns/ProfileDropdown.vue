@@ -33,7 +33,7 @@ const props = defineProps<{
     <transition name="fade">
         <div v-if="props.data.showProfileMenu"
             class="absolute max-w-[245px] max-md:text-base bottom-full left-3 right-3 mb-2 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-lg shadow-lg text-sm z-50"
-            @click.stop>
+        >
             <div class="px-4 py-2 border-b dark:border-gray-700">
                 <p class="text-gray-500 dark:text-gray-400">
                     {{ parsedUserDetails.email || 'No email' }}

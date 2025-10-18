@@ -2528,9 +2528,7 @@ onUnmounted(() => {
     <!-- Sidebar -->
     <SideNav v-if="isAuthenticated" :data="{
       chats,
-      currentChatId,
       parsedUserDetails,
-      screenWidth,
       isCollapsed,
     }" :functions="{
       setShowInput,
@@ -2558,7 +2556,6 @@ onUnmounted(() => {
         <TopNav v-if="isAuthenticated" :data="{
           currentChat,
           parsedUserDetails,
-          screenWidth,
           isCollapsed,
         }" :functions="{
           manualSync,
@@ -2599,7 +2596,7 @@ onUnmounted(() => {
             <img :src="parsedUserDetails?.theme=== 'dark' || (parsedUserDetails?.theme=== 'system' && isDarkMode) ?
               '/logo-light.svg' : '/logo.svg'" alt="Gemmie Logo" class="w-[60px] h-[60px] rounded-md" />
 
-            <p class="text-3xl text-black dark:text-white font-semibold">{{ parsedUserDetails?.username || 'Gemmie' }}
+            <p class="text-gray-700 dark:text-gray-300 text-3xl font-semibold">{{ parsedUserDetails?.username || 'Gemmie' }}
             </p>
             <div class="text-center max-w-md space-y-2">
               <p class="text-gray-600 dark:text-gray-400 leading-relaxed">
