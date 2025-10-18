@@ -19,7 +19,8 @@ const props = defineProps<{
     <!-- Chat Dropdown Menu -->
     <transition name="fade">
         <div v-if="props.data.activeChatMenu === props.data.chat?.id"
-            class="absolute top-8 right-0 bg-white border rounded-lg shadow-lg text-sm z-50 min-w-[120px]  max-md:min-w-[200px] dark:bg-gray-800 dark:border-gray-700 dark:shadow-md" @click.stop>
+            class="absolute top-8 right-0 bg-white border rounded-lg shadow-lg text-sm z-50 min-w-[120px]  max-md:min-w-[200px] dark:bg-gray-800 dark:border-gray-700 dark:shadow-md" 
+        >
             <button 
                 @click="()=>{
                     if(props.functions.startRename&&props.data.chat){
@@ -35,7 +36,7 @@ const props = defineProps<{
                 props.data.activeChatMenu = null; 
                 if (props.data.screenWidth < 720) props.functions.hideSidebar()
             }"
-                class="w-full flex items-center gap-2 text-left px-3 py-2 text-red-600 hover:bg-red-100 rounded-b-lg dark:text-red-500 dark:hover:bg-red-900">
+                class="w-full flex items-center gap-2 text-left px-3 py-2 text-red-600 hover:bg-red-100 rounded-b-lg dark:text-red-200 dark:hover:bg-red-900">
                 <i class="pi pi-trash text-xs max-md:text-base"></i>
                 <span class="max-md:text-base">Delete</span>
             </button>

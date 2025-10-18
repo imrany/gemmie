@@ -4,6 +4,7 @@ import DeleteAccView from '../views/DeleteAccView.vue'
 import UpgradeView from '@/views/UpgradeView.vue'
 import SettingsView from '@/views/SettingsView.vue'
 import WorkplaceView from '@/views/WorkplaceView.vue'
+import ChatsView from '@/views/ChatsView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -17,6 +18,11 @@ const router = createRouter({
       path: '/new',
       name: 'new_chat',
       component: HomeView
+    },
+    {
+      path: '/chats',
+      name: 'chats',
+      component: ChatsView
     },
     {
       path: '/workplace',

@@ -170,9 +170,7 @@ watch(isAuthenticated, (val) => {
     <!-- Sidebar -->
     <SideNav v-if="isAuthenticated" :data="{
       chats,
-      currentChatId,
       parsedUserDetails,
-      screenWidth,
       isCollapsed,
     }" :functions="{
       setShowInput,
