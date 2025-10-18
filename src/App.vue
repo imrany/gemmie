@@ -1,5 +1,4 @@
-fix this 
-<script setup lang="ts">
+ <script setup lang="ts">
 import { computed, onMounted, onUnmounted, provide, ref, watch, type ComputedRef } from 'vue';
 import { toast, Toaster } from 'vue-sonner'
 import 'vue-sonner/style.css'
@@ -9,6 +8,7 @@ import { nextTick } from 'vue';
 import { detectAndProcessVideo } from './utils/videoProcessing';
 import ConfirmDialog from './components/ConfirmDialog.vue';
 import type { Theme } from 'vue-sonner/src/packages/types.js';
+import UpdateModal from './components/Modals/UpdateModal.vue';
 
 const isUserOnline = ref(navigator.onLine)
 const connectionStatus = ref<'online' | 'offline' | 'checking'>('online')
@@ -57,7 +57,6 @@ const syncStatus = ref({
   syncMessage: '',
   syncProgress: 0
 })
-
 
 const currentChat: ComputedRef<CurrentChat | undefined> = computed(() => {
   return chats.value.find(chat => chat.id === currentChatId.value)
@@ -215,7 +214,7 @@ const userPlanStatus = computed(() => {
   return { status: 'active', isExpired: false }
 })
 
-// Single computed property to determine if user has limits
+// computed property to determine if user has limits
 const userHasRequestLimits = computed(() => {
   if (!parsedUserDetails.value) return true
   
@@ -696,16 +695,7 @@ function handleScroll() {
 
 function hideSidebar() {
   try {
-    const sideNav = document.getElementById("side_nav")
-    if (sideNav) {
-      if (sideNav.classList.contains("none")) {
-        sideNav.classList.add("w-full", "bg-white", "z-30", "fixed", "top-0", "left-0", "bottom-0", "border-r-[1px]", "flex", "flex-col", "transition-all", "duration-300", "ease-in-out")
-      } else {
-        sideNav.classList.remove("w-full", "bg-white", "z-30", "fixed", "top-0", "left-0", "bottom-0", "border-r-[1px]", "flex", "flex-col", "transition-all", "duration-300", "ease-in-out")
-      }
-      sideNav.classList.toggle("none")
-      isSidebarHidden.value = !isSidebarHidden.value
-    }
+    isSidebarHidden.value = !isSidebarHidden.value
   } catch (error) {
     console.error('Error toggling sidebar:', error)
   }
@@ -2545,7 +2535,6 @@ onMounted(async () => {
   }
 })
 
-// Single onUnmounted hook at the top level
 onUnmounted(() => {
   // Clean up event listeners
   if (handleResize) {
@@ -2694,6 +2683,7 @@ provide("globalState", globalState)
   <div @click="handleClickOutside">
     <Toaster position="top-right" :closeButton="true" closeButtonPosition="top-left" :theme="parsedUserDetails?parsedUserDetails.theme : 'system'" />
     <ConfirmDialog v-if="confirmDialog.visible" :confirmDialog="confirmDialog" />
+    <UpdateModal/>
     <RouterView />
   </div>
 </template>
