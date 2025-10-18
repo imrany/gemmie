@@ -36,7 +36,6 @@ const globalState = inject('globalState') as {
   screenWidth: Ref<number>,
   confirmDialog: Ref<ConfirmDialogOptions>,
   isCollapsed: Ref<boolean>,
-  isSidebarHidden: Ref<boolean>,
   authData: Ref<{ username: string; email: string; password: string; agreeToTerms: boolean; }>,
   syncStatus: Ref<{
     lastSync: Date | null;
@@ -65,7 +64,6 @@ const globalState = inject('globalState') as {
   expanded: Ref<boolean[]>,
   showInput: Ref<boolean>,
   showConfirmDialog: (options: ConfirmDialogOptions) => void,
-  hideSidebar: () => void,
   setShowInput: () => void,
   clearAllChats: () => void,
   switchToChat: (chatId: string) => void,
@@ -126,7 +124,6 @@ const {
   screenWidth,
   confirmDialog,
   isCollapsed,
-  isSidebarHidden,
   authData,
   syncStatus,
   isAuthenticated,
@@ -145,7 +142,6 @@ const {
   cancelAllRequests,
   cancelChatRequests,
   checkRequestLimitBeforeSubmit,
-  hideSidebar,
   setShowInput,
   clearAllChats,
   switchToChat,
@@ -2538,7 +2534,6 @@ onUnmounted(() => {
       isCollapsed,
     }" :functions="{
       setShowInput,
-      hideSidebar,
       clearAllChats,
       toggleSidebar,
       logout,
@@ -2565,9 +2560,7 @@ onUnmounted(() => {
           parsedUserDetails,
           screenWidth,
           isCollapsed,
-          isSidebarHidden,
         }" :functions="{
-          hideSidebar,
           manualSync,
         }" />
         <!-- Empty State -->
@@ -2586,7 +2579,6 @@ onUnmounted(() => {
         }" :functions="{
           validateCurrentStep,
           setShowInput,
-          hideSidebar,
           clearAllChats,
           toggleSidebar,
           logout,

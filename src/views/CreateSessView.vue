@@ -170,7 +170,6 @@ const props = defineProps<{
   functions:{
     validateCurrentStep: () => boolean,
     setShowInput: () => void
-    hideSidebar: () => void
     clearAllChats: () => void
     toggleSidebar: () => void
     logout: () => void

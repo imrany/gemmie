@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'v0.7.7';
+const CACHE_VERSION = 'v0.8.1'; 
 const staticCacheName = `site-static-${CACHE_VERSION}`;
 const dynamicCache = `site-dynamic-${CACHE_VERSION}`;
 
@@ -12,7 +12,8 @@ const assets = [
 
 // Installing service worker
 self.addEventListener('install', (evt) => {
-  console.log('Service Worker installing...');
+  console.log('Service Worker installing... Version:', CACHE_VERSION);
+  
   evt.waitUntil(
     caches.open(staticCacheName)
       .then((cache) => {
@@ -21,7 +22,9 @@ self.addEventListener('install', (evt) => {
       })
       .then(() => {
         console.log('Assets cached successfully');
-        return self.skipWaiting(); // Forces the waiting service worker to become active
+        // DON'T call self.skipWaiting() here
+        // This keeps the new service worker in "waiting" state
+        // until the user approves the update
       })
       .catch((error) => {
         console.error('Failed to cache assets:', error);
@@ -31,7 +34,7 @@ self.addEventListener('install', (evt) => {
 
 // Activating service worker
 self.addEventListener('activate', (evt) => {
-  console.log('Service Worker activating...');
+  console.log('Service Worker activating... Version:', CACHE_VERSION);
   evt.waitUntil(
     caches.keys().then((keys) => {
       // Only delete caches that don't match current version
@@ -50,7 +53,7 @@ self.addEventListener('activate', (evt) => {
   );
 });
 
-// Improved cache limit function with async/await
+// cache limit function with async/await
 const limitCacheSize = async (name, size) => {
   try {
     const cache = await caches.open(name);
@@ -91,7 +94,7 @@ const shouldCacheRequest = (url) => {
   return true;
 };
 
-// Enhanced fetch event with better caching strategies
+// fetch event with better caching strategies
 self.addEventListener('fetch', (evt) => {
   // Skip non-HTTP requests and extension requests
   if (!evt.request.url.startsWith('http') || evt.request.url.includes('extension://')) {
@@ -151,7 +154,7 @@ self.addEventListener('fetch', (evt) => {
   );
 });
 
-// Enhanced push notification handler
+// push notification handler
 self.addEventListener("push", event => {
   console.log("Push event received:", event);
   const data = event.data.json();
@@ -160,7 +163,6 @@ self.addEventListener("push", event => {
     body: data.body,
     icon: data.icon || '/favicon.svg',
     badge: data.badge || '/logo.svg',
-    // Enable sound
     silent: false,
     data: { link: data.url }
   }
@@ -207,8 +209,11 @@ self.addEventListener('sync', (event) => {
 });
 
 // Handle service worker updates
+// This is called when user clicks "Update Now"
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
+    console.log('Received SKIP_WAITING message - user approved update, activating now');
+    // This makes the waiting service worker become the active one
     self.skipWaiting();
   }
 });
