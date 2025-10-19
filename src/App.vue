@@ -674,20 +674,18 @@ function scrollToLastMessage() {
   if (!scrollableElem.value) return
   
   nextTick(() => {
-    setTimeout(() => {
-      const messages = scrollableElem.value?.querySelectorAll('.chat-message')
-      if (messages && messages.length > 0) {
-        const lastMessage = messages[messages.length - 2] as HTMLElement // Get user's prompt (second to last)
-        if (lastMessage) {
-          // Scroll so the last message pair starts at the top with some padding
-          const offsetTop = lastMessage.offsetTop - 10 // 10px padding from top
-          scrollableElem.value?.scrollTo({
-            top: offsetTop,
-            behavior: 'smooth'
-          })
-        }
+    const messages = scrollableElem.value?.querySelectorAll('.chat-message')
+    if (messages && messages.length > 0) {
+      const lastMessage = messages[messages.length - 2] as HTMLElement // Get user's prompt (second to last)
+      if (lastMessage) {
+        // Scroll so the last message pair starts at the top with some padding
+        const offsetTop = lastMessage.offsetTop - 10 // 10px padding from top
+        scrollableElem.value?.scrollTo({
+          top: offsetTop,
+          behavior: 'smooth'
+        })
       }
-    }, 100)
+    }
   })
 }
 
@@ -776,12 +774,16 @@ function loadChatDrafts() {
       const currentDraft = chatDrafts.value.get(currentChatId.value) || ''
       const currentPastePreview = pastePreviews.value.get(currentChatId.value)
 
+      let shouldFocus = false
+
       if (currentPastePreview && currentPastePreview.show) {
         const textarea = document.getElementById('prompt') as HTMLTextAreaElement
         if (textarea) {
           const draftWithoutPaste = currentDraft.replace(currentPastePreview.content, '')
           textarea.value = draftWithoutPaste
           autoGrow({ target: textarea } as any)
+          shouldFocus = true
+          console.log('📝 Focus: Paste preview detected')
         }
       } else if (currentDraft && detectLargePaste(currentDraft)) {
         const wordCount = currentDraft.trim().split(/\s+/).filter(word => word.length > 0).length
@@ -798,14 +800,41 @@ function loadChatDrafts() {
         if (textarea) {
           textarea.value = ''
           autoGrow({ target: textarea } as any)
+          shouldFocus = true
+          console.log('📝 Focus: Large paste detected and converted to preview')
         }
-      } else {
+      } else if (currentDraft.trim()) {
         const textarea = document.getElementById('prompt') as HTMLTextAreaElement
         if (textarea) {
           textarea.value = currentDraft
           autoGrow({ target: textarea } as any)
+          shouldFocus = true
+          console.log('📝 Focus: Draft content detected')
         }
         pastePreviews.value.delete(currentChatId.value)
+      } else {
+        const textarea = document.getElementById('prompt') as HTMLTextAreaElement
+        if (textarea) {
+          textarea.value = ''
+          autoGrow({ target: textarea } as any)
+          // Don't focus on empty drafts
+          console.log('📝 No focus: Empty draft')
+        }
+        pastePreviews.value.delete(currentChatId.value)
+      }
+
+      // Focus the textarea if we have content to work with
+      if (shouldFocus) {
+        nextTick(() => {
+          const textarea = document.getElementById('prompt') as HTMLTextAreaElement
+          if (textarea) {
+            // Small delay to ensure DOM is updated
+            setTimeout(() => {
+              textarea.focus()
+              console.log('🎯 Textarea focused due to draft/preview content')
+            }, 100)
+          }
+        })
       }
     }
   } catch (error) {
@@ -898,14 +927,9 @@ function switchToChat(chatId: string) {
     nextTick(() => {
       loadChatDrafts()
 
-      const textarea = document.getElementById('prompt') as HTMLTextAreaElement
-      if (textarea) {
-        textarea.focus()
-      }
-
       setTimeout(() => {
         scrollToLastMessage()
-      }, 100)
+      }, 2000)
     })
   } catch (error) {
     console.error('Error switching to chat:', error)
