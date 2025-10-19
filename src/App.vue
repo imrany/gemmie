@@ -484,11 +484,6 @@ function deleteChat(chatId: string) {
               performSmartSync()
             }, 1000)
           }
-
-          toast.success('Chat deleted', {
-            duration: 3000,
-            description: 'Chat has been removed successfully.'
-          })
         } catch (error) {
           console.error('Error deleting chat:', error)
           toast.error('Failed to delete chat')
@@ -926,10 +921,7 @@ function switchToChat(chatId: string) {
 
     nextTick(() => {
       loadChatDrafts()
-
-      setTimeout(() => {
-        scrollToLastMessage()
-      }, 2000)
+      // scrollToLastMessage()
     })
   } catch (error) {
     console.error('Error switching to chat:', error)
@@ -1056,11 +1048,6 @@ function deleteMessage(messageIndex: number) {
               performSmartSync()
             }, 1000)
           }
-
-          toast.success('Message deleted', {
-            duration: 3000,
-            description: 'Message has been removed successfully.'
-          })
         } catch (error) {
           console.error('Error deleting message:', error)
           toast.error('Failed to delete message')
@@ -1103,8 +1090,6 @@ function renameChat(chatId: string, newTitle: string) {
         performSmartSync()
       }, 1000)
     }
-
-    toast.success('Chat renamed successfully')
   } catch (error) {
     console.error('Error renaming chat:', error)
     toast.error('Failed to rename chat')
