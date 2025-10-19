@@ -55,17 +55,7 @@ let props = defineProps<{
         Gemmie
       </p>
 
-
-      <!-- Mobile Sidebar Toggle -->
-      <div v-if="screenWidth < 720" class="flex gap-2 items-center ml-auto">
-        <button @click="hideSidebar"  title="Toggle Sidebar"
-          class="w-9 h-9 flex items-center justify-center text-lg hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full cursor-pointer transition-colors">
-          <span class="pi pi-bars text-lg text-gray-700 dark:text-gray-300"></span>
-        </button>
-      </div>
-
-      <!-- Desktop Actions -->
-      <div v-else class="flex gap-3 items-center ml-auto">
+      <div class="flex gap-3 items-center ml-auto">
         <!-- Sync Status -->
         <div v-if="isAuthenticated" class="relative">
           <div v-if="syncStatus.syncing"
@@ -86,6 +76,14 @@ let props = defineProps<{
             <i class="pi pi-check-circle"></i>
             <span>Synced</span>
           </div>
+        </div>
+
+        <!-- Mobile Sidebar Toggle -->
+        <div v-if="screenWidth < 720" class="flex gap-2 items-center ml-auto">
+          <button @click="hideSidebar"  title="Toggle Sidebar"
+            class="w-9 h-9 flex items-center justify-center text-lg hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full cursor-pointer transition-colors">
+            <span class="pi pi-bars text-lg text-gray-700 dark:text-gray-300"></span>
+          </button>
         </div>
       </div>
     </div>

@@ -15,7 +15,6 @@ const {
     createNewChat,
     deleteChat,
     setShowInput,
-    hideSidebar,
     clearAllChats,
     toggleSidebar,
     logout,
@@ -31,7 +30,6 @@ const {
     createNewChat: (initialMessage?: string) => string,
     deleteChat: (chatId: string) => void,
     setShowInput: () => void,
-    hideSidebar: () => void,
     clearAllChats: () => void,
     toggleSidebar: () => void,
     logout: () => void,
@@ -61,13 +59,11 @@ const filteredChats = computed(() => {
 const handleChatClick = (chatId: string) => {
     switchToChat(chatId);
     setShowInput();
-    if (screenWidth.value < 720) hideSidebar();
     router.push('/');
 };
 
 const handleNewChat = () => {
     createNewChat();
-    if (screenWidth.value < 720) hideSidebar();
     router.push('/new');
 };
 
