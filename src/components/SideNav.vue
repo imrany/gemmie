@@ -170,12 +170,26 @@ const handleSidebarToggle = () => {
 
 <template>
   <div id="side_nav" :class="[
+    // Mobile styles
+    screenWidth <= 720
+      ? isSidebarHidden
+        ? 'w-0 opacity-0 -translate-x-full'
+        : 'w-full opacity-100 translate-x-0'
+      : '',
+
+    // Desktop styles  
     screenWidth > 720
       ? props.data.isCollapsed
-        ? 'w-[60px] border-r z-30 fixed top-0 left-0 bottom-0 flex flex-col'
-        : 'w-[270px] border-r z-30 fixed top-0 left-0 bottom-0 flex flex-col'
-      : isSidebarHidden ? 'w-0 z-40' : 'w-full z-40 fixed top-0 left-0 bottom-0 flex flex-col',
-    'bg-gray-100 dark:bg-gray-800 dark:border-gray-700 transition-all duration-300 ease-in-out'
+        ? 'w-[60px]'
+        : 'w-[270px]'
+      : '',
+
+    // Base styles
+    'border-r z-40 fixed top-0 left-0 bottom-0 flex flex-col',
+    'bg-gray-100 dark:bg-gray-800 dark:border-gray-700',
+
+    // Animation classes
+    'transition-all duration-300 ease-in-out transform'
   ]" @click="handleClickOutside">
     <!-- Scrollable area -->
     <div class="flex-1 overflow-y-auto custom-scrollbar">
@@ -283,10 +297,9 @@ const handleSidebarToggle = () => {
             <div v-if="showFullSidebar && (currentChatId === chat.id || hoveredChatId === chat.id)"
               @click="toggleChatMenu(chat.id, $event)"
               class="flex items-center justify-center h-full pr-1 rounded-r-lg flex-shrink cursor-pointer transition-colors">
-              <div
-                :class="[hoveredChatId === chat.id?
+              <div :class="[hoveredChatId === chat.id ?
                 ' text-white bg-gray-500 dark:bg-gray-900'
-                :'bg-transparent',
+                : 'bg-transparent',
                 'rounded-md text-center p-1 w-6 h-6 flex items-center justify-center'
               ]">
                 <i class="pi pi-ellipsis-h dark:text-gray-300 text-xs"></i>
