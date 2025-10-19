@@ -670,6 +670,27 @@ function scrollToBottom(behavior: ScrollBehavior = 'smooth') {
   }
 }
 
+function scrollToLastMessage() {
+  if (!scrollableElem.value) return
+  
+  nextTick(() => {
+    setTimeout(() => {
+      const messages = scrollableElem.value?.querySelectorAll('.chat-message')
+      if (messages && messages.length > 0) {
+        const lastMessage = messages[messages.length - 2] as HTMLElement // Get user's prompt (second to last)
+        if (lastMessage) {
+          // Scroll so the last message pair starts at the top with some padding
+          const offsetTop = lastMessage.offsetTop - 10 // 10px padding from top
+          scrollableElem.value?.scrollTo({
+            top: offsetTop,
+            behavior: 'smooth'
+          })
+        }
+      }
+    }, 100)
+  })
+}
+
 function handleScroll() {
   try {
     const elem = scrollableElem.value;
@@ -883,7 +904,7 @@ function switchToChat(chatId: string) {
       }
 
       setTimeout(() => {
-        scrollToBottom()
+        scrollToLastMessage()
       }, 100)
     })
   } catch (error) {
@@ -2285,7 +2306,7 @@ watch(() => parsedUserDetails.value, (newUserDetails) => {
         console.log('Sync conflict - changes saved locally, will retry')
       }
     }
-  }, 1500) // Reduced debounce time for better responsiveness
+  }, 1500) 
 }, { deep: true, immediate: false })
 
 function hasUserDetailsChangedMeaningfully(newDetails: any, oldDetails: any): boolean {
@@ -2339,7 +2360,7 @@ watch(() => chats.value, (newChats, oldChats) => {
           console.error('Sync from chat changes failed:', error);
         });
       }
-    }, 5000); // Increased to 5 seconds
+    }, 1500); // Increased to 1.5 seconds
   }
 }, { deep: true, immediate: false });
 
@@ -2371,6 +2392,34 @@ function hasChatsChangedMeaningfully(newChats: Chat[], oldChats: Chat[]): boolea
 
   return false
 }
+
+// Add this watch function to sync currentChatId changes
+watch(() => currentChatId.value, (newChatId, oldChatId) => {
+  if (!isAuthenticated.value || !parsedUserDetails.value?.syncEnabled) {
+    return
+  }
+
+  if (newChatId && newChatId !== oldChatId) {
+    console.log('🔄 Current chat ID changed, marking for sync')
+    
+    // Mark as having unsynced changes
+    syncStatus.value.hasUnsyncedChanges = true
+    
+    // Debounced sync
+    if (chatsDebounceTimer) {
+      clearTimeout(chatsDebounceTimer)
+    }
+    
+    chatsDebounceTimer = setTimeout(() => {
+      if (syncStatus.value.hasUnsyncedChanges && !syncStatus.value.syncing) {
+        console.log('🔄 Triggering sync from current chat ID change')
+        performSmartSync().catch(error => {
+          console.error('Sync from current chat ID change failed:', error)
+        })
+      }
+    }, 500) // 0.5 second debounce
+  }
+}, { immediate: false, deep: true })
 
 function applyTheme(theme: Theme) {
   const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
@@ -2649,6 +2698,7 @@ const globalState = {
   handleClickOutside,
   autoGrow,
   performSmartSync,
+  scrollToLastMessage,
 
   // Sync UI functions
   showSyncIndicator,
