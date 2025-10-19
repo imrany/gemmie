@@ -150,7 +150,6 @@ function cancelRename() {
 
 function handleChatClick(chatId: string) {
   props.functions.switchToChat(chatId)
-  props.functions.setShowInput()
   if (router.currentRoute.value.path !== '/') router.push('/')
   if (screenWidth.value < 720) hideSidebar()
 }

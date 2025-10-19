@@ -1444,7 +1444,7 @@ const scrollButtonPosition = computed(() => {
 const scrollContainerPadding = computed(() => {
   if (isLoading.value) {
     return 'pb-[calc(100vh-100px)]'
-  }else if ((isRequestLimitExceeded.value || shouldShowUpgradePrompt.value) && pastePreview.value?.show) {
+  } else if ((isRequestLimitExceeded.value || shouldShowUpgradePrompt.value) && pastePreview.value?.show) {
     return 'pb-[200px] sm:pb-[190px]'
   } else if (isRequestLimitExceeded.value || shouldShowUpgradePrompt.value) {
     return 'pb-[190px] sm:pb-[200px]'
@@ -2324,226 +2324,213 @@ onBeforeUnmount(() => {
 
 // Consolidated onMounted hook for better organization
 onMounted(() => {
+  // Handle /new route redirect first
   if (route.path === "/new") {
     createNewChat()
     setShowInput()
     router.replace("/")
+    return // Early return since we're redirecting
   }
 
-  // 1. Load basic state
-  const saved = localStorage.getItem("isCollapsed");
+  // 1. Load basic state (combined operations)
+  const saved = localStorage.getItem("isCollapsed")
   if (saved && saved !== "null") {
     try {
-      isCollapsed.value = JSON.parse(saved);
+      isCollapsed.value = JSON.parse(saved)
     } catch (err) {
-      console.error("Error parsing isCollapsed:", err);
+      console.error("Error parsing isCollapsed:", err)
     }
   }
 
-  const savedChatId = localStorage.getItem("currentChatId");
-  if (savedChatId) currentChatId.value = savedChatId;
+  const savedChatId = localStorage.getItem("currentChatId")
+  if (savedChatId) currentChatId.value = savedChatId
 
-  // 2. Load cached previews
-  loadLinkPreviewCache();
+  // 2. Load cached data and setup handlers
+  loadLinkPreviewCache()
+  setupPastePreviewHandlers()
 
-  // 3. Setup paste preview handlers
-  setupPastePreviewHandlers();
-
-  // 4. Make functions globally available with error boundaries
+  // 3. Setup global functions with unified approach
   if (typeof window !== 'undefined') {
-    const safeGlobalFunction = (fn: Function, name: string) => {
-      return (...args: any[]) => {
+    const setupGlobalFunction = (name: string, fn: Function) => {
+      (window as any)[name] = (...args: any[]) => {
         try {
-          return fn.apply(this, args);
+          return fn(...args)
         } catch (error) {
-          console.error(`Error in ${name}:`, error);
+          console.error(`Error in ${name}:`, error)
           toast.error(`Error in ${name}`, {
             duration: 3000,
             description: 'An unexpected error occurred'
-          });
+          })
         }
-      };
-    };
+      }
+    }
 
-    (window as any).openPasteModal = safeGlobalFunction(openPasteModal, 'openPasteModal');
-    (window as any).copyPasteContent = safeGlobalFunction(copyPasteContent, 'copyPasteContent');
-    (window as any).removePastePreview = safeGlobalFunction(removePastePreview, 'removePastePreview');
-
-    // Video functions
-    (window as any).playEmbeddedVideo = safeGlobalFunction(playEmbeddedVideo, 'playEmbeddedVideo');
-    (window as any).pauseVideo = safeGlobalFunction(pauseVideo, 'pauseVideo');
-    (window as any).resumeVideo = safeGlobalFunction(resumeVideo, 'resumeVideo');
-    (window as any).stopVideo = safeGlobalFunction(stopVideo, 'stopVideo');
-    (window as any).toggleDirectVideo = safeGlobalFunction(toggleDirectVideo, 'toggleDirectVideo');
-    (window as any).stopDirectVideo = safeGlobalFunction(stopDirectVideo, 'stopDirectVideo');
-    (window as any).showVideoControls = safeGlobalFunction(showVideoControls, 'showVideoControls');
-    (window as any).updateVideoControls = safeGlobalFunction(updateVideoControls, 'updateVideoControls');
-    (window as any).playSocialVideo = safeGlobalFunction(playSocialVideo, 'playSocialVideo');
-    (window as any).scrollToLastMessage = safeGlobalFunction(scrollToLastMessage, 'scrollToLastMessage')
+    setupGlobalFunction('openPasteModal', openPasteModal)
+    setupGlobalFunction('copyPasteContent', copyPasteContent)
+    setupGlobalFunction('removePastePreview', removePastePreview)
+    setupGlobalFunction('playEmbeddedVideo', playEmbeddedVideo)
+    setupGlobalFunction('pauseVideo', pauseVideo)
+    setupGlobalFunction('resumeVideo', resumeVideo)
+    setupGlobalFunction('stopVideo', stopVideo)
+    setupGlobalFunction('toggleDirectVideo', toggleDirectVideo)
+    setupGlobalFunction('stopDirectVideo', stopDirectVideo)
+    setupGlobalFunction('showVideoControls', showVideoControls)
+    setupGlobalFunction('updateVideoControls', updateVideoControls)
+    setupGlobalFunction('playSocialVideo', playSocialVideo)
+    setupGlobalFunction('scrollToLastMessage', scrollToLastMessage)
   }
 
+  // 4. Setup event listeners once
   document.addEventListener('click', handleClickOutside)
 
-  // 5. Initialize features based on authentication
+  const copyListener = (e: any) => {
+    if (e.target?.classList.contains("copy-button")) {
+      const code = decodeURIComponent(e.target.getAttribute("data-code"))
+      copyCode(code, e.target)
+    }
+  }
+  document.addEventListener("click", copyListener)
+  document.addEventListener('keydown', handleModalKeydown)
+
+  // 5. Initialize core features
+  initializeSpeechRecognition()
+  initializeVideoLazyLoading()
+
+  // 6. Setup periodic tasks
+  const interval = setInterval(() => {
+    now.value = Date.now()
+  }, 1000)
+
+  const resetCheckInterval = setInterval(loadRequestCount, 5 * 60 * 1000)
+
+  // 7. Initialize authentication-dependent features
   if (isAuthenticated.value) {
     // Load request count for limited users
     const shouldHaveLimit = isFreeUser.value ||
       planStatus.value.isExpired ||
       planStatus.value.status === 'no-plan' ||
-      planStatus.value.status === 'expired';
+      planStatus.value.status === 'expired'
 
     if (shouldHaveLimit) {
-      loadRequestCount();
+      loadRequestCount()
     }
 
-    loadChats();
-    setShowInput()
+    loadChats()
 
-    // Initial sync from server (delayed to avoid conflicts)
+    // Only show input if no messages exist
+    if (currentMessages.value.length === 0) {
+      setShowInput()
+    }
+
+    // Initial sync from server
     setTimeout(() => {
-      syncFromServer();
-    }, 1000);
+      performSmartSync()
+    }, 1000)
 
-    // Pre-process links in existing messages
-    currentMessages.value.forEach((item, index) => {
+    // Pre-process links in existing messages - optimized to avoid duplicates
+    const processedUrls = new Set()
+    currentMessages.value.forEach((item) => {
       [item.prompt, item.response].forEach((text) => {
         if (text && text !== "...") {
-          extractUrls(text)
-            .slice(0, 3)
-            .forEach((url) => {
-              if (!linkPreviewCache.value.has(url)) {
-                fetchLinkPreview(url).then(() => {
-                  linkPreviewCache.value = new Map(linkPreviewCache.value);
-                });
-              }
-            });
+          extractUrls(text).slice(0, 3).forEach((url) => {
+            if (!linkPreviewCache.value.has(url) && !processedUrls.has(url)) {
+              processedUrls.add(url)
+              fetchLinkPreview(url).then(() => {
+                linkPreviewCache.value = new Map(linkPreviewCache.value)
+              })
+            }
+          })
         }
-      });
-    });
+      })
+    })
+  } else {
+    loadChats()
   }
 
-  // 6. Initialize speech recognition
-  initializeSpeechRecognition();
-
-  // 7. Global event listeners
-  const copyListener = (e: any) => {
-    if (e.target?.classList.contains("copy-button")) {
-      const code = decodeURIComponent(e.target.getAttribute("data-code"));
-      copyCode(code, e.target);
-    }
-  };
-  document.addEventListener("click", copyListener);
-  document.addEventListener('keydown', handleModalKeydown);
-
-  // 8. Initialize video lazy loading
-  initializeVideoLazyLoading();
-
-  // 9. Setup periodic tasks
-  const interval = setInterval(() => {
-    now.value = Date.now();
-  }, 1000);
-
-  // Check for daily reset on app start
-  const resetCheckInterval = setInterval(loadRequestCount, 5 * 60 * 1000);
-
-  // 10. Setup DOM-dependent functionality
+  // 8. DOM-dependent functionality - consolidated timing
   nextTick(() => {
     // Clear any initial content in textarea
-    const textarea = document.getElementById('prompt') as HTMLTextAreaElement;
+    const textarea = document.getElementById('prompt') as HTMLTextAreaElement
     if (textarea && textarea.value) {
-      console.log('Initial textarea content found:', textarea.value);
-      textarea.value = '';
-      transcribedText.value = '';
+      console.log('Initial textarea content found:', textarea.value)
+      textarea.value = ''
+      transcribedText.value = ''
     }
 
-    // Set up scroll listener with proper cleanup
+    // Setup scroll handling once
     if (scrollableElem.value) {
-      scrollableElem.value.addEventListener("scroll", debouncedHandleScroll, { passive: true });
+      // Remove duplicate scroll listener setup
+      scrollableElem.value.addEventListener("scroll", debouncedHandleScroll, { passive: true })
     }
 
-    // Auto-focus input
-    if (showInput.value || currentMessages.value.length > 0) {
-      textarea?.focus();
+    // Auto-focus input only when appropriate
+    if (showInput.value && currentMessages.value.length === 0) {
+      textarea?.focus()
     }
 
-    // Process link previews in responses
+    // Process link previews in responses - avoid duplicate processing
     currentMessages.value.forEach((msg: Res, index) => {
-      if (msg.response && msg.response !== "...") {
-        processLinksInResponse(index);
+      if (msg.response && msg.response !== "..." && !msg.response.endsWith('...')) {
+        processLinksInResponse(index)
       }
-    });
+    })
 
-    // Observe existing video containers after processing links
-    observeNewVideoContainers();
-
-    // Initial scroll to bottom with delay to ensure content is rendered
+    // Single delayed setup for scroll and video observation
     setTimeout(() => {
-      scrollToLastMessage();
+      scrollToLastMessage()
+      observeNewVideoContainers()
 
-      // Set up scroll listener after initial render
-      if (scrollableElem.value) {
-        scrollableElem.value.addEventListener("scroll", debouncedHandleScroll, {
-          passive: true
-        });
+      // Initial scroll state calculation
+      handleScroll()
+    }, 300) // Single delay instead of multiple
+  })
 
-        // Trigger initial scroll state calculation
-        setTimeout(() => {
-          handleScroll();
-        }, 200);
-      }
-    }, 300); // Increased delay for more reliable initial render;
-  });
-
-  // 11. Store cleanup functions for onBeforeUnmount
+  // 9. Store cleanup references
   onBeforeUnmount(() => {
     // Clean up event listeners
-    document.removeEventListener("click", copyListener);
-    document.removeEventListener('keydown', handleModalKeydown);
-    document.removeEventListener('click', handlePastePreviewClick);
-    document.removeEventListener('click', handleRemovePastePreview);
+    document.removeEventListener("click", copyListener)
+    document.removeEventListener('keydown', handleModalKeydown)
+    document.removeEventListener('click', handleClickOutside)
+    document.removeEventListener('click', handlePastePreviewClick)
+    document.removeEventListener('click', handleRemovePastePreview)
 
     // Clean up scroll listener
     if (scrollableElem.value) {
-      scrollableElem.value.removeEventListener("scroll", debouncedHandleScroll);
+      scrollableElem.value.removeEventListener("scroll", debouncedHandleScroll)
     }
 
-    // Clean up video lazy loading observer
-    destroyVideoLazyLoading();
+    // Clean up video lazy loading
+    destroyVideoLazyLoading()
 
     // Clean up intervals
-    clearInterval(interval);
-    clearInterval(resetCheckInterval);
+    clearInterval(interval)
+    clearInterval(resetCheckInterval)
 
     // Clear timeouts
-    if (scrollTimeout) {
-      clearTimeout(scrollTimeout);
-    }
-    if (resizeTimeout) {
-      clearTimeout(resizeTimeout);
-    }
-    if (transcriptionTimer) {
-      clearInterval(transcriptionTimer);
-    }
-    if (updateTimeout) {
-      clearTimeout(updateTimeout);
-    }
+    const timers = [scrollTimeout, resizeTimeout, transcriptionTimer, updateTimeout]
+    timers.forEach(timer => {
+      if (timer) {
+        clearTimeout(timer)
+        clearInterval(timer)
+      }
+    })
 
     // Clean up speech recognition
     if (isRecording.value) {
-      stopVoiceRecording();
+      stopVoiceRecording()
     }
 
     // Restore body scroll if modal is open
     if (showPasteModal.value) {
-      document.body.style.overflow = 'auto';
+      document.body.style.overflow = 'auto'
     }
 
     // Final sync if needed
     if (syncStatus.value.hasUnsyncedChanges) {
-      syncToServer();
+      syncToServer()
     }
-  });
-});
+  })
+})
 
 onUnmounted(() => {
   // Final cleanup for voice recording

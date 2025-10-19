@@ -58,7 +58,6 @@ const filteredChats = computed(() => {
 
 const handleChatClick = (chatId: string) => {
     switchToChat(chatId);
-    setShowInput();
     router.push('/');
 };
 
