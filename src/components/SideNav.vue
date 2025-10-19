@@ -156,8 +156,8 @@ function handleChatClick(chatId: string) {
 }
 
 function handleNavAction(action: () => void) {
-  action()
   if (screenWidth.value < 720) hideSidebar()
+  action()
 }
 
 const handleSidebarToggle = () => {
@@ -175,7 +175,7 @@ const handleSidebarToggle = () => {
       ? props.data.isCollapsed
         ? 'w-[60px] border-r z-30 fixed top-0 left-0 bottom-0 flex flex-col'
         : 'w-[270px] border-r z-30 fixed top-0 left-0 bottom-0 flex flex-col'
-      : isSidebarHidden ? 'w-0' : 'w-full z-40 fixed top-0 left-0 bottom-0 flex flex-col',
+      : isSidebarHidden ? 'w-0 z-40' : 'w-full z-40 fixed top-0 left-0 bottom-0 flex flex-col',
     'bg-gray-100 dark:bg-gray-800 dark:border-gray-700 transition-all duration-300 ease-in-out'
   ]" @click="handleClickOutside">
     <!-- Scrollable area -->
