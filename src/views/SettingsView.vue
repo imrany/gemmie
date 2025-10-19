@@ -157,12 +157,6 @@ onMounted(() => {
     router.push('/')
   }
 })
-
-watch(isAuthenticated, (val) => {
-  if (val === false) {
-    router.push('/')
-  }
-})
 </script>
 
 <template>
