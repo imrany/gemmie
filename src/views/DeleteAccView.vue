@@ -114,17 +114,11 @@ onMounted(() => {
   if (parsedUserDetails.value) {
     username.value = parsedUserDetails.value.username || "";
     email.value = parsedUserDetails.value.email || "";
+    return
   } 
   
   router.push('/')
 })
-
-watch(isAuthenticated, (val) => {
-  if (val === false) {
-    router.push('/')
-  }
-})
-
 </script>
 
 <template>
