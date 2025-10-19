@@ -63,6 +63,7 @@ const globalState = inject('globalState') as {
   isLoading: Ref<boolean>,
   expanded: Ref<boolean[]>,
   showInput: Ref<boolean>,
+  scrollToLastMessage: () => void,
   showConfirmDialog: (options: ConfirmDialogOptions) => void,
   setShowInput: () => void,
   clearAllChats: () => void,
@@ -152,6 +153,7 @@ const {
   clearCurrentDraft,
   renameChat,
   deleteMessage,
+  scrollToLastMessage,
   scrollableElem,
   showScrollDownButton,
   handleScroll,
@@ -223,12 +225,12 @@ const currentPasteContent = ref<{
 } | null>(null)
 
 const isLoadingState = (response: string): boolean => {
-  return response.endsWith('...') || 
-         response === '...' ||
-         response.includes('web-search...') || response.includes('light-search...') ||
-         response.includes('deep-search...') ||
-         response.includes('light-response...') ||
-         response === 'refreshing...'
+  return response.endsWith('...') ||
+    response === '...' ||
+    response.includes('web-search...') || response.includes('light-search...') ||
+    response.includes('deep-search...') ||
+    response.includes('light-response...') ||
+    response === 'refreshing...'
 }
 
 const getLoadingMessage = (response: string): string => {
@@ -755,7 +757,6 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
   }
 
   isLoading.value = true
-  scrollToBottom();
 
   // Determine response mode - use light-response for pasted content, otherwise user preference
   let responseMode = parsedUserDetails?.value.responseMode || 'light-response'
@@ -785,27 +786,33 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
     transcribedText.value = ''
   }
 
+  // Store temporary message reference for potential removal
+  let tempMessageIndex = -1
   const tempResp: Res = {
     prompt: promptValue,
     response: responseMode ? `${responseMode}...` : "...",
   }
 
-  // Add message to submission chat
-  const targetChat = chats.value.find(chat => chat.id === submissionChatId)
-  if (targetChat) {
-    targetChat.messages.push(tempResp)
-    targetChat.updatedAt = new Date().toISOString()
-
-    // Update chat title if first message
-    if (targetChat.messages.length === 1) {
-      targetChat.title = generateChatTitle(promptValue)
-    }
-  }
-
-  updateExpandedArray()
-  processLinksInUserPrompt(promptValue)
-
   try {
+    // Add message to submission chat (temporarily)
+    const targetChat = chats.value.find(chat => chat.id === submissionChatId)
+    if (targetChat) {
+      targetChat.messages.push(tempResp)
+      tempMessageIndex = targetChat.messages.length - 1
+      targetChat.updatedAt = new Date().toISOString()
+
+      // Update chat title if first message
+      if (targetChat.messages.length === 1) {
+        targetChat.title = generateChatTitle(promptValue)
+      }
+    }
+
+    updateExpandedArray()
+    processLinksInUserPrompt(promptValue)
+
+    // Scroll to show the user's prompt at top
+    scrollToLastMessage();
+
     let response: Response
     let parseRes: any
 
@@ -847,6 +854,8 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
     // Check if request was aborted
     if (abortController.signal.aborted) {
       console.log(`Request ${requestId} was aborted`)
+      // Remove the temporary message if request was aborted
+      removeTemporaryMessage(submissionChatId, tempMessageIndex)
       return
     }
 
@@ -870,22 +879,19 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
       }
     }
 
-    // Update the response in chat
+    // Update the response in chat (replace the temporary message)
     const updatedTargetChat = chats.value.find(chat => chat.id === submissionChatId)
-    if (updatedTargetChat) {
-      const lastMessageIndex = updatedTargetChat.messages.length - 1
-      if (lastMessageIndex >= 0) {
-        const updatedMessage = {
-          prompt: promptValue,
-          response: finalResponse,
-          status: response.status,
-        }
-        updatedTargetChat.messages[lastMessageIndex] = updatedMessage
-        updatedTargetChat.updatedAt = new Date().toISOString()
-
-        // Process links in the response
-        await processLinksInResponse(lastMessageIndex)
+    if (updatedTargetChat && tempMessageIndex >= 0) {
+      const updatedMessage = {
+        prompt: promptValue,
+        response: finalResponse,
+        status: response.status,
       }
+      updatedTargetChat.messages[tempMessageIndex] = updatedMessage
+      updatedTargetChat.updatedAt = new Date().toISOString()
+
+      // Process links in the response
+      await processLinksInResponse(tempMessageIndex)
     }
 
     // Increment request count on success
@@ -903,25 +909,30 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
     // Don't show error if request was intentionally aborted
     if (err.name === 'AbortError') {
       console.log(`Request ${requestId} was aborted`)
+      removeTemporaryMessage(submissionChatId, tempMessageIndex)
       return
     }
 
     console.error('AI Response Error:', err)
 
-    // Update error in target chat
-    const errorTargetChat = chats.value.find(chat => chat.id === submissionChatId)
-    if (errorTargetChat && errorTargetChat.messages.length > 0) {
-      const lastMessageIndex = errorTargetChat.messages.length - 1
-      errorTargetChat.messages[lastMessageIndex] = {
-        prompt: promptValue,
-        response: `Error: ${err.message}`,
-        status: 500,
-      }
+    // Remove the temporary message on error
+    removeTemporaryMessage(submissionChatId, tempMessageIndex)
+
+    // More specific error messages
+    let errorMessage = err.message
+    let description = 'Please try again or check your connection'
+
+    if (err.message.includes('Failed to fetch')) {
+      errorMessage = 'Network Error'
+      description = 'Please check your internet connection'
+    } else if (err.message.includes('timeout')) {
+      errorMessage = 'Request Timeout'
+      description = 'The request took too long. Please try again'
     }
 
-    toast.error(`Failed to get AI response: ${err.message}`, {
+    toast.error(`Failed to get AI response: ${errorMessage}`, {
       duration: 5000,
-      description: 'Please try again or check your connection'
+      description
     })
 
     // Restore draft if request failed
@@ -946,6 +957,27 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
 
     // Observe new video containers
     observeNewVideoContainers();
+  }
+}
+
+// Helper function to remove temporary message on error/abort
+function removeTemporaryMessage(chatId: string, messageIndex: number) {
+  if (messageIndex < 0) return
+
+  const targetChat = chats.value.find(chat => chat.id === chatId)
+  if (targetChat && targetChat.messages.length > messageIndex) {
+    // Remove the temporary message
+    targetChat.messages.splice(messageIndex, 1)
+
+    // If this was the only message, we might want to handle the empty chat
+    if (targetChat.messages.length === 0) {
+      // Optionally delete the empty chat or keep it with a default title
+      targetChat.title = 'New Chat'
+    }
+
+    targetChat.updatedAt = new Date().toISOString()
+    updateExpandedArray()
+    saveChats()
   }
 }
 
@@ -1051,11 +1083,14 @@ async function handleLinkOnlyRequest(promptValue: string, chatId: string, reques
 
   isLoading.value = true
 
+  // Store temporary message reference
+  let tempMessageIndex = -1
   const tempResp: Res = { prompt: promptValue, response: "..." }
   const targetChat = chats.value.find(chat => chat.id === chatId)
 
   if (targetChat) {
     targetChat.messages.push(tempResp)
+    tempMessageIndex = targetChat.messages.length - 1
     targetChat.updatedAt = new Date().toISOString()
   }
 
@@ -1065,6 +1100,7 @@ async function handleLinkOnlyRequest(promptValue: string, chatId: string, reques
     for (const url of urls) {
       if (abortController.signal.aborted) {
         console.log(`Link request ${requestId} was aborted`)
+        removeTemporaryMessage(chatId, tempMessageIndex)
         return
       }
 
@@ -1102,9 +1138,8 @@ async function handleLinkOnlyRequest(promptValue: string, chatId: string, reques
 
     // Update the response in chat
     const updatedTargetChat = chats.value.find(chat => chat.id === chatId)
-    if (updatedTargetChat) {
-      const lastMessageIndex = updatedTargetChat.messages.length - 1
-      updatedTargetChat.messages[lastMessageIndex] = {
+    if (updatedTargetChat && tempMessageIndex >= 0) {
+      updatedTargetChat.messages[tempMessageIndex] = {
         prompt: promptValue,
         response: combinedResponse.trim(),
         status: 200
@@ -1123,6 +1158,16 @@ async function handleLinkOnlyRequest(promptValue: string, chatId: string, reques
       })
     }
 
+  } catch (err: any) {
+    console.error('Link analysis error:', err)
+
+    // Remove temporary message on error
+    removeTemporaryMessage(chatId, tempMessageIndex)
+
+    toast.error(`Failed to analyze links: ${err.message}`, {
+      duration: 5000,
+      description: 'Please try again'
+    })
   } finally {
     activeRequests.value.delete(requestId)
     requestChatMap.value.delete(requestId)
@@ -1172,6 +1217,8 @@ async function refreshResponse(oldPrompt?: string) {
     ...oldMessage,
     response: originalMode ? `${originalMode}...` : "Refreshing...",
   }
+
+  scrollToLastMessage()
 
   // Clean up link previews if needed
   const responseUrls = extractUrls(oldMessage.response || '')
@@ -1327,7 +1374,6 @@ async function refreshResponse(oldPrompt?: string) {
   }
 }
 
-
 // input area template logic
 const inputPlaceholderText = computed(() => {
   if (pastePreview.value && pastePreview.value.show) {
@@ -1395,9 +1441,10 @@ const scrollButtonPosition = computed(() => {
   }
 })
 
-// Update the scroll container padding computed property
 const scrollContainerPadding = computed(() => {
-  if ((isRequestLimitExceeded.value || shouldShowUpgradePrompt.value) && pastePreview.value?.show) {
+  if (isLoading.value) {
+    return 'pb-[calc(100vh-100px)]'
+  }else if ((isRequestLimitExceeded.value || shouldShowUpgradePrompt.value) && pastePreview.value?.show) {
     return 'pb-[200px] sm:pb-[190px]'
   } else if (isRequestLimitExceeded.value || shouldShowUpgradePrompt.value) {
     return 'pb-[190px] sm:pb-[200px]'
@@ -2065,16 +2112,6 @@ async function selectInputMode(mode: 'web-search' | 'deep-search' | 'light-respo
       'deep-search': 'Deep Search',
       'light-response': 'Light Response'
     }
-
-    // Show success immediately - sync happens in background via watch
-    toast.success(`Switched to ${modeNames[mode]}`, {
-      duration: 2000,
-      description: mode === 'web-search'
-        ? 'Responses will include web search results'
-        : mode === 'deep-search'
-          ? 'Responses will be more detailed and thorough'
-          : 'Responses will be quick and concise'
-    })
   } catch (error) {
     console.error('Error selecting input mode:', error)
     parsedUserDetails.value.responseMode = originalMode
@@ -2342,6 +2379,7 @@ onMounted(() => {
     (window as any).showVideoControls = safeGlobalFunction(showVideoControls, 'showVideoControls');
     (window as any).updateVideoControls = safeGlobalFunction(updateVideoControls, 'updateVideoControls');
     (window as any).playSocialVideo = safeGlobalFunction(playSocialVideo, 'playSocialVideo');
+    (window as any).scrollToLastMessage = safeGlobalFunction(scrollToLastMessage, 'scrollToLastMessage')
   }
 
   document.addEventListener('click', handleClickOutside)
@@ -2440,7 +2478,7 @@ onMounted(() => {
 
     // Initial scroll to bottom with delay to ensure content is rendered
     setTimeout(() => {
-      scrollToBottom();
+      scrollToLastMessage();
 
       // Set up scroll listener after initial render
       if (scrollableElem.value) {
@@ -2593,10 +2631,11 @@ onUnmounted(() => {
         <div v-else-if="isAuthenticated && currentMessages.length === 0">
           <div
             class="flex md:max-w-3xl max-w-[100vw] max-md:px-4 flex-col md:flex-grow items-center gap-3 text-gray-600 dark:text-gray-400">
-            <img :src="parsedUserDetails?.theme=== 'dark' || (parsedUserDetails?.theme=== 'system' && isDarkMode) ?
+            <img :src="parsedUserDetails?.theme === 'dark' || (parsedUserDetails?.theme === 'system' && isDarkMode) ?
               '/logo-light.svg' : '/logo.svg'" alt="Gemmie Logo" class="w-[60px] h-[60px] rounded-md" />
 
-            <p class="text-gray-700 dark:text-gray-300 text-3xl font-semibold">{{ parsedUserDetails?.username || 'Gemmie' }}
+            <p class="text-gray-700 dark:text-gray-300 text-3xl font-semibold">{{ parsedUserDetails?.username ||
+              'Gemmie' }}
             </p>
             <div class="text-center max-w-md space-y-2">
               <p class="text-gray-600 dark:text-gray-400 leading-relaxed">
@@ -2619,7 +2658,7 @@ onUnmounted(() => {
                 </div>
               </div>
             </div>
-            
+
             <div class="flex flex-col gap-4 w-full mb-[100px] max-w-2xl relative">
               <!-- Suggestion Chips Grid -->
               <div class="w-full flex justify-center">
@@ -2650,7 +2689,7 @@ onUnmounted(() => {
 
         <!-- Chat Messages Container -->
         <div ref="scrollableElem" v-else-if="currentMessages.length !== 0 && isAuthenticated"
-          class="relative md:max-w-3xl max-w-[100vw] flex-grow no-scrollbar overflow-y-auto px-2 w-full space-y-3 sm:space-y-4 mt-[55px] pt-8  scroll-container"
+          class="relative md:max-w-3xl min-h-[calc(100vh-200px)] max-w-[100vw] flex-grow no-scrollbar overflow-y-auto px-2 w-full space-y-3 sm:space-y-4 mt-[55px] pt-8  scroll-container"
           :class="scrollContainerPadding">
           <div v-if="currentMessages.length !== 0" v-for="(item, i) in currentMessages" :key="`chat-${i}`"
             class="flex flex-col gap-1">
@@ -2706,8 +2745,8 @@ onUnmounted(() => {
               <div
                 class="bg-none max-w-full w-full chat-message leading-relaxed text-black dark:text-gray-100 p-1 rounded-2xl prose prose-sm dark:prose-invert">
                 <!-- Loading state -->
-                <div v-if="isLoadingState(item.response)" 
-                    class="flex w-full rounded-lg bg-gray-50 dark:bg-gray-800 p-2 items-center animate-pulse gap-2 text-gray-500 dark:text-gray-400">
+                <div v-if="isLoadingState(item.response)"
+                  class="flex w-full rounded-lg bg-gray-50 dark:bg-gray-800 p-2 items-center animate-pulse gap-2 text-gray-500 dark:text-gray-400">
                   <i class="pi pi-spin pi-spinner"></i>
                   <span class="text-sm">{{ getLoadingMessage(item.response) }}</span>
                 </div>
@@ -2726,8 +2765,7 @@ onUnmounted(() => {
                 </div>
 
                 <!-- Actions - Responsive with fewer labels on mobile -->
-                <div
-                  v-if="!isLoadingState(item.response)"
+                <div v-if="!isLoadingState(item.response)"
                   class="flex flex-wrap justify-end gap-2 sm:gap-3 mt-2 text-gray-500 dark:text-gray-400 text-sm">
                   <button @click="copyResponse(item.response, i)"
                     class="flex items-center gap-1 hover:text-blue-600 dark:hover:text-blue-400 transition-colors min-h-[32px]">
@@ -2976,7 +3014,8 @@ onUnmounted(() => {
                               : 'border-blue-300 bg-blue-50 hover:bg-blue-100 dark:border-blue-600 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 text-blue-700 dark:text-blue-300'
                         ]" :title="modeOptions[parsedUserDetails.responseMode || ''].title">
                         <!-- Dynamic icon based on selected mode -->
-                        <i :class="modeOptions[parsedUserDetails.responseMode || ''].icon" class="text-xs sm:text-sm"></i>
+                        <i :class="modeOptions[parsedUserDetails.responseMode || ''].icon"
+                          class="text-xs sm:text-sm"></i>
                       </button>
 
                       <!-- Dropdown Menu -->
