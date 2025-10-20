@@ -211,7 +211,7 @@ const navLinks =[
     'bg-gray-100 dark:bg-gray-800 dark:border-gray-700',
 
     // Animation classes
-    'transition-all duration-300 ease-in-out transform'
+    'transition-all duration-300 ease-in-out transform select-none'
   ]" @click="handleClickOutside">
     <!-- Scrollable area -->
     <div class="flex-1 overflow-y-auto custom-scrollbar">
