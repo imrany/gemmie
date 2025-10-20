@@ -234,7 +234,7 @@ const currentPasteContent = ref<{
   type: 'text' | 'code' | 'json' | 'markdown' | 'xml' | 'html';
 } | null>(null)
 
-const deepSearchPagination = ref<Map<number, { currentPage: number; totalPages: number }>>(new Map())
+const deepSearchPagination = ref<Map<string, Map<number, { currentPage: number; totalPages: number }>>>(new Map())
 
 const isLoadingState = (response: string): boolean => {
   return response.endsWith('...') ||
@@ -310,6 +310,9 @@ function loadChats() {
       }
     }
     updateExpandedArray()
+
+    // Load pagination state
+    loadPaginationState()
   } catch (error) {
     console.error('Failed to load chats:', error)
     chats.value = []
@@ -697,45 +700,132 @@ function removePastePreview() {
 
 // Helper to get pagination for a message
 function getPagination(messageIndex: number) {
-  return deepSearchPagination.value.get(messageIndex) || { currentPage: 0, totalPages: 0 }
+  if (!currentChatId.value) return { currentPage: 0, totalPages: 0 }
+  
+  const chatPagination = deepSearchPagination.value.get(currentChatId.value)
+  if (!chatPagination) return { currentPage: 0, totalPages: 0 }
+  
+  return chatPagination.get(messageIndex) || { currentPage: 0, totalPages: 0 }
 }
 
 // Navigation functions
 function nextResult(messageIndex: number) {
+  if (!currentChatId.value) return
+  
   const pagination = getPagination(messageIndex)
   if (pagination.currentPage < pagination.totalPages - 1) {
-    deepSearchPagination.value.set(messageIndex, {
+    // Get or create chat pagination map
+    let chatPagination = deepSearchPagination.value.get(currentChatId.value)
+    if (!chatPagination) {
+      chatPagination = new Map()
+      deepSearchPagination.value.set(currentChatId.value, chatPagination)
+    }
+    
+    // Update the specific message pagination
+    chatPagination.set(messageIndex, {
       ...pagination,
       currentPage: pagination.currentPage + 1
     })
-    deepSearchPagination.value = new Map(deepSearchPagination.value) // Trigger reactivity
-    scrollToLastMessage()
+    
+    // Force reactivity
+    deepSearchPagination.value = new Map(deepSearchPagination.value)
+    
+    nextTick(() => scrollToLastMessage())
   }
 }
 
 function prevResult(messageIndex: number) {
+  if (!currentChatId.value) return
+  
   const pagination = getPagination(messageIndex)
   if (pagination.currentPage > 0) {
-    deepSearchPagination.value.set(messageIndex, {
+    // Get or create chat pagination map
+    let chatPagination = deepSearchPagination.value.get(currentChatId.value)
+    if (!chatPagination) {
+      chatPagination = new Map()
+      deepSearchPagination.value.set(currentChatId.value, chatPagination)
+    }
+    
+    // Update the specific message pagination
+    chatPagination.set(messageIndex, {
       ...pagination,
       currentPage: pagination.currentPage - 1
     })
-    deepSearchPagination.value = new Map(deepSearchPagination.value) // Trigger reactivity
-    scrollToLastMessage()
+    
+    // Force reactivity
+    deepSearchPagination.value = new Map(deepSearchPagination.value)
+    
+    nextTick(() => scrollToLastMessage())
   }
 }
 
 function goToPage(messageIndex: number, pageIndex: number) {
+  if (!currentChatId.value) return
+  
   const pagination = getPagination(messageIndex)
-  if (pagination.currentPage > 0) {
-    deepSearchPagination.value.set(messageIndex, {
+  if (pageIndex >= 0 && pageIndex < pagination.totalPages) {  // FIXED: Proper validation
+    // Get or create chat pagination map
+    let chatPagination = deepSearchPagination.value.get(currentChatId.value)
+    if (!chatPagination) {
+      chatPagination = new Map()
+      deepSearchPagination.value.set(currentChatId.value, chatPagination)
+    }
+    
+    // Update the specific message pagination
+    chatPagination.set(messageIndex, {
       ...pagination,
       currentPage: pageIndex
     })
-    deepSearchPagination.value = new Map(deepSearchPagination.value) // Trigger reactivity
-    scrollToLastMessage()
+    
+    // Force reactivity
+    deepSearchPagination.value = new Map(deepSearchPagination.value)
+    
+    nextTick(() => scrollToLastMessage())
   }
 }
+
+// Save pagination state to localStorage
+function savePaginationState() {
+  try {
+    const paginationData: Record<string, Record<number, { currentPage: number; totalPages: number }>> = {}
+    
+    deepSearchPagination.value.forEach((chatPagination, chatId) => {
+      const messageData: Record<number, { currentPage: number; totalPages: number }> = {}
+      chatPagination.forEach((pagination, messageIndex) => {
+        messageData[messageIndex] = pagination
+      })
+      paginationData[chatId] = messageData
+    })
+    
+    localStorage.setItem('deepSearchPagination', JSON.stringify(paginationData))
+  } catch (error) {
+    console.error('Failed to save pagination state:', error)
+  }
+}
+
+// Load pagination state from localStorage
+function loadPaginationState() {
+  try {
+    const stored = localStorage.getItem('deepSearchPagination')
+    if (stored) {
+      const paginationData = JSON.parse(stored)
+      const newMap = new Map<string, Map<number, { currentPage: number; totalPages: number }>>()
+      
+      Object.entries(paginationData).forEach(([chatId, messageData]) => {
+        const chatMap = new Map<number, { currentPage: number; totalPages: number }>()
+        Object.entries(messageData as Record<number, { currentPage: number; totalPages: number }>).forEach(([index, pagination]) => {
+          chatMap.set(Number(index), pagination)
+        })
+        newMap.set(chatId, chatMap)
+      })
+      
+      deepSearchPagination.value = newMap
+    }
+  } catch (error) {
+    console.error('Failed to load pagination state:', error)
+  }
+}
+
 
 // handleSubmit function
 async function handleSubmit(e?: any, retryPrompt?: string) {
@@ -998,6 +1088,7 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
 
     isLoading.value = false
     saveChats()
+    savePaginationState()
 
     // Trigger background sync if needed
     setTimeout(() => {
@@ -1041,10 +1132,20 @@ function formatSearchResults(searchData: any, mode: string, messageIndex?: numbe
 
   // For deep-search, set up pagination
   if (mode === 'deep-search' && messageIndex !== undefined) {
-    deepSearchPagination.value.set(messageIndex, {
+    // Get or create chat pagination map
+    let chatPagination = deepSearchPagination.value.get(currentChatId.value)
+    if (!chatPagination) {
+      chatPagination = new Map()
+      deepSearchPagination.value.set(currentChatId.value, chatPagination)
+    }
+    
+    chatPagination.set(messageIndex, {
       currentPage: 0,
       totalPages: results.length
     })
+    
+    // Force reactivity
+    deepSearchPagination.value = new Map(deepSearchPagination.value)
   }
 
   // Store results as JSON for client-side pagination
@@ -1206,6 +1307,7 @@ async function handleLinkOnlyRequest(promptValue: string, chatId: string, reques
     requestChatMap.value.delete(requestId)
     isLoading.value = false
     saveChats()
+    savePaginationState()
   }
 }
 
@@ -1399,6 +1501,7 @@ async function refreshResponse(oldPrompt?: string) {
   } finally {
     isLoading.value = false
     saveChats()
+    savePaginationState()
     observeNewVideoContainers()
   }
 }
@@ -2323,6 +2426,10 @@ watch(() => ({ ...planStatus.value }), (newStatus, oldStatus) => {
   }
 }, { deep: true })
 
+watch(deepSearchPagination, () => {
+  savePaginationState()
+}, { deep: true })
+
 watch([() => currentMessages.value.length, () => chats.value], () => {
   nextTick(() => {
     setTimeout(() => {
@@ -2430,6 +2537,7 @@ onMounted(() => {
     setupGlobalFunction('scrollToLastMessage', scrollToLastMessage)
     setupGlobalFunction('nextResult', nextResult)
     setupGlobalFunction('prevResult', prevResult)
+    setupGlobalFunction('goToPage', goToPage)
   }
 
   // 4. Setup event listeners once
