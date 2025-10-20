@@ -15,6 +15,7 @@ import PastePreviewModal from "@/components/Modals/PastePreviewModal.vue"
 import { useRoute } from "vue-router"
 import { renderMarkdown } from "@/utils/markdownSupport"
 import TextHightlightPopover from "@/components/TextHightlightPopover.vue"
+import { ClipboardList, Trash } from "lucide-vue-next"
 
 type ModeOption = {
   mode: 'light-response' | 'web-search' | 'deep-search',
@@ -224,6 +225,8 @@ const currentPasteContent = ref<{
   charCount: number;
   type: 'text' | 'code' | 'json' | 'markdown' | 'xml' | 'html';
 } | null>(null)
+
+const deepSearchPagination = ref<Map<number, { currentPage: number; totalPages: number }>>(new Map())
 
 const isLoadingState = (response: string): boolean => {
   return response.endsWith('...') ||
@@ -684,6 +687,36 @@ function removePastePreview() {
   }
 }
 
+// Helper to get pagination for a message
+function getPagination(messageIndex: number) {
+  return deepSearchPagination.value.get(messageIndex) || { currentPage: 0, totalPages: 0 }
+}
+
+// Navigation functions
+function nextResult(messageIndex: number) {
+  const pagination = getPagination(messageIndex)
+  if (pagination.currentPage < pagination.totalPages - 1) {
+    deepSearchPagination.value.set(messageIndex, {
+      ...pagination,
+      currentPage: pagination.currentPage + 1
+    })
+    deepSearchPagination.value = new Map(deepSearchPagination.value) // Trigger reactivity
+    scrollToLastMessage()
+  }
+}
+
+function prevResult(messageIndex: number) {
+  const pagination = getPagination(messageIndex)
+  if (pagination.currentPage > 0) {
+    deepSearchPagination.value.set(messageIndex, {
+      ...pagination,
+      currentPage: pagination.currentPage - 1
+    })
+    deepSearchPagination.value = new Map(deepSearchPagination.value) // Trigger reactivity
+    scrollToLastMessage()
+  }
+}
+
 // handleSubmit function
 async function handleSubmit(e?: any, retryPrompt?: string) {
   e?.preventDefault?.()
@@ -757,8 +790,6 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
     return handleLinkOnlyRequest(promptValue, submissionChatId, requestId, abortController)
   }
 
-  isLoading.value = true
-
   // Determine response mode - use light-response for pasted content, otherwise user preference
   let responseMode = parsedUserDetails?.value.responseMode || 'light-response'
 
@@ -787,6 +818,9 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
     transcribedText.value = ''
   }
 
+  isLoading.value = true
+  scrollToLastMessage();
+
   // Store temporary message reference for potential removal
   let tempMessageIndex = -1
   const tempResp: Res = {
@@ -810,9 +844,6 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
 
     updateExpandedArray()
     processLinksInUserPrompt(promptValue)
-
-    // Scroll to show the user's prompt at top
-    scrollToLastMessage();
 
     let response: Response
     let parseRes: any
@@ -871,10 +902,9 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
     let finalResponse = parseRes.error ? parseRes.error : parseRes.response
 
     if (isSearchMode) {
-      // Check for results in both locations (results or json)
       const hasResults = parseRes.results || parseRes.json;
       if (hasResults) {
-        finalResponse = formatSearchResults(parseRes, responseMode)
+        finalResponse = formatSearchResults(parseRes, responseMode, tempMessageIndex)
       } else {
         finalResponse = "No search results found for your query."
       }
@@ -983,97 +1013,78 @@ function removeTemporaryMessage(chatId: string, messageIndex: number) {
 }
 
 // Helper function to format search results
-function formatSearchResults(searchData: any, mode: string): string {
-  // Check for results in different possible locations
+function formatSearchResults(searchData: any, mode: string, messageIndex?: number): string {
   const results = searchData.results || searchData.json || [];
   if (results.length === 0) {
     return "No search results found for your query."
   }
 
+  // For deep-search, set up pagination
+  if (mode === 'deep-search' && messageIndex !== undefined) {
+    deepSearchPagination.value.set(messageIndex, {
+      currentPage: 0,
+      totalPages: results.length
+    })
+  }
+
+  // Store results as JSON for client-side pagination
+  if (mode === 'deep-search') {
+    return JSON.stringify({
+      mode: 'deep-search',
+      results: results,
+      metadata: {
+        total_pages: searchData.total_pages,
+        content_depth: searchData.content_depth,
+        search_time: searchData.search_time
+      }
+    })
+  }
+
+  // For web-search, keep existing format (all results shown)
   let formatted = "";
+  const { total_pages } = searchData
 
-  if (mode === 'light-search' || mode === 'web-search') {
-    const { total_pages } = searchData
+  formatted += `Showing **${results.length}** of **${total_pages || results.length}** total results\n\n`
+  formatted += `\n\n`
 
-    // Header with result count
-    formatted += `Showing **${results.length}** of **${total_pages || results.length}** total results\n\n`
-    formatted += `\n\n`
+  results.forEach((result: any, index: number) => {
+    const title = result.title || 'No Title'
+    const url = result.url || '#'
+    const description = result.description || 'No description available'
 
-    results.forEach((result: any, index: number) => {
-      const title = result.title || 'No Title'
-      const url = result.url || '#'
-      const description = result.description || 'No description available'
+    formatted += `#### ${index + 1}. ${title} \n\n`
+    formatted += `${description} \n`
+    formatted += `[${url}](${url}) \n\n`
 
-      // Result number and title
-      formatted += `#### ${index + 1}. ${title} \n\n`
-
-      // Description
-      formatted += `${description} \n`
-
-      // URL link
-      formatted += `[${url}](${url}) \n\n`
-
-      // Separator between results
-      if (index < results.length - 1) {
-        formatted += `\n\n\n`
-      }
-    })
-
-  } else if (mode === 'deep-search') {
-    const { json, total_pages, content_depth, search_time } = searchData
-
-    // Header for deep search
-    formatted += `**Advanced Analysis** • ${json.length} results analyzed at depth ${content_depth || 1}\n\n`
-    formatted += `\n\n`
-
-    // Process each result
-    json.forEach((result: any, index: number) => {
-      const title = result.title || 'No Title'
-      const url = result.url || '#'
-      const markdownContent = result.markdown_content || ''
-      const depth = result.depth || 0
-      const source: string = result.source || 'Unknown'
-
-      // Result header
-      formatted += `### ${index + 1}. ${title}\n\n`
-
-      // Metadata in a quote block for styling
-      formatted += `**URL:** [${url}](${url}) \n\n`
-      formatted += `> **Source:** ${source.startsWith('https://') ? `[${source}](${source})` : (source.length > 60 ? source.slice(0, 60) + "..." : source)} • **Depth:** ${depth}  \n`;
-
-      // Use the pre-formatted markdown content directly
-      if (markdownContent) {
-        formatted += `${markdownContent} \n\n`
-      } else if (result.content) {
-        // Fallback to plain content if no markdown
-        formatted += `${result.content.substring(0, 500)}... \n\n`
-      }
-
-      // Separator between results
-      if (index < json.length - 1) {
-        formatted += `\n\n\n`
-      }
-    })
-
-    // Summary section for deep search
-    const totalContentResults = json.filter((r: any) => r.content || r.markdown_content).length
-
-    formatted += `\n\n`
-    formatted += `## Search Summary\n\n`
-
-    if (totalContentResults > 0) {
-      formatted += `- **Content Extracted:** ${totalContentResults} of ${json.length} results\n`
-      formatted += `- **Search Depth:** ${content_depth || 1} level${(content_depth || 1) > 1 ? 's' : ''}\n`
-      formatted += `- **Total Results:** ${json.length} results\n`
-      formatted += `- **Pages Analyzed:** ${total_pages} pages\n`
-      formatted += `- **Processing Time:** ${(search_time / 1e9).toFixed(2)}s\n\n`
-    } else {
-      formatted += `- **Total Results:** ${json.length} results\n`
-      formatted += `- **Pages Analyzed:** ${total_pages} pages\n`
-      formatted += `- **Processing Time:** ${(search_time / 1e9).toFixed(2)}s\n\n`
+    if (index < results.length - 1) {
+      formatted += `\n\n\n`
     }
+  })
 
-    formatted += `> ✨ *All results have been deeply analyzed and formatted for your review.*\n`
+  return formatted
+}
+
+// Function to render a single deep search result
+function renderDeepSearchResult(data: any, currentPage: number) {
+  const { results, metadata } = data
+  const result = results[currentPage]
+
+  if (!result) return "No result available"
+
+  const title = result.title || 'No Title'
+  const url = result.url || '#'
+  const markdownContent = result.markdown_content || ''
+  const depth = result.depth || 0
+  const source: string = result.source || 'Unknown'
+
+  let formatted = `### ${currentPage + 1}. ${title}\n\n`
+  formatted += `**URL:** [${url}](${url}) \n\n`
+  formatted += `> **Source:** ${source.startsWith('https://') ? `[${source}](${source})` : (source.length > 60 ? source.slice(0, 60) + "..." : source)} • **Depth:** ${depth}  \n`
+
+  if (markdownContent) {
+    formatted += `${markdownContent} \n\n`
+  } else if (result.content) {
+    formatted += `${result.content.substring(0, 500)}... \n\n`
   }
 
   return formatted
@@ -1083,6 +1094,7 @@ async function handleLinkOnlyRequest(promptValue: string, chatId: string, reques
   const urls = extractUrls(promptValue)
 
   isLoading.value = true
+  scrollToLastMessage();
 
   // Store temporary message reference
   let tempMessageIndex = -1
@@ -1219,6 +1231,7 @@ async function refreshResponse(oldPrompt?: string) {
     response: originalMode ? `${originalMode}...` : "Refreshing...",
   }
 
+  isLoading.value = true
   scrollToLastMessage()
 
   // Clean up link previews if needed
@@ -1337,7 +1350,7 @@ async function refreshResponse(oldPrompt?: string) {
       // Check for results in both locations (results or json)
       const hasResults = parseRes.results || parseRes.json;
       if (hasResults) {
-        finalResponse = formatSearchResults(parseRes, originalMode)
+        finalResponse = formatSearchResults(parseRes, originalMode, msgIndex)
       } else {
         finalResponse = "No search results found for your query."
       }
@@ -1356,13 +1369,7 @@ async function refreshResponse(oldPrompt?: string) {
     // Re-run link previews if needed
     await processLinksInResponse(msgIndex)
 
-    incrementRequestCount()
-
-    toast.success('Response refreshed', {
-      duration: 2000,
-      description: 'The response has been updated with fresh data'
-    })
-
+    // incrementRequestCount()
   } catch (err: any) {
     console.error('Refresh error:', err)
     toast.error(`Failed to refresh response: ${err.message}`)
@@ -1370,9 +1377,26 @@ async function refreshResponse(oldPrompt?: string) {
     // Restore original message on error
     chat.messages[msgIndex] = oldMessage
   } finally {
+    isLoading.value = false
     saveChats()
     observeNewVideoContainers()
   }
+}
+
+// Helper to check if response is deep search result
+function isDeepSearchResult(response: string): boolean {
+  if (!response || typeof response !== 'string') return false
+  
+  try {
+    if (response.startsWith('{') && response.includes('"mode"')) {
+      const parsed = JSON.parse(response)
+      return parsed.mode === 'deep-search'
+    }
+  } catch (e) {
+    return false
+  }
+  
+  return false
 }
 
 // input area template logic
@@ -1443,9 +1467,13 @@ const scrollButtonPosition = computed(() => {
 })
 
 const scrollContainerPadding = computed(() => {
+  // When loading (during handleSubmit or refreshResponse), use full viewport padding
   if (isLoading.value) {
     return 'pb-[calc(100vh-100px)]'
-  } else if ((isRequestLimitExceeded.value || shouldShowUpgradePrompt.value) && pastePreview.value?.show) {
+  }
+  
+  // After loading completes, calculate appropriate padding based on UI state
+  if ((isRequestLimitExceeded.value || shouldShowUpgradePrompt.value) && pastePreview.value?.show) {
     return 'pb-[200px] sm:pb-[190px]'
   } else if (isRequestLimitExceeded.value || shouldShowUpgradePrompt.value) {
     return 'pb-[190px] sm:pb-[200px]'
@@ -1454,6 +1482,7 @@ const scrollContainerPadding = computed(() => {
   } else if (showScrollDownButton.value) {
     return 'pb-[140px] sm:pb-[120px]'
   } else {
+    // Base padding when nothing special is showing
     return 'pb-[110px] sm:pb-[120px]'
   }
 })
@@ -2379,6 +2408,8 @@ onMounted(() => {
     setupGlobalFunction('updateVideoControls', updateVideoControls)
     setupGlobalFunction('playSocialVideo', playSocialVideo)
     setupGlobalFunction('scrollToLastMessage', scrollToLastMessage)
+    setupGlobalFunction('nextResult', nextResult)
+    setupGlobalFunction('prevResult', prevResult)
   }
 
   // 4. Setup event listeners once
@@ -2679,105 +2710,141 @@ onUnmounted(() => {
         <div ref="scrollableElem" v-else-if="currentMessages.length !== 0 && isAuthenticated"
           class="relative md:max-w-3xl min-h-[calc(100vh-200px)] max-w-[100vw] flex-grow no-scrollbar overflow-y-auto px-2 w-full space-y-3 sm:space-y-4 mt-[55px] pt-8  scroll-container"
           :class="scrollContainerPadding">
-          <div v-if="currentMessages.length !== 0" v-for="(item, i) in currentMessages" :key="`chat-${i}`"
-            class="flex flex-col gap-1">
-            <!-- User Bubble -->
-            <div class="flex w-full chat-message">
-              <div class="flex flex-col w-full">
-                <!-- User message bubble -->
-                <div
-                  class="flex items-start gap-2 font-medium bg-gray-100 dark:bg-gray-800 text-black dark:text-gray-100 px-4 rounded-2xl prose prose-sm dark:prose-invert chat-bubble w-fit max-w-full">
-                  <!-- Avatar container -->
-                  <div class="flex-shrink-0 py-3">
-                    <div
-                      class="flex items-center justify-center w-7 h-7 text-gray-100 dark:text-gray-800 bg-gray-700 dark:bg-gray-200 rounded-full text-sm font-semibold">
-                      {{ parsedUserDetails.username.toUpperCase().slice(0, 2) }}
-                    </div>
-                  </div>
-
-                  <!-- Message content container -->
-                  <div class="flex-1 min-w-0">
-                    <div class="break-words text-base leading-relaxed"
-                      v-html="renderMarkdown((item && item?.prompt && item?.prompt?.length > 800) ? item?.prompt?.trim().split('#pastedText#')[0] : item.prompt || '')">
-                    </div>
-                  </div>
-                </div>
-                <div class="flex flex-col gap-3 mt-2">
-                  <!-- Link Previews for User Messages -->
-                  <div v-if="extractUrls(item.prompt || '').length > 0" class="w-full">
-                    <div v-for="url in extractUrls(item.prompt || '').slice(0, 3)" :key="`user-${i}-${url}`">
-                      <div v-if="linkPreviewCache.get(url)"
-                        v-html="LinkPreviewComponent({ preview: linkPreviewCache.get(url)! })"></div>
-                    </div>
-                  </div>
-
+          <div v-if="currentMessages.length !== 0" class="flex flex-col gap-1">
+            <div v-for="(item, i) in currentMessages" :key="`chat-${i}`" class="flex flex-col gap-1">
+              <!-- User Bubble -->
+              <div class="flex w-full chat-message">
+                <div class="flex flex-col w-full">
+                  <!-- User message bubble -->
                   <div
-                    v-if="item && item.prompt && (item?.prompt?.trim().split(/\s+/).length > 100 || item?.prompt?.length > 800)"
-                    class="mb-3">
-                    <div class="flex justify-center">
-                      <div class="ml-auto sm:w-[80%] md:w-[70%] lg:w-[60%] xl:w-[50%]" v-html="PastePreviewComponent(
-                        item?.prompt?.trim()?.split('#pastedText#')[1] || '',
-                        item?.prompt?.trim().split('#pastedText#')[1]?.split(/\s+/)?.length || 0,
-                        item?.prompt?.trim()?.split('#pastedText#')[1]?.length || 0, true
-                      )">
+                    class="flex items-start gap-2 font-medium bg-gray-100 dark:bg-gray-800 text-black dark:text-gray-100 px-4 rounded-2xl prose prose-sm dark:prose-invert chat-bubble w-fit max-w-full">
+                    <!-- Avatar container -->
+                    <div class="flex-shrink-0 py-3">
+                      <div
+                        class="flex items-center justify-center w-7 h-7 text-gray-100 dark:text-gray-800 bg-gray-700 dark:bg-gray-200 rounded-full text-sm font-semibold">
+                        {{ parsedUserDetails.username.toUpperCase().slice(0, 2) }}
+                      </div>
+                    </div>
+
+                    <!-- Message content container -->
+                    <div class="flex-1 min-w-0">
+                      <div class="break-words text-base leading-relaxed"
+                        v-html="renderMarkdown((item && item?.prompt && item?.prompt?.length > 800) ? item?.prompt?.trim().split('#pastedText#')[0] : item.prompt || '')">
                       </div>
                     </div>
                   </div>
 
-                </div>
-              </div>
-            </div>
+                  <div class="flex flex-col gap-3 mt-2">
+                    <!-- Link Previews for User Messages -->
+                    <div v-if="extractUrls(item.prompt || '').length > 0" class="w-full">
+                      <div v-for="url in extractUrls(item.prompt || '').slice(0, 3)" :key="`user-${i}-${url}`">
+                        <div v-if="linkPreviewCache.get(url)"
+                          v-html="LinkPreviewComponent({ preview: linkPreviewCache.get(url)! })"></div>
+                      </div>
+                    </div>
 
-            <!-- Bot Bubble -->
-            <div class="flex w-full md:max-w-3xl max-w-full relative pb-[20px]">
-              <div
-                class="bg-none max-w-full w-full chat-message leading-relaxed text-black dark:text-gray-100 p-1 rounded-2xl prose prose-sm dark:prose-invert">
-                <!-- Loading state -->
-                <div v-if="isLoadingState(item.response)"
-                  class="flex w-full rounded-lg bg-gray-50 dark:bg-gray-800 p-2 items-center animate-pulse gap-2 text-gray-500 dark:text-gray-400">
-                  <i class="pi pi-spin pi-spinner"></i>
-                  <span class="text-sm">{{ getLoadingMessage(item.response) }}</span>
-                </div>
-
-                <!-- Regular response with enhanced link handling -->
-                <div v-else>
-                  <div class="break-words overflow-x-hidden" v-html="renderMarkdown(item.response || '')"></div>
-
-                  <!-- Link Previews Section -->
-                  <div v-if="extractUrls(item.response || '').length > 0" class="mt-2 sm:mt-3">
-                    <div v-for="url in extractUrls(item.response || '').slice(0, 3)" :key="url">
-                      <div v-if="linkPreviewCache.get(url)"
-                        v-html="LinkPreviewComponent({ preview: linkPreviewCache.get(url)! })"></div>
+                    <div
+                      v-if="item && item.prompt && (item?.prompt?.trim().split(/\s+/).length > 100 || item?.prompt?.length > 800)"
+                      class="mb-3">
+                      <div class="flex justify-center">
+                        <div class="ml-auto sm:w-[80%] md:w-[70%] lg:w-[60%] xl:w-[50%]" v-html="PastePreviewComponent(
+                          item?.prompt?.trim()?.split('#pastedText#')[1] || '',
+                          item?.prompt?.trim().split('#pastedText#')[1]?.split(/\s+/)?.length || 0,
+                          item?.prompt?.trim()?.split('#pastedText#')[1]?.length || 0, true
+                        )">
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
+              </div>
 
-                <!-- Actions - Responsive with fewer labels on mobile -->
-                <div v-if="!isLoadingState(item.response)"
-                  class="flex flex-wrap justify-end gap-2 sm:gap-3 mt-2 text-gray-500 dark:text-gray-400 text-sm">
-                  <button @click="copyResponse(item.response, i)"
-                    class="flex items-center gap-1 hover:text-blue-600 dark:hover:text-blue-400 transition-colors min-h-[32px]">
-                    <i class="pi pi-copy"></i>
-                    <span>{{ copiedIndex === i ? 'Copied!' : 'Copy' }}</span>
-                  </button>
+              <!-- Bot Bubble -->
+              <div class="flex w-full md:max-w-3xl max-w-full relative pb-[20px]">
+                <div
+                  class="bg-none max-w-full w-full chat-message leading-relaxed text-black dark:text-gray-100 p-1 rounded-2xl prose prose-sm dark:prose-invert">
+                  <!-- Loading state -->
+                  <div v-if="isLoadingState(item.response)"
+                    class="flex w-full rounded-lg bg-gray-50 dark:bg-gray-800 p-2 items-center animate-pulse gap-2 text-gray-500 dark:text-gray-400">
+                    <i class="pi pi-spin pi-spinner"></i>
+                    <span class="text-sm">{{ getLoadingMessage(item.response) }}</span>
+                  </div>
 
-                  <button @click="shareResponse(item.response, item.prompt)"
-                    class="flex items-center gap-1 hover:text-green-600 dark:hover:text-green-400 transition-colors min-h-[32px]">
-                    <i class="pi pi-share-alt"></i>
-                    <span>Share</span>
-                  </button>
+                  <!-- Regular response with enhanced link handling -->
+                  <div v-else>
+                    <!-- Check if it's a deep search result -->
+                    <template v-if="isDeepSearchResult(item.response)">
+                      <div class="break-words overflow-x-hidden"
+                        v-html="renderMarkdown(renderDeepSearchResult(JSON.parse(item.response), getPagination(i).currentPage))">
+                      </div>
+                    </template>
 
-                  <button @click="refreshResponse(item.prompt)" :disabled="isLoading"
-                    class="flex items-center gap-1 hover:text-orange-600 dark:hover:text-orange-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-h-[32px]">
-                    <i class="pi pi-refresh"></i>
-                    <span>Refresh</span>
-                  </button>
+                    <!-- Regular response -->
+                    <template v-else>
+                      <div class="break-words overflow-x-hidden" v-html="renderMarkdown(item.response || '')"></div>
+                    </template>
 
-                  <button @click="deleteMessage(i)" :disabled="isLoading"
-                    class="flex items-center gap-1 hover:text-red-600 dark:hover:text-red-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-h-[32px]">
-                    <i class="pi pi-trash"></i>
-                    <span>Delete</span>
-                  </button>
+                    <!-- Link Previews Section -->
+                    <!-- <div v-if="extractUrls(item.response || '').length > 0" class="mt-2 sm:mt-3">
+                      <div v-for="url in extractUrls(item.response || '').slice(0, 3)" :key="url">
+                        <div v-if="linkPreviewCache.get(url)"
+                          v-html="LinkPreviewComponent({ preview: linkPreviewCache.get(url)! })"></div>
+                      </div>
+                    </div> -->
+                  </div>
+
+                  <!-- Actions - Responsive with fewer labels on mobile -->
+                  <div v-if="!isLoadingState(item.response)"
+                    class="flex flex-wrap items-center justify-between gap-2 sm:gap-3 mt-3 text-gray-500 dark:text-gray-400 text-sm">
+
+                    <!-- Left side: Navigation for deep search -->
+                    <div v-if="isDeepSearchResult(item.response) && getPagination(i).totalPages > 1" class="flex mr-auto items-center gap-2">
+                      <button @click="prevResult(i)" :disabled="getPagination(i).currentPage === 0"
+                        class="flex items-center gap-1 hover:text-blue-600 dark:hover:text-blue-400 transition-colors disabled:opacity-30 disabled:cursor-not-allowed min-h-[32px]">
+                        <i class="pi pi-chevron-left"></i>
+                        <span class="hidden sm:inline">Previous</span>
+                      </button>
+
+                      <button @click="nextResult(i)"
+                        :disabled="getPagination(i).currentPage >= getPagination(i).totalPages - 1"
+                        class="flex items-center gap-1 hover:text-blue-600 dark:hover:text-blue-400 transition-colors disabled:opacity-30 disabled:cursor-not-allowed min-h-[32px]">
+                        <span class="hidden sm:inline">Next</span>
+                        <i class="pi pi-chevron-right"></i>
+                      </button>
+                    </div>
+
+                    <!-- Pagination Info -->
+                    <div v-if="isDeepSearchResult(item.response) && getPagination(i).totalPages > 1" class="mx-auto text-center text-sm text-gray-600 dark:text-gray-400">
+                      Result {{ getPagination(i).currentPage + 1 }} of {{ getPagination(i).totalPages }}
+                    </div>
+
+                    <!-- Right side: Regular actions -->
+                    <div class="flex flex-wrap ml-auto gap-2 sm:gap-3">
+                      <button @click="copyResponse(item.response, i)"
+                        class="flex items-center gap-1 hover:text-blue-600 dark:hover:text-blue-400 transition-colors min-h-[32px]">
+                        <ClipboardList :size="16" />
+                        <span>{{ copiedIndex === i ? 'Copied!' : 'Copy' }}</span>
+                      </button>
+
+                      <button @click="shareResponse(item.response, item.prompt)"
+                        class="flex items-center gap-1 hover:text-green-600 dark:hover:text-green-400 transition-colors min-h-[32px]">
+                        <i class="pi pi-share-alt"></i>
+                        <span>Share</span>
+                      </button>
+
+                      <button @click="refreshResponse(item.prompt)" :disabled="isLoading"
+                        class="flex items-center gap-1 hover:text-orange-600 dark:hover:text-orange-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-h-[32px]">
+                        <i class="pi pi-refresh"></i>
+                        <span>Retry</span>
+                      </button>
+
+                      <button @click="deleteMessage(i)" :disabled="isLoading"
+                        class="flex items-center gap-1 hover:text-red-600 dark:hover:text-red-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-h-[32px]">
+                        <Trash :size="16" />
+                        <span>Delete</span>
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -2907,7 +2974,7 @@ onUnmounted(() => {
                 </div>
               </div>
 
-              <!-- Input Area with Voice Recording - FLEX COL LAYOUT -->
+              <!-- Input Area with Voice Recording -->
               <div class="flex flex-col w-full bg-white dark:bg-gray-900 rounded-2xl px-2 sm:px-3 py-2 gap-1 sm:gap-2"
                 :class="inputDisabled ? 'opacity-50 border border-t dark:border-gray-700 pointer-events-none' :
                   showUpgradeBanner ? 'border border-t dark:border-gray-700' : ''">
@@ -2940,7 +3007,7 @@ onUnmounted(() => {
                       'disabled:opacity-50 disabled:cursor-not-allowed',
                       isRecording ? 'bg-red-50 border-red-200 dark:border-red-800' : 'focus:border-blue-500 dark:focus:border-blue-400'
                     ]" :placeholder="inputPlaceholderText">
-                  </textarea>
+          </textarea>
                 </div>
 
                 <!-- Buttons Row - Below textarea -->
@@ -3052,7 +3119,7 @@ onUnmounted(() => {
         </div>
       </div>
     </div>
-    <TextHightlightPopover/>
+    <TextHightlightPopover />
     <PastePreviewModal :data="{
       showPasteModal,
       currentPasteContent,
