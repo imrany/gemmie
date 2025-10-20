@@ -58,6 +58,8 @@ const syncStatus = ref({
   syncProgress: 0
 })
 
+const isOpenTextHighlightPopover = ref(false)
+
 const currentChat: ComputedRef<CurrentChat | undefined> = computed(() => {
   return chats.value.find(chat => chat.id === currentChatId.value)
 })
@@ -686,6 +688,11 @@ function scrollToLastMessage() {
 
 function handleScroll() {
   try {
+    console.log('scrolling')
+    if (isOpenTextHighlightPopover.value) {
+      isOpenTextHighlightPopover.value = false
+    }
+
     const elem = scrollableElem.value;
     if (!elem) return;
 
@@ -2506,6 +2513,7 @@ onMounted(async () => {
       console.error('Error loading collapsed state:', error)
     }
 
+    window.addEventListener('scroll', handleScroll, { passive: true })
     // Resize handler
     screenWidth.value = window.innerWidth
     handleResize = () => {
@@ -2629,11 +2637,14 @@ onUnmounted(() => {
   if (userDetailsDebounceTimer) {
     clearTimeout(userDetailsDebounceTimer)
   }
+
+  window.removeEventListener('scroll', handleScroll)
 })
 
 // Global state object with all functions and reactive references
 const globalState = {
   // Reactive references
+  isOpenTextHighlightPopover,
   FREE_REQUEST_LIMIT,
   requestCount,
   userDetailsDebounceTimer,
