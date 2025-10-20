@@ -16,6 +16,14 @@ import { useRoute } from "vue-router"
 import { renderMarkdown } from "@/utils/markdownSupport"
 import TextHightlightPopover from "@/components/TextHightlightPopover.vue"
 import { ClipboardList, Trash } from "lucide-vue-next"
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination"
 
 type ModeOption = {
   mode: 'light-response' | 'web-search' | 'deep-search',
@@ -711,6 +719,18 @@ function prevResult(messageIndex: number) {
     deepSearchPagination.value.set(messageIndex, {
       ...pagination,
       currentPage: pagination.currentPage - 1
+    })
+    deepSearchPagination.value = new Map(deepSearchPagination.value) // Trigger reactivity
+    scrollToLastMessage()
+  }
+}
+
+function goToPage(messageIndex: number, pageIndex: number) {
+  const pagination = getPagination(messageIndex)
+  if (pagination.currentPage > 0) {
+    deepSearchPagination.value.set(messageIndex, {
+      ...pagination,
+      currentPage: pageIndex
     })
     deepSearchPagination.value = new Map(deepSearchPagination.value) // Trigger reactivity
     scrollToLastMessage()
@@ -2799,23 +2819,30 @@ onUnmounted(() => {
 
                     <!-- Left side: Navigation for deep search -->
                     <div v-if="isDeepSearchResult(item.response) && getPagination(i).totalPages > 1" class="flex mr-auto items-center gap-2">
-                      <button @click="prevResult(i)" :disabled="getPagination(i).currentPage === 0"
-                        class="flex items-center gap-1 hover:text-blue-600 dark:hover:text-blue-400 transition-colors disabled:opacity-30 disabled:cursor-not-allowed min-h-[32px]">
-                        <i class="pi pi-chevron-left"></i>
-                        <span class="hidden sm:inline">Previous</span>
-                      </button>
+                      <Pagination 
+                        :items-per-page="1" 
+                        :total="getPagination(i).totalPages" 
+                        :default-page="getPagination(i).currentPage + 1"
+                        @update:page="(newPage) => goToPage(i, newPage - 1)"
+                      >
+                        <PaginationContent v-slot="{ items }">
+                          <PaginationPrevious @click="prevResult(i)" :disabled="getPagination(i).currentPage === 0" />
 
-                      <button @click="nextResult(i)"
-                        :disabled="getPagination(i).currentPage >= getPagination(i).totalPages - 1"
-                        class="flex items-center gap-1 hover:text-blue-600 dark:hover:text-blue-400 transition-colors disabled:opacity-30 disabled:cursor-not-allowed min-h-[32px]">
-                        <span class="hidden sm:inline">Next</span>
-                        <i class="pi pi-chevron-right"></i>
-                      </button>
-                    </div>
+                          <template v-for="(paginationItem, index) in items" :key="index">
+                            <PaginationItem
+                              v-if="paginationItem.type === 'page'"
+                              :value="paginationItem.value"
+                              :is-active="paginationItem.value === getPagination(i).currentPage + 1"
+                              @click="goToPage(i, paginationItem.value - 1)"
+                            >
+                              {{ paginationItem.value }}
+                            </PaginationItem>
+                            <PaginationEllipsis v-else-if="paginationItem.type === 'ellipsis'" :key="`ellipsis-${index}`" />
+                          </template>
 
-                    <!-- Pagination Info -->
-                    <div v-if="isDeepSearchResult(item.response) && getPagination(i).totalPages > 1" class="mx-auto text-center text-sm text-gray-600 dark:text-gray-400">
-                      Result {{ getPagination(i).currentPage + 1 }} of {{ getPagination(i).totalPages }}
+                          <PaginationNext @click="nextResult(i)" :disabled="getPagination(i).currentPage >= getPagination(i).totalPages - 1" />
+                        </PaginationContent>
+                      </Pagination>
                     </div>
 
                     <!-- Right side: Regular actions -->
@@ -3007,7 +3034,7 @@ onUnmounted(() => {
                       'disabled:opacity-50 disabled:cursor-not-allowed',
                       isRecording ? 'bg-red-50 border-red-200 dark:border-red-800' : 'focus:border-blue-500 dark:focus:border-blue-400'
                     ]" :placeholder="inputPlaceholderText">
-          </textarea>
+                  </textarea>
                 </div>
 
                 <!-- Buttons Row - Below textarea -->
