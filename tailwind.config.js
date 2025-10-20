@@ -3,10 +3,10 @@ export default {
     content: ['./index.html', './src/**/*.{vue,js,ts,jsx,tsx}'],
     darkMode: 'class', // or false or 'class' or 'media'
     theme: {
-       extend: {},
+    	extend: {}
     },
     variants: {
         extend: {},
     },
-    plugins: [],
+    plugins: [require("tailwindcss-animate")],
 }
