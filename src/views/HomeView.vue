@@ -14,7 +14,7 @@ import { copyPasteContent, detectContentType } from "@/utils/previewPasteContent
 import PastePreviewModal from "@/components/Modals/PastePreviewModal.vue"
 import { useRoute } from "vue-router"
 import { renderMarkdown } from "@/utils/markdownSupport"
-import TextHightlightDropdown from "@/components/Dropdowns/TextHightlightDropdown.vue"
+import TextHightlightPopover from "@/components/TextHightlightPopover.vue"
 
 type ModeOption = {
   mode: 'light-response' | 'web-search' | 'deep-search',
@@ -3052,7 +3052,7 @@ onUnmounted(() => {
         </div>
       </div>
     </div>
-    <TextHightlightDropdown/>
+    <TextHightlightPopover/>
     <PastePreviewModal :data="{
       showPasteModal,
       currentPasteContent,

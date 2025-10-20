@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, nextTick, onMounted, onUnmounted, inject, type Ref } from 'vue' // Add lifecycle hooks
+import { ref, onMounted, onUnmounted, inject, type Ref } from 'vue'
 import { toast } from 'vue-sonner'
 import {
   Popover,
@@ -17,7 +17,7 @@ const triggerElement = ref<HTMLElement | null>(null)
 const triggerStyle = ref({ top: '0px', left: '0px' })
 const actualSide = ref('top')
 
-async function handleMouseUp() {
+function handleMouseUp() {
   const selection = window.getSelection()
   const text = selection?.toString().trim()
 
@@ -28,7 +28,6 @@ async function handleMouseUp() {
     const rect = range?.getBoundingClientRect()
 
     if (rect && triggerElement.value) {
-      // Position trigger element at the center of selection, above the text
       triggerStyle.value = {
         top: (rect.top + window.scrollY - 10) + 'px',
         left: (rect.left + window.scrollX + rect.width / 2) + 'px'
@@ -39,31 +38,41 @@ async function handleMouseUp() {
   }
 }
 
+function handleContextMenu(e: MouseEvent) {
+  if (window.getSelection()?.toString().length ?? 0 > 0) {
+    e.preventDefault()
+  }
+}
+
 function copyText() {
   navigator.clipboard.writeText(selectedText.value)
   toast.success('Copied to clipboard!')
   isOpenTextHighlightPopover.value = false
+  window.getSelection()?.removeAllRanges()
 }
 
 function speakText() {
   const utterance = new SpeechSynthesisUtterance(selectedText.value)
   utterance.rate = 1
   window.speechSynthesis.speak(utterance)
-  toast.success('Playing...')
   isOpenTextHighlightPopover.value = false
+  window.getSelection()?.removeAllRanges()
 }
 
 function translateText() {
   window.open(`https://translate.google.com/?text=${encodeURIComponent(selectedText.value)}`, '_blank')
   isOpenTextHighlightPopover.value = false
+  window.getSelection()?.removeAllRanges()
 }
 
 onMounted(() => {
   document.addEventListener('mouseup', handleMouseUp)
+  document.addEventListener('contextmenu', handleContextMenu)
 })
 
 onUnmounted(() => {
   document.removeEventListener('mouseup', handleMouseUp)
+  document.removeEventListener('contextmenu', handleContextMenu)
 })
 </script>
 
