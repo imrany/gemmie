@@ -1491,7 +1491,7 @@ async function refreshResponse(oldPrompt?: string) {
     // Re-run link previews if needed
     await processLinksInResponse(msgIndex)
 
-    // incrementRequestCount()
+    incrementRequestCount()
   } catch (err: any) {
     console.error('Refresh error:', err)
     toast.error(`Failed to refresh response: ${err.message}`)
