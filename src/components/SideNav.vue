@@ -4,7 +4,7 @@ import { ref, inject, computed, onMounted, onUnmounted, nextTick, type Ref } fro
 import { useRouter } from 'vue-router';
 import ChatDropdown from './Dropdowns/ChatDropdown.vue';
 import ProfileDropdown from './Dropdowns/ProfileDropdown.vue';
-import { CirclePlus } from 'lucide-vue-next'
+import { Plus } from 'lucide-vue-next'
 
 const globalState = inject('globalState') as {
   currentChatId: Ref<string>,
@@ -235,7 +235,7 @@ const handleSidebarToggle = () => {
         class="px-3 mb-4 mt-2 max-md:text-lg flex flex-col gap-1 font-light text-sm">
         <button @click="handleNavAction(() => router.push('/new'))" title="New Chat"
           class="w-full font-normal flex items-center gap-2 h-[40px] hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg px-2 transition-colors">
-          <CirclePlus class="text-gray-500 dark:text-gray-400"/>
+          <Plus class="text-gray-500 dark:text-gray-400"/>
           <span v-if="showFullSidebar" class="dark:text-gray-200">New Chat</span>
         </button>
 
