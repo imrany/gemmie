@@ -4,7 +4,13 @@ import { ref, inject, computed, onMounted, onUnmounted, nextTick, type Ref } fro
 import { useRouter } from 'vue-router';
 import ChatDropdown from './Dropdowns/ChatDropdown.vue';
 import ProfileDropdown from './Dropdowns/ProfileDropdown.vue';
-import { Plus } from 'lucide-vue-next'
+import { WalletCards } from 'lucide-vue-next'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 
 const globalState = inject('globalState') as {
   currentChatId: Ref<string>,
@@ -167,6 +173,21 @@ const handleSidebarToggle = () => {
     hideSidebar();
   }
 };
+
+const navLinks =[
+  {
+    label: "New Chat",
+    description: "New Chat",
+    icon: '<i class="pi pi-plus text-gray-500 dark:text-gray-400"></i>',
+    action:()=> handleNavAction(() => router.push('/new'))
+  },
+  {
+    label: "Chats",
+    description: "Recent Chats",
+    icon: '<i class="pi pi-comments text-gray-500 dark:text-gray-400"></i>',
+    action:()=> handleNavAction(() => router.push('/chats'))
+  }
+]
 </script>
 
 <template>
@@ -233,39 +254,64 @@ const handleSidebarToggle = () => {
       <!-- Navigation Menu -->
       <div v-if="props.data.parsedUserDetails.username"
         class="px-3 mb-4 mt-2 max-md:text-lg flex flex-col gap-1 font-light text-sm">
-        <button @click="handleNavAction(() => router.push('/new'))" title="New Chat"
-          class="w-full font-normal flex items-center gap-2 h-[40px] hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg px-2 transition-colors">
-          <Plus class="text-gray-500 dark:text-gray-400"/>
-          <span v-if="showFullSidebar" class="dark:text-gray-200">New Chat</span>
-        </button>
+       
+        <div v-for="navlink in navLinks">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger as-child>
+                <button @click="navlink.action"
+                  class="w-full font-normal flex items-center gap-2 h-[40px] hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg px-2 transition-colors">
+                  <span v-html="navlink.icon"></span>
+                  <span v-if="showFullSidebar" class="dark:text-gray-200">{{navlink.label }}</span>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right" :avoid-collisions="true">
+                <p>{{ navlink.description }}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
 
-        <button @click="handleNavAction(() => router.push('/chats'))" title="Recent Chats"
-          class="w-full font-normal flex items-center gap-2 h-[40px] hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg px-2 transition-colors">
-          <i class="pi pi-comments text-gray-500 dark:text-gray-400"></i>
-          <span v-if="showFullSidebar" class="dark:text-gray-200">Chats</span>
-        </button>
-
+        
         <div v-if="isAuthenticated">
-          <button v-if="screenWidth > 720" @click="openWorkplace" title="Workplace"
-            class="w-full font-normal flex items-center gap-2 h-[40px] hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg px-2 transition-colors">
-            <i class="pi pi-pencil text-gray-500 dark:text-gray-400"></i>
-            <span v-if="showFullSidebar" class="dark:text-gray-200">Workplace</span>
-          </button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger as-child>
+                <button v-if="screenWidth > 720" @click="openWorkplace"
+                  class="w-full font-normal flex items-center gap-2 h-[40px] hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg px-2 transition-colors">
+                  <i class="pi pi-pencil text-gray-500 dark:text-gray-400"></i>
+                  <span v-if="showFullSidebar" class="dark:text-gray-200">Workplace</span>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right" :avoid-collisions="true">
+                <p>Workplace</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
 
           <!-- Sync button -->
-          <button title="Sync Data" @click="props.functions.manualSync"
-            :disabled="syncStatus.syncing || !props.data.parsedUserDetails.syncEnabled"
-            class="w-full font-normal flex items-center gap-2 h-[40px] hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg px-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
-            <i :class="[
-              syncStatus.syncing ? 'pi pi-spin pi-spinner' : 'pi pi-refresh',
-              'text-gray-500 dark:text-gray-400'
-            ]"></i>
-            <span v-if="showFullSidebar" class="dark:text-gray-200">
-              {{ syncStatus.syncing ? 'Syncing...' : 'Sync Data' }}
-            </span>
-            <div v-if="syncStatus.hasUnsyncedChanges && props.data.parsedUserDetails.syncEnabled && showFullSidebar"
-              class="ml-auto w-2 h-2 bg-orange-500 dark:bg-orange-400 rounded-full"></div>
-          </button>
+           <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger as-child>
+                <button @click="props.functions.manualSync"
+                  :disabled="syncStatus.syncing || !props.data.parsedUserDetails.syncEnabled"
+                  class="w-full font-normal flex items-center gap-2 h-[40px] hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg px-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                  <i :class="[
+                    syncStatus.syncing ? 'pi pi-spin pi-spinner' : 'pi pi-refresh',
+                    'text-gray-500 dark:text-gray-400'
+                  ]"></i>
+                  <span v-if="showFullSidebar" class="dark:text-gray-200">
+                    {{ syncStatus.syncing ? 'Syncing...' : 'Sync Data' }}
+                  </span>
+                  <div v-if="syncStatus.hasUnsyncedChanges && props.data.parsedUserDetails.syncEnabled && showFullSidebar"
+                    class="ml-auto w-2 h-2 bg-orange-500 dark:bg-orange-400 rounded-full"></div>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right" :avoid-collisions="true">
+                <p>Sync Data</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
       </div>
 
