@@ -312,9 +312,6 @@ function loadChats() {
       }
     }
     updateExpandedArray()
-
-    // Load pagination state
-    loadPaginationState()
   } catch (error) {
     console.error('Failed to load chats:', error)
     chats.value = []
@@ -477,10 +474,33 @@ function removePastePreview() {
 function getPagination(messageIndex: number) {
   if (!currentChatId.value) return { currentPage: 0, totalPages: 0 }
   
-  const chatPagination = deepSearchPagination.value.get(currentChatId.value)
-  if (!chatPagination) return { currentPage: 0, totalPages: 0 }
+  const message = currentMessages.value[messageIndex]
+  if (!message || !isDeepSearchResult(message.response)) {
+    return { currentPage: 0, totalPages: 0 }
+  }
   
-  return chatPagination.get(messageIndex) || { currentPage: 0, totalPages: 0 }
+  // Get or create chat pagination map
+  let chatPagination = deepSearchPagination.value.get(currentChatId.value)
+  if (!chatPagination) {
+    chatPagination = new Map()
+    deepSearchPagination.value.set(currentChatId.value, chatPagination)
+  }
+  
+  // Get or initialize pagination for this message
+  let pagination = chatPagination.get(messageIndex)
+  if (!pagination) {
+    // Extract total pages from the deep search result
+    try {
+      const parsed = JSON.parse(message.response)
+      const totalPages = parsed.results?.length || 0
+      pagination = { currentPage: 0, totalPages }
+      chatPagination.set(messageIndex, pagination)
+    } catch (e) {
+      pagination = { currentPage: 0, totalPages: 0 }
+    }
+  }
+  
+  return pagination
 }
 
 // Navigation functions
@@ -556,48 +576,6 @@ function goToPage(messageIndex: number, pageIndex: number) {
     deepSearchPagination.value = new Map(deepSearchPagination.value)
     
     nextTick(() => scrollToLastMessage())
-  }
-}
-
-// Save pagination state to localStorage
-function savePaginationState() {
-  try {
-    const paginationData: Record<string, Record<number, { currentPage: number; totalPages: number }>> = {}
-    
-    deepSearchPagination.value.forEach((chatPagination, chatId) => {
-      const messageData: Record<number, { currentPage: number; totalPages: number }> = {}
-      chatPagination.forEach((pagination, messageIndex) => {
-        messageData[messageIndex] = pagination
-      })
-      paginationData[chatId] = messageData
-    })
-    
-    localStorage.setItem('deepSearchPagination', JSON.stringify(paginationData))
-  } catch (error) {
-    console.error('Failed to save pagination state:', error)
-  }
-}
-
-// Load pagination state from localStorage
-function loadPaginationState() {
-  try {
-    const stored = localStorage.getItem('deepSearchPagination')
-    if (stored) {
-      const paginationData = JSON.parse(stored)
-      const newMap = new Map<string, Map<number, { currentPage: number; totalPages: number }>>()
-      
-      Object.entries(paginationData).forEach(([chatId, messageData]) => {
-        const chatMap = new Map<number, { currentPage: number; totalPages: number }>()
-        Object.entries(messageData as Record<number, { currentPage: number; totalPages: number }>).forEach(([index, pagination]) => {
-          chatMap.set(Number(index), pagination)
-        })
-        newMap.set(chatId, chatMap)
-      })
-      
-      deepSearchPagination.value = newMap
-    }
-  } catch (error) {
-    console.error('Failed to load pagination state:', error)
   }
 }
 
@@ -863,7 +841,6 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
 
     isLoading.value = false
     saveChats()
-    savePaginationState()
 
     // Trigger background sync if needed
     setTimeout(() => {
@@ -1082,7 +1059,6 @@ async function handleLinkOnlyRequest(promptValue: string, chatId: string, reques
     requestChatMap.value.delete(requestId)
     isLoading.value = false
     saveChats()
-    savePaginationState()
   }
 }
 
@@ -1276,7 +1252,6 @@ async function refreshResponse(oldPrompt?: string) {
   } finally {
     isLoading.value = false
     saveChats()
-    savePaginationState()
     observeNewVideoContainers()
   }
 }
@@ -2201,9 +2176,6 @@ watch(() => ({ ...planStatus.value }), (newStatus, oldStatus) => {
   }
 }, { deep: true })
 
-watch(deepSearchPagination, () => {
-  savePaginationState()
-}, { deep: true })
 
 watch([() => currentMessages.value.length, () => chats.value], () => {
   nextTick(() => {
