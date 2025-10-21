@@ -244,10 +244,20 @@ const navLinks =[
             </div>
           </div>
 
-          <button @click="handleSidebarToggle" title="Toggle Sidebar"
-            class="w-8 h-8 flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full cursor-pointer transition-colors">
-            <i :class="sidebarIconClass"></i>
-          </button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger as-child>
+                <button @click="handleSidebarToggle"
+                  class="w-8 h-8 flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full cursor-pointer transition-colors">
+                  <i :class="sidebarIconClass"></i>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent v-if="!showFullSidebar" side="right" :avoid-collisions="true">
+                <p>Toggle Sidebar</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+
         </div>
       </div>
 
