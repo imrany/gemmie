@@ -265,7 +265,7 @@ const navLinks =[
                   <span v-if="showFullSidebar" class="dark:text-gray-200">{{navlink.label }}</span>
                 </button>
               </TooltipTrigger>
-              <TooltipContent side="right" :avoid-collisions="true">
+              <TooltipContent v-if="!showFullSidebar" side="right" :avoid-collisions="true">
                 <p>{{ navlink.description }}</p>
               </TooltipContent>
             </Tooltip>
@@ -283,7 +283,7 @@ const navLinks =[
                   <span v-if="showFullSidebar" class="dark:text-gray-200">Workplace</span>
                 </button>
               </TooltipTrigger>
-              <TooltipContent side="right" :avoid-collisions="true">
+              <TooltipContent v-if="!showFullSidebar" side="right" :avoid-collisions="true">
                 <p>Workplace</p>
               </TooltipContent>
             </Tooltip>
@@ -307,7 +307,7 @@ const navLinks =[
                     class="ml-auto w-2 h-2 bg-orange-500 dark:bg-orange-400 rounded-full"></div>
                 </button>
               </TooltipTrigger>
-              <TooltipContent side="right" :avoid-collisions="true">
+              <TooltipContent v-if="!showFullSidebar" side="right" :avoid-collisions="true">
                 <p>Sync Data</p>
               </TooltipContent>
             </Tooltip>
