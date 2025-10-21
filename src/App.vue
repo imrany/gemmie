@@ -1224,7 +1224,7 @@ async function fetchLinkPreview(url: string, options: {
     }
 
     linkPreviewCache.value.set(url, updatedPreview)
-    if(cache){
+    if(options.cache){
       saveLinkPreviewCache()
     }
     return updatedPreview
@@ -1240,7 +1240,7 @@ async function fetchLinkPreview(url: string, options: {
     }
 
     linkPreviewCache.value.set(url, fallbackPreview)
-    if(cache){
+    if(options.cache){
       saveLinkPreviewCache()
     }
     return fallbackPreview
