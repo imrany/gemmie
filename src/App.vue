@@ -1178,10 +1178,12 @@ async function fetchLinkPreview(url: string, options: {
     }
   }
 
-  if (linkPreviewCache.value.has(url)) {
+  // Only return from cache if caching is enabled
+  if (cache && linkPreviewCache.value.has(url)) {
     return linkPreviewCache.value.get(url)!
   }
 
+  // Create preview object but don't cache it yet if cache is false
   const preview: LinkPreview = { 
     url, 
     title: '',
@@ -1189,7 +1191,11 @@ async function fetchLinkPreview(url: string, options: {
     loading: true, 
     error: false 
   }
-  linkPreviewCache.value.set(url, preview)
+  
+  // Only set in cache if caching is enabled
+  if (cache) {
+    linkPreviewCache.value.set(url, preview)
+  }
 
   try {
     const lang = "en"
@@ -1231,8 +1237,9 @@ async function fetchLinkPreview(url: string, options: {
       error: false
     }
 
-    linkPreviewCache.value.set(url, updatedPreview)
+    // Only update cache if caching is enabled
     if (cache) {
+      linkPreviewCache.value.set(url, updatedPreview)
       saveLinkPreviewCache()
     }
     return updatedPreview
@@ -1247,8 +1254,9 @@ async function fetchLinkPreview(url: string, options: {
       error: true
     }
 
-    linkPreviewCache.value.set(url, fallbackPreview)
+    // Only update cache if caching is enabled
     if (cache) {
+      linkPreviewCache.value.set(url, fallbackPreview)
       saveLinkPreviewCache()
     }
     return fallbackPreview
