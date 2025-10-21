@@ -85,8 +85,6 @@ const fetchPreview = async (url:string) => {
 
 // Watch for popover open and link changes
 watch([isOpen, () => props.data?.href], ([newIsOpen, newHref], [oldIsOpen, oldHref]) => {
-  console.log('Watch triggered:', { newIsOpen, newHref, oldIsOpen, oldHref })
-  
   const hrefChanged = newHref !== oldHref
   const shouldFetch = newIsOpen && newHref
   
