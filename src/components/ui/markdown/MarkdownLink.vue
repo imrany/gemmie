@@ -47,13 +47,11 @@ const getDomain = (url: string) => {
 }
 
 // Fetch link preview
-const fetchPreview = async () => {
-  if (preview.value) return
-  
-  // Set loading state
+const fetchPreview = async (url:string) => {
+  // Reset preview when fetching new URL
   preview.value = {
-    url: props.data.href,
-    domain: getDomain(props.data.href),
+    url: url,
+    domain: getDomain(url),
     title: props.data.text,
     description: '',
     previewImage: '',
@@ -62,29 +60,20 @@ const fetchPreview = async () => {
   }
   
   try {
-    // Replace this with your actual API endpoint
-    const data= await fetchLinkPreview(props.data.href, {
-        cache: false
+    const data = await fetchLinkPreview(url, {
+      cache: false
     })
     
     preview.value = {
-      url: props.data.href,
-      domain: getDomain(props.data.href),
+      ...data,
       title: data.title || props.data.text,
-      description: data.description || '',
-      previewImage: data.previewImage || data.previewImage || '',
-      video: data.video || '',
-      videoThumbnail: data.videoThumbnail || '',
-      videoType: data.videoType || undefined,
-      videoDuration: data.videoDuration || '',
-      embedHtml: data.embedHtml || '',
-      loading: false,
-      error: false
+      domain: data.domain || getDomain(url)
     }
   } catch (error) {
+    console.error('Failed to fetch link preview:', error)
     preview.value = {
-      url: props.data.href,
-      domain: getDomain(props.data.href),
+      url,
+      domain: getDomain(url),
       title: props.data.text,
       description: '',
       previewImage: '',
@@ -94,10 +83,25 @@ const fetchPreview = async () => {
   }
 }
 
-// Fetch preview when popover opens
-watch(isOpen, (newValue) => {
-  if (newValue && !preview.value) {
-    fetchPreview()
+// Watch for popover open and link changes
+watch([isOpen, () => props.data?.href], ([newIsOpen, newHref], [oldIsOpen, oldHref]) => {
+  console.log('Watch triggered:', { newIsOpen, newHref, oldIsOpen, oldHref })
+  
+  const hrefChanged = newHref !== oldHref
+  const shouldFetch = newIsOpen && newHref
+  
+  if (shouldFetch) {
+    // If href changed or no preview exists, fetch fresh data
+    if (hrefChanged || !preview.value || preview.value.url !== newHref) {
+      fetchPreview(newHref)
+    }
+  }
+}, { immediate: true })
+
+// Watch specifically for href changes when popover is open
+watch(() => props.data?.href, (newHref, oldHref) => {
+  if (newHref && newHref !== oldHref && isOpen.value) {
+    fetchPreview(newHref)
   }
 })
 </script>
