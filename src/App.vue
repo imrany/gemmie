@@ -1160,7 +1160,9 @@ function clearAllChats() {
   }
 }
 
-async function fetchLinkPreview(url: string): Promise<LinkPreview> {
+async function fetchLinkPreview(url: string, options: {
+  cache?: boolean
+}): Promise<LinkPreview> {
   try {
     new URL(url)
   } catch (error) {
@@ -1222,7 +1224,9 @@ async function fetchLinkPreview(url: string): Promise<LinkPreview> {
     }
 
     linkPreviewCache.value.set(url, updatedPreview)
-    saveLinkPreviewCache()
+    if(cache){
+      saveLinkPreviewCache()
+    }
     return updatedPreview
   } catch (error) {
     console.error("Failed to fetch link preview:", error)
@@ -1236,7 +1240,9 @@ async function fetchLinkPreview(url: string): Promise<LinkPreview> {
     }
 
     linkPreviewCache.value.set(url, fallbackPreview)
-    saveLinkPreviewCache()
+    if(cache){
+      saveLinkPreviewCache()
+    }
     return fallbackPreview
   }
 }
