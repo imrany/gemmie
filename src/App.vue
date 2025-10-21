@@ -1162,7 +1162,9 @@ function clearAllChats() {
 
 async function fetchLinkPreview(url: string, options: {
   cache?: boolean
-}): Promise<LinkPreview> {
+} = {}): Promise<LinkPreview> {
+  const { cache = true } = options
+  
   try {
     new URL(url)
   } catch (error) {
@@ -1180,7 +1182,13 @@ async function fetchLinkPreview(url: string, options: {
     return linkPreviewCache.value.get(url)!
   }
 
-  const preview: LinkPreview = { url, loading: true }
+  const preview: LinkPreview = { 
+    url, 
+    title: '',
+    domain: new URL(url).hostname,
+    loading: true, 
+    error: false 
+  }
   linkPreviewCache.value.set(url, preview)
 
   try {
@@ -1224,7 +1232,7 @@ async function fetchLinkPreview(url: string, options: {
     }
 
     linkPreviewCache.value.set(url, updatedPreview)
-    if(options.cache){
+    if (cache) {
       saveLinkPreviewCache()
     }
     return updatedPreview
@@ -1240,7 +1248,7 @@ async function fetchLinkPreview(url: string, options: {
     }
 
     linkPreviewCache.value.set(url, fallbackPreview)
-    if(options.cache){
+    if (cache) {
       saveLinkPreviewCache()
     }
     return fallbackPreview
