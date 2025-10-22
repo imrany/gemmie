@@ -473,19 +473,19 @@ function removePastePreview() {
 // Helper to get pagination for a message
 function getPagination(messageIndex: number) {
   if (!currentChatId.value) return { currentPage: 0, totalPages: 0 }
-  
+
   const message = currentMessages.value[messageIndex]
   if (!message || !isDeepSearchResult(message.response)) {
     return { currentPage: 0, totalPages: 0 }
   }
-  
+
   // Get or create chat pagination map
   let chatPagination = deepSearchPagination.value.get(currentChatId.value)
   if (!chatPagination) {
     chatPagination = new Map()
     deepSearchPagination.value.set(currentChatId.value, chatPagination)
   }
-  
+
   // Get or initialize pagination for this message
   let pagination = chatPagination.get(messageIndex)
   if (!pagination) {
@@ -499,14 +499,14 @@ function getPagination(messageIndex: number) {
       pagination = { currentPage: 0, totalPages: 0 }
     }
   }
-  
+
   return pagination
 }
 
 // Navigation functions
 function nextResult(messageIndex: number) {
   if (!currentChatId.value) return
-  
+
   const pagination = getPagination(messageIndex)
   if (pagination.currentPage < pagination.totalPages - 1) {
     // Get or create chat pagination map
@@ -515,23 +515,23 @@ function nextResult(messageIndex: number) {
       chatPagination = new Map()
       deepSearchPagination.value.set(currentChatId.value, chatPagination)
     }
-    
+
     // Update the specific message pagination
     chatPagination.set(messageIndex, {
       ...pagination,
       currentPage: pagination.currentPage + 1
     })
-    
+
     // Force reactivity
     deepSearchPagination.value = new Map(deepSearchPagination.value)
-    
+
     nextTick(() => scrollToLastMessage())
   }
 }
 
 function prevResult(messageIndex: number) {
   if (!currentChatId.value) return
-  
+
   const pagination = getPagination(messageIndex)
   if (pagination.currentPage > 0) {
     // Get or create chat pagination map
@@ -540,23 +540,23 @@ function prevResult(messageIndex: number) {
       chatPagination = new Map()
       deepSearchPagination.value.set(currentChatId.value, chatPagination)
     }
-    
+
     // Update the specific message pagination
     chatPagination.set(messageIndex, {
       ...pagination,
       currentPage: pagination.currentPage - 1
     })
-    
+
     // Force reactivity
     deepSearchPagination.value = new Map(deepSearchPagination.value)
-    
+
     nextTick(() => scrollToLastMessage())
   }
 }
 
 function goToPage(messageIndex: number, pageIndex: number) {
   if (!currentChatId.value) return
-  
+
   const pagination = getPagination(messageIndex)
   if (pageIndex >= 0 && pageIndex < pagination.totalPages) {  // FIXED: Proper validation
     // Get or create chat pagination map
@@ -565,16 +565,16 @@ function goToPage(messageIndex: number, pageIndex: number) {
       chatPagination = new Map()
       deepSearchPagination.value.set(currentChatId.value, chatPagination)
     }
-    
+
     // Update the specific message pagination
     chatPagination.set(messageIndex, {
       ...pagination,
       currentPage: pageIndex
     })
-    
+
     // Force reactivity
     deepSearchPagination.value = new Map(deepSearchPagination.value)
-    
+
     nextTick(() => scrollToLastMessage())
   }
 }
@@ -890,12 +890,12 @@ function formatSearchResults(searchData: any, mode: string, messageIndex?: numbe
       chatPagination = new Map()
       deepSearchPagination.value.set(currentChatId.value, chatPagination)
     }
-    
+
     chatPagination.set(messageIndex, {
       currentPage: 0,
       totalPages: results.length
     })
-    
+
     // Force reactivity
     deepSearchPagination.value = new Map(deepSearchPagination.value)
   }
@@ -1259,7 +1259,7 @@ async function refreshResponse(oldPrompt?: string) {
 // Helper to check if response is deep search result
 function isDeepSearchResult(response: string): boolean {
   if (!response || typeof response !== 'string') return false
-  
+
   try {
     if (response.startsWith('{') && response.includes('"mode"')) {
       const parsed = JSON.parse(response)
@@ -1268,7 +1268,7 @@ function isDeepSearchResult(response: string): boolean {
   } catch (e) {
     return false
   }
-  
+
   return false
 }
 
@@ -1344,7 +1344,7 @@ const scrollContainerPadding = computed(() => {
   if (isLoading.value) {
     return 'pb-[calc(100vh-100px)]'
   }
-  
+
   // After loading completes, calculate appropriate padding based on UI state
   if ((isRequestLimitExceeded.value || shouldShowUpgradePrompt.value) && pastePreview.value?.show) {
     return 'pb-[200px] sm:pb-[190px]'
@@ -1695,7 +1695,7 @@ function PastePreviewComponent(content: string, wordCount: number, charCount: nu
   const clickableClass = isClickable ? 'paste-preview-clickable cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors duration-200' : ''
 
   return `
-    <div class="paste-preview border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden my-2 bg-gray-100 dark:bg-gray-700 hover:shadow-md transition-all duration-300 w-full ${clickableClass}" 
+    <div class="paste-preview border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden my-2 bg-gray-100 dark:bg-gray-700 hover:shadow-md transition-all duration-300 w-full ${clickableClass}"
          id="${componentId}" ${clickableAttributes}>
       <div class="w-full">
         <div class="bg-gray-600 dark:bg-gray-800 px-3 py-1 text-white dark:text-gray-200 text-xs font-medium flex items-center gap-2 transition-colors duration-200">
@@ -2549,7 +2549,7 @@ onUnmounted(() => {
 
                     <!-- Message content container -->
                     <div class="flex-1 min-w-0">
-                      <MarkdownRenderer 
+                      <MarkdownRenderer
                         class="break-words text-base leading-relaxed"
                         :content="(item && item?.prompt && item?.prompt?.length > 800) ? item?.prompt?.trim().split('#pastedText#')[0] : item.prompt || ''"
                       />
@@ -2617,9 +2617,9 @@ onUnmounted(() => {
 
                     <!-- Left side: Navigation for deep search -->
                     <div v-if="isDeepSearchResult(item.response) && getPagination(i).totalPages > 1" class="flex mr-auto items-center gap-2">
-                      <Pagination 
-                        :items-per-page="1" 
-                        :total="getPagination(i).totalPages" 
+                      <Pagination
+                        :items-per-page="1"
+                        :total="getPagination(i).totalPages"
                         :default-page="getPagination(i).currentPage + 1"
                         @update:page="(newPage) => goToPage(i, newPage - 1)"
                       >
