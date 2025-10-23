@@ -190,7 +190,6 @@ const globalState = inject("globalState") as {
 const {
     chatDrafts,
     screenWidth,
-    confirmDialog,
     isCollapsed,
     authData,
     syncStatus,
@@ -203,12 +202,8 @@ const {
     chatsDebounceTimer,
     logout,
     isLoading,
-    expanded,
     showInput,
-    hasActiveRequestsForCurrentChat,
-    showConfirmDialog,
     cancelAllRequests,
-    cancelChatRequests,
     checkRequestLimitBeforeSubmit,
     setShowInput,
     clearAllChats,
@@ -230,27 +225,20 @@ const {
     fetchLinkPreview,
     loadLinkPreviewCache,
     saveLinkPreviewCache,
-    syncFromServer,
     syncToServer,
     currentChat,
-    linkPreview,
     currentMessages,
-    isDarkMode,
     updateExpandedArray,
-    apiCall,
     manualSync,
     toggleSidebar,
     autoGrow,
     handleAuth,
     isFreeUser,
     isUserOnline,
-    connectionStatus,
     checkInternetConnection,
     activeRequests,
     requestChatMap,
-    pendingResponses,
     performSmartSync,
-    requestCount,
     resetRequestCount,
     incrementRequestCount,
     loadRequestCount,
@@ -1066,7 +1054,7 @@ function formatSearchResults(
 
 // Function to render a single deep search result
 function renderDeepSearchResult(data: any, currentPage: number) {
-    const { results, metadata } = data;
+    const { results } = data;
     const result = results[currentPage];
 
     if (!result) return "No result available";
@@ -2262,12 +2250,6 @@ async function selectInputMode(
         // Update in-memory state - the watch will handle syncing
         parsedUserDetails.value.responseMode = mode;
         showInputModeDropdown.value = false;
-
-        const modeNames = {
-            "web-search": "Web Search",
-            "deep-search": "Deep Search",
-            "light-response": "Light Response",
-        };
     } catch (error) {
         console.error("Error selecting input mode:", error);
         parsedUserDetails.value.responseMode = originalMode;
