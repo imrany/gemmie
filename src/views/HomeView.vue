@@ -397,14 +397,15 @@ function prevAuthStep() {
 function validateCurrentStep(): boolean {
     try {
         switch (authStep.value) {
-            case 1:
+            case 1: {
                 const username = authData.value.username?.trim();
                 return !!(
                     username &&
                     username.length >= 2 &&
                     username.length <= 50
                 );
-            case 2:
+            }
+            case 2: {
                 const email = authData.value.email?.trim();
                 return !!(
                     email &&
@@ -412,16 +413,19 @@ function validateCurrentStep(): boolean {
                     email.length <= 100 &&
                     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
                 );
-            case 3:
+            }
+            case 3: {
                 const password = authData.value.password;
                 return !!(
                     password &&
                     password.length > 7 &&
                     password.length < 25
                 );
-            case 4:
+            }
+            case 4: {
                 const agreeToTerms = authData.value.agreeToTerms;
                 return agreeToTerms;
+            }
             default:
                 return false;
         }
@@ -3710,7 +3714,7 @@ onUnmounted(() => {
                                                     v-for="(
                                                         option, key
                                                     ) in modeOptions"
-                                                    :key="option.mode"
+                                                    :key="key"
                                                     type="button"
                                                     @click="
                                                         selectInputMode(
