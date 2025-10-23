@@ -1,1700 +1,1903 @@
 <script lang="ts" setup>
-import type { Ref } from "vue"
-import { ref, onMounted, nextTick, computed, onBeforeUnmount, inject, watch, onUnmounted } from "vue"
-import SideNav from "../components/SideNav.vue"
-import TopNav from "../components/TopNav.vue"
-import type { Chat, ConfirmDialogOptions, CurrentChat, LinkPreview, Res, UserDetails } from "@/types"
-import { toast } from 'vue-sonner'
-import { destroyVideoLazyLoading, initializeVideoLazyLoading, observeNewVideoContainers, pauseVideo, playEmbeddedVideo, playSocialVideo, resumeVideo, showVideoControls, stopDirectVideo, stopVideo, toggleDirectVideo, updateVideoControls } from "@/utils/videoProcessing"
-import { onUpdated } from "vue"
-import { extractUrls, generateChatTitle, copyCode, isPromptTooShort, WRAPPER_URL, detectLargePaste, SPINDLE_URL } from "@/utils/globals"
-import CreateSessView from "./CreateSessView.vue"
-import router from "@/router"
-import { copyPasteContent, detectContentType } from "@/utils/previewPasteContent"
-import PastePreviewModal from "@/components/Modals/PastePreviewModal.vue"
-import { useRoute } from "vue-router"
-import TextHightlightPopover from "@/components/TextHightlightPopover.vue"
-import { ClipboardList, Trash } from "lucide-vue-next"
+import type { Ref } from "vue";
 import {
-  Pagination,
-  PaginationContent,
-  PaginationEllipsis,
-  PaginationItem,
-  PaginationNext,
-  PaginationPrevious,
-} from "@/components/ui/pagination"
-import MarkdownRenderer from "@/components/ui/markdown/MarkdownRenderer.vue"
-import LinkPreviewComponent from "@/components/LinkPreview.vue"
-import EmptyChatView from "./EmptyChatView.vue"
+    ref,
+    onMounted,
+    nextTick,
+    computed,
+    onBeforeUnmount,
+    inject,
+    watch,
+    onUnmounted,
+} from "vue";
+import SideNav from "../components/SideNav.vue";
+import TopNav from "../components/TopNav.vue";
+import type {
+    Chat,
+    ConfirmDialogOptions,
+    CurrentChat,
+    LinkPreview,
+    Res,
+    UserDetails,
+} from "@/types";
+import { toast } from "vue-sonner";
+import {
+    destroyVideoLazyLoading,
+    initializeVideoLazyLoading,
+    observeNewVideoContainers,
+    pauseVideo,
+    playEmbeddedVideo,
+    playSocialVideo,
+    resumeVideo,
+    showVideoControls,
+    stopDirectVideo,
+    stopVideo,
+    toggleDirectVideo,
+    updateVideoControls,
+} from "@/utils/videoProcessing";
+import { onUpdated } from "vue";
+import {
+    extractUrls,
+    generateChatTitle,
+    copyCode,
+    isPromptTooShort,
+    WRAPPER_URL,
+    detectLargePaste,
+    SPINDLE_URL,
+} from "@/utils/globals";
+import CreateSessView from "./CreateSessView.vue";
+import router from "@/router";
+import {
+    copyPasteContent,
+    detectContentType,
+} from "@/utils/previewPasteContent";
+import PastePreviewModal from "@/components/Modals/PastePreviewModal.vue";
+import { useRoute } from "vue-router";
+import TextHightlightPopover from "@/components/TextHightlightPopover.vue";
+import { ClipboardList, Trash } from "lucide-vue-next";
+import {
+    Pagination,
+    PaginationContent,
+    PaginationEllipsis,
+    PaginationItem,
+    PaginationNext,
+    PaginationPrevious,
+} from "@/components/ui/pagination";
+import MarkdownRenderer from "@/components/ui/markdown/MarkdownRenderer.vue";
+import LinkPreviewComponent from "@/components/LinkPreview.vue";
+import EmptyChatView from "./EmptyChatView.vue";
 
 type ModeOption = {
-  mode: 'light-response' | 'web-search' | 'deep-search',
-  label: string,
-  description: string,
-  icon: string,
-  title: string
-}
+    mode: "light-response" | "web-search" | "deep-search";
+    label: string;
+    description: string;
+    icon: string;
+    title: string;
+};
 
 // Inject global state
-const globalState = inject('globalState') as {
-  handleAuth: (data: {
-    username: string;
-    email: string;
-    password: string;
-  }) => any,
-  chatDrafts: Ref<Map<string, string>>,
-  userDetailsDebounceTimer: any,
-  chatsDebounceTimer: any,
-  screenWidth: Ref<number>,
-  confirmDialog: Ref<ConfirmDialogOptions>,
-  isCollapsed: Ref<boolean>,
-  authData: Ref<{ username: string; email: string; password: string; agreeToTerms: boolean; }>,
-  syncStatus: Ref<{
-    lastSync: Date | null;
-    syncing: boolean;
-    hasUnsyncedChanges: boolean;
-    showSyncIndicator: boolean;
-    syncMessage: string;
-    syncProgress: number;
-    lastError: string | null;
-    retryCount: number;
-    maxRetries: number;
-  }>,
-  isAuthenticated: Ref<boolean>,
-  parsedUserDetails: Ref<UserDetails>,
-  planStatus: Ref<{ status: string; timeLeft: string; expiryDate: string; isExpired: boolean; }>,
-  currentChatId: Ref<string>,
-  pastePreviews: Ref<Map<string, {
+const globalState = inject("globalState") as {
+    handleAuth: (data: {
+        username: string;
+        email: string;
+        password: string;
+    }) => any;
+    chatDrafts: Ref<Map<string, string>>;
+    userDetailsDebounceTimer: any;
+    chatsDebounceTimer: any;
+    screenWidth: Ref<number>;
+    confirmDialog: Ref<ConfirmDialogOptions>;
+    isCollapsed: Ref<boolean>;
+    authData: Ref<{
+        username: string;
+        email: string;
+        password: string;
+        agreeToTerms: boolean;
+    }>;
+    syncStatus: Ref<{
+        lastSync: Date | null;
+        syncing: boolean;
+        hasUnsyncedChanges: boolean;
+        showSyncIndicator: boolean;
+        syncMessage: string;
+        syncProgress: number;
+        lastError: string | null;
+        retryCount: number;
+        maxRetries: number;
+    }>;
+    isAuthenticated: Ref<boolean>;
+    parsedUserDetails: Ref<UserDetails>;
+    planStatus: Ref<{
+        status: string;
+        timeLeft: string;
+        expiryDate: string;
+        isExpired: boolean;
+    }>;
+    currentChatId: Ref<string>;
+    pastePreviews: Ref<
+        Map<
+            string,
+            {
+                content: string;
+                wordCount: number;
+                charCount: number;
+                show: boolean;
+            }
+        >
+    >;
+    chats: Ref<Chat[]>;
+    logout: () => void;
+    isLoading: Ref<boolean>;
+    expanded: Ref<boolean[]>;
+    showInput: Ref<boolean>;
+    scrollToLastMessage: () => void;
+    showConfirmDialog: (options: ConfirmDialogOptions) => void;
+    setShowInput: () => void;
+    clearAllChats: () => void;
+    switchToChat: (chatId: string) => void;
+    createNewChat: (initialMessage?: string) => string;
+    deleteChat: (chatId: string) => void;
+    loadChatDrafts: () => void;
+    saveChatDrafts: () => void;
+    renameChat: (chatId: string, newTitle: string) => void;
+    deleteMessage: (messageIndex: number) => void;
+    scrollableElem: Ref<HTMLElement | null>;
+    showScrollDownButton: Ref<boolean>;
+    handleScroll: () => void;
+    scrollToBottom: () => void;
+    cancelAllRequests: () => void;
+    cancelChatRequests: (chatId: string) => void;
+    saveChats: () => void;
+    clearCurrentDraft: () => void;
+    linkPreviewCache: Ref<Map<string, LinkPreview>>;
+    fetchLinkPreview: (url: string) => Promise<LinkPreview>;
+    loadLinkPreviewCache: () => void;
+    saveLinkPreviewCache: () => void;
+    syncFromServer: (data?: any) => void;
+    syncToServer: () => void;
+    currentChat: Ref<CurrentChat | undefined>;
+    currentMessages: Ref<Res[]>;
+    linkPreview: LinkPreview;
+    updateExpandedArray: () => void;
+    apiCall: (endpoint: string, options: RequestInit) => any;
+    manualSync: () => Promise<any>;
+    toggleSidebar: () => void;
+    isFreeUser: Ref<boolean>;
+    FREE_REQUEST_LIMIT: number;
+    isDarkMode: Ref<boolean>;
+    hasActiveRequestsForCurrentChat: Ref<boolean>;
+    isUserOnline: Ref<boolean>;
+    connectionStatus: Ref<string>;
+    checkInternetConnection: () => Promise<boolean>;
+    autoGrow: (e: Event) => void;
+    showSyncIndicator: (message: string, progress?: number) => void;
+    hideSyncIndicator: () => void;
+    updateSyncProgress: (message: string, progress: number) => void;
+    performSmartSync: () => Promise<void>;
+    activeRequests: Ref<Map<string, AbortController>>;
+    requestChatMap: Ref<Map<string, string>>;
+    pendingResponses: Ref<Map<string, { prompt: string; chatId: string }>>;
+    requestCount: Ref<number>;
+    resetRequestCount: () => void;
+    incrementRequestCount: () => void;
+    loadRequestCount: () => void;
+    checkRequestLimitBeforeSubmit: () => boolean;
+    requestsRemaining: Ref<boolean>;
+    shouldShowUpgradePrompt: Ref<boolean>;
+    isRequestLimitExceeded: Ref<boolean>;
+};
+
+const {
+    chatDrafts,
+    screenWidth,
+    confirmDialog,
+    isCollapsed,
+    authData,
+    syncStatus,
+    isAuthenticated,
+    currentChatId,
+    pastePreviews,
+    chats,
+    planStatus,
+    userDetailsDebounceTimer,
+    chatsDebounceTimer,
+    logout,
+    isLoading,
+    expanded,
+    showInput,
+    hasActiveRequestsForCurrentChat,
+    showConfirmDialog,
+    cancelAllRequests,
+    cancelChatRequests,
+    checkRequestLimitBeforeSubmit,
+    setShowInput,
+    clearAllChats,
+    switchToChat,
+    createNewChat,
+    deleteChat,
+    loadChatDrafts,
+    saveChatDrafts,
+    clearCurrentDraft,
+    renameChat,
+    deleteMessage,
+    scrollToLastMessage,
+    scrollableElem,
+    showScrollDownButton,
+    handleScroll,
+    scrollToBottom,
+    saveChats,
+    linkPreviewCache,
+    fetchLinkPreview,
+    loadLinkPreviewCache,
+    saveLinkPreviewCache,
+    syncFromServer,
+    syncToServer,
+    currentChat,
+    linkPreview,
+    currentMessages,
+    isDarkMode,
+    updateExpandedArray,
+    apiCall,
+    manualSync,
+    toggleSidebar,
+    autoGrow,
+    handleAuth,
+    isFreeUser,
+    isUserOnline,
+    connectionStatus,
+    checkInternetConnection,
+    activeRequests,
+    requestChatMap,
+    pendingResponses,
+    performSmartSync,
+    requestCount,
+    resetRequestCount,
+    incrementRequestCount,
+    loadRequestCount,
+    FREE_REQUEST_LIMIT,
+    requestsRemaining,
+    shouldShowUpgradePrompt,
+    isRequestLimitExceeded,
+    parsedUserDetails,
+} = globalState;
+
+const route = useRoute();
+// ---------- State ----------
+const authStep = ref(1);
+const showCreateSession = ref(false);
+const copiedIndex = ref<number | null>(null);
+const now = ref(Date.now());
+const showInputModeDropdown = ref(false);
+
+const isRecording = ref(false);
+const isTranscribing = ref(false);
+const transcribedText = ref("");
+const voiceRecognition = ref<any | null>(null);
+const microphonePermission = ref<"granted" | "denied" | "prompt">("prompt");
+const transcriptionDuration = ref(0);
+let transcriptionTimer: number | null = null;
+let updateTimeout: number | null = null;
+
+const showSuggestionsDropup = ref(false);
+
+const showPasteModal = ref(false);
+const pastePreview = computed(() => {
+    return pastePreviews.value.get(currentChatId.value) || null;
+});
+const currentPasteContent = ref<{
     content: string;
     wordCount: number;
     charCount: number;
-    show: boolean;
-  }>>,
-  chats: Ref<Chat[]>
-  logout: () => void,
-  isLoading: Ref<boolean>,
-  expanded: Ref<boolean[]>,
-  showInput: Ref<boolean>,
-  scrollToLastMessage: () => void,
-  showConfirmDialog: (options: ConfirmDialogOptions) => void,
-  setShowInput: () => void,
-  clearAllChats: () => void,
-  switchToChat: (chatId: string) => void,
-  createNewChat: (initialMessage?: string) => string,
-  deleteChat: (chatId: string) => void,
-  loadChatDrafts: () => void,
-  saveChatDrafts: () => void,
-  renameChat: (chatId: string, newTitle: string) => void,
-  deleteMessage: (messageIndex: number) => void,
-  scrollableElem: Ref<HTMLElement | null>,
-  showScrollDownButton: Ref<boolean>,
-  handleScroll: () => void,
-  scrollToBottom: () => void,
-  cancelAllRequests: () => void,
-  cancelChatRequests: (chatId: string) => void,
-  saveChats: () => void,
-  clearCurrentDraft: () => void,
-  linkPreviewCache: Ref<Map<string, LinkPreview>>,
-  fetchLinkPreview: (url: string) => Promise<LinkPreview>,
-  loadLinkPreviewCache: () => void,
-  saveLinkPreviewCache: () => void,
-  syncFromServer: (data?: any) => void,
-  syncToServer: () => void,
-  currentChat: Ref<CurrentChat | undefined>,
-  currentMessages: Ref<Res[]>,
-  linkPreview: LinkPreview,
-  updateExpandedArray: () => void,
-  apiCall: (endpoint: string, options: RequestInit) => any,
-  manualSync: () => Promise<any>
-  toggleSidebar: () => void,
-  isFreeUser: Ref<boolean>,
-  FREE_REQUEST_LIMIT: number,
-  isDarkMode: Ref<boolean>,
-  hasActiveRequestsForCurrentChat: Ref<boolean>,
-  isUserOnline: Ref<boolean>,
-  connectionStatus: Ref<string>,
-  checkInternetConnection: () => Promise<boolean>,
-  autoGrow: (e: Event) => void,
-  showSyncIndicator: (message: string, progress?: number) => void,
-  hideSyncIndicator: () => void,
-  updateSyncProgress: (message: string, progress: number) => void,
-  performSmartSync: () => Promise<void>,
-  activeRequests: Ref<Map<string, AbortController>>,
-  requestChatMap: Ref<Map<string, string>>,
-  pendingResponses: Ref<Map<string, { prompt: string; chatId: string }>>,
-  requestCount: Ref<number>,
-  resetRequestCount: () => void,
-  incrementRequestCount: () => void,
-  loadRequestCount: () => void,
-  checkRequestLimitBeforeSubmit: () => boolean,
-  requestsRemaining: Ref<boolean>,
-  shouldShowUpgradePrompt: Ref<boolean>,
-  isRequestLimitExceeded: Ref<boolean>,
-}
+    type: "text" | "code" | "json" | "markdown" | "xml" | "html";
+} | null>(null);
 
-const {
-  chatDrafts,
-  screenWidth,
-  confirmDialog,
-  isCollapsed,
-  authData,
-  syncStatus,
-  isAuthenticated,
-  currentChatId,
-  pastePreviews,
-  chats,
-  planStatus,
-  userDetailsDebounceTimer,
-  chatsDebounceTimer,
-  logout,
-  isLoading,
-  expanded,
-  showInput,
-  hasActiveRequestsForCurrentChat,
-  showConfirmDialog,
-  cancelAllRequests,
-  cancelChatRequests,
-  checkRequestLimitBeforeSubmit,
-  setShowInput,
-  clearAllChats,
-  switchToChat,
-  createNewChat,
-  deleteChat,
-  loadChatDrafts,
-  saveChatDrafts,
-  clearCurrentDraft,
-  renameChat,
-  deleteMessage,
-  scrollToLastMessage,
-  scrollableElem,
-  showScrollDownButton,
-  handleScroll,
-  scrollToBottom,
-  saveChats,
-  linkPreviewCache,
-  fetchLinkPreview,
-  loadLinkPreviewCache,
-  saveLinkPreviewCache,
-  syncFromServer,
-  syncToServer,
-  currentChat,
-  linkPreview,
-  currentMessages,
-  isDarkMode,
-  updateExpandedArray,
-  apiCall,
-  manualSync,
-  toggleSidebar,
-  autoGrow,
-  handleAuth,
-  isFreeUser,
-  isUserOnline,
-  connectionStatus,
-  checkInternetConnection,
-  activeRequests,
-  requestChatMap,
-  pendingResponses,
-  performSmartSync,
-  requestCount,
-  resetRequestCount,
-  incrementRequestCount,
-  loadRequestCount,
-  FREE_REQUEST_LIMIT,
-  requestsRemaining,
-  shouldShowUpgradePrompt,
-  isRequestLimitExceeded,
-  parsedUserDetails,
-} = globalState
-
-const route = useRoute()
-// ---------- State ----------
-const authStep = ref(1)
-const showCreateSession = ref(false)
-const copiedIndex = ref<number | null>(null)
-const now = ref(Date.now())
-const showInputModeDropdown = ref(false)
-
-const isRecording = ref(false)
-const isTranscribing = ref(false)
-const transcribedText = ref('')
-const voiceRecognition = ref<any | null>(null)
-const microphonePermission = ref<'granted' | 'denied' | 'prompt'>('prompt')
-const transcriptionDuration = ref(0)
-let transcriptionTimer: number | null = null
-let updateTimeout: number | null = null
-
-const showSuggestionsDropup = ref(false)
-
-const showPasteModal = ref(false)
-const pastePreview = computed(() => {
-  return pastePreviews.value.get(currentChatId.value) || null
-})
-const currentPasteContent = ref<{
-  content: string;
-  wordCount: number;
-  charCount: number;
-  type: 'text' | 'code' | 'json' | 'markdown' | 'xml' | 'html';
-} | null>(null)
-
-const deepSearchPagination = ref<Map<string, Map<number, { currentPage: number; totalPages: number }>>>(new Map())
+const deepSearchPagination = ref<
+    Map<string, Map<number, { currentPage: number; totalPages: number }>>
+>(new Map());
 
 const isLoadingState = (response: string): boolean => {
-  return response.endsWith('...') ||
-    response === '...' ||
-    response.includes('web-search...') || response.includes('light-search...') ||
-    response.includes('deep-search...') ||
-    response.includes('light-response...') ||
-    response === 'refreshing...'
-}
+    return (
+        response.endsWith("...") ||
+        response === "..." ||
+        response.includes("web-search...") ||
+        response.includes("light-search...") ||
+        response.includes("deep-search...") ||
+        response.includes("light-response...") ||
+        response === "refreshing..."
+    );
+};
 
 const getLoadingMessage = (response: string): string => {
-  if (response === 'web-search...' || response === 'light-search...') return 'Web searching...'
-  if (response === 'deep-search...') return 'Deep searching...'
-  if (response === 'light-response...') return 'Thinking...'
-  if (response === 'refreshing...') return 'Refreshing...'
-  return 'Thinking...'
-}
+    if (response === "web-search..." || response === "light-search...")
+        return "Web searching...";
+    if (response === "deep-search...") return "Deep searching...";
+    if (response === "light-response...") return "Thinking...";
+    if (response === "refreshing...") return "Refreshing...";
+    return "Thinking...";
+};
 
 const suggestionPrompts = [
-  {
-    icon: 'pi pi-pencil',
-    title: 'Write',
-    prompt: 'Write a short story about a time traveler who accidentally changes history',
-  },
-  {
-    icon: 'pi pi-code',
-    title: 'Code',
-    prompt: 'Help me debug a JavaScript function that\'s not working as expected',
-  },
-  {
-    icon: 'pi pi-book',
-    title: 'Learn',
-    prompt: 'Explain quantum computing in simple terms',
-  },
-  {
-    icon: 'pi pi-heart',
-    title: 'Health',
-    prompt: 'Get me daily healthy routines',
-  },
-  {
-    icon: 'pi pi-globe',
-    title: 'Events',
-    prompt: 'What are the latest global events?',
-  }
-]
+    {
+        icon: "pi pi-pencil",
+        title: "Write",
+        prompt: "Write a short story about a time traveler who accidentally changes history",
+    },
+    {
+        icon: "pi pi-code",
+        title: "Code",
+        prompt: "Help me debug a JavaScript function that's not working as expected",
+    },
+    {
+        icon: "pi pi-book",
+        title: "Learn",
+        prompt: "Explain quantum computing in simple terms",
+    },
+    {
+        icon: "pi pi-heart",
+        title: "Health",
+        prompt: "Get me daily healthy routines",
+    },
+    {
+        icon: "pi pi-globe",
+        title: "Events",
+        prompt: "What are the latest global events?",
+    },
+];
 
 // Handle suggestion selection
 function selectSuggestion(prompt: string) {
-  showSuggestionsDropup.value = false
-  setShowInput()
+    showSuggestionsDropup.value = false;
+    setShowInput();
 
-  nextTick(() => {
-    const textarea = document.getElementById('prompt') as HTMLTextAreaElement
-    if (textarea) {
-      textarea.value = prompt
-      autoGrow({ target: textarea } as any)
-      textarea.focus()
-    }
-  })
+    nextTick(() => {
+        const textarea = document.getElementById(
+            "prompt",
+        ) as HTMLTextAreaElement;
+        if (textarea) {
+            textarea.value = prompt;
+            autoGrow({ target: textarea } as any);
+            textarea.focus();
+        }
+    });
 }
 
 // Load chats from localStorage
 function loadChats() {
-  try {
-    const stored = localStorage.getItem('chats')
-    if (stored) {
-      const parsedChats = JSON.parse(stored)
-      if (Array.isArray(parsedChats)) {
-        chats.value = parsedChats
-        if (chats.value.length > 0 && !currentChatId.value) {
-          currentChatId.value = chats.value[0].id
+    try {
+        const stored = localStorage.getItem("chats");
+        if (stored) {
+            const parsedChats = JSON.parse(stored);
+            if (Array.isArray(parsedChats)) {
+                chats.value = parsedChats;
+                if (chats.value.length > 0 && !currentChatId.value) {
+                    currentChatId.value = chats.value[0].id;
+                }
+            }
         }
-      }
+        updateExpandedArray();
+    } catch (error) {
+        console.error("Failed to load chats:", error);
+        chats.value = [];
     }
-    updateExpandedArray()
-  } catch (error) {
-    console.error('Failed to load chats:', error)
-    chats.value = []
-  }
 }
 
 // ---------- Authentication Functions ----------
 function nextAuthStep() {
-  if (authStep.value < 4) {
-    authStep.value++
-  }
+    if (authStep.value < 4) {
+        authStep.value++;
+    }
 }
 
 function prevAuthStep() {
-  if (authStep.value > 1) {
-    authStep.value--
-  }
+    if (authStep.value > 1) {
+        authStep.value--;
+    }
 }
 
 function validateCurrentStep(): boolean {
-  try {
-    switch (authStep.value) {
-      case 1:
-        const username = authData.value.username?.trim()
-        return !!(username && username.length >= 2 && username.length <= 50)
-      case 2:
-        const email = authData.value.email?.trim()
-        return !!(email &&
-          email.length > 0 &&
-          email.length <= 100 &&
-          /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
-      case 3:
-        const password = authData.value.password
-        return !!(password && password.length > 7 && password.length < 25)
-      case 4:
-        const agreeToTerms = authData.value.agreeToTerms
-        return agreeToTerms
-      default:
-        return false
+    try {
+        switch (authStep.value) {
+            case 1:
+                const username = authData.value.username?.trim();
+                return !!(
+                    username &&
+                    username.length >= 2 &&
+                    username.length <= 50
+                );
+            case 2:
+                const email = authData.value.email?.trim();
+                return !!(
+                    email &&
+                    email.length > 0 &&
+                    email.length <= 100 &&
+                    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+                );
+            case 3:
+                const password = authData.value.password;
+                return !!(
+                    password &&
+                    password.length > 7 &&
+                    password.length < 25
+                );
+            case 4:
+                const agreeToTerms = authData.value.agreeToTerms;
+                return agreeToTerms;
+            default:
+                return false;
+        }
+    } catch (error) {
+        console.error("Error validating current step:", error);
+        return false;
     }
-  } catch (error) {
-    console.error('Error validating current step:', error)
-    return false
-  }
 }
 
 // Debounced scroll handler to improve performance
 let scrollTimeout: any = null;
 function debouncedHandleScroll() {
-  if (scrollTimeout) {
-    clearTimeout(scrollTimeout);
-  }
+    if (scrollTimeout) {
+        clearTimeout(scrollTimeout);
+    }
 
-  scrollTimeout = setTimeout(() => {
-    handleScroll();
-    scrollTimeout = null;
-  }, 100); // Increased for better performance
+    scrollTimeout = setTimeout(() => {
+        handleScroll();
+        scrollTimeout = null;
+    }, 100); // Increased for better performance
 }
 
 // Detect if prompt is just URLs (1 or more) with little/no extra text
 function isJustLinks(prompt: string): boolean {
-  const trimmed = prompt.trim()
-  const urls = extractUrls(trimmed)
+    const trimmed = prompt.trim();
+    const urls = extractUrls(trimmed);
 
-  if (urls.length === 0) return false
+    if (urls.length === 0) return false;
 
-  // Remove all URLs from prompt
-  let promptWithoutUrls = trimmed
-  for (const url of urls) {
-    promptWithoutUrls = promptWithoutUrls.replace(url, "").trim()
-  }
+    // Remove all URLs from prompt
+    let promptWithoutUrls = trimmed;
+    for (const url of urls) {
+        promptWithoutUrls = promptWithoutUrls.replace(url, "").trim();
+    }
 
-  // If only short filler words remain, treat as "just links"
-  return promptWithoutUrls.split(/\s+/).filter(Boolean).length <= 3
+    // If only short filler words remain, treat as "just links"
+    return promptWithoutUrls.split(/\s+/).filter(Boolean).length <= 3;
 }
 
 function handlePaste(e: ClipboardEvent) {
-  try {
-    const pastedText = e.clipboardData?.getData('text') || ''
+    try {
+        const pastedText = e.clipboardData?.getData("text") || "";
 
-    if (!pastedText.trim()) return
+        if (!pastedText.trim()) return;
 
-    if (detectLargePaste(pastedText)) {
-      e.preventDefault()
+        if (detectLargePaste(pastedText)) {
+            e.preventDefault();
 
-      const wordCount = pastedText.trim().split(/\s+/).filter(word => word.length > 0).length
-      const charCount = pastedText.length
+            const wordCount = pastedText
+                .trim()
+                .split(/\s+/)
+                .filter((word) => word.length > 0).length;
+            const charCount = pastedText.length;
 
-      // Enhanced paste preview with proper content handling
-      const processedContent = wordCount > 100 ? `#pastedText#${pastedText}` : pastedText
+            // Enhanced paste preview with proper content handling
+            const processedContent =
+                wordCount > 100 ? `#pastedText#${pastedText}` : pastedText;
 
-      // Store in pastePreviews map using current chat ID
-      if (currentChatId.value) {
-        pastePreviews.value.set(currentChatId.value, {
-          content: processedContent,
-          wordCount,
-          charCount,
-          show: true
-        })
-      }
+            // Store in pastePreviews map using current chat ID
+            if (currentChatId.value) {
+                pastePreviews.value.set(currentChatId.value, {
+                    content: processedContent,
+                    wordCount,
+                    charCount,
+                    show: true,
+                });
+            }
 
-      // Save draft immediately when large content is pasted
-      if (currentChatId.value) {
-        const textarea = document.getElementById('prompt') as HTMLTextAreaElement
-        let currentDraft = textarea?.value || ''
+            // Save draft immediately when large content is pasted
+            if (currentChatId.value) {
+                const textarea = document.getElementById(
+                    "prompt",
+                ) as HTMLTextAreaElement;
+                let currentDraft = textarea?.value || "";
 
-        // Combine current textarea content with paste preview content
-        const fullDraft = currentDraft + processedContent
-        chatDrafts.value.set(currentChatId.value, fullDraft)
-        saveChatDrafts()
+                // Combine current textarea content with paste preview content
+                const fullDraft = currentDraft + processedContent;
+                chatDrafts.value.set(currentChatId.value, fullDraft);
+                saveChatDrafts();
 
-        // Clear textarea but keep the draft with paste content
-        if (textarea) {
-          textarea.value = currentDraft // Keep only the typed content in textarea
-          autoGrow({ target: textarea } as any)
+                // Clear textarea but keep the draft with paste content
+                if (textarea) {
+                    textarea.value = currentDraft; // Keep only the typed content in textarea
+                    autoGrow({ target: textarea } as any);
+                }
+            }
+
+            toast.info("Large content detected", {
+                duration: 4000,
+                description: `${wordCount} words, ${charCount} characters. Preview shown below.`,
+            });
+        } else {
+            // For small pastes, let the normal paste happen and then save draft
+            setTimeout(() => {
+                if (currentChatId.value) {
+                    const textarea = document.getElementById(
+                        "prompt",
+                    ) as HTMLTextAreaElement;
+                    if (textarea) {
+                        // For small pastes, save the normal content
+                        chatDrafts.value.set(
+                            currentChatId.value,
+                            textarea.value,
+                        );
+                        saveChatDrafts();
+                    }
+                }
+            }, 100);
         }
-      }
-
-      toast.info('Large content detected', {
-        duration: 4000,
-        description: `${wordCount} words, ${charCount} characters. Preview shown below.`
-      })
-    } else {
-      // For small pastes, let the normal paste happen and then save draft
-      setTimeout(() => {
-        if (currentChatId.value) {
-          const textarea = document.getElementById('prompt') as HTMLTextAreaElement
-          if (textarea) {
-            // For small pastes, save the normal content
-            chatDrafts.value.set(currentChatId.value, textarea.value)
-            saveChatDrafts()
-          }
-        }
-      }, 100)
+    } catch (error) {
+        console.error("Error handling paste:", error);
+        // Don't prevent default on error - let normal paste proceed
     }
-  } catch (error) {
-    console.error('Error handling paste:', error)
-    // Don't prevent default on error - let normal paste proceed
-  }
 }
 
 function removePastePreview() {
-  // Remove paste preview for current chat
-  if (currentChatId.value) {
-    pastePreviews.value.delete(currentChatId.value)
-    saveChatDrafts()
+    // Remove paste preview for current chat
+    if (currentChatId.value) {
+        pastePreviews.value.delete(currentChatId.value);
+        saveChatDrafts();
 
-    // Also clear textarea if it contains paste content
-    const textarea = document.getElementById('prompt') as HTMLTextAreaElement
-    if (textarea && textarea.value.includes('#pastedText#')) {
-      // Extract any non-pasted content
-      const parts = textarea.value.split('#pastedText#')
-      textarea.value = parts[0] || ''
-      autoGrow({ target: textarea } as any)
+        // Also clear textarea if it contains paste content
+        const textarea = document.getElementById(
+            "prompt",
+        ) as HTMLTextAreaElement;
+        if (textarea && textarea.value.includes("#pastedText#")) {
+            // Extract any non-pasted content
+            const parts = textarea.value.split("#pastedText#");
+            textarea.value = parts[0] || "";
+            autoGrow({ target: textarea } as any);
+        }
     }
-  }
 }
 
 // Helper to get pagination for a message
 function getPagination(messageIndex: number) {
-  if (!currentChatId.value) return { currentPage: 0, totalPages: 0 }
+    if (!currentChatId.value) return { currentPage: 0, totalPages: 0 };
 
-  const message = currentMessages.value[messageIndex]
-  if (!message || !isDeepSearchResult(message.response)) {
-    return { currentPage: 0, totalPages: 0 }
-  }
-
-  // Get or create chat pagination map
-  let chatPagination = deepSearchPagination.value.get(currentChatId.value)
-  if (!chatPagination) {
-    chatPagination = new Map()
-    deepSearchPagination.value.set(currentChatId.value, chatPagination)
-  }
-
-  // Get or initialize pagination for this message
-  let pagination = chatPagination.get(messageIndex)
-  if (!pagination) {
-    // Extract total pages from the deep search result
-    try {
-      const parsed = JSON.parse(message.response)
-      const totalPages = parsed.results?.length || 0
-      pagination = { currentPage: 0, totalPages }
-      chatPagination.set(messageIndex, pagination)
-    } catch (e) {
-      pagination = { currentPage: 0, totalPages: 0 }
+    const message = currentMessages.value[messageIndex];
+    if (!message || !isDeepSearchResult(message.response)) {
+        return { currentPage: 0, totalPages: 0 };
     }
-  }
 
-  return pagination
+    // Get or create chat pagination map
+    let chatPagination = deepSearchPagination.value.get(currentChatId.value);
+    if (!chatPagination) {
+        chatPagination = new Map();
+        deepSearchPagination.value.set(currentChatId.value, chatPagination);
+    }
+
+    // Get or initialize pagination for this message
+    let pagination = chatPagination.get(messageIndex);
+    if (!pagination) {
+        // Extract total pages from the deep search result
+        try {
+            const parsed = JSON.parse(message.response);
+            const totalPages = parsed.results?.length || 0;
+            pagination = { currentPage: 0, totalPages };
+            chatPagination.set(messageIndex, pagination);
+        } catch (e) {
+            pagination = { currentPage: 0, totalPages: 0 };
+        }
+    }
+
+    return pagination;
 }
 
 // Navigation functions
 function nextResult(messageIndex: number) {
-  if (!currentChatId.value) return
+    if (!currentChatId.value) return;
 
-  const pagination = getPagination(messageIndex)
-  if (pagination.currentPage < pagination.totalPages - 1) {
-    // Get or create chat pagination map
-    let chatPagination = deepSearchPagination.value.get(currentChatId.value)
-    if (!chatPagination) {
-      chatPagination = new Map()
-      deepSearchPagination.value.set(currentChatId.value, chatPagination)
+    const pagination = getPagination(messageIndex);
+    if (pagination.currentPage < pagination.totalPages - 1) {
+        // Get or create chat pagination map
+        let chatPagination = deepSearchPagination.value.get(
+            currentChatId.value,
+        );
+        if (!chatPagination) {
+            chatPagination = new Map();
+            deepSearchPagination.value.set(currentChatId.value, chatPagination);
+        }
+
+        // Update the specific message pagination
+        chatPagination.set(messageIndex, {
+            ...pagination,
+            currentPage: pagination.currentPage + 1,
+        });
+
+        // Force reactivity
+        deepSearchPagination.value = new Map(deepSearchPagination.value);
+
+        nextTick(() => scrollToLastMessage());
     }
-
-    // Update the specific message pagination
-    chatPagination.set(messageIndex, {
-      ...pagination,
-      currentPage: pagination.currentPage + 1
-    })
-
-    // Force reactivity
-    deepSearchPagination.value = new Map(deepSearchPagination.value)
-
-    nextTick(() => scrollToLastMessage())
-  }
 }
 
 function prevResult(messageIndex: number) {
-  if (!currentChatId.value) return
+    if (!currentChatId.value) return;
 
-  const pagination = getPagination(messageIndex)
-  if (pagination.currentPage > 0) {
-    // Get or create chat pagination map
-    let chatPagination = deepSearchPagination.value.get(currentChatId.value)
-    if (!chatPagination) {
-      chatPagination = new Map()
-      deepSearchPagination.value.set(currentChatId.value, chatPagination)
+    const pagination = getPagination(messageIndex);
+    if (pagination.currentPage > 0) {
+        // Get or create chat pagination map
+        let chatPagination = deepSearchPagination.value.get(
+            currentChatId.value,
+        );
+        if (!chatPagination) {
+            chatPagination = new Map();
+            deepSearchPagination.value.set(currentChatId.value, chatPagination);
+        }
+
+        // Update the specific message pagination
+        chatPagination.set(messageIndex, {
+            ...pagination,
+            currentPage: pagination.currentPage - 1,
+        });
+
+        // Force reactivity
+        deepSearchPagination.value = new Map(deepSearchPagination.value);
+
+        nextTick(() => scrollToLastMessage());
     }
-
-    // Update the specific message pagination
-    chatPagination.set(messageIndex, {
-      ...pagination,
-      currentPage: pagination.currentPage - 1
-    })
-
-    // Force reactivity
-    deepSearchPagination.value = new Map(deepSearchPagination.value)
-
-    nextTick(() => scrollToLastMessage())
-  }
 }
 
 function goToPage(messageIndex: number, pageIndex: number) {
-  if (!currentChatId.value) return
+    if (!currentChatId.value) return;
 
-  const pagination = getPagination(messageIndex)
-  if (pageIndex >= 0 && pageIndex < pagination.totalPages) {  // FIXED: Proper validation
-    // Get or create chat pagination map
-    let chatPagination = deepSearchPagination.value.get(currentChatId.value)
-    if (!chatPagination) {
-      chatPagination = new Map()
-      deepSearchPagination.value.set(currentChatId.value, chatPagination)
+    const pagination = getPagination(messageIndex);
+    if (pageIndex >= 0 && pageIndex < pagination.totalPages) {
+        // FIXED: Proper validation
+        // Get or create chat pagination map
+        let chatPagination = deepSearchPagination.value.get(
+            currentChatId.value,
+        );
+        if (!chatPagination) {
+            chatPagination = new Map();
+            deepSearchPagination.value.set(currentChatId.value, chatPagination);
+        }
+
+        // Update the specific message pagination
+        chatPagination.set(messageIndex, {
+            ...pagination,
+            currentPage: pageIndex,
+        });
+
+        // Force reactivity
+        deepSearchPagination.value = new Map(deepSearchPagination.value);
+
+        nextTick(() => scrollToLastMessage());
     }
-
-    // Update the specific message pagination
-    chatPagination.set(messageIndex, {
-      ...pagination,
-      currentPage: pageIndex
-    })
-
-    // Force reactivity
-    deepSearchPagination.value = new Map(deepSearchPagination.value)
-
-    nextTick(() => scrollToLastMessage())
-  }
 }
-
 
 // handleSubmit function
 async function handleSubmit(e?: any, retryPrompt?: string) {
-  e?.preventDefault?.()
+    e?.preventDefault?.();
 
-  // Stop voice recording immediately when submitting
-  if (isRecording.value || isTranscribing.value) {
-    stopVoiceRecording(true)
-  }
-
-  // Use the global connection check
-  if (!isUserOnline.value) {
-    const isActuallyOnline = await checkInternetConnection()
-    if (!isActuallyOnline) {
-      toast.error('You are offline', {
-        duration: 4000,
-        description: 'Please check your internet connection and try again'
-      })
-      return
-    }
-  }
-
-  let promptValue = retryPrompt || e?.target?.prompt?.value?.trim()
-
-  // Check if we have paste preview content
-  const currentPastePreview = pastePreviews.value.get(currentChatId.value)
-  const hasPastePreview = currentPastePreview && currentPastePreview.show && !retryPrompt
-
-  if (hasPastePreview) {
-    promptValue += currentPastePreview.content
-    pastePreviews.value.delete(currentChatId.value)
-  }
-
-  let fabricatedPrompt = promptValue
-  if (!promptValue || isLoading.value) return
-
-  if (!isAuthenticated.value) {
-    toast.warning('Please create a session first', {
-      duration: 4000,
-      description: 'You need to be logged in.'
-    })
-    return
-  }
-
-  // Check request limits
-  loadRequestCount()
-
-  // Clear draft for current chat
-  clearCurrentDraft()
-
-  // Create new chat if none exists
-  let submissionChatId = currentChatId.value
-  const submissionChat = chats.value.find(chat => chat.id === submissionChatId)
-
-  if (!submissionChatId || !submissionChat) {
-    const newChatId = createNewChat(promptValue)
-    if (!newChatId) return
-    currentChatId.value = newChatId
-    submissionChatId = newChatId
-  }
-
-  // Generate unique request ID
-  const requestId = `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-  const abortController = new AbortController()
-
-  // Track the active request using global state
-  activeRequests.value.set(requestId, abortController)
-  requestChatMap.value.set(requestId, submissionChatId)
-
-  // Handle link-only prompts
-  if (isJustLinks(promptValue)) {
-    return handleLinkOnlyRequest(promptValue, submissionChatId, requestId, abortController)
-  }
-
-  // Determine response mode - use light-response for pasted content, otherwise user preference
-  let responseMode = parsedUserDetails?.value.responseMode || 'light-response'
-
-  // Override to light-response if pasted content is detected
-  if (hasPastePreview) {
-    responseMode = 'light-response'
-    console.log('Pasted content detected - using light-response mode')
-  }
-
-  const isSearchMode = responseMode === 'web-search' || responseMode === 'deep-search'
-
-  // Merge with context for short prompts in non-search modes
-  if (responseMode === 'light-response' && isPromptTooShort(promptValue) && currentMessages.value.length > 0) {
-    const lastMessage = currentMessages.value[currentMessages.value.length - 1]
-    fabricatedPrompt = `${lastMessage.prompt || ''} ${lastMessage.response || ''}\nUser: ${promptValue}`
-  }
-
-  // Clear input field
-  if (!retryPrompt && e?.target?.prompt) {
-    e.target.prompt.value = ""
-    e.target.prompt.style.height = "auto"
-  }
-
-  // Clear voice transcription
-  if (transcribedText.value) {
-    transcribedText.value = ''
-  }
-
-  isLoading.value = true
-  scrollToLastMessage();
-
-  // Store temporary message reference for potential removal
-  let tempMessageIndex = -1
-  const tempResp: Res = {
-    prompt: promptValue,
-    response: responseMode ? `${responseMode}...` : "...",
-  }
-
-  try {
-    // Add message to submission chat (temporarily)
-    const targetChat = chats.value.find(chat => chat.id === submissionChatId)
-    if (targetChat) {
-      targetChat.messages.push(tempResp)
-      tempMessageIndex = targetChat.messages.length - 1
-      targetChat.updatedAt = new Date().toISOString()
-
-      // Update chat title if first message
-      if (targetChat.messages.length === 1) {
-        targetChat.title = generateChatTitle(promptValue)
-      }
+    // Stop voice recording immediately when submitting
+    if (isRecording.value || isTranscribing.value) {
+        stopVoiceRecording(true);
     }
 
-    updateExpandedArray()
-    processLinksInUserPrompt(promptValue)
-
-    let response: Response
-    let parseRes: any
-
-    if (isSearchMode) {
-      // Enhanced search request with proper parameters
-      const searchParams = new URLSearchParams({
-        query: encodeURIComponent(fabricatedPrompt),
-        mode: responseMode === 'web-search' ? 'light-search' : 'deep-search',
-        max_results: responseMode === 'deep-search' ? '5' : '5',
-        content_depth: responseMode === 'deep-search' ? '2' : '1'
-      })
-
-      console.log(`Making ${responseMode} request`)
-
-      response = await fetch(
-        `${SPINDLE_URL}/search?${searchParams}`,
-        {
-          method: "GET",
-          signal: abortController.signal,
-          headers: {
-            "Content-Type": "application/json",
-          }
+    // Use the global connection check
+    if (!isUserOnline.value) {
+        const isActuallyOnline = await checkInternetConnection();
+        if (!isActuallyOnline) {
+            toast.error("You are offline", {
+                duration: 4000,
+                description:
+                    "Please check your internet connection and try again",
+            });
+            return;
         }
-      )
-    } else {
-      // Standard light-response mode
-      console.log('Making light-response request')
-
-      response = await fetch(WRAPPER_URL, {
-        method: "POST",
-        body: JSON.stringify(fabricatedPrompt),
-        headers: {
-          "Content-Type": "application/json"
-        },
-        signal: abortController.signal
-      })
     }
 
-    // Check if request was aborted
-    if (abortController.signal.aborted) {
-      console.log(`Request ${requestId} was aborted`)
-      // Remove the temporary message if request was aborted
-      removeTemporaryMessage(submissionChatId, tempMessageIndex)
-      return
+    let promptValue = retryPrompt || e?.target?.prompt?.value?.trim();
+
+    // Check if we have paste preview content
+    const currentPastePreview = pastePreviews.value.get(currentChatId.value);
+    const hasPastePreview =
+        currentPastePreview && currentPastePreview.show && !retryPrompt;
+
+    if (hasPastePreview) {
+        promptValue += currentPastePreview.content;
+        pastePreviews.value.delete(currentChatId.value);
     }
 
-    if (!response.ok) {
-      const errorText = await response.text()
-      throw new Error(`HTTP ${response.status}: ${errorText || response.statusText}`)
+    let fabricatedPrompt = promptValue;
+    if (!promptValue || isLoading.value) return;
+
+    if (!isAuthenticated.value) {
+        toast.warning("Please create a session first", {
+            duration: 4000,
+            description: "You need to be logged in.",
+        });
+        return;
     }
 
-    parseRes = await response.json()
+    // Check request limits
+    loadRequestCount();
 
-    // Enhanced response processing for search modes
-    let finalResponse = parseRes.error ? parseRes.error : parseRes.response
+    // Clear draft for current chat
+    clearCurrentDraft();
 
-    if (isSearchMode) {
-      const hasResults = parseRes.results || parseRes.json;
-      if (hasResults) {
-        finalResponse = formatSearchResults(parseRes, responseMode, tempMessageIndex)
-      } else {
-        finalResponse = "No search results found for your query."
-      }
+    // Create new chat if none exists
+    let submissionChatId = currentChatId.value;
+    const submissionChat = chats.value.find(
+        (chat) => chat.id === submissionChatId,
+    );
+
+    if (!submissionChatId || !submissionChat) {
+        const newChatId = createNewChat(promptValue);
+        if (!newChatId) return;
+        currentChatId.value = newChatId;
+        submissionChatId = newChatId;
     }
 
-    // Update the response in chat (replace the temporary message)
-    const updatedTargetChat = chats.value.find(chat => chat.id === submissionChatId)
-    if (updatedTargetChat && tempMessageIndex >= 0) {
-      const updatedMessage = {
+    // Generate unique request ID
+    const requestId = `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const abortController = new AbortController();
+
+    // Track the active request using global state
+    activeRequests.value.set(requestId, abortController);
+    requestChatMap.value.set(requestId, submissionChatId);
+
+    // Handle link-only prompts
+    if (isJustLinks(promptValue)) {
+        return handleLinkOnlyRequest(
+            promptValue,
+            submissionChatId,
+            requestId,
+            abortController,
+        );
+    }
+
+    // Determine response mode - use light-response for pasted content, otherwise user preference
+    let responseMode =
+        parsedUserDetails?.value.responseMode || "light-response";
+
+    // Override to light-response if pasted content is detected
+    if (hasPastePreview) {
+        responseMode = "light-response";
+        console.log("Pasted content detected - using light-response mode");
+    }
+
+    const isSearchMode =
+        responseMode === "web-search" || responseMode === "deep-search";
+
+    // Merge with context for short prompts in non-search modes
+    if (
+        responseMode === "light-response" &&
+        isPromptTooShort(promptValue) &&
+        currentMessages.value.length > 0
+    ) {
+        const lastMessage =
+            currentMessages.value[currentMessages.value.length - 1];
+        fabricatedPrompt = `${lastMessage.prompt || ""} ${lastMessage.response || ""}\nUser: ${promptValue}`;
+    }
+
+    // Clear input field
+    if (!retryPrompt && e?.target?.prompt) {
+        e.target.prompt.value = "";
+        e.target.prompt.style.height = "auto";
+    }
+
+    // Clear voice transcription
+    if (transcribedText.value) {
+        transcribedText.value = "";
+    }
+
+    isLoading.value = true;
+    scrollToLastMessage();
+
+    // Store temporary message reference for potential removal
+    let tempMessageIndex = -1;
+    const tempResp: Res = {
         prompt: promptValue,
-        response: finalResponse,
-        status: response.status,
-      }
-      updatedTargetChat.messages[tempMessageIndex] = updatedMessage
-      updatedTargetChat.updatedAt = new Date().toISOString()
+        response: responseMode ? `${responseMode}...` : "...",
+    };
 
-      // Process links in the response
-      await processLinksInResponse(tempMessageIndex)
+    try {
+        // Add message to submission chat (temporarily)
+        const targetChat = chats.value.find(
+            (chat) => chat.id === submissionChatId,
+        );
+        if (targetChat) {
+            targetChat.messages.push(tempResp);
+            tempMessageIndex = targetChat.messages.length - 1;
+            targetChat.updatedAt = new Date().toISOString();
+
+            // Update chat title if first message
+            if (targetChat.messages.length === 1) {
+                targetChat.title = generateChatTitle(promptValue);
+            }
+        }
+
+        updateExpandedArray();
+        processLinksInUserPrompt(promptValue);
+
+        let response: Response;
+        let parseRes: any;
+
+        if (isSearchMode) {
+            // Enhanced search request with proper parameters
+            const searchParams = new URLSearchParams({
+                query: encodeURIComponent(fabricatedPrompt),
+                mode:
+                    responseMode === "web-search"
+                        ? "light-search"
+                        : "deep-search",
+                max_results: responseMode === "deep-search" ? "5" : "5",
+                content_depth: responseMode === "deep-search" ? "2" : "1",
+            });
+
+            console.log(`Making ${responseMode} request`);
+
+            response = await fetch(`${SPINDLE_URL}/search?${searchParams}`, {
+                method: "GET",
+                signal: abortController.signal,
+                headers: {
+                    "Content-Type": "application/json",
+                },
+            });
+        } else {
+            // Standard light-response mode
+            console.log("Making light-response request");
+
+            response = await fetch(WRAPPER_URL, {
+                method: "POST",
+                body: JSON.stringify(fabricatedPrompt),
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                signal: abortController.signal,
+            });
+        }
+
+        // Check if request was aborted
+        if (abortController.signal.aborted) {
+            console.log(`Request ${requestId} was aborted`);
+            // Remove the temporary message if request was aborted
+            removeTemporaryMessage(submissionChatId, tempMessageIndex);
+            return;
+        }
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(
+                `HTTP ${response.status}: ${errorText || response.statusText}`,
+            );
+        }
+
+        parseRes = await response.json();
+
+        // Enhanced response processing for search modes
+        let finalResponse = parseRes.error ? parseRes.error : parseRes.response;
+
+        if (isSearchMode) {
+            const hasResults = parseRes.results || parseRes.json;
+            if (hasResults) {
+                finalResponse = formatSearchResults(
+                    parseRes,
+                    responseMode,
+                    tempMessageIndex,
+                );
+            } else {
+                finalResponse = "No search results found for your query.";
+            }
+        }
+
+        // Update the response in chat (replace the temporary message)
+        const updatedTargetChat = chats.value.find(
+            (chat) => chat.id === submissionChatId,
+        );
+        if (updatedTargetChat && tempMessageIndex >= 0) {
+            const updatedMessage = {
+                prompt: promptValue,
+                response: finalResponse,
+                status: response.status,
+            };
+            updatedTargetChat.messages[tempMessageIndex] = updatedMessage;
+            updatedTargetChat.updatedAt = new Date().toISOString();
+
+            // Process links in the response
+            await processLinksInResponse(tempMessageIndex);
+        }
+
+        // Increment request count on success
+        incrementRequestCount();
+
+        // Show success notification if user switched away
+        if (currentChatId.value !== submissionChatId) {
+            toast.success("Response received", {
+                duration: 3000,
+                description: `Switch to "${targetChat?.title || "chat"}" to view the response`,
+            });
+        }
+    } catch (err: any) {
+        // Don't show error if request was intentionally aborted
+        if (err.name === "AbortError") {
+            console.log(`Request ${requestId} was aborted`);
+            removeTemporaryMessage(submissionChatId, tempMessageIndex);
+            return;
+        }
+
+        console.error("AI Response Error:", err);
+
+        // Remove the temporary message on error
+        removeTemporaryMessage(submissionChatId, tempMessageIndex);
+
+        // More specific error messages
+        let errorMessage = err.message;
+        let description = "Please try again or check your connection";
+
+        if (err.message.includes("Failed to fetch")) {
+            errorMessage = "Network Error";
+            description = "Please check your internet connection";
+        } else if (err.message.includes("timeout")) {
+            errorMessage = "Request Timeout";
+            description = "The request took too long. Please try again";
+        }
+
+        toast.error(`Failed to get AI response: ${errorMessage}`, {
+            duration: 5000,
+            description,
+        });
+
+        // Restore draft if request failed
+        if (submissionChatId && promptValue.trim()) {
+            chatDrafts.value.set(submissionChatId, promptValue);
+            saveChatDrafts();
+        }
+    } finally {
+        // Clean up request tracking
+        activeRequests.value.delete(requestId);
+        requestChatMap.value.delete(requestId);
+
+        isLoading.value = false;
+        saveChats();
+
+        // Trigger background sync if needed
+        setTimeout(() => {
+            performSmartSync().catch((error) => {
+                console.error("Background sync failed:", error);
+            });
+        }, 500);
+
+        // Observe new video containers
+        observeNewVideoContainers();
     }
-
-    // Increment request count on success
-    incrementRequestCount()
-
-    // Show success notification if user switched away
-    if (currentChatId.value !== submissionChatId) {
-      toast.success('Response received', {
-        duration: 3000,
-        description: `Switch to "${targetChat?.title || 'chat'}" to view the response`
-      })
-    }
-
-  } catch (err: any) {
-    // Don't show error if request was intentionally aborted
-    if (err.name === 'AbortError') {
-      console.log(`Request ${requestId} was aborted`)
-      removeTemporaryMessage(submissionChatId, tempMessageIndex)
-      return
-    }
-
-    console.error('AI Response Error:', err)
-
-    // Remove the temporary message on error
-    removeTemporaryMessage(submissionChatId, tempMessageIndex)
-
-    // More specific error messages
-    let errorMessage = err.message
-    let description = 'Please try again or check your connection'
-
-    if (err.message.includes('Failed to fetch')) {
-      errorMessage = 'Network Error'
-      description = 'Please check your internet connection'
-    } else if (err.message.includes('timeout')) {
-      errorMessage = 'Request Timeout'
-      description = 'The request took too long. Please try again'
-    }
-
-    toast.error(`Failed to get AI response: ${errorMessage}`, {
-      duration: 5000,
-      description
-    })
-
-    // Restore draft if request failed
-    if (submissionChatId && promptValue.trim()) {
-      chatDrafts.value.set(submissionChatId, promptValue)
-      saveChatDrafts()
-    }
-  } finally {
-    // Clean up request tracking
-    activeRequests.value.delete(requestId)
-    requestChatMap.value.delete(requestId)
-
-    isLoading.value = false
-    saveChats()
-
-    // Trigger background sync if needed
-    setTimeout(() => {
-      performSmartSync().catch(error => {
-        console.error('Background sync failed:', error);
-      });
-    }, 500);
-
-    // Observe new video containers
-    observeNewVideoContainers();
-  }
 }
 
 // Helper function to remove temporary message on error/abort
 function removeTemporaryMessage(chatId: string, messageIndex: number) {
-  if (messageIndex < 0) return
+    if (messageIndex < 0) return;
 
-  const targetChat = chats.value.find(chat => chat.id === chatId)
-  if (targetChat && targetChat.messages.length > messageIndex) {
-    // Remove the temporary message
-    targetChat.messages.splice(messageIndex, 1)
+    const targetChat = chats.value.find((chat) => chat.id === chatId);
+    if (targetChat && targetChat.messages.length > messageIndex) {
+        // Remove the temporary message
+        targetChat.messages.splice(messageIndex, 1);
 
-    // If this was the only message, we might want to handle the empty chat
-    if (targetChat.messages.length === 0) {
-      // Optionally delete the empty chat or keep it with a default title
-      targetChat.title = 'New Chat'
+        // If this was the only message, we might want to handle the empty chat
+        if (targetChat.messages.length === 0) {
+            // Optionally delete the empty chat or keep it with a default title
+            targetChat.title = "New Chat";
+        }
+
+        targetChat.updatedAt = new Date().toISOString();
+        updateExpandedArray();
+        saveChats();
     }
-
-    targetChat.updatedAt = new Date().toISOString()
-    updateExpandedArray()
-    saveChats()
-  }
 }
 
 // Helper function to format search results
-function formatSearchResults(searchData: any, mode: string, messageIndex?: number): string {
-  const results = searchData.results || searchData.json || [];
-  if (results.length === 0) {
-    return "No search results found for your query."
-  }
-
-  // For deep-search, set up pagination
-  if (mode === 'deep-search' && messageIndex !== undefined) {
-    // Get or create chat pagination map
-    let chatPagination = deepSearchPagination.value.get(currentChatId.value)
-    if (!chatPagination) {
-      chatPagination = new Map()
-      deepSearchPagination.value.set(currentChatId.value, chatPagination)
+function formatSearchResults(
+    searchData: any,
+    mode: string,
+    messageIndex?: number,
+): string {
+    const results = searchData.results || searchData.json || [];
+    if (results.length === 0) {
+        return "No search results found for your query.";
     }
 
-    chatPagination.set(messageIndex, {
-      currentPage: 0,
-      totalPages: results.length
-    })
+    // For deep-search, set up pagination
+    if (mode === "deep-search" && messageIndex !== undefined) {
+        // Get or create chat pagination map
+        let chatPagination = deepSearchPagination.value.get(
+            currentChatId.value,
+        );
+        if (!chatPagination) {
+            chatPagination = new Map();
+            deepSearchPagination.value.set(currentChatId.value, chatPagination);
+        }
 
-    // Force reactivity
-    deepSearchPagination.value = new Map(deepSearchPagination.value)
-  }
+        chatPagination.set(messageIndex, {
+            currentPage: 0,
+            totalPages: results.length,
+        });
 
-  // Store results as JSON for client-side pagination
-  if (mode === 'deep-search') {
-    return JSON.stringify({
-      mode: 'deep-search',
-      results: results,
-      metadata: {
-        total_pages: searchData.total_pages,
-        content_depth: searchData.content_depth,
-        search_time: searchData.search_time
-      }
-    })
-  }
-
-  // For web-search, keep existing format (all results shown)
-  let formatted = "";
-  const { total_pages } = searchData
-
-  formatted += `Showing **${results.length}** of **${total_pages || results.length}** total results\n\n`
-  formatted += `\n\n`
-
-  results.forEach((result: any, index: number) => {
-    const title = result.title || 'No Title'
-    const url = result.url || '#'
-    const description = result.description || 'No description available'
-
-    formatted += `#### ${index + 1}. ${title} \n\n`
-    formatted += `${description} \n`
-    formatted += `[${url}](${url}) \n\n`
-
-    if (index < results.length - 1) {
-      formatted += `\n\n\n`
+        // Force reactivity
+        deepSearchPagination.value = new Map(deepSearchPagination.value);
     }
-  })
 
-  return formatted
+    // Store results as JSON for client-side pagination
+    if (mode === "deep-search") {
+        return JSON.stringify({
+            mode: "deep-search",
+            results: results,
+            metadata: {
+                total_pages: searchData.total_pages,
+                content_depth: searchData.content_depth,
+                search_time: searchData.search_time,
+            },
+        });
+    }
+
+    // For web-search, keep existing format (all results shown)
+    let formatted = "";
+    const { total_pages } = searchData;
+
+    formatted += `Showing **${results.length}** of **${total_pages || results.length}** total results\n\n`;
+    formatted += `\n\n`;
+
+    results.forEach((result: any, index: number) => {
+        const title = result.title || "No Title";
+        const url = result.url || "#";
+        const description = result.description || "No description available";
+
+        formatted += `#### ${index + 1}. ${title} \n\n`;
+        formatted += `${description} \n`;
+        formatted += `[${url}](${url}) \n\n`;
+
+        if (index < results.length - 1) {
+            formatted += `\n\n\n`;
+        }
+    });
+
+    return formatted;
 }
 
 // Function to render a single deep search result
 function renderDeepSearchResult(data: any, currentPage: number) {
-  const { results, metadata } = data
-  const result = results[currentPage]
+    const { results, metadata } = data;
+    const result = results[currentPage];
 
-  if (!result) return "No result available"
+    if (!result) return "No result available";
 
-  const title = result.title || 'No Title'
-  const url = result.url || '#'
-  const markdownContent = result.markdown_content || ''
-  const depth = result.depth || 0
-  const source: string = result.source || 'Unknown'
+    const title = result.title || "No Title";
+    const url = result.url || "#";
+    const markdownContent = result.markdown_content || "";
+    const depth = result.depth || 0;
+    const source: string = result.source || "Unknown";
 
-  let formatted = `### ${currentPage + 1}. ${title}\n\n`
-  formatted += `**URL:** [${url}](${url}) \n\n`
-  formatted += `> **Source:** ${source.startsWith('https://') ? `[${source}](${source})` : (source.length > 60 ? source.slice(0, 60) + "..." : source)} • **Depth:** ${depth}  \n`
+    let formatted = `### ${currentPage + 1}. ${title}\n\n`;
+    formatted += `**URL:** [${url}](${url}) \n\n`;
+    formatted += `> **Source:** ${source.startsWith("https://") ? `[${source}](${source})` : source.length > 60 ? source.slice(0, 60) + "..." : source} • **Depth:** ${depth}  \n`;
 
-  if (markdownContent) {
-    formatted += `${markdownContent} \n\n`
-  } else if (result.content) {
-    formatted += `${result.content.substring(0, 500)}... \n\n`
-  }
+    if (markdownContent) {
+        formatted += `${markdownContent} \n\n`;
+    } else if (result.content) {
+        formatted += `${result.content.substring(0, 500)}... \n\n`;
+    }
 
-  return formatted
+    return formatted;
 }
 
-async function handleLinkOnlyRequest(promptValue: string, chatId: string, requestId: string, abortController: AbortController) {
-  const urls = extractUrls(promptValue)
+async function handleLinkOnlyRequest(
+    promptValue: string,
+    chatId: string,
+    requestId: string,
+    abortController: AbortController,
+) {
+    const urls = extractUrls(promptValue);
 
-  isLoading.value = true
-  scrollToLastMessage();
+    isLoading.value = true;
+    scrollToLastMessage();
 
-  // Store temporary message reference
-  let tempMessageIndex = -1
-  const tempResp: Res = { prompt: promptValue, response: "..." }
-  const targetChat = chats.value.find(chat => chat.id === chatId)
+    // Store temporary message reference
+    let tempMessageIndex = -1;
+    const tempResp: Res = { prompt: promptValue, response: "..." };
+    const targetChat = chats.value.find((chat) => chat.id === chatId);
 
-  if (targetChat) {
-    targetChat.messages.push(tempResp)
-    tempMessageIndex = targetChat.messages.length - 1
-    targetChat.updatedAt = new Date().toISOString()
-  }
+    if (targetChat) {
+        targetChat.messages.push(tempResp);
+        tempMessageIndex = targetChat.messages.length - 1;
+        targetChat.updatedAt = new Date().toISOString();
+    }
 
-  try {
-    let combinedResponse = `I've analyzed the link${urls.length > 1 ? "s" : ""} you shared:  \n\n`
+    try {
+        let combinedResponse = `I've analyzed the link${urls.length > 1 ? "s" : ""} you shared:  \n\n`;
 
-    for (const url of urls) {
-      if (abortController.signal.aborted) {
-        console.log(`Link request ${requestId} was aborted`)
-        removeTemporaryMessage(chatId, tempMessageIndex)
-        return
-      }
+        for (const url of urls) {
+            if (abortController.signal.aborted) {
+                console.log(`Link request ${requestId} was aborted`);
+                removeTemporaryMessage(chatId, tempMessageIndex);
+                return;
+            }
 
-      try {
-        const linkPreview = await fetchLinkPreview(url)
+            try {
+                const linkPreview = await fetchLinkPreview(url);
 
-        // Use proper markdown with double spaces for line breaks
-        combinedResponse += `### ${linkPreview.title || 'Untitled'}  \n\n`
+                // Use proper markdown with double spaces for line breaks
+                combinedResponse += `### ${linkPreview.title || "Untitled"}  \n\n`;
 
-        if (linkPreview.description) {
-          combinedResponse += `${linkPreview.description}  \n\n`
+                if (linkPreview.description) {
+                    combinedResponse += `${linkPreview.description}  \n\n`;
+                }
+
+                combinedResponse += `**Source:** ${linkPreview.domain || new URL(url).hostname}  \n`;
+                combinedResponse += `**Url:** [${url}](${url})  \n\n`;
+
+                if (urls.length > 1) {
+                    combinedResponse += `  \n\n`;
+                }
+            } catch (err: any) {
+                combinedResponse += `### ⚠️ Error  \n\n`;
+                combinedResponse += `Failed to analyze: [${url}](${url})  \n\n`;
+                combinedResponse += `> ${err.message || "Unknown error occurred"}  \n\n`;
+
+                if (urls.length > 1) {
+                    combinedResponse += `  \n\n`;
+                }
+            }
         }
 
-        combinedResponse += `**Source:** ${linkPreview.domain || new URL(url).hostname}  \n`
-        combinedResponse += `**Url:** [${url}](${url})  \n\n`
-
+        // Add summary footer for multiple links
         if (urls.length > 1) {
-          combinedResponse += `  \n\n`
+            combinedResponse += `> ✨ *Analyzed ${urls.length} links* \n`;
         }
-      } catch (err: any) {
-        combinedResponse += `### ⚠️ Error  \n\n`
-        combinedResponse += `Failed to analyze: [${url}](${url})  \n\n`
-        combinedResponse += `> ${err.message || 'Unknown error occurred'}  \n\n`
 
-        if (urls.length > 1) {
-          combinedResponse += `  \n\n`
+        // Update the response in chat
+        const updatedTargetChat = chats.value.find(
+            (chat) => chat.id === chatId,
+        );
+        if (updatedTargetChat && tempMessageIndex >= 0) {
+            updatedTargetChat.messages[tempMessageIndex] = {
+                prompt: promptValue,
+                response: combinedResponse.trim(),
+                status: 200,
+            };
+            updatedTargetChat.updatedAt = new Date().toISOString();
         }
-      }
+
+        // ✅ ONLY INCREMENT ON SUCCESS for link-only prompts
+        incrementRequestCount();
+
+        // Show notification if user switched away
+        if (currentChatId.value !== chatId) {
+            toast.success("Links analyzed", {
+                duration: 3000,
+                description: `Switch to "${targetChat?.title || "chat"}" to view the analysis`,
+            });
+        }
+    } catch (err: any) {
+        console.error("Link analysis error:", err);
+
+        // Remove temporary message on error
+        removeTemporaryMessage(chatId, tempMessageIndex);
+
+        toast.error(`Failed to analyze links: ${err.message}`, {
+            duration: 5000,
+            description: "Please try again",
+        });
+    } finally {
+        activeRequests.value.delete(requestId);
+        requestChatMap.value.delete(requestId);
+        isLoading.value = false;
+        saveChats();
     }
-
-    // Add summary footer for multiple links
-    if (urls.length > 1) {
-      combinedResponse += `> ✨ *Analyzed ${urls.length} links* \n`
-    }
-
-    // Update the response in chat
-    const updatedTargetChat = chats.value.find(chat => chat.id === chatId)
-    if (updatedTargetChat && tempMessageIndex >= 0) {
-      updatedTargetChat.messages[tempMessageIndex] = {
-        prompt: promptValue,
-        response: combinedResponse.trim(),
-        status: 200
-      }
-      updatedTargetChat.updatedAt = new Date().toISOString()
-    }
-
-    // ✅ ONLY INCREMENT ON SUCCESS for link-only prompts
-    incrementRequestCount()
-
-    // Show notification if user switched away
-    if (currentChatId.value !== chatId) {
-      toast.success('Links analyzed', {
-        duration: 3000,
-        description: `Switch to "${targetChat?.title || 'chat'}" to view the analysis`
-      })
-    }
-
-  } catch (err: any) {
-    console.error('Link analysis error:', err)
-
-    // Remove temporary message on error
-    removeTemporaryMessage(chatId, tempMessageIndex)
-
-    toast.error(`Failed to analyze links: ${err.message}`, {
-      duration: 5000,
-      description: 'Please try again'
-    })
-  } finally {
-    activeRequests.value.delete(requestId)
-    requestChatMap.value.delete(requestId)
-    isLoading.value = false
-    saveChats()
-  }
 }
 
 async function refreshResponse(oldPrompt?: string) {
-  if (!isUserOnline.value) {
-    const isActuallyOnline = await checkInternetConnection()
-    if (!isActuallyOnline) {
-      toast.error('You are offline', {
-        duration: 4000,
-        description: 'Please check your internet connection and try again'
-      })
-      return
+    if (!isUserOnline.value) {
+        const isActuallyOnline = await checkInternetConnection();
+        if (!isActuallyOnline) {
+            toast.error("You are offline", {
+                duration: 4000,
+                description:
+                    "Please check your internet connection and try again",
+            });
+            return;
+        }
     }
-  }
 
-  const chatIndex = chats.value.findIndex(chat => chat.id === currentChatId.value)
-  if (chatIndex === -1) return
+    const chatIndex = chats.value.findIndex(
+        (chat) => chat.id === currentChatId.value,
+    );
+    if (chatIndex === -1) return;
 
-  const chat = chats.value[chatIndex]
-  const msgIndex = chat.messages.findIndex(m => m.prompt === oldPrompt)
-  if (msgIndex === -1) return
+    const chat = chats.value[chatIndex];
+    const msgIndex = chat.messages.findIndex((m) => m.prompt === oldPrompt);
+    if (msgIndex === -1) return;
 
-  const oldMessage = chat.messages[msgIndex]
+    const oldMessage = chat.messages[msgIndex];
 
-  // Get the original response mode from message metadata or use current
-  const originalMode = parsedUserDetails?.value?.responseMode || 'light-response'
-  const isSearchMode = originalMode === 'web-search' || originalMode === 'deep-search'
+    // Get the original response mode from message metadata or use current
+    const originalMode =
+        parsedUserDetails?.value?.responseMode || "light-response";
+    const isSearchMode =
+        originalMode === "web-search" || originalMode === "deep-search";
 
-  let fabricatedPrompt = oldPrompt
-  if (originalMode === 'light-response' && oldPrompt && isPromptTooShort(oldPrompt) && currentMessages.value.length > 1) {
-    const lastMessage = currentMessages.value[msgIndex - 1]
-    fabricatedPrompt = `${lastMessage.prompt || ''} ${lastMessage.response || ''}\nUser: ${oldPrompt}`
-  }
+    let fabricatedPrompt = oldPrompt;
+    if (
+        originalMode === "light-response" &&
+        oldPrompt &&
+        isPromptTooShort(oldPrompt) &&
+        currentMessages.value.length > 1
+    ) {
+        const lastMessage = currentMessages.value[msgIndex - 1];
+        fabricatedPrompt = `${lastMessage.prompt || ""} ${lastMessage.response || ""}\nUser: ${oldPrompt}`;
+    }
 
-  // Check request limits for refresh too
-  if (!checkRequestLimitBeforeSubmit()) {
-    return
-  }
+    // Check request limits for refresh too
+    if (!checkRequestLimitBeforeSubmit()) {
+        return;
+    }
 
-  // Show placeholder while refreshing
-  chat.messages[msgIndex] = {
-    ...oldMessage,
-    response: originalMode ? `${originalMode}...` : "Refreshing...",
-  }
+    // Show placeholder while refreshing
+    chat.messages[msgIndex] = {
+        ...oldMessage,
+        response: originalMode ? `${originalMode}...` : "Refreshing...",
+    };
 
-  isLoading.value = true
-  scrollToLastMessage()
+    isLoading.value = true;
+    scrollToLastMessage();
 
-  // Clean up link previews if needed
-  const responseUrls = extractUrls(oldMessage.response || '')
-  const promptUrls = extractUrls(oldMessage.prompt || '')
-  const urls = [...new Set([...responseUrls, ...promptUrls])]
+    // Clean up link previews if needed
+    const responseUrls = extractUrls(oldMessage.response || "");
+    const promptUrls = extractUrls(oldMessage.prompt || "");
+    const urls = [...new Set([...responseUrls, ...promptUrls])];
 
-  if (urls.length > 0) {
-    urls.forEach(url => {
-      linkPreviewCache.value.delete(url)
-    })
-    saveLinkPreviewCache()
-  }
+    if (urls.length > 0) {
+        urls.forEach((url) => {
+            linkPreviewCache.value.delete(url);
+        });
+        saveLinkPreviewCache();
+    }
 
-  // Handle link-only prompts
-  if (oldPrompt && isJustLinks(oldPrompt)) {
-    const urls = extractUrls(oldPrompt)
+    // Handle link-only prompts
+    if (oldPrompt && isJustLinks(oldPrompt)) {
+        const urls = extractUrls(oldPrompt);
+
+        try {
+            let combinedResponse = `I've analyzed the link${urls.length > 1 ? "s" : ""} you shared:  \n\n`;
+
+            for (const url of urls) {
+                try {
+                    const linkPreview = await fetchLinkPreview(url);
+
+                    // Use proper markdown with double spaces for line breaks
+                    combinedResponse += `### ${linkPreview.title || "Untitled"}  \n\n`;
+
+                    if (linkPreview.description) {
+                        combinedResponse += `${linkPreview.description}  \n\n`;
+                    }
+
+                    combinedResponse += `**Source:** ${linkPreview.domain || new URL(url).hostname}  \n`;
+                    combinedResponse += `**Url:** [${url}](${url})  \n\n`;
+
+                    if (urls.length > 1) {
+                        combinedResponse += ` \n\n`;
+                    }
+                } catch (err: any) {
+                    combinedResponse += `### ⚠️ Error  \n\n`;
+                    combinedResponse += `Failed to analyze: [${url}](${url})  \n\n`;
+                    combinedResponse += `> ${err.message || "Unknown error occurred"}  \n\n`;
+
+                    if (urls.length > 1) {
+                        combinedResponse += ` \n\n`;
+                    }
+                }
+            }
+
+            // Replace the same message with the refreshed response
+            chat.messages[msgIndex] = {
+                ...oldMessage,
+                response: combinedResponse.trim(),
+                status: 200,
+            };
+
+            chat.updatedAt = new Date().toISOString();
+            saveChats();
+
+            // Re-run link previews if needed
+            await processLinksInResponse(msgIndex);
+
+            incrementRequestCount();
+        } finally {
+            observeNewVideoContainers();
+        }
+
+        return;
+    }
 
     try {
-      let combinedResponse = `I've analyzed the link${urls.length > 1 ? "s" : ""} you shared:  \n\n`
+        let response: Response;
+        let parseRes: any;
 
-      for (const url of urls) {
-        try {
-          const linkPreview = await fetchLinkPreview(url)
+        if (isSearchMode) {
+            // Refresh search request with same parameters
+            const searchParams = new URLSearchParams({
+                query: encodeURIComponent(fabricatedPrompt || ""),
+                mode:
+                    originalMode === "web-search"
+                        ? "light-search"
+                        : "deep-search",
+                max_results: originalMode === "deep-search" ? "5" : "5",
+                content_depth: originalMode === "deep-search" ? "2" : "1",
+            });
 
-          // Use proper markdown with double spaces for line breaks
-          combinedResponse += `### ${linkPreview.title || 'Untitled'}  \n\n`
+            console.log(`Refreshing ${originalMode} request`);
 
-          if (linkPreview.description) {
-            combinedResponse += `${linkPreview.description}  \n\n`
-          }
-
-          combinedResponse += `**Source:** ${linkPreview.domain || new URL(url).hostname}  \n`
-          combinedResponse += `**Url:** [${url}](${url})  \n\n`
-
-          if (urls.length > 1) {
-            combinedResponse += ` \n\n`
-          }
-        } catch (err: any) {
-          combinedResponse += `### ⚠️ Error  \n\n`
-          combinedResponse += `Failed to analyze: [${url}](${url})  \n\n`
-          combinedResponse += `> ${err.message || 'Unknown error occurred'}  \n\n`
-
-          if (urls.length > 1) {
-            combinedResponse += ` \n\n`
-          }
+            response = await fetch(`${SPINDLE_URL}/search?${searchParams}`, {
+                method: "GET",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+            });
+        } else {
+            // Standard light-response mode refresh
+            response = await fetch(WRAPPER_URL, {
+                method: "POST",
+                body: JSON.stringify(fabricatedPrompt),
+                headers: {
+                    "Content-Type": "application/json",
+                },
+            });
         }
-      }
 
-      // Replace the same message with the refreshed response
-      chat.messages[msgIndex] = {
-        ...oldMessage,
-        response: combinedResponse.trim(),
-        status: 200,
-      }
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
 
-      chat.updatedAt = new Date().toISOString()
-      saveChats()
+        parseRes = await response.json();
 
-      // Re-run link previews if needed
-      await processLinksInResponse(msgIndex)
+        let finalResponse = parseRes.error ? parseRes.error : parseRes.response;
 
-      incrementRequestCount()
+        if (isSearchMode) {
+            // Check for results in both locations (results or json)
+            const hasResults = parseRes.results || parseRes.json;
+            if (hasResults) {
+                finalResponse = formatSearchResults(
+                    parseRes,
+                    originalMode,
+                    msgIndex,
+                );
+            } else {
+                finalResponse = "No search results found for your query.";
+            }
+        }
 
+        // Replace the same message with the refreshed response
+        chat.messages[msgIndex] = {
+            ...oldMessage,
+            response: finalResponse,
+            status: response.status,
+        };
+
+        chat.updatedAt = new Date().toISOString();
+        saveChats();
+
+        // Re-run link previews if needed
+        await processLinksInResponse(msgIndex);
+
+        incrementRequestCount();
+    } catch (err: any) {
+        console.error("Refresh error:", err);
+        toast.error(`Failed to refresh response: ${err.message}`);
+
+        // Restore original message on error
+        chat.messages[msgIndex] = oldMessage;
     } finally {
-      observeNewVideoContainers()
+        isLoading.value = false;
+        saveChats();
+        observeNewVideoContainers();
     }
-
-    return
-  }
-
-  try {
-    let response: Response
-    let parseRes: any
-
-    if (isSearchMode) {
-      // Refresh search request with same parameters
-      const searchParams = new URLSearchParams({
-        query: encodeURIComponent(fabricatedPrompt || ''),
-        mode: originalMode === 'web-search' ? 'light-search' : 'deep-search',
-        max_results: originalMode === 'deep-search' ? '5' : '5',
-        content_depth: originalMode === 'deep-search' ? '2' : '1'
-      })
-
-      console.log(`Refreshing ${originalMode} request`)
-
-      response = await fetch(
-        `${SPINDLE_URL}/search?${searchParams}`,
-        {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-          }
-        }
-      )
-    } else {
-      // Standard light-response mode refresh
-      response = await fetch(WRAPPER_URL, {
-        method: "POST",
-        body: JSON.stringify(fabricatedPrompt),
-        headers: {
-          "Content-Type": "application/json"
-        }
-      })
-    }
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-    }
-
-    parseRes = await response.json()
-
-    let finalResponse = parseRes.error ? parseRes.error : parseRes.response
-
-    if (isSearchMode) {
-      // Check for results in both locations (results or json)
-      const hasResults = parseRes.results || parseRes.json;
-      if (hasResults) {
-        finalResponse = formatSearchResults(parseRes, originalMode, msgIndex)
-      } else {
-        finalResponse = "No search results found for your query."
-      }
-    }
-
-    // Replace the same message with the refreshed response
-    chat.messages[msgIndex] = {
-      ...oldMessage,
-      response: finalResponse,
-      status: response.status,
-    }
-
-    chat.updatedAt = new Date().toISOString()
-    saveChats()
-
-    // Re-run link previews if needed
-    await processLinksInResponse(msgIndex)
-
-    incrementRequestCount()
-  } catch (err: any) {
-    console.error('Refresh error:', err)
-    toast.error(`Failed to refresh response: ${err.message}`)
-
-    // Restore original message on error
-    chat.messages[msgIndex] = oldMessage
-  } finally {
-    isLoading.value = false
-    saveChats()
-    observeNewVideoContainers()
-  }
 }
 
 // Helper to check if response is deep search result
 function isDeepSearchResult(response: string): boolean {
-  if (!response || typeof response !== 'string') return false
+    if (!response || typeof response !== "string") return false;
 
-  try {
-    if (response.startsWith('{') && response.includes('"mode"')) {
-      const parsed = JSON.parse(response)
-      return parsed.mode === 'deep-search'
+    try {
+        if (response.startsWith("{") && response.includes('"mode"')) {
+            const parsed = JSON.parse(response);
+            return parsed.mode === "deep-search";
+        }
+    } catch (e) {
+        return false;
     }
-  } catch (e) {
-    return false
-  }
 
-  return false
+    return false;
 }
 
 // input area template logic
 const inputPlaceholderText = computed(() => {
-  if (pastePreview.value && pastePreview.value.show) {
-    return 'Large content ready to send...'
-  }
-
-  if (isRecording.value) {
-    return screenWidth.value > 640 ? 'Speak now... (Click mic to stop)' : 'Speak now...'
-  }
-
-  if (isRequestLimitExceeded.value) {
-    if (planStatus.value.isExpired) {
-      return screenWidth.value > 640 ? 'Plan expired - renew to continue...' : 'Plan expired...'
+    if (pastePreview.value && pastePreview.value.show) {
+        return "Large content ready to send...";
     }
-    return screenWidth.value > 640 ? 'Upgrade to continue chatting...' : 'Upgrade to continue...'
-  }
 
-  if (isLoading.value) {
-    return 'Please wait...'
-  }
+    if (isRecording.value) {
+        return screenWidth.value > 640
+            ? "Speak now... (Click mic to stop)"
+            : "Speak now...";
+    }
 
-  const shouldHaveLimit = isFreeUser.value ||
-    planStatus.value.isExpired ||
-    planStatus.value.status === 'no-plan' ||
-    planStatus.value.status === 'expired'
+    if (isRequestLimitExceeded.value) {
+        if (planStatus.value.isExpired) {
+            return screenWidth.value > 640
+                ? "Plan expired - renew to continue..."
+                : "Plan expired...";
+        }
+        return screenWidth.value > 640
+            ? "Upgrade to continue chatting..."
+            : "Upgrade to continue...";
+    }
 
-  if (shouldHaveLimit) {
-    return `Ask me a question... (${requestsRemaining.value} requests left)`
-  }
+    if (isLoading.value) {
+        return "Please wait...";
+    }
 
-  return 'Ask me a question...'
-})
+    const shouldHaveLimit =
+        isFreeUser.value ||
+        planStatus.value.isExpired ||
+        planStatus.value.status === "no-plan" ||
+        planStatus.value.status === "expired";
+
+    if (shouldHaveLimit) {
+        return `Ask me a question... (${requestsRemaining.value} requests left)`;
+    }
+
+    return "Ask me a question...";
+});
 
 const inputDisabled = computed(() => {
-  return isLoading.value || isRequestLimitExceeded.value
-})
+    return isLoading.value || isRequestLimitExceeded.value;
+});
 
 const showLimitExceededBanner = computed(() => {
-  return isRequestLimitExceeded.value
-})
+    return isRequestLimitExceeded.value;
+});
 
 const showUpgradeBanner = computed(() => {
-  return shouldShowUpgradePrompt.value && !isRequestLimitExceeded.value
-})
+    return shouldShowUpgradePrompt.value && !isRequestLimitExceeded.value;
+});
 
 const scrollButtonPosition = computed(() => {
-  // Base positions
-  const basePosition = 'bottom-[130px] sm:bottom-[140px]'
-  const withScrollButton = 'bottom-[130px] sm:bottom-[140px]'
-  const withBanners = 'bottom-[210px] sm:bottom-[220px]'
-  const withPastePreview = 'bottom-[300px] sm:bottom-[350px]'
-  const withPasteAndBanners = 'bottom-[400px] sm:bottom-[420px]'
+    // Base positions
+    const basePosition = "bottom-[130px] sm:bottom-[140px]";
+    const withScrollButton = "bottom-[130px] sm:bottom-[140px]";
+    const withBanners = "bottom-[210px] sm:bottom-[220px]";
+    const withPastePreview = "bottom-[300px] sm:bottom-[350px]";
+    const withPasteAndBanners = "bottom-[400px] sm:bottom-[420px]";
 
-  // Priority order: paste + banners > banners > paste > scroll button > base
-  if ((isRequestLimitExceeded.value || shouldShowUpgradePrompt.value) && pastePreview.value?.show) {
-    return withPasteAndBanners
-  } else if (isRequestLimitExceeded.value || shouldShowUpgradePrompt.value) {
-    return withBanners
-  } else if (pastePreview.value?.show) {
-    return withPastePreview
-  } else if (showScrollDownButton.value) {
-    return withScrollButton
-  } else {
-    return basePosition
-  }
-})
+    // Priority order: paste + banners > banners > paste > scroll button > base
+    if (
+        (isRequestLimitExceeded.value || shouldShowUpgradePrompt.value) &&
+        pastePreview.value?.show
+    ) {
+        return withPasteAndBanners;
+    } else if (isRequestLimitExceeded.value || shouldShowUpgradePrompt.value) {
+        return withBanners;
+    } else if (pastePreview.value?.show) {
+        return withPastePreview;
+    } else if (showScrollDownButton.value) {
+        return withScrollButton;
+    } else {
+        return basePosition;
+    }
+});
 
 const scrollContainerPadding = computed(() => {
-  // When loading (during handleSubmit or refreshResponse), use full viewport padding
-  if (isLoading.value) {
-    return 'pb-[calc(100vh-100px)]'
-  }
+    // When loading (during handleSubmit or refreshResponse), use full viewport padding
+    if (isLoading.value) {
+        return "pb-[calc(100vh-100px)]";
+    }
 
-  // After loading completes, calculate appropriate padding based on UI state
-  if ((isRequestLimitExceeded.value || shouldShowUpgradePrompt.value) && pastePreview.value?.show) {
-    return 'pb-[200px] sm:pb-[190px]'
-  } else if (isRequestLimitExceeded.value || shouldShowUpgradePrompt.value) {
-    return 'pb-[190px] sm:pb-[200px]'
-  } else if (pastePreview.value?.show) {
-    return 'pb-[150px] sm:pb-[140px]'
-  } else if (showScrollDownButton.value) {
-    return 'pb-[140px] sm:pb-[120px]'
-  } else {
-    // Base padding when nothing special is showing
-    return 'pb-[110px] sm:pb-[120px]'
-  }
-})
+    // After loading completes, calculate appropriate padding based on UI state
+    if (
+        (isRequestLimitExceeded.value || shouldShowUpgradePrompt.value) &&
+        pastePreview.value?.show
+    ) {
+        return "pb-[200px] sm:pb-[190px]";
+    } else if (isRequestLimitExceeded.value || shouldShowUpgradePrompt.value) {
+        return "pb-[190px] sm:pb-[200px]";
+    } else if (pastePreview.value?.show) {
+        return "pb-[150px] sm:pb-[140px]";
+    } else if (showScrollDownButton.value) {
+        return "pb-[140px] sm:pb-[120px]";
+    } else {
+        // Base padding when nothing special is showing
+        return "pb-[110px] sm:pb-[120px]";
+    }
+});
 
 // Add connection checking before authentication
 async function handleStepSubmit(e: Event) {
-  e.preventDefault()
+    e.preventDefault();
 
-  // Early validation with improved error handling
-  if (!validateCurrentStep()) {
-    handleValidationError()
-    return
-  }
+    // Early validation with improved error handling
+    if (!validateCurrentStep()) {
+        handleValidationError();
+        return;
+    }
 
-  // Handle step progression vs final submission
-  if (authStep.value < 4) {
-    nextAuthStep()
-    return
-  }
+    // Handle step progression vs final submission
+    if (authStep.value < 4) {
+        nextAuthStep();
+        return;
+    }
 
-  // Final step - create session
-  await handleFinalAuthStep()
+    // Final step - create session
+    await handleFinalAuthStep();
 }
 
 function handleValidationError() {
-  const errorMessages = {
-    1: {
-      title: 'Invalid Username',
-      message: 'Username must be 2-50 characters and contain only letters, numbers, and underscores'
-    },
-    2: {
-      title: 'Invalid Email',
-      message: 'Please enter a valid email address (e.g., name@example.com)'
-    },
-    3: {
-      title: 'Weak Password',
-      message: 'Password must be at least 7 characters with a mix of letters and numbers'
-    },
-    4: {
-      title: 'Terms Required',
-      message: 'Please accept the Terms of Service and Privacy Policy to continue'
-    }
-  }
+    const errorMessages = {
+        1: {
+            title: "Invalid Username",
+            message:
+                "Username must be 2-50 characters and contain only letters, numbers, and underscores",
+        },
+        2: {
+            title: "Invalid Email",
+            message:
+                "Please enter a valid email address (e.g., name@example.com)",
+        },
+        3: {
+            title: "Weak Password",
+            message:
+                "Password must be at least 7 characters with a mix of letters and numbers",
+        },
+        4: {
+            title: "Terms Required",
+            message:
+                "Please accept the Terms of Service and Privacy Policy to continue",
+        },
+    };
 
-  const error = errorMessages[authStep.value as keyof typeof errorMessages]
-  if (error) {
-    toast.warning(error.title, {
-      duration: 4000,
-      description: error.message,
-      action: {
-        label: 'Got it',
-        onClick: () => { }
-      }
-    })
-  }
+    const error = errorMessages[authStep.value as keyof typeof errorMessages];
+    if (error) {
+        toast.warning(error.title, {
+            duration: 4000,
+            description: error.message,
+            action: {
+                label: "Got it",
+                onClick: () => {},
+            },
+        });
+    }
 }
 
 async function handleFinalAuthStep() {
-  try {
-    isLoading.value = true
+    try {
+        isLoading.value = true;
 
-    // Add a small delay to show the loading state
-    await new Promise(resolve => setTimeout(resolve, 500))
+        // Add a small delay to show the loading state
+        await new Promise((resolve) => setTimeout(resolve, 500));
 
-    const response = await handleAuth(authData.value)
+        const response = await handleAuth(authData.value);
 
-    // Validate response structure
-    if (!response) {
-      throw new Error('No response received from authentication service')
+        // Validate response structure
+        if (!response) {
+            throw new Error("No response received from authentication service");
+        }
+
+        if (response.error) {
+            throw new Error(response.error);
+        }
+
+        if (!response.data || !response.success) {
+            throw new Error(
+                "Authentication failed - invalid response structure",
+            );
+        }
+
+        // Success handling
+        await handleAuthSuccess(response);
+    } catch (err: any) {
+        await handleAuthError(err);
+    } finally {
+        isLoading.value = false;
     }
-
-    if (response.error) {
-      throw new Error(response.error)
-    }
-
-    if (!response.data || !response.success) {
-      throw new Error('Authentication failed - invalid response structure')
-    }
-
-    // Success handling
-    await handleAuthSuccess(response)
-
-  } catch (err: any) {
-    await handleAuthError(err)
-  } finally {
-    isLoading.value = false
-  }
 }
 
 async function handleAuthSuccess(response: any) {
-  // Reset form state
-  setShowCreateSession(false)
-  authStep.value = 1
-  authData.value = {
-    username: '',
-    email: '',
-    password: '',
-    agreeToTerms: false
-  }
+    // Reset form state
+    setShowCreateSession(false);
+    authStep.value = 1;
+    authData.value = {
+        username: "",
+        email: "",
+        password: "",
+        agreeToTerms: false,
+    };
 
-  // Load user data
-  await loadRequestCount()
+    // Load user data
+    await loadRequestCount();
 
-  // Handle redirect logic
-  await handlePostAuthRedirect()
+    // Handle redirect logic
+    await handlePostAuthRedirect();
 
-  // Focus input field
-  nextTick(() => {
-    const textarea = document.getElementById("prompt") as HTMLTextAreaElement
-    if (textarea) {
-      textarea.focus()
-      // Add a subtle animation to draw attention to the input
-      textarea.classList.add('ring-2', 'ring-blue-500')
-      setTimeout(() => {
-        textarea.classList.remove('ring-2', 'ring-blue-500')
-      }, 2000)
-    }
-  })
+    // Focus input field
+    nextTick(() => {
+        const textarea = document.getElementById(
+            "prompt",
+        ) as HTMLTextAreaElement;
+        if (textarea) {
+            textarea.focus();
+            // Add a subtle animation to draw attention to the input
+            textarea.classList.add("ring-2", "ring-blue-500");
+            setTimeout(() => {
+                textarea.classList.remove("ring-2", "ring-blue-500");
+            }, 2000);
+        }
+    });
 }
 
 async function handlePostAuthRedirect() {
-  // Check multiple sources for upgrade redirect
-  const previousRoute = document.referrer
-  const urlParams = new URLSearchParams(window.location.search)
-  const isFromUpgrade =
-    previousRoute.includes('/upgrade') ||
-    urlParams.has('from') && urlParams.get('from') === 'upgrade' ||
-    urlParams.has('redirect') && urlParams.get('redirect') === 'upgrade'
+    // Check multiple sources for upgrade redirect
+    const previousRoute = document.referrer;
+    const urlParams = new URLSearchParams(window.location.search);
+    const isFromUpgrade =
+        previousRoute.includes("/upgrade") ||
+        (urlParams.has("from") && urlParams.get("from") === "upgrade") ||
+        (urlParams.has("redirect") && urlParams.get("redirect") === "upgrade");
 
-  if (isFromUpgrade) {
-    console.log('Redirecting to upgrade page after authentication')
-    // Small delay for better UX flow
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    router.push('/upgrade')
-  }
+    if (isFromUpgrade) {
+        console.log("Redirecting to upgrade page after authentication");
+        // Small delay for better UX flow
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        router.push("/upgrade");
+    }
 }
 
 async function handleAuthError(err: any) {
-  console.error('Authentication error:', err)
+    console.error("Authentication error:", err);
 
-  // Map specific error types to user-friendly messages
-  const errorMap = {
-    timeout: {
-      title: 'Connection Timeout',
-      message: 'Server took too long to respond. Please check your connection and try again.'
-    },
-    network: {
-      title: 'Network Error',
-      message: 'Unable to reach our servers. Please check your internet connection.'
-    },
-    credentials: {
-      title: 'Invalid Credentials',
-      message: 'The username, email, or password you entered is incorrect.'
-    },
-    server: {
-      title: 'Server Error',
-      message: 'Our servers are experiencing issues. Please try again in a few minutes.'
-    },
-    rate_limit: {
-      title: 'Too Many Attempts',
-      message: 'Please wait a moment before trying again.'
-    },
-    default: {
-      title: 'Authentication Failed',
-      message: 'An unexpected error occurred. Please try again.'
-    }
-  }
+    // Map specific error types to user-friendly messages
+    const errorMap = {
+        timeout: {
+            title: "Connection Timeout",
+            message:
+                "Server took too long to respond. Please check your connection and try again.",
+        },
+        network: {
+            title: "Network Error",
+            message:
+                "Unable to reach our servers. Please check your internet connection.",
+        },
+        credentials: {
+            title: "Invalid Credentials",
+            message:
+                "The username, email, or password you entered is incorrect.",
+        },
+        server: {
+            title: "Server Error",
+            message:
+                "Our servers are experiencing issues. Please try again in a few minutes.",
+        },
+        rate_limit: {
+            title: "Too Many Attempts",
+            message: "Please wait a moment before trying again.",
+        },
+        default: {
+            title: "Authentication Failed",
+            message: "An unexpected error occurred. Please try again.",
+        },
+    };
 
-  // Determine error type
-  let errorType: keyof typeof errorMap = 'default'
-  const errorMessage = err.message?.toLowerCase() || ''
+    // Determine error type
+    let errorType: keyof typeof errorMap = "default";
+    const errorMessage = err.message?.toLowerCase() || "";
 
-  if (errorMessage.includes('timeout')) errorType = 'timeout'
-  else if (errorMessage.includes('failed to fetch') || errorMessage.includes('network')) errorType = 'network'
-  else if (errorMessage.includes('http 4') || errorMessage.includes('invalid') || errorMessage.includes('credential')) errorType = 'credentials'
-  else if (errorMessage.includes('http 5')) errorType = 'server'
-  else if (errorMessage.includes('rate') || errorMessage.includes('limit')) errorType = 'rate_limit'
+    if (errorMessage.includes("timeout")) errorType = "timeout";
+    else if (
+        errorMessage.includes("failed to fetch") ||
+        errorMessage.includes("network")
+    )
+        errorType = "network";
+    else if (
+        errorMessage.includes("http 4") ||
+        errorMessage.includes("invalid") ||
+        errorMessage.includes("credential")
+    )
+        errorType = "credentials";
+    else if (errorMessage.includes("http 5")) errorType = "server";
+    else if (errorMessage.includes("rate") || errorMessage.includes("limit"))
+        errorType = "rate_limit";
 
-  const error = errorMap[errorType]
+    const error = errorMap[errorType];
 
-  // Show error with retry option
-  toast.error(error.title, {
-    duration: 6000,
-    description: error.message,
-    action: {
-      label: 'Try Again',
-      onClick: () => {
-        // Auto-focus the relevant input field based on step
-        nextTick(() => {
-          const focusMap = {
-            1: 'username',
-            2: 'email',
-            3: 'password',
-            4: 'agreeToTerms'
-          }
-          const fieldToFocus = focusMap[authStep.value as keyof typeof focusMap]
-          if (fieldToFocus && fieldToFocus !== 'agreeToTerms') {
-            const input = document.querySelector(`[name="${fieldToFocus}"]`) as HTMLInputElement
-            if (input) {
-              input.focus()
-              input.select()
-            }
-          }
-        })
-      }
-    }
-  })
+    // Show error with retry option
+    toast.error(error.title, {
+        duration: 6000,
+        description: error.message,
+        action: {
+            label: "Try Again",
+            onClick: () => {
+                // Auto-focus the relevant input field based on step
+                nextTick(() => {
+                    const focusMap = {
+                        1: "username",
+                        2: "email",
+                        3: "password",
+                        4: "agreeToTerms",
+                    };
+                    const fieldToFocus =
+                        focusMap[authStep.value as keyof typeof focusMap];
+                    if (fieldToFocus && fieldToFocus !== "agreeToTerms") {
+                        const input = document.querySelector(
+                            `[name="${fieldToFocus}"]`,
+                        ) as HTMLInputElement;
+                        if (input) {
+                            input.focus();
+                            input.select();
+                        }
+                    }
+                });
+            },
+        },
+    });
 }
 
 // Process links in a response and generate previews
 async function processLinksInResponse(index: number) {
-  const targetChat = chats.value.find(chat => chat.id === currentChatId.value)
-  if (!targetChat || !targetChat.messages[index] || !targetChat.messages[index].response || targetChat.messages[index].response === "...") return
+    const targetChat = chats.value.find(
+        (chat) => chat.id === currentChatId.value,
+    );
+    if (
+        !targetChat ||
+        !targetChat.messages[index] ||
+        !targetChat.messages[index].response ||
+        targetChat.messages[index].response === "..."
+    )
+        return;
 
-  const urls = extractUrls(targetChat.messages[index].response)
-  if (urls.length > 0) {
-    urls.slice(0, 3).forEach(url => {
-      fetchLinkPreview(url).then(() => {
-        linkPreviewCache.value = new Map(linkPreviewCache.value)
-      })
-    })
-  }
+    const urls = extractUrls(targetChat.messages[index].response);
+    if (urls.length > 0) {
+        urls.slice(0, 3).forEach((url) => {
+            fetchLinkPreview(url).then(() => {
+                linkPreviewCache.value = new Map(linkPreviewCache.value);
+            });
+        });
+    }
 }
 
 // Process links in user prompts
 async function processLinksInUserPrompt(prompt: string) {
-  const urls = extractUrls(prompt)
-  if (urls.length > 0) {
-    // Start loading previews for user prompt links
-    urls.slice(0, 3).forEach(url => {
-      fetchLinkPreview(url).then(() => {
-        // Trigger reactivity update
-        linkPreviewCache.value = new Map(linkPreviewCache.value)
-      })
-    })
-  }
+    const urls = extractUrls(prompt);
+    if (urls.length > 0) {
+        // Start loading previews for user prompt links
+        urls.slice(0, 3).forEach((url) => {
+            fetchLinkPreview(url).then(() => {
+                // Trigger reactivity update
+                linkPreviewCache.value = new Map(linkPreviewCache.value);
+            });
+        });
+    }
 }
 
 // ---------- Extra actions ----------
 function copyResponse(text: string, index?: number) {
-  navigator.clipboard.writeText(text)
-    .then(() => {
-      copiedIndex.value = index ?? null
+    navigator.clipboard
+        .writeText(text)
+        .then(() => {
+            copiedIndex.value = index ?? null;
 
-      setTimeout(() => {
-        copiedIndex.value = null
-      }, 2000)
-    })
-    .catch(err => {
-      console.error('Failed to copy text: ', err)
-      toast.error('Copy Failed', {
-        duration: 3000,
-        description: ''
-      })
-    })
+            setTimeout(() => {
+                copiedIndex.value = null;
+            }, 2000);
+        })
+        .catch((err) => {
+            console.error("Failed to copy text: ", err);
+            toast.error("Copy Failed", {
+                duration: 3000,
+                description: "",
+            });
+        });
 }
 
 function shareResponse(text: string, prompt?: string) {
-  if (navigator.share) {
-    navigator.share({
-      title: prompt && prompt.length > 200 ? `${prompt.slice(0, 200)}...\n\n` : `${prompt || "Gemmie Chat"}\n\n`,
-      text
-    }).then(() => {
-      console.log("Share successful")
-    }).catch(err => {
-      console.log("Share canceled", err)
-    })
-  } else {
-    copyCode(text)
-    toast.info('Copied Instead', {
-      duration: 3000,
-    })
-  }
+    if (navigator.share) {
+        navigator
+            .share({
+                title:
+                    prompt && prompt.length > 200
+                        ? `${prompt.slice(0, 200)}...\n\n`
+                        : `${prompt || "Gemmie Chat"}\n\n`,
+                text,
+            })
+            .then(() => {
+                console.log("Share successful");
+            })
+            .catch((err) => {
+                console.log("Share canceled", err);
+            });
+    } else {
+        copyCode(text);
+        toast.info("Copied Instead", {
+            duration: 3000,
+        });
+    }
 }
 
-let resizeTimeout: any
+let resizeTimeout: any;
 window.onresize = () => {
-  clearTimeout(resizeTimeout)
-  resizeTimeout = setTimeout(() => {
-    screenWidth.value = screen.width
-  }, 100)
-}
+    clearTimeout(resizeTimeout);
+    resizeTimeout = setTimeout(() => {
+        screenWidth.value = screen.width;
+    }, 100);
+};
 
 function onEnter(e: KeyboardEvent) {
-  if (e.key !== 'Enter' || e.shiftKey || isLoading.value) {
-    return
-  }
-
-  e.preventDefault()
-
-  const textarea = e.target as HTMLTextAreaElement
-  if (textarea && textarea.value.trim()) {
-    const formEvent = {
-      preventDefault: () => { },
-      target: { prompt: textarea }
+    if (e.key !== "Enter" || e.shiftKey || isLoading.value) {
+        return;
     }
-    handleSubmit(formEvent)
-  }
+
+    e.preventDefault();
+
+    const textarea = e.target as HTMLTextAreaElement;
+    if (textarea && textarea.value.trim()) {
+        const formEvent = {
+            preventDefault: () => {},
+            target: { prompt: textarea },
+        };
+        handleSubmit(formEvent);
+    }
 }
 
 // Function to close paste modal
 function closePasteModal() {
-  showPasteModal.value = false
-  currentPasteContent.value = null
+    showPasteModal.value = false;
+    currentPasteContent.value = null;
 
-  // Restore body scroll
-  document.body.style.overflow = 'auto'
+    // Restore body scroll
+    document.body.style.overflow = "auto";
 }
 
 // Keyboard handler for modal
 function handleModalKeydown(e: KeyboardEvent) {
-  if (e.key === 'Escape' && showPasteModal.value) {
-    closePasteModal()
-  }
+    if (e.key === "Escape" && showPasteModal.value) {
+        closePasteModal();
+    }
 }
 
-function PastePreviewComponent(content: string, wordCount: number, charCount: number, isClickable: boolean = false) {
-  const preview = content.length > 200 ? content.substring(0, 200) + '...' : content
+function PastePreviewComponent(
+    content: string,
+    wordCount: number,
+    charCount: number,
+    isClickable: boolean = false,
+) {
+    const preview =
+        content.length > 200 ? content.substring(0, 200) + "..." : content;
 
-  // Proper HTML escaping
-  const escapedPreview = preview
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
-    .replace(/\n/g, '<br>')
-    .replace(/\t/g, '&nbsp;&nbsp;&nbsp;&nbsp;')
+    // Proper HTML escaping
+    const escapedPreview = preview
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;")
+        .replace(/\n/g, "<br>")
+        .replace(/\t/g, "&nbsp;&nbsp;&nbsp;&nbsp;");
 
-  // Generate unique ID for this component
-  const componentId = `paste-${Math.random().toString(36).substr(2, 9)}`
+    // Generate unique ID for this component
+    const componentId = `paste-${Math.random().toString(36).substr(2, 9)}`;
 
-  // For clickable elements, add the data attributes and class to the main container
-  const clickableAttributes = isClickable ?
-    `data-paste-content="${encodeURIComponent(content)}" data-word-count="${wordCount}" data-char-count="${charCount}"` : ''
+    // For clickable elements, add the data attributes and class to the main container
+    const clickableAttributes = isClickable
+        ? `data-paste-content="${encodeURIComponent(content)}" data-word-count="${wordCount}" data-char-count="${charCount}"`
+        : "";
 
-  const clickableClass = isClickable ? 'paste-preview-clickable cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors duration-200' : ''
+    const clickableClass = isClickable
+        ? "paste-preview-clickable cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors duration-200"
+        : "";
 
-  return `
+    return `
     <div class="paste-preview border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden my-2 bg-gray-100 dark:bg-gray-700 hover:shadow-md transition-all duration-300 w-full ${clickableClass}"
          id="${componentId}" ${clickableAttributes}>
       <div class="w-full">
@@ -1703,7 +1906,7 @@ function PastePreviewComponent(content: string, wordCount: number, charCount: nu
           <span>PASTED CONTENT</span>
           <span class="ml-auto text-gray-200 dark:text-gray-400 hidden sm:inline">${wordCount} words • ${charCount} chars</span>
           <span class="ml-auto text-gray-200 dark:text-gray-400 sm:hidden">${charCount} chars</span>
-          ${isClickable ? '<i class="pi pi-external-link ml-1 text-gray-300 dark:text-gray-500"></i>' : ''}
+          ${isClickable ? '<i class="pi pi-external-link ml-1 text-gray-300 dark:text-gray-500"></i>' : ""}
         </div>
         <div class="pb-3 px-3">
           <div class="relative">
@@ -1713,1241 +1916,1879 @@ function PastePreviewComponent(content: string, wordCount: number, charCount: nu
             <div class="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-gray-100 dark:from-gray-700 via-gray-100/80 dark:via-gray-700/80 to-transparent pointer-events-none transition-colors duration-200"></div>
           </div>
           <div class="flex items-center justify-between mt-2 text-xs text-gray-600 dark:text-gray-400 transition-colors duration-200">
-            <span class="hidden sm:inline">${isClickable ? 'Click to view full content' : 'Large content detected'}</span>
-            <span class="sm:hidden">${isClickable ? 'Tap to view' : 'Large content'}</span>
-            ${!isClickable ? '<button class="remove-paste-preview text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 underline font-medium transition-colors duration-200" type="button">Remove</button>' : ''}
+            <span class="hidden sm:inline">${isClickable ? "Click to view full content" : "Large content detected"}</span>
+            <span class="sm:hidden">${isClickable ? "Tap to view" : "Large content"}</span>
+            ${!isClickable ? '<button class="remove-paste-preview text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 underline font-medium transition-colors duration-200" type="button">Remove</button>' : ""}
           </div>
         </div>
       </div>
     </div>
-  `
+  `;
 }
 
 function handlePastePreviewClick(e: Event) {
-  const target = e.target as HTMLElement
+    const target = e.target as HTMLElement;
 
-  // Check if the clicked element itself or any parent has the clickable class
-  const clickableElement = target.closest('.paste-preview-clickable')
+    // Check if the clicked element itself or any parent has the clickable class
+    const clickableElement = target.closest(".paste-preview-clickable");
 
-  if (clickableElement) {
-    // Prevent event bubbling to avoid conflicts
-    e.preventDefault()
-    e.stopPropagation()
+    if (clickableElement) {
+        // Prevent event bubbling to avoid conflicts
+        e.preventDefault();
+        e.stopPropagation();
 
-    const content = clickableElement.getAttribute('data-paste-content')
-    const wordCount = clickableElement.getAttribute('data-word-count')
-    const charCount = clickableElement.getAttribute('data-char-count')
+        const content = clickableElement.getAttribute("data-paste-content");
+        const wordCount = clickableElement.getAttribute("data-word-count");
+        const charCount = clickableElement.getAttribute("data-char-count");
 
-    if (content && wordCount && charCount) {
-      try {
-        const decodedContent = decodeURIComponent(content)
-        const parsedWordCount = parseInt(wordCount, 10)
-        const parsedCharCount = parseInt(charCount, 10)
+        if (content && wordCount && charCount) {
+            try {
+                const decodedContent = decodeURIComponent(content);
+                const parsedWordCount = parseInt(wordCount, 10);
+                const parsedCharCount = parseInt(charCount, 10);
 
-        openPasteModal(decodedContent, parsedWordCount, parsedCharCount)
-      } catch (error) {
-        console.error('Error parsing paste preview data:', error)
-        toast.error('Error opening paste preview', {
-          duration: 3000,
-          description: 'Could not parse content data'
-        })
-      }
+                openPasteModal(
+                    decodedContent,
+                    parsedWordCount,
+                    parsedCharCount,
+                );
+            } catch (error) {
+                console.error("Error parsing paste preview data:", error);
+                toast.error("Error opening paste preview", {
+                    duration: 3000,
+                    description: "Could not parse content data",
+                });
+            }
+        }
     }
-  }
 }
 
 function handleRemovePastePreview(e: Event) {
-  const target = e.target as HTMLElement
+    const target = e.target as HTMLElement;
 
-  if (target.classList.contains('remove-paste-preview')) {
-    e.preventDefault()
-    e.stopPropagation()
-    removePastePreview()
-  }
+    if (target.classList.contains("remove-paste-preview")) {
+        e.preventDefault();
+        e.stopPropagation();
+        removePastePreview();
+    }
 }
 
 function setupPastePreviewHandlers() {
-  // Remove existing listeners to avoid duplicates
-  document.removeEventListener('click', handlePastePreviewClick, true)
-  document.removeEventListener('click', handleRemovePastePreview, true)
+    // Remove existing listeners to avoid duplicates
+    document.removeEventListener("click", handlePastePreviewClick, true);
+    document.removeEventListener("click", handleRemovePastePreview, true);
 
-  // Add event delegation with capture phase for better reliability
-  document.addEventListener('click', handlePastePreviewClick, true)
-  document.addEventListener('click', handleRemovePastePreview, true)
+    // Add event delegation with capture phase for better reliability
+    document.addEventListener("click", handlePastePreviewClick, true);
+    document.addEventListener("click", handleRemovePastePreview, true);
 
-  console.log('Paste preview handlers setup complete') // Debug log
+    console.log("Paste preview handlers setup complete"); // Debug log
 }
 
 // Function to open paste modal
 function openPasteModal(content: string, wordCount: number, charCount: number) {
-  try {
-    // Handle the #pastedText# prefix if present
-    const actualContent = content.startsWith('#pastedText#') ? content.substring(12) : content
+    try {
+        // Handle the #pastedText# prefix if present
+        const actualContent = content.startsWith("#pastedText#")
+            ? content.substring(12)
+            : content;
 
-    // Detect content type - provide fallback if function not available
-    let contentType: 'text' | 'code' | 'json' | 'markdown' | 'xml' | 'html' = 'text'
+        // Detect content type - provide fallback if function not available
+        let contentType:
+            | "text"
+            | "code"
+            | "json"
+            | "markdown"
+            | "xml"
+            | "html" = "text";
 
-    if (typeof detectContentType === 'function') {
-      contentType = detectContentType(actualContent)
-    } else {
-      // Simple content type detection as fallback
-      if (actualContent.trim().startsWith('{') && actualContent.trim().endsWith('}')) {
-        contentType = 'json'
-      } else if (actualContent.includes('```') || actualContent.includes('function') || actualContent.includes('class')) {
-        contentType = 'code'
-      } else if (actualContent.includes('#') || actualContent.includes('**')) {
-        contentType = 'markdown'
-      } else if (actualContent.includes('<') && actualContent.includes('>')) {
-        contentType = 'html'
-      }
+        if (typeof detectContentType === "function") {
+            contentType = detectContentType(actualContent);
+        } else {
+            // Simple content type detection as fallback
+            if (
+                actualContent.trim().startsWith("{") &&
+                actualContent.trim().endsWith("}")
+            ) {
+                contentType = "json";
+            } else if (
+                actualContent.includes("```") ||
+                actualContent.includes("function") ||
+                actualContent.includes("class")
+            ) {
+                contentType = "code";
+            } else if (
+                actualContent.includes("#") ||
+                actualContent.includes("**")
+            ) {
+                contentType = "markdown";
+            } else if (
+                actualContent.includes("<") &&
+                actualContent.includes(">")
+            ) {
+                contentType = "html";
+            }
+        }
+
+        currentPasteContent.value = {
+            content: actualContent,
+            wordCount,
+            charCount,
+            type: contentType,
+        };
+
+        showPasteModal.value = true;
+
+        // Prevent body scroll
+        document.body.style.overflow = "hidden";
+
+        console.log("Paste modal opened successfully", {
+            wordCount,
+            charCount,
+            type: contentType,
+        }); // Debug log
+    } catch (error) {
+        console.error("Error opening paste modal:", error);
+        toast.error("Error opening preview", {
+            duration: 3000,
+            description: "Could not display content preview",
+        });
     }
-
-    currentPasteContent.value = {
-      content: actualContent,
-      wordCount,
-      charCount,
-      type: contentType
-    }
-
-    showPasteModal.value = true
-
-    // Prevent body scroll
-    document.body.style.overflow = 'hidden'
-
-    console.log('Paste modal opened successfully', { wordCount, charCount, type: contentType }) // Debug log
-
-  } catch (error) {
-    console.error('Error opening paste modal:', error)
-    toast.error('Error opening preview', {
-      duration: 3000,
-      description: 'Could not display content preview'
-    })
-  }
 }
 
 function cleanupPastePreviewHandlers() {
-  document.removeEventListener('click', handlePastePreviewClick, true)
-  document.removeEventListener('click', handleRemovePastePreview, true)
-  console.log('Paste preview handlers cleaned up') // Debug log
+    document.removeEventListener("click", handlePastePreviewClick, true);
+    document.removeEventListener("click", handleRemovePastePreview, true);
+    console.log("Paste preview handlers cleaned up"); // Debug log
 }
 
-function updateAuthData(data: Partial<{ username: string; email: string; password: string }>) {
-  Object.assign(authData.value, data)
+function updateAuthData(
+    data: Partial<{ username: string; email: string; password: string }>,
+) {
+    Object.assign(authData.value, data);
 }
 
 function setShowCreateSession(value: boolean) {
-  showCreateSession.value = value
+    showCreateSession.value = value;
 }
 
 // Initialize Speech Recognition (add this in the onMounted hook)
 function initializeSpeechRecognition() {
-  const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
-  if (!SpeechRecognition) {
-    console.warn('Speech recognition not supported')
-    return
-  }
-
-  const recognition = new SpeechRecognition()
-  recognition.continuous = true
-  recognition.interimResults = true
-  recognition.lang = 'en-US'
-  recognition.maxAlternatives = 1
-
-  recognition.onresult = (event: any) => {
-    // Only process if we're still recording (FIX 6)
-    if (!isRecording.value) return
-
-    let interimTranscript = ''
-    for (let i = event.resultIndex; i < event.results.length; i++) {
-      const transcript = event.results[i][0].transcript
-      if (event.results[i].isFinal) {
-        transcribedText.value += transcript + ' '
-      } else {
-        interimTranscript += transcript
-      }
+    const SpeechRecognition =
+        (window as any).SpeechRecognition ||
+        (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+        console.warn("Speech recognition not supported");
+        return;
     }
-    updateTextarea(interimTranscript)
-  }
 
-  recognition.onerror = (event: any) => {
-    console.error('Speech recognition error:', event.error)
-    isRecording.value = false
-    isTranscribing.value = false
-    microphonePermission.value = event.error === 'not-allowed' ? 'denied' : microphonePermission.value
+    const recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = "en-US";
+    recognition.maxAlternatives = 1;
 
-    if (event.error !== 'aborted') { // Don't show toast for manual stops
-      toast.error('Voice Input Error', {
-        duration: 4000,
-        description: event.error === 'not-allowed' ? 'Microphone access denied' : event.error
-      })
-    }
-  }
+    recognition.onresult = (event: any) => {
+        // Only process if we're still recording (FIX 6)
+        if (!isRecording.value) return;
 
-  recognition.onend = () => {
-    // Only restart if we're still supposed to be recording (FIX 5)
-    if (isRecording.value && !isTranscribing.value) {
-      setTimeout(() => {
-        if (isRecording.value) { // Double check we're still recording
-          recognition.start()
+        let interimTranscript = "";
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+            const transcript = event.results[i][0].transcript;
+            if (event.results[i].isFinal) {
+                transcribedText.value += transcript + " ";
+            } else {
+                interimTranscript += transcript;
+            }
         }
-      }, 500)
-    } else {
-      isTranscribing.value = false
-    }
-  }
+        updateTextarea(interimTranscript);
+    };
 
-  recognition.onstart = () => {
-    isTranscribing.value = true
-  }
+    recognition.onerror = (event: any) => {
+        console.error("Speech recognition error:", event.error);
+        isRecording.value = false;
+        isTranscribing.value = false;
+        microphonePermission.value =
+            event.error === "not-allowed"
+                ? "denied"
+                : microphonePermission.value;
 
-  voiceRecognition.value = recognition
+        if (event.error !== "aborted") {
+            // Don't show toast for manual stops
+            toast.error("Voice Input Error", {
+                duration: 4000,
+                description:
+                    event.error === "not-allowed"
+                        ? "Microphone access denied"
+                        : event.error,
+            });
+        }
+    };
+
+    recognition.onend = () => {
+        // Only restart if we're still supposed to be recording (FIX 5)
+        if (isRecording.value && !isTranscribing.value) {
+            setTimeout(() => {
+                if (isRecording.value) {
+                    // Double check we're still recording
+                    recognition.start();
+                }
+            }, 500);
+        } else {
+            isTranscribing.value = false;
+        }
+    };
+
+    recognition.onstart = () => {
+        isTranscribing.value = true;
+    };
+
+    voiceRecognition.value = recognition;
 }
 
 function updateTextarea(interim: string) {
-  if (updateTimeout) clearTimeout(updateTimeout)
-  updateTimeout = window.setTimeout(() => {
-    const textarea = document.getElementById('prompt') as HTMLTextAreaElement
-    if (textarea && (isRecording.value || transcribedText.value)) {
-      // Only update if we're actively recording or have transcribed text
-      textarea.value = transcribedText.value + interim
-      autoGrow({ target: textarea } as any)
-    }
-  }, 100)
+    if (updateTimeout) clearTimeout(updateTimeout);
+    updateTimeout = window.setTimeout(() => {
+        const textarea = document.getElementById(
+            "prompt",
+        ) as HTMLTextAreaElement;
+        if (textarea && (isRecording.value || transcribedText.value)) {
+            // Only update if we're actively recording or have transcribed text
+            textarea.value = transcribedText.value + interim;
+            autoGrow({ target: textarea } as any);
+        }
+    }, 100);
 }
 
 // Toggle voice recording
 async function toggleVoiceRecording() {
-  if (!voiceRecognition.value) {
-    toast.error('Speech recognition not available', {
-      duration: 3000,
-      description: 'Your browser may not support speech recognition.'
-    })
-    return
-  }
+    if (!voiceRecognition.value) {
+        toast.error("Speech recognition not available", {
+            duration: 3000,
+            description: "Your browser may not support speech recognition.",
+        });
+        return;
+    }
 
-  if (isRecording.value) {
-    stopVoiceRecording(false) // Don't clear text - let user decide
-  } else {
-    await startVoiceRecording()
-  }
+    if (isRecording.value) {
+        stopVoiceRecording(false); // Don't clear text - let user decide
+    } else {
+        await startVoiceRecording();
+    }
 }
 
 // Start voice recording
 async function startVoiceRecording() {
-  try {
-    await navigator.mediaDevices.getUserMedia({ audio: true })
-    microphonePermission.value = 'granted'
-    isRecording.value = true
-    transcribedText.value = ''
-    transcriptionDuration.value = 0
-    startTimer()
+    try {
+        await navigator.mediaDevices.getUserMedia({ audio: true });
+        microphonePermission.value = "granted";
+        isRecording.value = true;
+        transcribedText.value = "";
+        transcriptionDuration.value = 0;
+        startTimer();
 
-    const textarea = document.getElementById('prompt') as HTMLTextAreaElement
-    if (textarea) {
-      textarea.value = ''
-      autoGrow({ target: textarea } as any)
+        const textarea = document.getElementById(
+            "prompt",
+        ) as HTMLTextAreaElement;
+        if (textarea) {
+            textarea.value = "";
+            autoGrow({ target: textarea } as any);
+        }
+
+        voiceRecognition.value?.start();
+    } catch (error) {
+        microphonePermission.value = "denied";
+        isRecording.value = false;
+        toast.error("Microphone Access Denied", {
+            duration: 5000,
+            description: "Please allow microphone access.",
+        });
     }
-
-    voiceRecognition.value?.start()
-  } catch (error) {
-    microphonePermission.value = 'denied'
-    isRecording.value = false
-    toast.error('Microphone Access Denied', {
-      duration: 5000,
-      description: 'Please allow microphone access.'
-    })
-  }
 }
 
 // Stop voice recording
 function stopVoiceRecording(clearText: boolean = true) {
-  isRecording.value = false
-  isTranscribing.value = false
-  stopTimer()
-  voiceRecognition.value?.stop()
+    isRecording.value = false;
+    isTranscribing.value = false;
+    stopTimer();
+    voiceRecognition.value?.stop();
 
-  // Clear transcribed text if requested (FIX 2 & 5)
-  if (clearText) {
-    clearVoiceTranscription()
-  }
+    // Clear transcribed text if requested (FIX 2 & 5)
+    if (clearText) {
+        clearVoiceTranscription();
+    }
 }
 
 function startTimer() {
-  transcriptionTimer = window.setInterval(() => {
-    transcriptionDuration.value += 1
-  }, 1000)
+    transcriptionTimer = window.setInterval(() => {
+        transcriptionDuration.value += 1;
+    }, 1000);
 }
 
 function stopTimer() {
-  if (transcriptionTimer) clearInterval(transcriptionTimer)
+    if (transcriptionTimer) clearInterval(transcriptionTimer);
 }
 
 // Clear voice transcription
 function clearVoiceTranscription() {
-  transcribedText.value = ''
-  transcriptionDuration.value = 0 // Reset duration
-  const textarea = document.getElementById('prompt') as HTMLTextAreaElement
-  if (textarea) {
-    textarea.value = ''
-    autoGrow({ target: textarea } as any)
-    textarea.focus()
-  }
+    transcribedText.value = "";
+    transcriptionDuration.value = 0; // Reset duration
+    const textarea = document.getElementById("prompt") as HTMLTextAreaElement;
+    if (textarea) {
+        textarea.value = "";
+        autoGrow({ target: textarea } as any);
+        textarea.focus();
+    }
 }
 
 // Select input mode and handle special actions
-async function selectInputMode(mode: 'web-search' | 'deep-search' | 'light-response') {
-  // Store original value for rollback
-  const originalMode = parsedUserDetails.value.responseMode
+async function selectInputMode(
+    mode: "web-search" | "deep-search" | "light-response",
+) {
+    // Store original value for rollback
+    const originalMode = parsedUserDetails.value.responseMode;
 
-  // Don't do anything if same mode
-  if (originalMode === mode) {
-    showInputModeDropdown.value = false
-    return
-  }
-
-  try {
-    // Update in-memory state - the watch will handle syncing
-    parsedUserDetails.value.responseMode = mode
-    showInputModeDropdown.value = false
-
-    const modeNames = {
-      'web-search': 'Web Search',
-      'deep-search': 'Deep Search',
-      'light-response': 'Light Response'
+    // Don't do anything if same mode
+    if (originalMode === mode) {
+        showInputModeDropdown.value = false;
+        return;
     }
-  } catch (error) {
-    console.error('Error selecting input mode:', error)
-    parsedUserDetails.value.responseMode = originalMode
 
-    toast.error('Failed to change mode', {
-      duration: 3000,
-      description: 'An error occurred'
-    })
-  }
+    try {
+        // Update in-memory state - the watch will handle syncing
+        parsedUserDetails.value.responseMode = mode;
+        showInputModeDropdown.value = false;
+
+        const modeNames = {
+            "web-search": "Web Search",
+            "deep-search": "Deep Search",
+            "light-response": "Light Response",
+        };
+    } catch (error) {
+        console.error("Error selecting input mode:", error);
+        parsedUserDetails.value.responseMode = originalMode;
+
+        toast.error("Failed to change mode", {
+            duration: 3000,
+            description: "An error occurred",
+        });
+    }
 }
 
 // Close dropdown when clicking outside
 const handleClickOutside = (e: MouseEvent) => {
-  const dropdown = document.querySelector('.relative .absolute')
-  const button = document.querySelector('.relative button')
+    const dropdown = document.querySelector(".relative .absolute");
+    const button = document.querySelector(".relative button");
 
-  if (dropdown && !dropdown.contains(e.target as Node) &&
-    button && !button.contains(e.target as Node)) {
-    showInputModeDropdown.value = false
-  }
+    if (
+        dropdown &&
+        !dropdown.contains(e.target as Node) &&
+        button &&
+        !button.contains(e.target as Node)
+    ) {
+        showInputModeDropdown.value = false;
+    }
 
-  // Close suggestions dropup
-  const suggestionsDropup = document.querySelector('.suggestions-dropup')
-  const suggestionsButton = document.querySelector('.suggestions-button')
+    // Close suggestions dropup
+    const suggestionsDropup = document.querySelector(".suggestions-dropup");
+    const suggestionsButton = document.querySelector(".suggestions-button");
 
-  if (suggestionsDropup && !suggestionsDropup.contains(e.target as Node) &&
-    suggestionsButton && !suggestionsButton.contains(e.target as Node)) {
-    showSuggestionsDropup.value = false
-  }
-}
+    if (
+        suggestionsDropup &&
+        !suggestionsDropup.contains(e.target as Node) &&
+        suggestionsButton &&
+        !suggestionsButton.contains(e.target as Node)
+    ) {
+        showSuggestionsDropup.value = false;
+    }
+};
 
 const modeOptions: Record<string, ModeOption> = {
-  'light-response': {
-    mode: 'light-response',
-    label: 'Quick Response',
-    description: 'Fast & concise',
-    icon: 'pi pi-bolt',
-    title: 'Quick Response - Click to change mode'
-  },
-  'web-search': {
-    mode: 'web-search',
-    label: 'Web Search',
-    description: 'Include web results',
-    icon: 'pi pi-search',
-    title: 'Web Search - Click to change mode'
-  },
-  'deep-search': {
-    mode: 'deep-search',
-    label: 'Deep Search',
-    description: 'Detailed analysis',
-    icon: 'pi pi-code',
-    title: 'Deep Search - Click to change mode'
-  }
-}
+    "light-response": {
+        mode: "light-response",
+        label: "Quick Response",
+        description: "Fast & concise",
+        icon: "pi pi-bolt",
+        title: "Quick Response - Click to change mode",
+    },
+    "web-search": {
+        mode: "web-search",
+        label: "Web Search",
+        description: "Include web results",
+        icon: "pi pi-search",
+        title: "Web Search - Click to change mode",
+    },
+    "deep-search": {
+        mode: "deep-search",
+        label: "Deep Search",
+        description: "Detailed analysis",
+        icon: "pi pi-code",
+        title: "Deep Search - Click to change mode",
+    },
+};
 
 onUpdated(() => {
-  // Check for new video containers after DOM updates
-  observeNewVideoContainers();
+    // Check for new video containers after DOM updates
+    observeNewVideoContainers();
 });
 
 // Watch for chat switches to manage requests
 watch(currentChatId, (newChatId, oldChatId) => {
-  loadChatDrafts()
+    loadChatDrafts();
 
-  if (oldChatId && newChatId !== oldChatId) {
-    // Clear paste preview when switching chats
-    // pastePreviews.value.delete(oldChatId)
+    if (oldChatId && newChatId !== oldChatId) {
+        // Clear paste preview when switching chats
+        // pastePreviews.value.delete(oldChatId)
 
-    // Cancel ongoing requests for the old chat (optional - remove if you want them to continue)
-    // cancelChatRequests(oldChatId)
+        // Cancel ongoing requests for the old chat (optional - remove if you want them to continue)
+        // cancelChatRequests(oldChatId)
 
-    // User switched chats - stop any active recording
-    if (isRecording.value || isTranscribing.value) {
-      stopVoiceRecording(true)
-      toast.info('Voice recording stopped', {
-        duration: 2000,
-        description: 'Switched to different chat'
-      })
+        // User switched chats - stop any active recording
+        if (isRecording.value || isTranscribing.value) {
+            stopVoiceRecording(true);
+            toast.info("Voice recording stopped", {
+                duration: 2000,
+                description: "Switched to different chat",
+            });
+        }
     }
-  }
-})
+});
 
 watch([isRecording, isTranscribing], ([recording, transcribing]) => {
-  if (!recording && !transcribing && !transcribedText.value) {
-    const textarea = document.getElementById('prompt') as HTMLTextAreaElement
-    if (textarea && textarea.value && !pastePreview.value) {
-      textarea.value = ''
-      autoGrow({ target: textarea } as any)
+    if (!recording && !transcribing && !transcribedText.value) {
+        const textarea = document.getElementById(
+            "prompt",
+        ) as HTMLTextAreaElement;
+        if (textarea && textarea.value && !pastePreview.value) {
+            textarea.value = "";
+            autoGrow({ target: textarea } as any);
+        }
     }
-  }
-})
+});
 
 watch(isAuthenticated, (newVal) => {
-  if (newVal) {
-    showCreateSession.value = false
-  }
-})
+    if (newVal) {
+        showCreateSession.value = false;
+    }
+});
 
 // watch for user plan changes
-watch(() => ({
-  isFree: isFreeUser.value,
-  planName: parsedUserDetails.value?.planName,
-  planStatus: planStatus.value.status
-}), (newValue, oldValue) => {
-  if (!oldValue) return // Skip initial call
+watch(
+    () => ({
+        isFree: isFreeUser.value,
+        planName: parsedUserDetails.value?.planName,
+        planStatus: planStatus.value.status,
+    }),
+    (newValue, oldValue) => {
+        if (!oldValue) return; // Skip initial call
 
-  // If user upgraded from free to paid
-  if (oldValue.isFree === true && newValue.isFree === false) {
-    resetRequestCount()
-    toast.success(`Welcome to ${newValue.planName || 'Premium'}!`, {
-      duration: 5000,
-      description: 'You now have unlimited requests!'
-    })
-  }
-  // If user downgraded from paid to free (plan expired)
-  else if (oldValue.isFree === false && newValue.isFree === true) {
-    loadRequestCount()
-
-    if (newValue.planStatus === 'expired') {
-      toast.warning('Your plan has expired', {
-        duration: Infinity,
-        description: `You're now limited to ${FREE_REQUEST_LIMIT} requests per day`,
-        action: {
-          label: 'Upgrade',
-          onClick: () => {
-            router.push('/upgrade')
-          }
+        // If user upgraded from free to paid
+        if (oldValue.isFree === true && newValue.isFree === false) {
+            resetRequestCount();
+            toast.success(`Welcome to ${newValue.planName || "Premium"}!`, {
+                duration: 5000,
+                description: "You now have unlimited requests!",
+            });
         }
-      })
-    }
-  }
-}, { deep: true })
+        // If user downgraded from paid to free (plan expired)
+        else if (oldValue.isFree === false && newValue.isFree === true) {
+            loadRequestCount();
+
+            if (newValue.planStatus === "expired") {
+                toast.warning("Your plan has expired", {
+                    duration: Infinity,
+                    description: `You're now limited to ${FREE_REQUEST_LIMIT} requests per day`,
+                    action: {
+                        label: "Upgrade",
+                        onClick: () => {
+                            router.push("/upgrade");
+                        },
+                    },
+                });
+            }
+        }
+    },
+    { deep: true },
+);
 
 // Call loadRequestCount after user details are fully loaded
-watch(() => parsedUserDetails.value, (newUserDetails) => {
-  if (newUserDetails) {
-    // Small delay to ensure all computed properties are updated
-    nextTick(() => {
-      setTimeout(() => {
-        loadRequestCount()
-      }, 100)
-    })
-  }
-}, { immediate: true })
+watch(
+    () => parsedUserDetails.value,
+    (newUserDetails) => {
+        if (newUserDetails) {
+            // Small delay to ensure all computed properties are updated
+            nextTick(() => {
+                setTimeout(() => {
+                    loadRequestCount();
+                }, 100);
+            });
+        }
+    },
+    { immediate: true },
+);
 
 // planStatus to handle reactive objects properly
-watch(() => ({ ...planStatus.value }), (newStatus, oldStatus) => {
-  if (oldStatus && oldStatus.isExpired === false && newStatus.isExpired === true) {
-    toast.error('Your plan has expired', {
-      duration: Infinity,
-      description: 'Please renew your plan to continue using the service.',
-      action: {
-        label: 'Renew Now',
-        onClick: () => {
-          router.push('/upgrade')
+watch(
+    () => ({ ...planStatus.value }),
+    (newStatus, oldStatus) => {
+        if (
+            oldStatus &&
+            oldStatus.isExpired === false &&
+            newStatus.isExpired === true
+        ) {
+            toast.error("Your plan has expired", {
+                duration: Infinity,
+                description:
+                    "Please renew your plan to continue using the service.",
+                action: {
+                    label: "Renew Now",
+                    onClick: () => {
+                        router.push("/upgrade");
+                    },
+                },
+            });
         }
-      }
-    })
-  }
-}, { deep: true })
+    },
+    { deep: true },
+);
 
+watch(
+    [() => currentMessages.value.length, () => chats.value],
+    () => {
+        nextTick(() => {
+            setTimeout(() => {
+                handleScroll(); // Recalculate scroll position after content changes
+            }, 100);
+        });
+    },
+    { deep: true },
+);
 
-watch([() => currentMessages.value.length, () => chats.value], () => {
-  nextTick(() => {
-    setTimeout(() => {
-      handleScroll(); // Recalculate scroll position after content changes
-    }, 100);
-  });
-}, { deep: true });
-
-watch(() => route.path, (newPath, oldPath) => {
-  if (newPath === "/new") {
-    createNewChat()
-    setShowInput()
-    router.replace(`${oldPath}`)
-  }
-}, { immediate: true })
+watch(
+    () => route.path,
+    (newPath, oldPath) => {
+        if (newPath === "/new") {
+            createNewChat();
+            setShowInput();
+            router.replace(`${oldPath}`);
+        }
+    },
+    { immediate: true },
+);
 
 onBeforeUnmount(() => {
-  if (transcriptionTimer) clearInterval(transcriptionTimer);
-  if (updateTimeout) clearTimeout(updateTimeout);
+    if (transcriptionTimer) clearInterval(transcriptionTimer);
+    if (updateTimeout) clearTimeout(updateTimeout);
 
-  // Clean up all active requests
-  cancelAllRequests()
-
-  // Clean up speech recognition
-  if (isRecording.value || isTranscribing.value) {
-    stopVoiceRecording(false) // Don't clear text during unmount
-  }
-
-  // Remove keyboard listener
-  document.removeEventListener('keydown', handleModalKeydown)
-  document.removeEventListener('click', handleClickOutside)
-
-  // Clean up paste preview handlers (use the enhanced cleanup function)
-  cleanupPastePreviewHandlers()
-
-  // Restore body scroll if modal is open
-  if (showPasteModal.value) {
-    document.body.style.overflow = 'auto'
-  }
-
-  // Clear debounce timers
-  if (chatsDebounceTimer) {
-    clearTimeout(chatsDebounceTimer)
-  }
-  if (userDetailsDebounceTimer) {
-    clearTimeout(userDetailsDebounceTimer)
-  }
-})
-
-// Consolidated onMounted hook for better organization
-onMounted(() => {
-  // Handle /new route redirect first
-  if (route.path === "/new") {
-    createNewChat()
-    setShowInput()
-    router.replace("/")
-    return // Early return since we're redirecting
-  }
-
-  // 1. Load basic state (combined operations)
-  const saved = localStorage.getItem("isCollapsed")
-  if (saved && saved !== "null") {
-    try {
-      isCollapsed.value = JSON.parse(saved)
-    } catch (err) {
-      console.error("Error parsing isCollapsed:", err)
-    }
-  }
-
-  const savedChatId = localStorage.getItem("currentChatId")
-  if (savedChatId) currentChatId.value = savedChatId
-
-  // 2. Load cached data and setup handlers
-  loadLinkPreviewCache()
-  setupPastePreviewHandlers()
-
-  // 3. Setup global functions with unified approach
-  if (typeof window !== 'undefined') {
-    const setupGlobalFunction = (name: string, fn: Function) => {
-      (window as any)[name] = (...args: any[]) => {
-        try {
-          return fn(...args)
-        } catch (error) {
-          console.error(`Error in ${name}:`, error)
-          toast.error(`Error in ${name}`, {
-            duration: 3000,
-            description: 'An unexpected error occurred'
-          })
-        }
-      }
-    }
-
-    setupGlobalFunction('openPasteModal', openPasteModal)
-    setupGlobalFunction('copyPasteContent', copyPasteContent)
-    setupGlobalFunction('removePastePreview', removePastePreview)
-    setupGlobalFunction('playEmbeddedVideo', playEmbeddedVideo)
-    setupGlobalFunction('pauseVideo', pauseVideo)
-    setupGlobalFunction('resumeVideo', resumeVideo)
-    setupGlobalFunction('stopVideo', stopVideo)
-    setupGlobalFunction('toggleDirectVideo', toggleDirectVideo)
-    setupGlobalFunction('stopDirectVideo', stopDirectVideo)
-    setupGlobalFunction('showVideoControls', showVideoControls)
-    setupGlobalFunction('updateVideoControls', updateVideoControls)
-    setupGlobalFunction('playSocialVideo', playSocialVideo)
-    setupGlobalFunction('scrollToLastMessage', scrollToLastMessage)
-    setupGlobalFunction('nextResult', nextResult)
-    setupGlobalFunction('prevResult', prevResult)
-    setupGlobalFunction('goToPage', goToPage)
-  }
-
-  // 4. Setup event listeners once
-  document.addEventListener('click', handleClickOutside)
-
-  const copyListener = (e: any) => {
-    if (e.target?.classList.contains("copy-button")) {
-      const code = decodeURIComponent(e.target.getAttribute("data-code"))
-      copyCode(code, e.target)
-    }
-  }
-  document.addEventListener("click", copyListener)
-  document.addEventListener('keydown', handleModalKeydown)
-
-  // 5. Initialize core features
-  initializeSpeechRecognition()
-  initializeVideoLazyLoading()
-
-  // 6. Setup periodic tasks
-  const interval = setInterval(() => {
-    now.value = Date.now()
-  }, 1000)
-
-  const resetCheckInterval = setInterval(loadRequestCount, 5 * 60 * 1000)
-
-  // 7. Initialize authentication-dependent features
-  if (isAuthenticated.value) {
-    // Load request count for limited users
-    const shouldHaveLimit = isFreeUser.value ||
-      planStatus.value.isExpired ||
-      planStatus.value.status === 'no-plan' ||
-      planStatus.value.status === 'expired'
-
-    if (shouldHaveLimit) {
-      loadRequestCount()
-    }
-
-    loadChats()
-
-    // Only show input if no messages exist
-    if (currentMessages.value.length === 0) {
-      setShowInput()
-    }
-
-    // Initial sync from server
-    setTimeout(() => {
-      performSmartSync()
-    }, 1000)
-
-    // Pre-process links in existing messages - optimized to avoid duplicates
-    const processedUrls = new Set()
-    currentMessages.value.forEach((item) => {
-      [item.prompt, item.response].forEach((text) => {
-        if (text && text !== "...") {
-          extractUrls(text).slice(0, 3).forEach((url) => {
-            if (!linkPreviewCache.value.has(url) && !processedUrls.has(url)) {
-              processedUrls.add(url)
-              fetchLinkPreview(url).then(() => {
-                linkPreviewCache.value = new Map(linkPreviewCache.value)
-              })
-            }
-          })
-        }
-      })
-    })
-  } else {
-    loadChats()
-  }
-
-  // 8. DOM-dependent functionality - consolidated timing
-  nextTick(() => {
-    // Clear any initial content in textarea
-    const textarea = document.getElementById('prompt') as HTMLTextAreaElement
-    if (textarea && textarea.value) {
-      console.log('Initial textarea content found:', textarea.value)
-      textarea.value = ''
-      transcribedText.value = ''
-    }
-
-    // Setup scroll handling once
-    if (scrollableElem.value) {
-      // Remove duplicate scroll listener setup
-      scrollableElem.value.addEventListener("scroll", debouncedHandleScroll, { passive: true })
-    }
-
-    // Auto-focus input only when appropriate
-    if (showInput.value && currentMessages.value.length === 0) {
-      textarea?.focus()
-    }
-
-    // Process link previews in responses - avoid duplicate processing
-    currentMessages.value.forEach((msg: Res, index) => {
-      if (msg.response && msg.response !== "..." && !msg.response.endsWith('...')) {
-        processLinksInResponse(index)
-      }
-    })
-
-    // Single delayed setup for scroll and video observation
-    setTimeout(() => {
-      scrollToLastMessage()
-      observeNewVideoContainers()
-
-      // Initial scroll state calculation
-      handleScroll()
-    }, 300) // Single delay instead of multiple
-  })
-
-  // 9. Store cleanup references
-  onBeforeUnmount(() => {
-    // Clean up event listeners
-    document.removeEventListener("click", copyListener)
-    document.removeEventListener('keydown', handleModalKeydown)
-    document.removeEventListener('click', handleClickOutside)
-    document.removeEventListener('click', handlePastePreviewClick)
-    document.removeEventListener('click', handleRemovePastePreview)
-
-    // Clean up scroll listener
-    if (scrollableElem.value) {
-      scrollableElem.value.removeEventListener("scroll", debouncedHandleScroll)
-    }
-
-    // Clean up video lazy loading
-    destroyVideoLazyLoading()
-
-    // Clean up intervals
-    clearInterval(interval)
-    clearInterval(resetCheckInterval)
-
-    // Clear timeouts
-    const timers = [scrollTimeout, resizeTimeout, transcriptionTimer, updateTimeout]
-    timers.forEach(timer => {
-      if (timer) {
-        clearTimeout(timer)
-        clearInterval(timer)
-      }
-    })
+    // Clean up all active requests
+    cancelAllRequests();
 
     // Clean up speech recognition
-    if (isRecording.value) {
-      stopVoiceRecording()
+    if (isRecording.value || isTranscribing.value) {
+        stopVoiceRecording(false); // Don't clear text during unmount
     }
+
+    // Remove keyboard listener
+    document.removeEventListener("keydown", handleModalKeydown);
+    document.removeEventListener("click", handleClickOutside);
+
+    // Clean up paste preview handlers (use the enhanced cleanup function)
+    cleanupPastePreviewHandlers();
 
     // Restore body scroll if modal is open
     if (showPasteModal.value) {
-      document.body.style.overflow = 'auto'
+        document.body.style.overflow = "auto";
     }
 
-    // Final sync if needed
-    if (syncStatus.value.hasUnsyncedChanges) {
-      syncToServer()
+    // Clear debounce timers
+    if (chatsDebounceTimer) {
+        clearTimeout(chatsDebounceTimer);
     }
-  })
-})
+    if (userDetailsDebounceTimer) {
+        clearTimeout(userDetailsDebounceTimer);
+    }
+});
+
+// Consolidated onMounted hook for better organization
+onMounted(() => {
+    // Handle /new route redirect first
+    if (route.path === "/new") {
+        createNewChat();
+        setShowInput();
+        router.replace("/");
+        return; // Early return since we're redirecting
+    }
+
+    // 1. Load basic state (combined operations)
+    const saved = localStorage.getItem("isCollapsed");
+    if (saved && saved !== "null") {
+        try {
+            isCollapsed.value = JSON.parse(saved);
+        } catch (err) {
+            console.error("Error parsing isCollapsed:", err);
+        }
+    }
+
+    const savedChatId = localStorage.getItem("currentChatId");
+    if (savedChatId) currentChatId.value = savedChatId;
+
+    // 2. Load cached data and setup handlers
+    loadLinkPreviewCache();
+    setupPastePreviewHandlers();
+
+    // 3. Setup global functions with unified approach
+    if (typeof window !== "undefined") {
+        const setupGlobalFunction = (name: string, fn: Function) => {
+            (window as any)[name] = (...args: any[]) => {
+                try {
+                    return fn(...args);
+                } catch (error) {
+                    console.error(`Error in ${name}:`, error);
+                    toast.error(`Error in ${name}`, {
+                        duration: 3000,
+                        description: "An unexpected error occurred",
+                    });
+                }
+            };
+        };
+
+        setupGlobalFunction("openPasteModal", openPasteModal);
+        setupGlobalFunction("copyPasteContent", copyPasteContent);
+        setupGlobalFunction("removePastePreview", removePastePreview);
+        setupGlobalFunction("playEmbeddedVideo", playEmbeddedVideo);
+        setupGlobalFunction("pauseVideo", pauseVideo);
+        setupGlobalFunction("resumeVideo", resumeVideo);
+        setupGlobalFunction("stopVideo", stopVideo);
+        setupGlobalFunction("toggleDirectVideo", toggleDirectVideo);
+        setupGlobalFunction("stopDirectVideo", stopDirectVideo);
+        setupGlobalFunction("showVideoControls", showVideoControls);
+        setupGlobalFunction("updateVideoControls", updateVideoControls);
+        setupGlobalFunction("playSocialVideo", playSocialVideo);
+        setupGlobalFunction("scrollToLastMessage", scrollToLastMessage);
+        setupGlobalFunction("nextResult", nextResult);
+        setupGlobalFunction("prevResult", prevResult);
+        setupGlobalFunction("goToPage", goToPage);
+    }
+
+    // 4. Setup event listeners once
+    document.addEventListener("click", handleClickOutside);
+
+    const copyListener = (e: any) => {
+        if (e.target?.classList.contains("copy-button")) {
+            const code = decodeURIComponent(e.target.getAttribute("data-code"));
+            copyCode(code, e.target);
+        }
+    };
+    document.addEventListener("click", copyListener);
+    document.addEventListener("keydown", handleModalKeydown);
+
+    // 5. Initialize core features
+    initializeSpeechRecognition();
+    initializeVideoLazyLoading();
+
+    // 6. Setup periodic tasks
+    const interval = setInterval(() => {
+        now.value = Date.now();
+    }, 1000);
+
+    const resetCheckInterval = setInterval(loadRequestCount, 5 * 60 * 1000);
+
+    // 7. Initialize authentication-dependent features
+    if (isAuthenticated.value) {
+        // Load request count for limited users
+        const shouldHaveLimit =
+            isFreeUser.value ||
+            planStatus.value.isExpired ||
+            planStatus.value.status === "no-plan" ||
+            planStatus.value.status === "expired";
+
+        if (shouldHaveLimit) {
+            loadRequestCount();
+        }
+
+        loadChats();
+
+        // Only show input if no messages exist
+        if (currentMessages.value.length === 0) {
+            setShowInput();
+        }
+
+        // Initial sync from server
+        setTimeout(() => {
+            performSmartSync();
+        }, 1000);
+
+        // Pre-process links in existing messages - optimized to avoid duplicates
+        const processedUrls = new Set();
+        currentMessages.value.forEach((item) => {
+            [item.prompt, item.response].forEach((text) => {
+                if (text && text !== "...") {
+                    extractUrls(text)
+                        .slice(0, 3)
+                        .forEach((url) => {
+                            if (
+                                !linkPreviewCache.value.has(url) &&
+                                !processedUrls.has(url)
+                            ) {
+                                processedUrls.add(url);
+                                fetchLinkPreview(url).then(() => {
+                                    linkPreviewCache.value = new Map(
+                                        linkPreviewCache.value,
+                                    );
+                                });
+                            }
+                        });
+                }
+            });
+        });
+    } else {
+        loadChats();
+    }
+
+    // 8. DOM-dependent functionality - consolidated timing
+    nextTick(() => {
+        // Clear any initial content in textarea
+        const textarea = document.getElementById(
+            "prompt",
+        ) as HTMLTextAreaElement;
+        if (textarea && textarea.value) {
+            console.log("Initial textarea content found:", textarea.value);
+            textarea.value = "";
+            transcribedText.value = "";
+        }
+
+        // Setup scroll handling once
+        if (scrollableElem.value) {
+            // Remove duplicate scroll listener setup
+            scrollableElem.value.addEventListener(
+                "scroll",
+                debouncedHandleScroll,
+                { passive: true },
+            );
+        }
+
+        // Auto-focus input only when appropriate
+        if (showInput.value && currentMessages.value.length === 0) {
+            textarea?.focus();
+        }
+
+        // Process link previews in responses - avoid duplicate processing
+        currentMessages.value.forEach((msg: Res, index) => {
+            if (
+                msg.response &&
+                msg.response !== "..." &&
+                !msg.response.endsWith("...")
+            ) {
+                processLinksInResponse(index);
+            }
+        });
+
+        // Single delayed setup for scroll and video observation
+        setTimeout(() => {
+            scrollToLastMessage();
+            observeNewVideoContainers();
+
+            // Initial scroll state calculation
+            handleScroll();
+        }, 300); // Single delay instead of multiple
+    });
+
+    // 9. Store cleanup references
+    onBeforeUnmount(() => {
+        // Clean up event listeners
+        document.removeEventListener("click", copyListener);
+        document.removeEventListener("keydown", handleModalKeydown);
+        document.removeEventListener("click", handleClickOutside);
+        document.removeEventListener("click", handlePastePreviewClick);
+        document.removeEventListener("click", handleRemovePastePreview);
+
+        // Clean up scroll listener
+        if (scrollableElem.value) {
+            scrollableElem.value.removeEventListener(
+                "scroll",
+                debouncedHandleScroll,
+            );
+        }
+
+        // Clean up video lazy loading
+        destroyVideoLazyLoading();
+
+        // Clean up intervals
+        clearInterval(interval);
+        clearInterval(resetCheckInterval);
+
+        // Clear timeouts
+        const timers = [
+            scrollTimeout,
+            resizeTimeout,
+            transcriptionTimer,
+            updateTimeout,
+        ];
+        timers.forEach((timer) => {
+            if (timer) {
+                clearTimeout(timer);
+                clearInterval(timer);
+            }
+        });
+
+        // Clean up speech recognition
+        if (isRecording.value) {
+            stopVoiceRecording();
+        }
+
+        // Restore body scroll if modal is open
+        if (showPasteModal.value) {
+            document.body.style.overflow = "auto";
+        }
+
+        // Final sync if needed
+        if (syncStatus.value.hasUnsyncedChanges) {
+            syncToServer();
+        }
+    });
+});
 
 onUnmounted(() => {
-  // Final cleanup for voice recording
-  if (voiceRecognition.value) {
-    voiceRecognition.value.abort()
-  }
+    // Final cleanup for voice recording
+    if (voiceRecognition.value) {
+        voiceRecognition.value.abort();
+    }
 
-  if (transcriptionTimer) {
-    clearInterval(transcriptionTimer)
-  }
+    if (transcriptionTimer) {
+        clearInterval(transcriptionTimer);
+    }
 
-  if (updateTimeout) {
-    clearTimeout(updateTimeout)
-  }
-})
+    if (updateTimeout) {
+        clearTimeout(updateTimeout);
+    }
+});
 </script>
 
 <template>
-  <div class="flex h-[100vh] bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
-    <!-- Sidebar -->
-    <SideNav v-if="isAuthenticated" :data="{
-      chats,
-      parsedUserDetails,
-      isCollapsed,
-    }" :functions="{
-      setShowInput,
-      clearAllChats,
-      toggleSidebar,
-      logout,
-      createNewChat,
-      switchToChat,
-      deleteChat,
-      renameChat,
-      manualSync,
-    }" />
-
-    <!-- Main Chat Window -->
     <div
-      :class="screenWidth > 720 && isAuthenticated ? (!isCollapsed ?
-        'flex-grow flex flex-col items-center justify-center ml-[270px] font-light text-sm transition-all duration-300 ease-in-out bg-inherit'
-        :
-        'flex-grow flex flex-col items-center justify-center ml-[60px] font-light text-sm transition-all duration-300 ease-in-out bg-inherit'
-      )
-        : 'text-sm font-light flex-grow items-center justify-center flex flex-col transition-all duration-300 ease-in-out bg-inherit'">
-
-      <div
-        :class="(screenWidth > 720 && isAuthenticated) ? 'h-screen bg-inherit flex flex-col items-center justify-center w-[85%]' : 'bg-inherit h-screen w-full flex flex-col items-center justify-center'">
-        <TopNav v-if="isAuthenticated" :data="{
-          currentChat,
-          parsedUserDetails,
-          isCollapsed,
-        }" :functions="{
-          manualSync,
-        }" />
-        <!-- Empty State -->
-        <CreateSessView v-if="!isAuthenticated" :data="{
-          chats,
-          currentChatId,
-          isCollapsed,
-          parsedUserDetails,
-          screenWidth,
-          syncStatus,
-          isLoading,
-          authStep,
-          showCreateSession,
-          authData,
-          currentMessages,
-        }" :functions="{
-          validateCurrentStep,
-          setShowInput,
-          clearAllChats,
-          toggleSidebar,
-          logout,
-          createNewChat,
-          switchToChat,
-          deleteChat,
-          renameChat,
-          manualSync,
-          handleStepSubmit,
-          prevAuthStep,
-          updateAuthData,
-          setShowCreateSession,
-        }" />
-
-        <EmptyChatView v-else-if="isAuthenticated && currentMessages.length === 0"
-          :suggestionPrompts="suggestionPrompts"
-          :selectSuggestion="selectSuggestion"
+        class="flex h-[100vh] bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+    >
+        <!-- Sidebar -->
+        <SideNav
+            v-if="isAuthenticated"
+            :data="{
+                chats,
+                parsedUserDetails,
+                isCollapsed,
+            }"
+            :functions="{
+                setShowInput,
+                clearAllChats,
+                toggleSidebar,
+                logout,
+                createNewChat,
+                switchToChat,
+                deleteChat,
+                renameChat,
+                manualSync,
+            }"
         />
 
-        <!-- Chat Messages Container -->
-        <div ref="scrollableElem" v-else-if="currentMessages.length !== 0 && isAuthenticated"
-          class="relative md:max-w-3xl min-h-[calc(100vh-200px)] max-w-[100vw] flex-grow no-scrollbar overflow-y-auto px-2 w-full space-y-3 sm:space-y-4 mt-[55px] pt-8  scroll-container"
-          :class="scrollContainerPadding">
-          <div v-if="currentMessages.length !== 0" class="flex flex-col gap-1">
-            <div v-for="(item, i) in currentMessages" :key="`chat-${i}`" class="flex flex-col gap-1">
-              <!-- User Bubble -->
-              <div class="flex w-full chat-message">
-                <div class="flex flex-col w-full">
-                  <!-- User message bubble -->
-                  <div
-                    class="flex items-start gap-2 font-medium bg-gray-100 dark:bg-gray-800 text-black dark:text-gray-100 px-4 rounded-2xl prose prose-sm dark:prose-invert chat-bubble w-fit max-w-full">
-                    <!-- Avatar container -->
-                    <div class="flex-shrink-0 py-3">
-                      <div
-                        class="flex items-center justify-center w-7 h-7 text-gray-100 dark:text-gray-800 bg-gray-700 dark:bg-gray-200 rounded-full text-sm font-semibold">
-                        {{ parsedUserDetails.username.toUpperCase().slice(0, 2) }}
-                      </div>
-                    </div>
+        <!-- Main Chat Window -->
+        <div
+            :class="
+                screenWidth > 720 && isAuthenticated
+                    ? !isCollapsed
+                        ? 'flex-grow flex flex-col items-center justify-center ml-[270px] font-light text-sm transition-all duration-300 ease-in-out bg-inherit'
+                        : 'flex-grow flex flex-col items-center justify-center ml-[60px] font-light text-sm transition-all duration-300 ease-in-out bg-inherit'
+                    : 'text-sm font-light flex-grow items-center justify-center flex flex-col transition-all duration-300 ease-in-out bg-inherit'
+            "
+        >
+            <div
+                :class="
+                    screenWidth > 720 && isAuthenticated
+                        ? 'h-screen bg-inherit flex flex-col items-center justify-center w-[85%]'
+                        : 'bg-inherit h-screen w-full flex flex-col items-center justify-center'
+                "
+            >
+                <TopNav
+                    v-if="isAuthenticated"
+                    :data="{
+                        currentChat,
+                        parsedUserDetails,
+                        isCollapsed,
+                    }"
+                    :functions="{
+                        manualSync,
+                    }"
+                />
+                <!-- Empty State -->
+                <CreateSessView
+                    v-if="!isAuthenticated"
+                    :data="{
+                        chats,
+                        currentChatId,
+                        isCollapsed,
+                        parsedUserDetails,
+                        screenWidth,
+                        syncStatus,
+                        isLoading,
+                        authStep,
+                        showCreateSession,
+                        authData,
+                        currentMessages,
+                    }"
+                    :functions="{
+                        validateCurrentStep,
+                        setShowInput,
+                        clearAllChats,
+                        toggleSidebar,
+                        logout,
+                        createNewChat,
+                        switchToChat,
+                        deleteChat,
+                        renameChat,
+                        manualSync,
+                        handleStepSubmit,
+                        prevAuthStep,
+                        updateAuthData,
+                        setShowCreateSession,
+                    }"
+                />
 
-                    <!-- Message content container -->
-                    <div class="flex-1 min-w-0">
-                      <MarkdownRenderer
-                        class="break-words text-base leading-relaxed"
-                        :content="(item && item?.prompt && item?.prompt?.length > 800) ? item?.prompt?.trim().split('#pastedText#')[0] : item.prompt || ''"
-                      />
-                    </div>
-                  </div>
+                <EmptyChatView
+                    v-else-if="isAuthenticated && currentMessages.length === 0"
+                    :suggestionPrompts="suggestionPrompts"
+                    :selectSuggestion="selectSuggestion"
+                />
 
-                  <div class="flex flex-col gap-3 mt-2">
-                    <!-- Link Previews for User Messages -->
-                    <div v-if="extractUrls(item.prompt || '').length > 0" class="w-full">
-                      <div v-for="url in extractUrls(item.prompt || '').slice(0, 3)" :key="`user-${i}-${url}`">
-                        <LinkPreviewComponent v-if="linkPreviewCache.get(url)" :preview="linkPreviewCache.get(url)!"/>
-                      </div>
-                    </div>
-
-                    <div
-                      v-if="item && item.prompt && (item?.prompt?.trim().split(/\s+/).length > 100 || item?.prompt?.length > 800)"
-                      class="mb-3">
-                      <div class="flex justify-center">
-                        <div class="ml-auto sm:w-[80%] md:w-[70%] lg:w-[60%] xl:w-[50%]" v-html="PastePreviewComponent(
-                          item?.prompt?.trim()?.split('#pastedText#')[1] || '',
-                          item?.prompt?.trim().split('#pastedText#')[1]?.split(/\s+/)?.length || 0,
-                          item?.prompt?.trim()?.split('#pastedText#')[1]?.length || 0, true
-                        )">
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Bot Bubble -->
-              <div class="flex w-full md:max-w-3xl max-w-full relative pb-[20px]">
+                <!-- Chat Messages Container -->
                 <div
-                  class="bg-none max-w-full w-full chat-message leading-relaxed text-black dark:text-gray-100 p-1 rounded-2xl prose prose-sm dark:prose-invert">
-                  <!-- Loading state -->
-                  <div v-if="isLoadingState(item.response)"
-                    class="flex w-full rounded-lg bg-gray-50 dark:bg-gray-800 p-2 items-center animate-pulse gap-2 text-gray-500 dark:text-gray-400">
-                    <i class="pi pi-spin pi-spinner"></i>
-                    <span class="text-sm">{{ getLoadingMessage(item.response) }}</span>
-                  </div>
-
-                  <!-- Regular response with enhanced link handling -->
-                  <div v-else>
-                    <!-- Check if it's a deep search result -->
-                    <template v-if="isDeepSearchResult(item.response)">
-                      <MarkdownRenderer class="break-words overflow-x-hidden" :content="renderDeepSearchResult(JSON.parse(item.response), getPagination(i).currentPage)" />
-                    </template>
-
-                    <!-- Regular response -->
-                    <template v-else>
-                      <MarkdownRenderer class="break-words overflow-x-hidden" :content="item.response || ''" />
-                    </template>
-
-                    <!-- Link Previews Section -->
-                    <div v-if="!isDeepSearchResult(item.response) && extractUrls(item.response || '').length > 0" class="mt-2 sm:mt-3">
-                      <div v-for="url in extractUrls(item.response || '').slice(0, 3)" :key="url">
-                        <LinkPreviewComponent v-if="linkPreviewCache.get(url)" :preview="linkPreviewCache.get(url)!"/>
-                      </div>
-                    </div>
-                  </div>
-
-                  <!-- Actions - Responsive with fewer labels on mobile -->
-                  <div v-if="!isLoadingState(item.response)"
-                    class="flex flex-wrap items-center justify-between gap-2 sm:gap-3 mt-3 text-gray-500 dark:text-gray-400 text-sm">
-
-                    <!-- Left side: Navigation for deep search -->
-                    <div v-if="isDeepSearchResult(item.response) && getPagination(i).totalPages > 1" class="flex mr-auto items-center gap-2">
-                      <Pagination
-                        :items-per-page="1"
-                        :total="getPagination(i).totalPages"
-                        :default-page="getPagination(i).currentPage + 1"
-                        @update:page="(newPage) => goToPage(i, newPage - 1)"
-                      >
-                        <PaginationContent v-slot="{ items }">
-                          <PaginationPrevious @click="prevResult(i)" :disabled="getPagination(i).currentPage === 0" />
-
-                          <template v-for="(paginationItem, index) in items" :key="index">
-                            <PaginationItem
-                              v-if="paginationItem.type === 'page'"
-                              :value="paginationItem.value"
-                              :is-active="paginationItem.value === getPagination(i).currentPage + 1"
-                              @click="goToPage(i, paginationItem.value - 1)"
-                            >
-                              {{ paginationItem.value }}
-                            </PaginationItem>
-                            <PaginationEllipsis v-else-if="paginationItem.type === 'ellipsis'" :key="`ellipsis-${index}`" />
-                          </template>
-
-                          <PaginationNext @click="nextResult(i)" :disabled="getPagination(i).currentPage >= getPagination(i).totalPages - 1" />
-                        </PaginationContent>
-                      </Pagination>
-                    </div>
-
-                    <!-- Right side: Regular actions -->
-                    <div class="flex flex-wrap ml-auto gap-2 sm:gap-3">
-                      <button @click="copyResponse(item.response, i)"
-                        class="flex items-center gap-1 hover:text-blue-600 dark:hover:text-blue-400 transition-colors min-h-[32px]">
-                        <ClipboardList :size="16" />
-                        <span>{{ copiedIndex === i ? 'Copied!' : 'Copy' }}</span>
-                      </button>
-
-                      <button @click="shareResponse(item.response, item.prompt)"
-                        class="flex items-center gap-1 hover:text-green-600 dark:hover:text-green-400 transition-colors min-h-[32px]">
-                        <i class="pi pi-share-alt"></i>
-                        <span>Share</span>
-                      </button>
-
-                      <button @click="refreshResponse(item.prompt)" :disabled="isLoading"
-                        class="flex items-center gap-1 hover:text-orange-600 dark:hover:text-orange-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-h-[32px]">
-                        <i class="pi pi-refresh"></i>
-                        <span>Retry</span>
-                      </button>
-
-                      <button @click="deleteMessage(i)" :disabled="isLoading"
-                        class="flex items-center gap-1 hover:text-red-600 dark:hover:text-red-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-h-[32px]">
-                        <Trash :size="16" />
-                        <span>Delete</span>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Responsive Scroll to Bottom Button -->
-        <button v-if="showScrollDownButton && currentMessages.length !== 0 && isAuthenticated" @click="scrollToBottom()"
-          :class="[
-            'absolute bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border dark:border-gray-700 px-4 h-8 rounded-full shadow-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors z-20 flex items-center justify-center gap-2',
-            scrollButtonPosition
-          ]" :disabled="isRecording" :title="isRecording ? 'Recording in progress' : 'Scroll to bottom'">
-          <i class="pi pi-arrow-down text-xs" :class="{ 'animate-bounce': !isRecording }"></i>
-          <span class="text-sm font-medium">Scroll Down</span>
-        </button>
-
-        <!-- Input Area -->
-        <div v-if="(currentMessages.length !== 0 || showInput === true) && isAuthenticated" :style="screenWidth > 720 && !isCollapsed ? 'left:270px;' :
-          screenWidth > 720 && isCollapsed ? 'left:60px;' : 'left:0px;'"
-          class="bg-white dark:bg-gray-900 z-20 bottom-0 right-0 fixed" :class="pastePreview?.show ? 'pt-2' : ''">
-
-          <div class="flex items-center justify-center pb-3 sm:pb-5 px-2 sm:px-5">
-            <form @submit="handleSubmit"
-              class="w-full md:max-w-3xl relative flex bg-gray-50 dark:bg-gray-800 flex-col border-2 dark:border-gray-700 shadow rounded-2xl items-center">
-
-              <!-- Paste Preview inside form - above other content -->
-              <div v-if="pastePreview && pastePreview.show" class="w-full p-3 border-b dark:border-gray-700">
-                <div
-                  v-html="PastePreviewComponent(pastePreview.content, pastePreview.wordCount, pastePreview.charCount)">
-                </div>
-              </div>
-
-              <!-- Request Limit Exceeded Banner -->
-              <div v-if="showLimitExceededBanner" class="py-2 sm:py-3 w-full px-2 sm:px-3">
-                <div class="flex items-center justify-center w-full">
-                  <!-- Mobile: Stacked Layout -->
-                  <div class="flex sm:hidden w-full flex-col gap-2">
-                    <div class="flex items-center gap-2">
-                      <div
-                        class="w-6 h-6 sm:w-8 sm:h-8 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center flex-shrink-0">
-                        <i class="pi pi-ban text-red-600 dark:text-red-400 text-xs sm:text-sm"></i>
-                      </div>
-                      <div class="min-w-0 flex-1">
-                        <h3 class="text-xs sm:text-sm font-semibold text-red-800 dark:text-red-400 leading-tight">
-                          {{ planStatus.isExpired ? 'Plan Expired' : 'Free Requests Exhausted' }}
-                        </h3>
-                        <p class="text-xs text-red-600 dark:text-red-400 leading-tight mt-0.5">
-                          {{ planStatus.isExpired ? 'Renew your plan' : `Used all ${FREE_REQUEST_LIMIT} requests` }}
-                        </p>
-                      </div>
-                    </div>
-                    <button @click="$router.push('/upgrade')"
-                      class="w-full bg-red-500 hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700 text-white py-2 rounded-md text-xs font-medium transition-colors">
-                      {{ planStatus.isExpired ? 'Renew Plan' : 'Upgrade Plan' }}
-                    </button>
-                  </div>
-
-                  <!-- Desktop: Horizontal Layout -->
-                  <div class="hidden sm:flex w-full items-center gap-3">
+                    ref="scrollableElem"
+                    v-else-if="currentMessages.length !== 0 && isAuthenticated"
+                    class="relative md:max-w-3xl min-h-[calc(100vh-200px)] max-w-[100vw] flex-grow no-scrollbar overflow-y-auto px-2 w-full space-y-3 sm:space-y-4 mt-[55px] pt-8 scroll-container"
+                    :class="scrollContainerPadding"
+                >
                     <div
-                      class="w-8 h-8 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center flex-shrink-0">
-                      <i class="pi pi-ban text-red-600 dark:text-red-400 text-sm"></i>
-                    </div>
-                    <div class="min-w-0 flex-1">
-                      <h3 class="text-sm font-semibold text-red-800 dark:text-red-400 mb-1">
-                        {{ planStatus.isExpired ? 'Plan Expired' : 'Free Requests Exhausted' }}
-                      </h3>
-                      <p class="text-xs text-red-600 dark:text-red-400">
-                        {{ planStatus.isExpired ?
-                          'Please renew your plan to continue using the service.' :
-                          `You've used all ${FREE_REQUEST_LIMIT} free requests. Upgrade to continue chatting.` }}
-                      </p>
-                    </div>
-                    <button @click="$router.push('/upgrade')"
-                      class="bg-red-500 px-3 hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700 text-white py-2 rounded-md text-sm font-medium transition-colors flex-shrink-0 whitespace-nowrap">
-                      {{ planStatus.isExpired ? 'Renew Plan' : 'Upgrade Plan' }}
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Upgrade Warning Banner -->
-              <div v-if="showUpgradeBanner" class="py-2 sm:py-3 w-full px-2 sm:px-3">
-                <div class="flex items-center justify-center w-full">
-                  <!-- Mobile: Stacked Layout -->
-                  <div class="flex sm:hidden w-full flex-col gap-2">
-                    <div class="flex items-center gap-2">
-                      <div
-                        class="w-6 h-6 sm:w-8 sm:h-8 bg-yellow-100 dark:bg-yellow-900/30 rounded-full flex items-center justify-center flex-shrink-0">
-                        <i
-                          class="pi pi-exclamation-triangle text-yellow-600 dark:text-yellow-400 text-xs sm:text-sm"></i>
-                      </div>
-                      <div class="min-w-0 flex-1">
-                        <h3 class="text-xs sm:text-sm font-semibold text-yellow-800 dark:text-yellow-400 leading-tight">
-                          {{ requestsRemaining }} requests left
-                        </h3>
-                        <p class="text-xs text-yellow-600 dark:text-yellow-400 leading-tight mt-0.5">
-                          Upgrade for unlimited access
-                        </p>
-                      </div>
-                    </div>
-                    <button @click="$router.push('/upgrade')"
-                      class="w-full bg-orange-500 hover:bg-orange-600 dark:bg-orange-600 dark:hover:bg-orange-700 text-white py-2 rounded-md text-xs font-medium transition-colors">
-                      Upgrade Plan
-                    </button>
-                  </div>
-
-                  <!-- Desktop: Horizontal Layout -->
-                  <div class="hidden sm:flex w-full items-center gap-3">
-                    <div
-                      class="w-8 h-8 bg-yellow-100 dark:bg-yellow-900/30 rounded-full flex items-center justify-center flex-shrink-0">
-                      <i class="pi pi-exclamation-triangle text-yellow-600 dark:text-yellow-400 text-sm"></i>
-                    </div>
-                    <div class="min-w-0 flex-1">
-                      <h3 class="text-sm font-semibold text-yellow-800 dark:text-yellow-400 mb-1">
-                        {{ requestsRemaining }} free requests remaining
-                      </h3>
-                      <p class="text-xs text-yellow-600 dark:text-yellow-400">
-                        Upgrade to continue chatting without limits
-                      </p>
-                    </div>
-                    <button @click="$router.push('/upgrade')"
-                      class="bg-orange-500 px-3 hover:bg-orange-600 dark:bg-orange-600 dark:hover:bg-orange-700 text-white py-2 rounded-md text-sm font-medium transition-colors flex-shrink-0 whitespace-nowrap">
-                      Upgrade Plan
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Input Area with Voice Recording -->
-              <div class="flex flex-col w-full bg-white dark:bg-gray-900 rounded-2xl px-2 sm:px-3 py-2 gap-1 sm:gap-2"
-                :class="inputDisabled ? 'opacity-50 border border-t dark:border-gray-700 pointer-events-none' :
-                  showUpgradeBanner ? 'border border-t dark:border-gray-700' : ''">
-
-                <div class="w-full items-center justify-center flex">
-                  <!-- Voice Recording Indicator (when active) - Now aligned horizontally -->
-                  <div v-if="isRecording || isTranscribing"
-                    class="flex items-center gap-1 sm:gap-2 px-2 py-1 bg-red-50 dark:bg-red-900/30 rounded-lg border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 text-xs sm:text-sm flex-shrink-0 h-fit">
-                    <div class="flex items-center gap-1">
-                      <div class="w-2 h-2 bg-red-500 dark:bg-red-400 rounded-full animate-pulse"></div>
-                      <span class="hidden sm:inline">{{ isTranscribing ? 'Listening...' : 'Starting...' }}</span>
-                      <span class="sm:hidden">{{ isTranscribing ? '🎤' : '⏳' }}</span>
-                    </div>
-                  </div>
-
-                  <!-- Clear Voice Button (when transcribed text exists) -->
-                  <button v-if="transcribedText && !isRecording" type="button" @click="clearVoiceTranscription"
-                    class="rounded-lg w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center transition-colors text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 flex-shrink-0"
-                    title="Clear voice transcription">
-                    <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="currentColor" viewBox="0 0 24 24">
-                      <path
-                        d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
-                    </svg>
-                  </button>
-
-                  <!-- Textarea - Now takes remaining space alongside the indicator -->
-                  <textarea required id="prompt" name="prompt" @keydown="onEnter" @input="autoGrow" @paste="handlePaste"
-                    :disabled="inputDisabled" rows="1" :class="[
-                      'flex-grow py-3 px-3 placeholder:text-gray-500 dark:placeholder:text-gray-400 rounded-xl bg-white dark:bg-gray-900 dark:text-gray-100 text-sm outline-none resize-none max-h-[120px] sm:max-h-[150px] md:max-h-[200px] overflow-auto leading-relaxed min-w-0',
-                      'disabled:opacity-50 disabled:cursor-not-allowed',
-                      isRecording ? 'bg-red-50 border-red-200 dark:border-red-800' : 'focus:border-blue-500 dark:focus:border-blue-400'
-                    ]" :placeholder="inputPlaceholderText">
-                  </textarea>
-                </div>
-
-                <!-- Buttons Row - Below textarea -->
-                <div class="flex items-center justify-between w-full gap-2">
-                  <!-- Left side buttons -->
-                  <div class="flex items-center gap-2">
-                    <!-- Microphone Toggle Button -->
-                    <button type="button" @click="toggleVoiceRecording" :disabled="inputDisabled" :class="[
-                      'rounded-lg w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center transition-all duration-200 flex-shrink-0',
-                      isRecording
-                        ? 'bg-red-500 hover:bg-red-600 text-white shadow-lg transform scale-105 animate-pulse'
-                        : 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-200',
-                      'disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none'
-                    ]" :title="microphonePermission === 'denied'
-                      ? 'Microphone access denied'
-                      : isRecording
-                        ? 'Stop voice input'
-                        : 'Start voice input'">
-
-                      <!-- Microphone Icon -->
-                      <svg v-if="microphonePermission === 'prompt'" class="w-4 h-4 sm:w-5 sm:h-5" fill="currentColor"
-                        viewBox="0 0 24 24">
-                        <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
-                        <path d="M19 10v1a7 7 0 0 1-14 0v-1a1 1 0 0 1 2 0v1a5 5 0 0 0 10 0v-1a1 1 0 0 1 2 0Z" />
-                      </svg>
-
-                      <svg v-else-if="!isRecording && microphonePermission === 'granted'" class="w-4 h-4 sm:w-5 sm:h-5"
-                        fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
-                        <path d="M19 10v1a7 7 0 0 1-14 0v-1a1 1 0 0 1 2 0v1a5 5 0 0 0 10 0v-1a1 1 0 0 1 2 0Z" />
-                      </svg>
-
-                      <!-- Stop Icon -->
-                      <svg v-else-if="microphonePermission === 'granted' && isRecording" class="w-4 h-4 sm:w-5 sm:h-5"
-                        fill="currentColor" viewBox="0 0 24 24">
-                        <rect x="6" y="6" width="12" height="12" rx="2" />
-                      </svg>
-
-                      <!-- Microphone Denied Icon -->
-                      <svg v-else-if="microphonePermission === 'denied' && !isRecording"
-                        class="w-4 h-4 sm:w-5 sm:h-5 text-red-500 dark:text-red-400" fill="currentColor"
-                        viewBox="0 0 24 24">
-                        <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
-                        <path d="M19 10v1a7 7 0 0 1-14 0v-1a1 1 0 0 1 2 0v1a5 5 0 0 0 10 0v-1a1 1 0 0 1 2 0Z" />
-                        <line x1="4" y1="4" x2="20" y2="20" stroke="currentColor" stroke-width="2" />
-                      </svg>
-                    </button>
-
-                    <!-- Mode Dropdown Container -->
-                    <div class="relative flex-shrink-0">
-                      <!-- Dropdown Button - Shows current mode -->
-                      <button type="button" @click.stop="showInputModeDropdown = !showInputModeDropdown"
-                        :disabled="inputDisabled" :class="[
-                          'rounded-lg w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm border',
-                          parsedUserDetails?.responseMode === 'web-search'
-                            ? 'border-green-300 bg-green-50 hover:bg-green-100 dark:border-green-600 dark:bg-green-900/30 dark:hover:bg-green-900/50 text-green-700 dark:text-green-300'
-                            : parsedUserDetails?.responseMode === 'deep-search'
-                              ? 'border-orange-300 bg-orange-50 hover:bg-orange-100 dark:border-orange-600 dark:bg-orange-900/30 dark:hover:bg-orange-900/50 text-orange-700 dark:text-orange-300'
-                              : 'border-blue-300 bg-blue-50 hover:bg-blue-100 dark:border-blue-600 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 text-blue-700 dark:text-blue-300'
-                        ]" :title="modeOptions[parsedUserDetails.responseMode || ''].title">
-                        <!-- Dynamic icon based on selected mode -->
-                        <i :class="modeOptions[parsedUserDetails.responseMode || ''].icon"
-                          class="text-xs sm:text-sm"></i>
-                      </button>
-
-                      <!-- Dropdown Menu -->
-                      <div v-show="showInputModeDropdown"
-                        class="absolute bottom-12 left-0 bg-white dark:bg-gray-800 border-[1px] border-gray-300 dark:border-gray-600 rounded-lg shadow-2xl pt-2 z-[100] w-[220px] sm:w-[240px]"
-                        @click.stop>
+                        v-if="currentMessages.length !== 0"
+                        class="flex flex-col gap-1"
+                    >
                         <div
-                          class="px-2 py-1 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide border-b border-gray-200 dark:border-gray-700">
-                          Response Mode
+                            v-for="(item, i) in currentMessages"
+                            :key="`chat-${i}`"
+                            class="flex flex-col gap-1"
+                        >
+                            <!-- User Bubble -->
+                            <div class="flex w-full chat-message">
+                                <div class="flex flex-col w-full">
+                                    <!-- User message bubble -->
+                                    <div
+                                        class="flex items-start gap-2 font-medium bg-gray-100 dark:bg-gray-800 text-black dark:text-gray-100 px-4 rounded-2xl prose prose-sm dark:prose-invert chat-bubble w-fit max-w-full"
+                                    >
+                                        <!-- Avatar container -->
+                                        <div class="flex-shrink-0 py-3">
+                                            <div
+                                                class="flex items-center justify-center w-7 h-7 text-gray-100 dark:text-gray-800 bg-gray-700 dark:bg-gray-200 rounded-full text-sm font-semibold"
+                                            >
+                                                {{
+                                                    parsedUserDetails.username
+                                                        .toUpperCase()
+                                                        .slice(0, 2)
+                                                }}
+                                            </div>
+                                        </div>
+
+                                        <!-- Message content container -->
+                                        <div class="flex-1 min-w-0">
+                                            <MarkdownRenderer
+                                                class="break-words text-base leading-relaxed"
+                                                :content="
+                                                    item &&
+                                                    item?.prompt &&
+                                                    item?.prompt?.length > 800
+                                                        ? item?.prompt
+                                                              ?.trim()
+                                                              .split(
+                                                                  '#pastedText#',
+                                                              )[0]
+                                                        : item.prompt || ''
+                                                "
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div class="flex flex-col gap-3 mt-2">
+                                        <!-- Link Previews for User Messages -->
+                                        <div
+                                            v-if="
+                                                extractUrls(item.prompt || '')
+                                                    .length > 0
+                                            "
+                                            class="w-full"
+                                        >
+                                            <div
+                                                v-for="url in extractUrls(
+                                                    item.prompt || '',
+                                                ).slice(0, 3)"
+                                                :key="`user-${i}-${url}`"
+                                            >
+                                                <LinkPreviewComponent
+                                                    v-if="
+                                                        linkPreviewCache.get(
+                                                            url,
+                                                        )
+                                                    "
+                                                    :preview="
+                                                        linkPreviewCache.get(
+                                                            url,
+                                                        )!
+                                                    "
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div
+                                            v-if="
+                                                item &&
+                                                item.prompt &&
+                                                (item?.prompt
+                                                    ?.trim()
+                                                    .split(/\s+/).length >
+                                                    100 ||
+                                                    item?.prompt?.length > 800)
+                                            "
+                                            class="mb-3"
+                                        >
+                                            <div class="flex justify-center">
+                                                <div
+                                                    class="ml-auto sm:w-[80%] md:w-[70%] lg:w-[60%] xl:w-[50%]"
+                                                    v-html="
+                                                        PastePreviewComponent(
+                                                            item?.prompt
+                                                                ?.trim()
+                                                                ?.split(
+                                                                    '#pastedText#',
+                                                                )[1] || '',
+                                                            item?.prompt
+                                                                ?.trim()
+                                                                .split(
+                                                                    '#pastedText#',
+                                                                )[1]
+                                                                ?.split(/\s+/)
+                                                                ?.length || 0,
+                                                            item?.prompt
+                                                                ?.trim()
+                                                                ?.split(
+                                                                    '#pastedText#',
+                                                                )[1]?.length ||
+                                                                0,
+                                                            true,
+                                                        )
+                                                    "
+                                                ></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Bot Bubble -->
+                            <div
+                                class="flex w-full md:max-w-3xl max-w-full relative pb-[20px]"
+                            >
+                                <div
+                                    class="bg-none max-w-full w-full chat-message leading-relaxed text-black dark:text-gray-100 p-1 rounded-2xl prose prose-sm dark:prose-invert"
+                                >
+                                    <!-- Loading state -->
+                                    <div
+                                        v-if="isLoadingState(item.response)"
+                                        class="flex w-full rounded-lg bg-gray-50 dark:bg-gray-800 p-2 items-center animate-pulse gap-2 text-gray-500 dark:text-gray-400"
+                                    >
+                                        <i class="pi pi-spin pi-spinner"></i>
+                                        <span class="text-sm">{{
+                                            getLoadingMessage(item.response)
+                                        }}</span>
+                                    </div>
+
+                                    <!-- Regular response with enhanced link handling -->
+                                    <div v-else>
+                                        <!-- Check if it's a deep search result -->
+                                        <template
+                                            v-if="
+                                                isDeepSearchResult(
+                                                    item.response,
+                                                )
+                                            "
+                                        >
+                                            <MarkdownRenderer
+                                                class="break-words overflow-x-hidden"
+                                                :content="
+                                                    renderDeepSearchResult(
+                                                        JSON.parse(
+                                                            item.response,
+                                                        ),
+                                                        getPagination(i)
+                                                            .currentPage,
+                                                    )
+                                                "
+                                            />
+                                        </template>
+
+                                        <!-- Regular response -->
+                                        <template v-else>
+                                            <MarkdownRenderer
+                                                class="break-words overflow-x-hidden"
+                                                :content="item.response || ''"
+                                            />
+                                        </template>
+
+                                        <!-- Link Previews Section -->
+                                        <div
+                                            v-if="
+                                                !isDeepSearchResult(
+                                                    item.response,
+                                                ) &&
+                                                extractUrls(item.response || '')
+                                                    .length > 0
+                                            "
+                                            class="mt-2 sm:mt-3"
+                                        >
+                                            <div
+                                                v-for="url in extractUrls(
+                                                    item.response || '',
+                                                ).slice(0, 3)"
+                                                :key="url"
+                                            >
+                                                <LinkPreviewComponent
+                                                    v-if="
+                                                        linkPreviewCache.get(
+                                                            url,
+                                                        )
+                                                    "
+                                                    :preview="
+                                                        linkPreviewCache.get(
+                                                            url,
+                                                        )!
+                                                    "
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Actions - Responsive with fewer labels on mobile -->
+                                    <div
+                                        v-if="!isLoadingState(item.response)"
+                                        class="flex flex-wrap items-center justify-between gap-2 sm:gap-3 mt-3 text-gray-500 dark:text-gray-400 text-sm"
+                                    >
+                                        <!-- Left side: Navigation for deep search -->
+                                        <div
+                                            v-if="
+                                                isDeepSearchResult(
+                                                    item.response,
+                                                ) &&
+                                                getPagination(i).totalPages > 1
+                                            "
+                                            class="flex mr-auto items-center gap-2"
+                                        >
+                                            <Pagination
+                                                :items-per-page="1"
+                                                :total="
+                                                    getPagination(i).totalPages
+                                                "
+                                                :default-page="
+                                                    getPagination(i)
+                                                        .currentPage + 1
+                                                "
+                                                @update:page="
+                                                    (newPage) =>
+                                                        goToPage(i, newPage - 1)
+                                                "
+                                            >
+                                                <PaginationContent
+                                                    v-slot="{ items }"
+                                                >
+                                                    <PaginationPrevious
+                                                        @click="prevResult(i)"
+                                                        :disabled="
+                                                            getPagination(i)
+                                                                .currentPage ===
+                                                            0
+                                                        "
+                                                    />
+
+                                                    <template
+                                                        v-for="(
+                                                            paginationItem,
+                                                            index
+                                                        ) in items"
+                                                        :key="index"
+                                                    >
+                                                        <PaginationItem
+                                                            v-if="
+                                                                paginationItem.type ===
+                                                                'page'
+                                                            "
+                                                            class="bg-white hover:dark:bg-gray-700 dark:bg-gray-900"
+                                                            :value="
+                                                                paginationItem.value
+                                                            "
+                                                            :is-active="
+                                                                paginationItem.value ===
+                                                                getPagination(i)
+                                                                    .currentPage +
+                                                                    1
+                                                            "
+                                                            @click="
+                                                                goToPage(
+                                                                    i,
+                                                                    paginationItem.value -
+                                                                        1,
+                                                                )
+                                                            "
+                                                        >
+                                                            {{
+                                                                paginationItem.value
+                                                            }}
+                                                        </PaginationItem>
+                                                        <PaginationEllipsis
+                                                            v-else-if="
+                                                                paginationItem.type ===
+                                                                'ellipsis'
+                                                            "
+                                                            :key="`ellipsis-${index}`"
+                                                        />
+                                                    </template>
+
+                                                    <PaginationNext
+                                                        class="dark:bg-gray-900 hover:dark:bg-gray-700"
+                                                        @click="nextResult(i)"
+                                                        :disabled="
+                                                            getPagination(i)
+                                                                .currentPage >=
+                                                            getPagination(i)
+                                                                .totalPages -
+                                                                1
+                                                        "
+                                                    />
+                                                </PaginationContent>
+                                            </Pagination>
+                                        </div>
+
+                                        <!-- Right side: Regular actions -->
+                                        <div
+                                            class="flex flex-wrap ml-auto gap-2 sm:gap-3"
+                                        >
+                                            <button
+                                                @click="
+                                                    copyResponse(
+                                                        item.response,
+                                                        i,
+                                                    )
+                                                "
+                                                class="flex items-center gap-1 hover:text-blue-600 dark:hover:text-blue-400 transition-colors min-h-[32px]"
+                                            >
+                                                <ClipboardList :size="16" />
+                                                <span>{{
+                                                    copiedIndex === i
+                                                        ? "Copied!"
+                                                        : "Copy"
+                                                }}</span>
+                                            </button>
+
+                                            <button
+                                                @click="
+                                                    shareResponse(
+                                                        item.response,
+                                                        item.prompt,
+                                                    )
+                                                "
+                                                class="flex items-center gap-1 hover:text-green-600 dark:hover:text-green-400 transition-colors min-h-[32px]"
+                                            >
+                                                <i class="pi pi-share-alt"></i>
+                                                <span>Share</span>
+                                            </button>
+
+                                            <button
+                                                @click="
+                                                    refreshResponse(item.prompt)
+                                                "
+                                                :disabled="isLoading"
+                                                class="flex items-center gap-1 hover:text-orange-600 dark:hover:text-orange-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-h-[32px]"
+                                            >
+                                                <i class="pi pi-refresh"></i>
+                                                <span>Retry</span>
+                                            </button>
+
+                                            <button
+                                                @click="deleteMessage(i)"
+                                                :disabled="isLoading"
+                                                class="flex items-center gap-1 hover:text-red-600 dark:hover:text-red-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-h-[32px]"
+                                            >
+                                                <Trash :size="16" />
+                                                <span>Delete</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-
-                        <!-- Mode Options -->
-                        <button v-for="(option, key) in modeOptions" :key="option.mode" type="button"
-                          @click="selectInputMode(option.mode)" :class="[
-                            'w-full px-3 py-2.5 text-left text-sm flex items-center gap-3 transition-colors',
-                            parsedUserDetails?.responseMode === option.mode
-                              ? 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 border-r-2 border-green-500'
-                              : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200'
-                          ]">
-                          <i :class="[option.icon,
-                          parsedUserDetails?.responseMode === option.mode
-                            ? ' text-green-600 dark:text-green-400'
-                            : ' text-gray-600 dark:text-gray-400'
-                          ]"></i>
-                          <div class="flex-1 min-w-0">
-                            <div class="font-semibold">{{ option.label }}</div>
-                            <div class="text-xs opacity-70">{{ option.description }}</div>
-                          </div>
-                          <i v-if="parsedUserDetails?.responseMode === option.mode"
-                            class="pi pi-check text-green-600 dark:text-green-400 text-sm font-bold"></i>
-                        </button>
-                      </div>
                     </div>
-                  </div>
-
-                  <!-- Submit Button - Right side -->
-                  <button type="submit" :disabled="inputDisabled"
-                    class="rounded-lg w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center transition-colors text-white bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50 disabled:bg-gray-400 flex-shrink-0 shadow-sm">
-                    <i v-if="!isLoading" class="pi pi-arrow-up text-xs sm:text-sm"></i>
-                    <i v-else class="pi pi-spin pi-spinner text-xs sm:text-sm"></i>
-                  </button>
                 </div>
-              </div>
-            </form>
-          </div>
+
+                <!-- Responsive Scroll to Bottom Button -->
+                <button
+                    v-if="
+                        showScrollDownButton &&
+                        currentMessages.length !== 0 &&
+                        isAuthenticated
+                    "
+                    @click="scrollToBottom()"
+                    :class="[
+                        'absolute bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border dark:border-gray-700 px-4 h-8 rounded-full shadow-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors z-20 flex items-center justify-center gap-2',
+                        scrollButtonPosition,
+                    ]"
+                    :disabled="isRecording"
+                    :title="
+                        isRecording
+                            ? 'Recording in progress'
+                            : 'Scroll to bottom'
+                    "
+                >
+                    <i
+                        class="pi pi-arrow-down text-xs"
+                        :class="{ 'animate-bounce': !isRecording }"
+                    ></i>
+                    <span class="text-sm font-medium">Scroll Down</span>
+                </button>
+
+                <!-- Input Area -->
+                <div
+                    v-if="
+                        (currentMessages.length !== 0 || showInput === true) &&
+                        isAuthenticated
+                    "
+                    :style="
+                        screenWidth > 720 && !isCollapsed
+                            ? 'left:270px;'
+                            : screenWidth > 720 && isCollapsed
+                              ? 'left:60px;'
+                              : 'left:0px;'
+                    "
+                    class="bg-white dark:bg-gray-900 z-20 bottom-0 right-0 fixed"
+                    :class="pastePreview?.show ? 'pt-2' : ''"
+                >
+                    <div
+                        class="flex items-center justify-center pb-3 sm:pb-5 px-2 sm:px-5"
+                    >
+                        <form
+                            @submit="handleSubmit"
+                            class="w-full md:max-w-3xl relative flex bg-gray-50 dark:bg-gray-800 flex-col border-2 dark:border-gray-700 shadow rounded-2xl items-center"
+                        >
+                            <!-- Paste Preview inside form - above other content -->
+                            <div
+                                v-if="pastePreview && pastePreview.show"
+                                class="w-full p-3 border-b dark:border-gray-700"
+                            >
+                                <div
+                                    v-html="
+                                        PastePreviewComponent(
+                                            pastePreview.content,
+                                            pastePreview.wordCount,
+                                            pastePreview.charCount,
+                                        )
+                                    "
+                                ></div>
+                            </div>
+
+                            <!-- Request Limit Exceeded Banner -->
+                            <div
+                                v-if="showLimitExceededBanner"
+                                class="py-2 sm:py-3 w-full px-2 sm:px-3"
+                            >
+                                <div
+                                    class="flex items-center justify-center w-full"
+                                >
+                                    <!-- Mobile: Stacked Layout -->
+                                    <div
+                                        class="flex sm:hidden w-full flex-col gap-2"
+                                    >
+                                        <div class="flex items-center gap-2">
+                                            <div
+                                                class="w-6 h-6 sm:w-8 sm:h-8 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center flex-shrink-0"
+                                            >
+                                                <i
+                                                    class="pi pi-ban text-red-600 dark:text-red-400 text-xs sm:text-sm"
+                                                ></i>
+                                            </div>
+                                            <div class="min-w-0 flex-1">
+                                                <h3
+                                                    class="text-xs sm:text-sm font-semibold text-red-800 dark:text-red-400 leading-tight"
+                                                >
+                                                    {{
+                                                        planStatus.isExpired
+                                                            ? "Plan Expired"
+                                                            : "Free Requests Exhausted"
+                                                    }}
+                                                </h3>
+                                                <p
+                                                    class="text-xs text-red-600 dark:text-red-400 leading-tight mt-0.5"
+                                                >
+                                                    {{
+                                                        planStatus.isExpired
+                                                            ? "Renew your plan"
+                                                            : `Used all ${FREE_REQUEST_LIMIT} requests`
+                                                    }}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <button
+                                            @click="$router.push('/upgrade')"
+                                            class="w-full bg-red-500 hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700 text-white py-2 rounded-md text-xs font-medium transition-colors"
+                                        >
+                                            {{
+                                                planStatus.isExpired
+                                                    ? "Renew Plan"
+                                                    : "Upgrade Plan"
+                                            }}
+                                        </button>
+                                    </div>
+
+                                    <!-- Desktop: Horizontal Layout -->
+                                    <div
+                                        class="hidden sm:flex w-full items-center gap-3"
+                                    >
+                                        <div
+                                            class="w-8 h-8 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center flex-shrink-0"
+                                        >
+                                            <i
+                                                class="pi pi-ban text-red-600 dark:text-red-400 text-sm"
+                                            ></i>
+                                        </div>
+                                        <div class="min-w-0 flex-1">
+                                            <h3
+                                                class="text-sm font-semibold text-red-800 dark:text-red-400 mb-1"
+                                            >
+                                                {{
+                                                    planStatus.isExpired
+                                                        ? "Plan Expired"
+                                                        : "Free Requests Exhausted"
+                                                }}
+                                            </h3>
+                                            <p
+                                                class="text-xs text-red-600 dark:text-red-400"
+                                            >
+                                                {{
+                                                    planStatus.isExpired
+                                                        ? "Please renew your plan to continue using the service."
+                                                        : `You've used all ${FREE_REQUEST_LIMIT} free requests. Upgrade to continue chatting.`
+                                                }}
+                                            </p>
+                                        </div>
+                                        <button
+                                            @click="$router.push('/upgrade')"
+                                            class="bg-red-500 px-3 hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700 text-white py-2 rounded-md text-sm font-medium transition-colors flex-shrink-0 whitespace-nowrap"
+                                        >
+                                            {{
+                                                planStatus.isExpired
+                                                    ? "Renew Plan"
+                                                    : "Upgrade Plan"
+                                            }}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Upgrade Warning Banner -->
+                            <div
+                                v-if="showUpgradeBanner"
+                                class="py-2 sm:py-3 w-full px-2 sm:px-3"
+                            >
+                                <div
+                                    class="flex items-center justify-center w-full"
+                                >
+                                    <!-- Mobile: Stacked Layout -->
+                                    <div
+                                        class="flex sm:hidden w-full flex-col gap-2"
+                                    >
+                                        <div class="flex items-center gap-2">
+                                            <div
+                                                class="w-6 h-6 sm:w-8 sm:h-8 bg-yellow-100 dark:bg-yellow-900/30 rounded-full flex items-center justify-center flex-shrink-0"
+                                            >
+                                                <i
+                                                    class="pi pi-exclamation-triangle text-yellow-600 dark:text-yellow-400 text-xs sm:text-sm"
+                                                ></i>
+                                            </div>
+                                            <div class="min-w-0 flex-1">
+                                                <h3
+                                                    class="text-xs sm:text-sm font-semibold text-yellow-800 dark:text-yellow-400 leading-tight"
+                                                >
+                                                    {{ requestsRemaining }}
+                                                    requests left
+                                                </h3>
+                                                <p
+                                                    class="text-xs text-yellow-600 dark:text-yellow-400 leading-tight mt-0.5"
+                                                >
+                                                    Upgrade for unlimited access
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <button
+                                            @click="$router.push('/upgrade')"
+                                            class="w-full bg-orange-500 hover:bg-orange-600 dark:bg-orange-600 dark:hover:bg-orange-700 text-white py-2 rounded-md text-xs font-medium transition-colors"
+                                        >
+                                            Upgrade Plan
+                                        </button>
+                                    </div>
+
+                                    <!-- Desktop: Horizontal Layout -->
+                                    <div
+                                        class="hidden sm:flex w-full items-center gap-3"
+                                    >
+                                        <div
+                                            class="w-8 h-8 bg-yellow-100 dark:bg-yellow-900/30 rounded-full flex items-center justify-center flex-shrink-0"
+                                        >
+                                            <i
+                                                class="pi pi-exclamation-triangle text-yellow-600 dark:text-yellow-400 text-sm"
+                                            ></i>
+                                        </div>
+                                        <div class="min-w-0 flex-1">
+                                            <h3
+                                                class="text-sm font-semibold text-yellow-800 dark:text-yellow-400 mb-1"
+                                            >
+                                                {{ requestsRemaining }} free
+                                                requests remaining
+                                            </h3>
+                                            <p
+                                                class="text-xs text-yellow-600 dark:text-yellow-400"
+                                            >
+                                                Upgrade to continue chatting
+                                                without limits
+                                            </p>
+                                        </div>
+                                        <button
+                                            @click="$router.push('/upgrade')"
+                                            class="bg-orange-500 px-3 hover:bg-orange-600 dark:bg-orange-600 dark:hover:bg-orange-700 text-white py-2 rounded-md text-sm font-medium transition-colors flex-shrink-0 whitespace-nowrap"
+                                        >
+                                            Upgrade Plan
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Input Area with Voice Recording -->
+                            <div
+                                class="flex flex-col w-full bg-white dark:bg-gray-900 rounded-2xl px-2 sm:px-3 py-2 gap-1 sm:gap-2"
+                                :class="
+                                    inputDisabled
+                                        ? 'opacity-50 border border-t dark:border-gray-700 pointer-events-none'
+                                        : showUpgradeBanner
+                                          ? 'border border-t dark:border-gray-700'
+                                          : ''
+                                "
+                            >
+                                <div
+                                    class="w-full items-center justify-center flex"
+                                >
+                                    <!-- Voice Recording Indicator (when active) - Now aligned horizontally -->
+                                    <div
+                                        v-if="isRecording || isTranscribing"
+                                        class="flex items-center gap-1 sm:gap-2 px-2 py-1 bg-red-50 dark:bg-red-900/30 rounded-lg border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 text-xs sm:text-sm flex-shrink-0 h-fit"
+                                    >
+                                        <div class="flex items-center gap-1">
+                                            <div
+                                                class="w-2 h-2 bg-red-500 dark:bg-red-400 rounded-full animate-pulse"
+                                            ></div>
+                                            <span class="hidden sm:inline">{{
+                                                isTranscribing
+                                                    ? "Listening..."
+                                                    : "Starting..."
+                                            }}</span>
+                                            <span class="sm:hidden">{{
+                                                isTranscribing ? "🎤" : "⏳"
+                                            }}</span>
+                                        </div>
+                                    </div>
+
+                                    <!-- Clear Voice Button (when transcribed text exists) -->
+                                    <button
+                                        v-if="transcribedText && !isRecording"
+                                        type="button"
+                                        @click="clearVoiceTranscription"
+                                        class="rounded-lg w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center transition-colors text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 flex-shrink-0"
+                                        title="Clear voice transcription"
+                                    >
+                                        <svg
+                                            class="w-4 h-4 sm:w-5 sm:h-5"
+                                            fill="currentColor"
+                                            viewBox="0 0 24 24"
+                                        >
+                                            <path
+                                                d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"
+                                            />
+                                        </svg>
+                                    </button>
+
+                                    <!-- Textarea - Now takes remaining space alongside the indicator -->
+                                    <textarea
+                                        required
+                                        id="prompt"
+                                        name="prompt"
+                                        @keydown="onEnter"
+                                        @input="autoGrow"
+                                        @paste="handlePaste"
+                                        :disabled="inputDisabled"
+                                        rows="1"
+                                        :class="[
+                                            'flex-grow py-3 px-3 placeholder:text-gray-500 dark:placeholder:text-gray-400 rounded-xl bg-white dark:bg-gray-900 dark:text-gray-100 text-sm outline-none resize-none max-h-[120px] sm:max-h-[150px] md:max-h-[200px] overflow-auto leading-relaxed min-w-0',
+                                            'disabled:opacity-50 disabled:cursor-not-allowed',
+                                            isRecording
+                                                ? 'bg-red-50 border-red-200 dark:border-red-800'
+                                                : 'focus:border-blue-500 dark:focus:border-blue-400',
+                                        ]"
+                                        :placeholder="inputPlaceholderText"
+                                    >
+                                    </textarea>
+                                </div>
+
+                                <!-- Buttons Row - Below textarea -->
+                                <div
+                                    class="flex items-center justify-between w-full gap-2"
+                                >
+                                    <!-- Left side buttons -->
+                                    <div class="flex items-center gap-2">
+                                        <!-- Microphone Toggle Button -->
+                                        <button
+                                            type="button"
+                                            @click="toggleVoiceRecording"
+                                            :disabled="inputDisabled"
+                                            :class="[
+                                                'rounded-lg w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center transition-all duration-200 flex-shrink-0',
+                                                isRecording
+                                                    ? 'bg-red-500 hover:bg-red-600 text-white shadow-lg transform scale-105 animate-pulse'
+                                                    : 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-200',
+                                                'disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none',
+                                            ]"
+                                            :title="
+                                                microphonePermission ===
+                                                'denied'
+                                                    ? 'Microphone access denied'
+                                                    : isRecording
+                                                      ? 'Stop voice input'
+                                                      : 'Start voice input'
+                                            "
+                                        >
+                                            <!-- Microphone Icon -->
+                                            <svg
+                                                v-if="
+                                                    microphonePermission ===
+                                                    'prompt'
+                                                "
+                                                class="w-4 h-4 sm:w-5 sm:h-5"
+                                                fill="currentColor"
+                                                viewBox="0 0 24 24"
+                                            >
+                                                <path
+                                                    d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"
+                                                />
+                                                <path
+                                                    d="M19 10v1a7 7 0 0 1-14 0v-1a1 1 0 0 1 2 0v1a5 5 0 0 0 10 0v-1a1 1 0 0 1 2 0Z"
+                                                />
+                                            </svg>
+
+                                            <svg
+                                                v-else-if="
+                                                    !isRecording &&
+                                                    microphonePermission ===
+                                                        'granted'
+                                                "
+                                                class="w-4 h-4 sm:w-5 sm:h-5"
+                                                fill="currentColor"
+                                                viewBox="0 0 24 24"
+                                            >
+                                                <path
+                                                    d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"
+                                                />
+                                                <path
+                                                    d="M19 10v1a7 7 0 0 1-14 0v-1a1 1 0 0 1 2 0v1a5 5 0 0 0 10 0v-1a1 1 0 0 1 2 0Z"
+                                                />
+                                            </svg>
+
+                                            <!-- Stop Icon -->
+                                            <svg
+                                                v-else-if="
+                                                    microphonePermission ===
+                                                        'granted' && isRecording
+                                                "
+                                                class="w-4 h-4 sm:w-5 sm:h-5"
+                                                fill="currentColor"
+                                                viewBox="0 0 24 24"
+                                            >
+                                                <rect
+                                                    x="6"
+                                                    y="6"
+                                                    width="12"
+                                                    height="12"
+                                                    rx="2"
+                                                />
+                                            </svg>
+
+                                            <!-- Microphone Denied Icon -->
+                                            <svg
+                                                v-else-if="
+                                                    microphonePermission ===
+                                                        'denied' && !isRecording
+                                                "
+                                                class="w-4 h-4 sm:w-5 sm:h-5 text-red-500 dark:text-red-400"
+                                                fill="currentColor"
+                                                viewBox="0 0 24 24"
+                                            >
+                                                <path
+                                                    d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"
+                                                />
+                                                <path
+                                                    d="M19 10v1a7 7 0 0 1-14 0v-1a1 1 0 0 1 2 0v1a5 5 0 0 0 10 0v-1a1 1 0 0 1 2 0Z"
+                                                />
+                                                <line
+                                                    x1="4"
+                                                    y1="4"
+                                                    x2="20"
+                                                    y2="20"
+                                                    stroke="currentColor"
+                                                    stroke-width="2"
+                                                />
+                                            </svg>
+                                        </button>
+
+                                        <!-- Mode Dropdown Container -->
+                                        <div class="relative flex-shrink-0">
+                                            <!-- Dropdown Button - Shows current mode -->
+                                            <button
+                                                type="button"
+                                                @click.stop="
+                                                    showInputModeDropdown =
+                                                        !showInputModeDropdown
+                                                "
+                                                :disabled="inputDisabled"
+                                                :class="[
+                                                    'rounded-lg w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm border',
+                                                    parsedUserDetails?.responseMode ===
+                                                    'web-search'
+                                                        ? 'border-green-300 bg-green-50 hover:bg-green-100 dark:border-green-600 dark:bg-green-900/30 dark:hover:bg-green-900/50 text-green-700 dark:text-green-300'
+                                                        : parsedUserDetails?.responseMode ===
+                                                            'deep-search'
+                                                          ? 'border-orange-300 bg-orange-50 hover:bg-orange-100 dark:border-orange-600 dark:bg-orange-900/30 dark:hover:bg-orange-900/50 text-orange-700 dark:text-orange-300'
+                                                          : 'border-blue-300 bg-blue-50 hover:bg-blue-100 dark:border-blue-600 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 text-blue-700 dark:text-blue-300',
+                                                ]"
+                                                :title="
+                                                    modeOptions[
+                                                        parsedUserDetails.responseMode ||
+                                                            ''
+                                                    ].title
+                                                "
+                                            >
+                                                <!-- Dynamic icon based on selected mode -->
+                                                <i
+                                                    :class="
+                                                        modeOptions[
+                                                            parsedUserDetails.responseMode ||
+                                                                ''
+                                                        ].icon
+                                                    "
+                                                    class="text-xs sm:text-sm"
+                                                ></i>
+                                            </button>
+
+                                            <!-- Dropdown Menu -->
+                                            <div
+                                                v-show="showInputModeDropdown"
+                                                class="absolute bottom-12 left-0 bg-white dark:bg-gray-800 border-[1px] border-gray-300 dark:border-gray-600 rounded-lg shadow-2xl pt-2 z-[100] w-[220px] sm:w-[240px]"
+                                                @click.stop
+                                            >
+                                                <div
+                                                    class="px-2 py-1 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide border-b border-gray-200 dark:border-gray-700"
+                                                >
+                                                    Response Mode
+                                                </div>
+
+                                                <!-- Mode Options -->
+                                                <button
+                                                    v-for="(
+                                                        option, key
+                                                    ) in modeOptions"
+                                                    :key="option.mode"
+                                                    type="button"
+                                                    @click="
+                                                        selectInputMode(
+                                                            option.mode,
+                                                        )
+                                                    "
+                                                    :class="[
+                                                        'w-full px-3 py-2.5 text-left text-sm flex items-center gap-3 transition-colors',
+                                                        parsedUserDetails?.responseMode ===
+                                                        option.mode
+                                                            ? 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 border-r-2 border-green-500'
+                                                            : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200',
+                                                    ]"
+                                                >
+                                                    <i
+                                                        :class="[
+                                                            option.icon,
+                                                            parsedUserDetails?.responseMode ===
+                                                            option.mode
+                                                                ? ' text-green-600 dark:text-green-400'
+                                                                : ' text-gray-600 dark:text-gray-400',
+                                                        ]"
+                                                    ></i>
+                                                    <div class="flex-1 min-w-0">
+                                                        <div
+                                                            class="font-semibold"
+                                                        >
+                                                            {{ option.label }}
+                                                        </div>
+                                                        <div
+                                                            class="text-xs opacity-70"
+                                                        >
+                                                            {{
+                                                                option.description
+                                                            }}
+                                                        </div>
+                                                    </div>
+                                                    <i
+                                                        v-if="
+                                                            parsedUserDetails?.responseMode ===
+                                                            option.mode
+                                                        "
+                                                        class="pi pi-check text-green-600 dark:text-green-400 text-sm font-bold"
+                                                    ></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Submit Button - Right side -->
+                                    <button
+                                        type="submit"
+                                        :disabled="inputDisabled"
+                                        class="rounded-lg w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center transition-colors text-white bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50 disabled:bg-gray-400 flex-shrink-0 shadow-sm"
+                                    >
+                                        <i
+                                            v-if="!isLoading"
+                                            class="pi pi-arrow-up text-xs sm:text-sm"
+                                        ></i>
+                                        <i
+                                            v-else
+                                            class="pi pi-spin pi-spinner text-xs sm:text-sm"
+                                        ></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
         </div>
-      </div>
+        <TextHightlightPopover />
+        <PastePreviewModal
+            :data="{
+                showPasteModal,
+                currentPasteContent,
+            }"
+            :closePasteModal="closePasteModal"
+        />
     </div>
-    <TextHightlightPopover />
-    <PastePreviewModal :data="{
-      showPasteModal,
-      currentPasteContent,
-    }" :closePasteModal="closePasteModal" />
-  </div>
 </template>
