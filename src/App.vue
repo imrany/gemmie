@@ -18,14 +18,14 @@ import type {
     UserDetails,
 } from "./types";
 import {
-    API_BASE_URL,
     generateChatId,
     generateChatTitle,
     extractUrls,
     validateCredentials,
     getTransaction,
-    WRAPPER_URL,
     detectLargePaste,
+    createErrorContext,
+    getErrorStatus,
     SPINDLE_URL,
 } from "./utils/globals";
 import { nextTick } from "vue";
@@ -33,7 +33,14 @@ import { detectAndProcessVideo } from "./utils/videoProcessing";
 import ConfirmDialog from "./components/ConfirmDialog.vue";
 import type { Theme } from "vue-sonner/src/packages/types.js";
 import UpdateModal from "./components/Modals/UpdateModal.vue";
+import {
+    usePlatformError,
+    generateErrorId,
+} from "./composables/usePlatformError";
+import { useApiCall } from "@/composables/useApiCall";
+import type { PlatformError } from "./types";
 
+const { reportError } = usePlatformError();
 const isUserOnline = ref(navigator.onLine);
 const connectionStatus = ref<"online" | "offline" | "checking">("online");
 const screenWidth = ref(screen.width);
@@ -76,7 +83,7 @@ const authData = ref({
     password: "",
     agreeToTerms: false,
 });
-
+const FREE_REQUEST_LIMIT = 20;
 const syncStatus = ref({
     lastSync: null as Date | null,
     syncing: false,
@@ -88,9 +95,7 @@ const syncStatus = ref({
     syncMessage: "",
     syncProgress: 0,
 });
-
 const isOpenTextHighlightPopover = ref(false);
-
 const currentChat: ComputedRef<CurrentChat | undefined> = computed(() => {
     return chats.value.find((chat) => chat.id === currentChatId.value);
 });
@@ -240,8 +245,6 @@ const planStatus = computed(() => {
     return { status: "active", timeLeft, expiryDate, isExpired: false };
 });
 
-const FREE_REQUEST_LIMIT = 20;
-
 const userPlanStatus = computed(() => {
     if (!parsedUserDetails.value || !parsedUserDetails.value.expiryTimestamp) {
         return { status: "no-plan", isExpired: false };
@@ -316,7 +319,12 @@ const shouldShowUpgradePrompt = computed(
 const requestsRemaining = computed(() => requestLimitInfo.value.remaining);
 const isFreeUser = computed(() => userHasRequestLimits.value);
 const requestCount = computed(() => requestLimitInfo.value.currentCount);
-
+const { apiCall, unsecureApiCall, checkInternetConnection } = useApiCall({
+    isUserOnline,
+    connectionStatus,
+    parsedUserDetails,
+    syncStatus,
+});
 function showSyncIndicator(message: string, progress: number = 0) {
     syncStatus.value.showSyncIndicator = true;
     syncStatus.value.syncMessage = message;
@@ -360,93 +368,6 @@ function showConfirmDialog(options: ConfirmDialogOptions) {
             confirmDialog.value.visible = false;
         },
     };
-}
-
-async function apiCall(
-    endpoint: string,
-    options: RequestInit = {},
-    retryCount = 0,
-): Promise<any> {
-    if (!isUserOnline.value) {
-        const isActuallyOnline = await checkInternetConnection();
-        if (!isActuallyOnline) {
-            throw new Error(
-                "No internet connection. Please check your network and try again.",
-            );
-        }
-    }
-
-    const maxRetries = 3;
-    const retryDelay = Math.pow(2, retryCount) * 1000;
-
-    try {
-        if (
-            !parsedUserDetails.value?.userId &&
-            !endpoint.includes("/login") &&
-            !endpoint.includes("/register")
-        ) {
-            throw new Error("User not authenticated");
-        }
-
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 30000);
-
-        const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-            ...options,
-            headers: {
-                "Content-Type": "application/json",
-                ...(parsedUserDetails.value?.userId
-                    ? { "X-User-ID": parsedUserDetails.value.userId }
-                    : {}),
-                ...options.headers,
-            },
-            signal: controller.signal,
-        });
-
-        clearTimeout(timeoutId);
-
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-
-        const data = await response.json();
-
-        if (!data.success) {
-            throw new Error(data.message || "API request failed");
-        }
-
-        syncStatus.value.retryCount = 0;
-        syncStatus.value.lastError = null;
-
-        return data;
-    } catch (error: any) {
-        console.error(`API Error on ${endpoint}:`, error);
-
-        if (error.name === "AbortError") {
-            throw new Error("Request timeout - please try again");
-        }
-
-        if (
-            (error.name === "NetworkError" ||
-                error.name === "TypeError" ||
-                error.name === "TimeoutError") &&
-            retryCount < maxRetries
-        ) {
-            console.log(
-                `Retrying ${endpoint} in ${retryDelay}ms (attempt ${retryCount + 1}/${maxRetries})`,
-            );
-
-            await new Promise((resolve) => setTimeout(resolve, retryDelay));
-            return apiCall(endpoint, options, retryCount + 1);
-        }
-
-        if (endpoint.includes("/sync")) {
-            syncStatus.value.lastError = error.message;
-            syncStatus.value.retryCount = retryCount;
-        }
-
-        throw error;
-    }
 }
 
 function isValidChat(chat: any): chat is Chat {
@@ -552,11 +473,24 @@ function deleteChat(chatId: string) {
                                 urls.forEach((url) => {
                                     linkPreviewCache.value.delete(url);
                                 });
-                            } catch (error) {
-                                console.error(
-                                    "Error extracting URLs for cache cleanup:",
-                                    error,
-                                );
+                            } catch (error: any) {
+                                reportError({
+                                    createdAt: new Date().toISOString(),
+                                    id: generateErrorId(),
+                                    action: "deleteChat",
+                                    message:
+                                        "Error extracting URLs for cache cleanup: " +
+                                        error.message,
+                                    status: getErrorStatus(error),
+                                    userId:
+                                        parsedUserDetails.value?.userId ||
+                                        "unknown",
+                                    context: createErrorContext({
+                                        chatId,
+                                        errorName: error.name,
+                                    }),
+                                    severity: "low",
+                                } as PlatformError);
                             }
                         });
                         saveLinkPreviewCache();
@@ -587,15 +521,37 @@ function deleteChat(chatId: string) {
                             performSmartSync();
                         }, 1000);
                     }
-                } catch (error) {
-                    console.error("Error deleting chat:", error);
-                    toast.error("Failed to delete chat");
+                } catch (error: any) {
+                    reportError({
+                        action: `onconfirm delete chat`,
+                        message: "Failed to delete chat :" + error.message,
+                        description: `Failed to delete this chat. Please try again.`,
+                        status: getErrorStatus(error),
+                        context: createErrorContext({
+                            chatId,
+                            chatTitle,
+                            messageCount,
+                            errorName: error.name,
+                            errorStack: error.stack,
+                        }),
+                        userId: parsedUserDetails.value?.userId || "unknown",
+                        severity: "high",
+                    } as PlatformError);
                 }
             },
         });
-    } catch (error) {
-        console.error("Error in deleteChat:", error);
-        toast.error("Failed to delete chat");
+    } catch (error: any) {
+        reportError({
+            action: `delete chat`,
+            message: "Failed to delete chat :" + error.message,
+            description: `Failed to delete this chat. Please try again.`,
+            status: getErrorStatus(error),
+            context: createErrorContext({
+                chatId,
+                errorName: error.name,
+            }),
+            userId: parsedUserDetails.value?.userId || "unknown",
+        } as PlatformError);
     }
 }
 
@@ -630,8 +586,15 @@ async function logout() {
                         );
                         await syncToServer();
                         hideSyncIndicator();
-                    } catch (syncError) {
-                        console.error("Sync failed during logout:", syncError);
+                    } catch (syncError: any) {
+                        reportError({
+                            action: `sync error in logout`,
+                            message:
+                                "Sync failed during logout" + syncError.message,
+                            status: getErrorStatus(syncError),
+                            userId:
+                                parsedUserDetails.value?.userId || "unknown",
+                        } as PlatformError);
                         hideSyncIndicator();
                     }
                 }
@@ -722,12 +685,16 @@ async function logout() {
                     });
                 }
             } catch (error: any) {
-                console.error("Critical error during logout:", error);
-                toast.error("Error during logout process", {
-                    duration: 5000,
-                    description:
-                        "Some cleanup operations may not have completed. Please refresh the page.",
-                });
+                reportError({
+                    action: `logout`,
+                    message:
+                        "Critical error during logout process :" +
+                        error.message,
+                    description: `Some cleanup operations may not have completed. Please refresh the page.`,
+                    status: getErrorStatus(error),
+                    userId: parsedUserDetails.value?.userId || "unknown",
+                    severity: "critical",
+                } as PlatformError);
             } finally {
                 isLoading.value = false;
             }
@@ -1092,9 +1059,20 @@ function switchToChat(chatId: string) {
             loadChatDrafts();
             // scrollToLastMessage()
         });
-    } catch (error) {
-        console.error("Error switching to chat:", error);
-        toast.error("Failed to switch to chat");
+    } catch (error: any) {
+        reportError({
+            action: `switchToChat`,
+            message: "Error swicthing to chat: " + error.message,
+            description: `Failed to switch to chat : ${chatId.slice(0, 10)}...`,
+            status: getErrorStatus(error),
+            userId: parsedUserDetails.value?.userId || "unknown",
+            severity: "critical",
+            context: createErrorContext({
+                targetChatId: chatId,
+                currentChatId: currentChatId.value,
+                errorName: error.name,
+            }),
+        } as PlatformError);
     }
 }
 
@@ -1153,9 +1131,15 @@ function createNewChat(firstMessage?: string): string {
         });
 
         return newChatId;
-    } catch (error) {
-        console.error("Error creating new chat:", error);
-        toast.error("Failed to create new chat");
+    } catch (error: any) {
+        reportError({
+            action: `createNewChat`,
+            message: "Error creating new chat: " + error.message,
+            description: `Failed to create a new chat. Try again`,
+            status: getErrorStatus(error),
+            userId: parsedUserDetails.value?.userId || "unknown",
+            severity: "critical",
+        } as PlatformError);
         return "";
     }
 }
@@ -1244,15 +1228,27 @@ function deleteMessage(messageIndex: number) {
                             performSmartSync();
                         }, 1000);
                     }
-                } catch (error) {
-                    console.error("Error deleting message:", error);
-                    toast.error("Failed to delete message");
+                } catch (error: any) {
+                    reportError({
+                        action: `deleteMessage`,
+                        message: "Error in deleteMessage: " + error.message,
+                        description: `Failed to delete this message.`,
+                        status: getErrorStatus(error),
+                        userId: parsedUserDetails.value?.userId || "unknown",
+                        severity: "critical",
+                    } as PlatformError);
                 }
             },
         });
-    } catch (error) {
-        console.error("Error in deleteMessage:", error);
-        toast.error("Failed to delete message");
+    } catch (error: any) {
+        reportError({
+            action: `deleteMessage`,
+            message: "Error in deleteMessage: " + error.message,
+            description: `Failed to delete this message.`,
+            status: getErrorStatus(error),
+            userId: parsedUserDetails.value?.userId || "unknown",
+            severity: "critical",
+        } as PlatformError);
     }
 }
 
@@ -1286,9 +1282,15 @@ function renameChat(chatId: string, newTitle: string) {
                 performSmartSync();
             }, 1000);
         }
-    } catch (error) {
-        console.error("Error renaming chat:", error);
-        toast.error("Failed to rename chat");
+    } catch (error: any) {
+        reportError({
+            action: `renameChat`,
+            message: "Error renaming chat: " + error.message,
+            description: `Failed to rename this chat. Please try again.`,
+            status: getErrorStatus(error),
+            userId: parsedUserDetails.value?.userId || "unknown",
+            severity: "critical",
+        } as PlatformError);
     }
 }
 
@@ -1351,15 +1353,27 @@ function clearAllChats() {
                             description: "All chat data has been cleared",
                         },
                     );
-                } catch (error) {
-                    console.error("Error clearing all chats:", error);
-                    toast.error("Failed to clear all chats");
+                } catch (error: any) {
+                    reportError({
+                        action: `clearAllChats`,
+                        message: "Error clearing all chats: " + error.message,
+                        description: `Failed to clear all chats. Try again`,
+                        status: getErrorStatus(error),
+                        userId: parsedUserDetails.value?.userId || "unknown",
+                        severity: "critical",
+                    } as PlatformError);
                 }
             },
         });
-    } catch (error) {
-        console.error("Error in clearAllChats:", error);
-        toast.error("Failed to clear chats");
+    } catch (error: any) {
+        reportError({
+            action: `clearAllChats`,
+            message: "Error clearing all chats: " + error.message,
+            description: `Failed to clear all chats. Try again`,
+            status: getErrorStatus(error),
+            userId: parsedUserDetails.value?.userId || "unknown",
+            severity: "critical",
+        } as PlatformError);
     }
 }
 
@@ -1455,8 +1469,15 @@ async function fetchLinkPreview(
             saveLinkPreviewCache();
         }
         return updatedPreview;
-    } catch (error) {
-        console.error("Failed to fetch link preview:", error);
+    } catch (error: any) {
+        reportError({
+            action: `fetchLinkPreview`,
+            message: "Error in fetching link preview: " + error.message,
+            description: `Failed to fetch link preview for ${url}`,
+            status: getErrorStatus(error),
+            userId: parsedUserDetails.value?.userId || "unknown",
+            severity: "low",
+        } as PlatformError);
 
         const fallbackPreview: LinkPreview = {
             url,
@@ -1475,9 +1496,9 @@ async function fetchLinkPreview(
     }
 }
 
-function toggleSidebar() {
+function toggleSidebar(value?: boolean) {
     try {
-        isCollapsed.value = !isCollapsed.value;
+        isCollapsed.value = value || !isCollapsed.value;
         localStorage.setItem("isCollapsed", String(isCollapsed.value));
     } catch (error) {
         console.error("Error toggling sidebar:", error);
@@ -1501,7 +1522,6 @@ function saveChats() {
         }
 
         const chatsJson = JSON.stringify(chats.value);
-        const currentChatJson = JSON.stringify(currentChatId.value);
 
         if (chatsJson.length > 5000000) {
             toast.warning("Chat data is getting large", {
@@ -1517,12 +1537,15 @@ function saveChats() {
         if (isAuthenticated.value && parsedUserDetails.value?.syncEnabled) {
             syncStatus.value.hasUnsyncedChanges = true;
         }
-    } catch (error) {
-        console.error("Failed to save chats:", error);
-        toast.error("Failed to save chat data", {
-            duration: 4000,
-            description: "Your recent changes may not be saved",
-        });
+    } catch (error: any) {
+        reportError({
+            action: `saveChats`,
+            message: "Failed to save chats: " + error.message,
+            description: `Your recent changes may not be saved.`,
+            status: getErrorStatus(error),
+            userId: parsedUserDetails.value?.userId || "unknown",
+            severity: "critical",
+        } as PlatformError);
     }
 }
 
@@ -1579,8 +1602,20 @@ async function syncFromServer(serverData?: any) {
                         `✅ Synced ${mergedChats.length} chats from server`,
                     );
                 }
-            } catch (parseError) {
-                console.error("❌ Error parsing server chats:", parseError);
+            } catch (parseError: any) {
+                reportError({
+                    action: `syncFromServer`,
+                    message:
+                        "Error parsing server chats: " + parseError.message,
+                    status: getErrorStatus(parseError),
+                    userId: parsedUserDetails.value?.userId || "unknown",
+                    context: createErrorContext({
+                        dataType: "chats",
+                        rawDataLength: data.chats?.length,
+                        errorName: parseError.name,
+                    }),
+                    severity: "low",
+                } as PlatformError);
             }
         } else {
             console.log("📭 No chats data from server");
@@ -1619,11 +1654,21 @@ async function syncFromServer(serverData?: any) {
                         `✅ Synced ${Object.keys(mergedPreviews).length} link previews from server`,
                     );
                 }
-            } catch (parseError) {
-                console.error(
-                    "❌ Error parsing server link previews:",
-                    parseError,
-                );
+            } catch (parseError: any) {
+                reportError({
+                    action: `syncFromMessage`,
+                    message:
+                        "Error parsing server link previews: " +
+                        parseError.message,
+                    status: getErrorStatus(parseError),
+                    context: createErrorContext({
+                        dataType: "chats",
+                        rawDataLength: data.chats?.length,
+                        errorName: parseError.name,
+                    }),
+                    userId: parsedUserDetails.value?.userId || "unknown",
+                    severity: "low",
+                } as PlatformError);
             }
         }
 
@@ -1701,7 +1746,20 @@ async function syncFromServer(serverData?: any) {
 
         console.log("✅ Successfully synced data from server");
     } catch (error: any) {
-        console.error("❌ Sync from server failed:", error);
+        reportError({
+            action: `syncFromServer`,
+            message: "Sync from server failed: " + error.message,
+            description: `Using local stored data instead.`,
+            status: getErrorStatus(error),
+            userId: parsedUserDetails.value?.userId || "unknown",
+            context: createErrorContext({
+                hasServerData: !!serverData,
+                syncEnabled: parsedUserDetails.value?.syncEnabled,
+                errorName: error.name,
+                errorStack: error.stack,
+            }),
+            severity: "low",
+        } as PlatformError);
         syncStatus.value.lastError = error.message;
         hideSyncIndicator();
 
@@ -1796,7 +1854,14 @@ async function syncToServer() {
 
         return response;
     } catch (error: any) {
-        console.error("❌ Sync to server failed:", error);
+        reportError({
+            action: `syncToServer`,
+            message: "Syn to server failed: " + error.message,
+            description: `Changes have been reverted to local.`,
+            status: getErrorStatus(error),
+            userId: parsedUserDetails.value?.userId || "unknown",
+            severity: "low",
+        } as PlatformError);
         syncStatus.value.lastError = error.message;
         syncStatus.value.hasUnsyncedChanges = true;
         hideSyncIndicator();
@@ -1853,8 +1918,15 @@ async function performSmartSync() {
                 syncStatus.value.syncing = true;
                 await syncFromServer();
                 console.log("✅ Successfully synced data from server");
-            } catch (error) {
-                console.error("❌ Failed to sync from server:", error);
+            } catch (error: any) {
+                reportError({
+                    action: `performSmartSync`,
+                    message: "Failed to sync from server: " + error.message,
+                    description: `Using local stored data instead.`,
+                    status: getErrorStatus(error),
+                    userId: parsedUserDetails.value?.userId || "unknown",
+                    severity: "low",
+                } as PlatformError);
             }
         } else if (syncStatus.value.hasUnsyncedChanges) {
             console.log("📤 Has unsynced changes - syncing TO server");
@@ -1870,7 +1942,14 @@ async function performSmartSync() {
                 await syncToServer();
                 console.log("✅ Successfully synced changes to server");
             } catch (error: any) {
-                console.error("❌ Failed to sync to server:", error);
+                reportError({
+                    action: `performSmartSync`,
+                    message: "Failed to sync to server: " + error.message,
+                    description: `Using local stored instead.`,
+                    status: getErrorStatus(error),
+                    userId: parsedUserDetails.value?.userId || "unknown",
+                    severity: "low",
+                } as PlatformError);
 
                 if (hadUnsyncedChangesBeforeSync) {
                     syncStatus.value.hasUnsyncedChanges = true;
@@ -1896,82 +1975,30 @@ async function performSmartSync() {
                 syncStatus.value.syncing = true;
                 await syncFromServer();
                 console.log("✅ Server data is current");
-            } catch (error) {
-                console.error("❌ Failed to check for server updates:", error);
+            } catch (error: any) {
+                reportError({
+                    action: `performSmartSync`,
+                    message:
+                        "Failed to check for server updates: " + error.message,
+                    description: `Using local data instead.`,
+                    status: getErrorStatus(error),
+                    userId: parsedUserDetails.value?.userId || "unknown",
+                    severity: "low",
+                } as PlatformError);
             }
         }
-    } catch (error) {
-        console.error("💥 Critical error in performSmartSync:", error);
+    } catch (error: any) {
+        reportError({
+            action: `performSmartSync`,
+            message: "Critical error in Sync: " + error.message,
+            description: `Changes have been reverted, using local data instead.`,
+            status: getErrorStatus(error),
+            userId: parsedUserDetails.value?.userId || "unknown",
+            severity: "critical",
+        } as PlatformError);
     } finally {
         console.log("🔓 Sync completed");
         syncStatus.value.syncing = false;
-    }
-}
-
-async function unsecureApiCall(
-    endpoint: string,
-    options: RequestInit = {},
-    retryCount = 0,
-): Promise<any> {
-    const maxRetries = 2;
-    const retryDelay = Math.pow(2, retryCount) * 1000;
-
-    try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 15000);
-
-        const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-            ...options,
-            headers: {
-                "Content-Type": "application/json",
-                ...options.headers,
-            },
-            signal: controller.signal,
-        });
-
-        clearTimeout(timeoutId);
-
-        if (!response.ok) {
-            const errorText = await response
-                .text()
-                .catch(() => "Unknown error");
-            throw new Error(
-                `HTTP ${response.status}: ${response.statusText} - ${errorText}`,
-            );
-        }
-
-        const data = await response.json();
-
-        if (!data.success) {
-            throw new Error(data.message || "API request failed");
-        }
-
-        return data;
-    } catch (error: any) {
-        console.error(
-            `Unsecure API Error on ${endpoint} (attempt ${retryCount + 1}):`,
-            error,
-        );
-
-        if (error.name === "AbortError") {
-            throw new Error("Request timeout - please try again");
-        }
-
-        if (
-            (error.name === "NetworkError" ||
-                error.name === "TypeError" ||
-                error.message?.includes("Failed to fetch")) &&
-            retryCount < maxRetries
-        ) {
-            console.log(
-                `Retrying ${endpoint} in ${retryDelay}ms (attempt ${retryCount + 1}/${maxRetries})`,
-            );
-
-            await new Promise((resolve) => setTimeout(resolve, retryDelay));
-            return unsecureApiCall(endpoint, options, retryCount + 1);
-        }
-
-        throw error;
     }
 }
 
@@ -2147,8 +2174,16 @@ function loadLocalData() {
                     );
                     chats.value = [];
                 }
-            } catch (parseError) {
-                console.error("Error parsing stored chats:", parseError);
+            } catch (parseError: any) {
+                reportError({
+                    action: `loadLocalData`,
+                    message:
+                        "Error parsing local stored chats: " +
+                        parseError.message,
+                    status: getErrorStatus(parseError),
+                    userId: parsedUserDetails.value?.userId || "unknown",
+                    severity: "low",
+                } as PlatformError);
                 chats.value = [];
                 localStorage.removeItem("chats");
             }
@@ -2175,12 +2210,15 @@ function loadLocalData() {
 
         updateExpandedArray();
         console.log("Successfully loaded local data");
-    } catch (error) {
-        console.error("Error loading local data:", error);
-        toast.error("Failed to load local data", {
-            duration: 4000,
-            description: "Some data may not be available",
-        });
+    } catch (error: any) {
+        reportError({
+            action: `loadLocalData`,
+            message: "Failed to load local data: " + error.message,
+            description: `Some data may not be available`,
+            status: getErrorStatus(error),
+            userId: parsedUserDetails.value?.userId || "unknown",
+            severity: "critical",
+        } as PlatformError);
     }
 }
 
@@ -2227,11 +2265,14 @@ async function manualSync() {
         await performSmartSync();
         console.log("Manual smart sync completed successfully");
     } catch (error: any) {
-        console.error("Manual sync failed:", error);
-        toast.error("Sync failed", {
-            duration: 4000,
-            description: "Please check your internet connection and try again",
-        });
+        reportError({
+            action: `manualSync`,
+            message: "Manual sync failed: " + error.message,
+            description: `Please check your internet connection and try again.`,
+            status: getErrorStatus(error),
+            userId: parsedUserDetails.value?.userId || "unknown",
+            severity: "critical",
+        } as PlatformError);
     }
 }
 
@@ -2272,8 +2313,14 @@ async function toggleSync() {
                     duration: 3000,
                     description: "Your data is now syncing across devices",
                 });
-            } catch (error) {
-                console.error("Failed to sync when enabling:", error);
+            } catch (error: any) {
+                reportError({
+                    action: `toggleSync`,
+                    message: "Failed to sync when enabling: " + error.message,
+                    status: getErrorStatus(error),
+                    userId: parsedUserDetails.value?.userId || "unknown",
+                    severity: "low",
+                } as PlatformError);
                 hideSyncIndicator();
 
                 // Rollback on failure
@@ -2285,11 +2332,15 @@ async function toggleSync() {
                     JSON.stringify(originalUserDetails),
                 );
 
-                toast.error("Failed to enable sync", {
-                    duration: 4000,
-                    description:
-                        "Could not upload your data. Please try again.",
-                });
+                reportError({
+                    action: `toggleSync`,
+                    message: "Failed to enable sync: " + error.message,
+                    description: `Could not upload your data. Please try again.`,
+                    status: error.status,
+                    userId: parsedUserDetails.value?.userId || "unknown",
+                    severity: "high",
+                } as PlatformError);
+
                 throw error;
             }
         } else {
@@ -2322,8 +2373,16 @@ async function toggleSync() {
                     description:
                         "Your data will only be saved locally on this device",
                 });
-            } catch (error) {
-                console.error("Failed to disable sync on server:", error);
+            } catch (error: any) {
+                reportError({
+                    action: `toggleSync`,
+                    message:
+                        "Failed to disable sync on server: " + error.message,
+                    description: `Changes have been reverted. Please try again.`,
+                    status: getErrorStatus(error),
+                    userId: parsedUserDetails.value?.userId || "unknown",
+                    severity: "medium",
+                } as PlatformError);
                 hideSyncIndicator();
 
                 // Even if server update fails, allow local disable
@@ -2339,9 +2398,7 @@ async function toggleSync() {
                 });
             }
         }
-    } catch (error) {
-        console.error("Failed to toggle sync:", error);
-
+    } catch (error: any) {
         // Rollback: Revert both in-memory AND localStorage
         parsedUserDetails.value.syncEnabled = originalSyncValue;
         syncEnabled.value = originalSyncValue;
@@ -2351,10 +2408,14 @@ async function toggleSync() {
             JSON.stringify(originalUserDetails),
         );
 
-        toast.error("Failed to update sync setting", {
-            duration: 4000,
-            description: "Changes have been reverted. Please try again.",
-        });
+        reportError({
+            action: `toggleSync`,
+            message: "Failed to update sync setting: " + error.message,
+            description: `Changes have been reverted. Please try again.`,
+            status: getErrorStatus(error),
+            userId: parsedUserDetails.value?.userId || "unknown",
+            severity: "high",
+        } as PlatformError);
         throw error;
     }
 }
@@ -2373,36 +2434,14 @@ function isLocalDataEmpty(): boolean {
         });
 
         return !hasMeaningfulData;
-    } catch (error) {
-        console.error("Error checking local data state:", error);
-        return false;
-    }
-}
-
-async function checkInternetConnection(): Promise<boolean> {
-    try {
-        connectionStatus.value = "checking";
-
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000);
-
-        const response = await fetch(`${API_BASE_URL}/health`, {
-            method: "GET",
-            signal: controller.signal,
-            cache: "no-cache",
-        });
-
-        clearTimeout(timeoutId);
-
-        const isConnected = response.status < 400;
-        isUserOnline.value = isConnected;
-        connectionStatus.value = isConnected ? "online" : "offline";
-
-        return isConnected;
-    } catch (error) {
-        console.warn("Internet connection check failed:", error);
-        isUserOnline.value = false;
-        connectionStatus.value = "offline";
+    } catch (error: any) {
+        reportError({
+            action: `isLoadDataEmpty`,
+            message: "Error checking local data state: " + error.message,
+            status: getErrorStatus(error),
+            userId: parsedUserDetails.value?.userId || "unknown",
+            severity: "low",
+        } as PlatformError);
         return false;
     }
 }
@@ -2441,7 +2480,7 @@ function cancelChatRequests(chatId: string) {
 }
 
 function cancelAllRequests() {
-    activeRequests.value.forEach((controller, requestId) => {
+    activeRequests.value.forEach((controller) => {
         controller.abort();
     });
     activeRequests.value.clear();
@@ -2467,7 +2506,7 @@ function setupConnectionListeners() {
 
             // Auto-sync when coming back online with retry logic
             if (
-                syncStatus.value.hasUnsyncedChanges &&
+                // syncStatus.value.hasUnsyncedChanges &&
                 parsedUserDetails.value?.syncEnabled
             ) {
                 console.log("Connection restored - syncing unsaved changes");
@@ -2603,8 +2642,14 @@ function checkRequestLimitBeforeSubmit(): boolean {
         }
 
         return true; // Allow submission
-    } catch (error) {
-        console.error("Error checking request limit:", error);
+    } catch (error: any) {
+        reportError({
+            action: `checkRequestLimitBeforeSubmit`,
+            message: `Error checking request limit for user ${parsedUserDetails.value.username} : ${error.message}`,
+            status: getErrorStatus(error),
+            userId: parsedUserDetails.value?.userId || "unknown",
+            severity: "low",
+        } as PlatformError);
         return true; // Allow on error (safety)
     }
 }
@@ -2631,8 +2676,14 @@ function incrementRequestCount() {
         if (currentCount < FREE_REQUEST_LIMIT) {
             parsedUserDetails.value.requestCount.count = currentCount + 1;
         }
-    } catch (error) {
-        console.error("Failed to increment request count:", error);
+    } catch (error: any) {
+        reportError({
+            action: `incrementRequestCount`,
+            message: "Failed to increment request count: " + error.message,
+            status: getErrorStatus(error),
+            userId: parsedUserDetails.value?.userId || "unknown",
+            severity: "low",
+        } as PlatformError);
     }
 }
 
@@ -2644,8 +2695,14 @@ function resetRequestCount() {
                 timestamp: Date.now(),
             };
         }
-    } catch (error) {
-        console.error("Failed to reset request count:", error);
+    } catch (error: any) {
+        reportError({
+            action: `resetRequestCount`,
+            message: "Failed to reset request count: " + error.message,
+            status: getErrorStatus(error),
+            userId: parsedUserDetails.value?.userId || "unknown",
+            severity: "low",
+        } as PlatformError);
     }
 }
 
@@ -2706,7 +2763,15 @@ watch(
                 console.log("User details synced successfully");
                 previousUserDetails = tempNewState;
             } catch (error: any) {
-                console.error("Sync after user details change failed:", error);
+                reportError({
+                    action: `parsedUserDetails-watcher`,
+                    message:
+                        "Sync after user details changed failed: " +
+                        error.message,
+                    status: getErrorStatus(error),
+                    userId: parsedUserDetails.value?.userId || "unknown",
+                    severity: "low",
+                } as PlatformError);
 
                 // On sync failure, we keep the local changes
                 previousUserDetails = tempNewState;
@@ -2719,9 +2784,14 @@ watch(
                             "Changes saved locally. Will retry automatically.",
                     });
                 } else {
-                    console.log(
-                        "Sync conflict - changes saved locally, will retry",
-                    );
+                    reportError({
+                        action: `parsedUserDetails-watcher`,
+                        message: "Sync conflict:" + error.message,
+                        description: `Sync conflict - changes saved locally, will retry later`,
+                        status: getErrorStatus(error),
+                        userId: parsedUserDetails.value?.userId || "unknown",
+                        severity: "medium",
+                    } as PlatformError);
                 }
             }
         }, 1500);
@@ -2793,7 +2863,16 @@ watch(
                 ) {
                     console.log("🔄 Triggering sync from chat changes");
                     performSmartSync().catch((error) => {
-                        console.error("Sync from chat changes failed:", error);
+                        reportError({
+                            action: `chats-watcher`,
+                            message:
+                                "Sync from chat changed failed: " +
+                                error.message,
+                            status: getErrorStatus(error),
+                            userId:
+                                parsedUserDetails.value?.userId || "unknown",
+                            severity: "low",
+                        } as PlatformError);
                     });
                 }
             }, 1500); // Increased to 1.5 seconds
@@ -2836,7 +2915,7 @@ function hasChatsChangedMeaningfully(
     return false;
 }
 
-// Add this watch function to sync currentChatId changes
+// watch function to sync currentChatId changes
 watch(
     () => currentChatId.value,
     (newChatId, oldChatId) => {
@@ -2864,10 +2943,16 @@ watch(
                         "🔄 Triggering sync from current chat ID change",
                     );
                     performSmartSync().catch((error) => {
-                        console.error(
-                            "Sync from current chat ID change failed:",
-                            error,
-                        );
+                        reportError({
+                            action: `currentChatId-watcher`,
+                            message:
+                                "Sync from current chat ID changed failed: " +
+                                error.message,
+                            status: getErrorStatus(error),
+                            userId:
+                                parsedUserDetails.value?.userId || "unknown",
+                            severity: "low",
+                        } as PlatformError);
                     });
                 }
             }, 500); // 0.5 second debounce
@@ -2907,7 +2992,7 @@ function toggleTheme(newTheme?: Theme) {
     applyTheme(parsedUserDetails?.value?.theme || "system");
 }
 
-// Update the watch for parsedUserDetails to handle theme changes:
+// watch for parsedUserDetails to handle theme changes:
 watch(
     () => parsedUserDetails.value?.theme,
     (newTheme) => {
@@ -2964,6 +3049,11 @@ onMounted(async () => {
         handleResize = () => {
             try {
                 screenWidth.value = window.innerWidth;
+                if (screenWidth.value <= 768) {
+                    toggleSidebar(true);
+                } else {
+                    toggleSidebar(false);
+                }
             } catch (error) {
                 console.error("Error handling resize:", error);
             }
@@ -3008,12 +3098,15 @@ onMounted(async () => {
                 } else {
                     loadLocalData();
                 }
-            } catch (syncError) {
-                console.error("Error during initial sync:", syncError);
-                toast.warning("Failed to sync initial data", {
-                    duration: 3000,
-                    description: "Loading local data instead",
-                });
+            } catch (syncError: any) {
+                reportError({
+                    action: `App-onmounted`,
+                    message: "Error during initial sync: " + syncError.message,
+                    description: `Loading local data instead`,
+                    status: syncError.status,
+                    userId: parsedUserDetails.value?.userId || "unknown",
+                    severity: "low",
+                } as PlatformError);
                 loadLocalData();
             }
         } else {
@@ -3051,12 +3144,15 @@ onMounted(async () => {
         });
 
         console.log("App mounted successfully");
-    } catch (error) {
-        console.error("Critical error during app mounting:", error);
-        toast.error("Failed to initialize application", {
-            duration: 5000,
-            description: "Some features may not work correctly",
-        });
+    } catch (error: any) {
+        reportError({
+            action: `App-onmounted`,
+            message: "Failed to initialize application: " + error.message,
+            description: `Some features may not work correctly`,
+            status: error.status,
+            userId: parsedUserDetails.value?.userId || "unknown",
+            severity: "critical",
+        } as PlatformError);
     }
 });
 
