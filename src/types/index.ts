@@ -1,61 +1,73 @@
-import type { Theme } from "vue-sonner/src/packages/types.js"
+import type { Theme } from "vue-sonner/src/packages/types.js";
 
 export interface Res {
-  prompt?: string
-  response: string
-  status?: number
-  requestId?: string 
+  prompt?: string;
+  response: string;
+  status?: number;
+  requestId?: string;
+}
+
+export interface PlatformError {
+  message: string;
+  description?: string;
+  id: string;
+  action: string;
+  createdAt: string;
+  status?: number | string;
+  userId?: string;
+  context?: Record<string, any>;
+  severity?: "low" | "medium" | "high" | "critical";
 }
 
 export type Chat = {
-  id: string,
-  title: string,
-  messages: Res[],
-  createdAt: string,
-  updatedAt: string
-}
+  id: string;
+  title: string;
+  messages: Res[];
+  createdAt: string;
+  updatedAt: string;
+};
 
 export interface LinkPreview {
-  url: string
-  title?: string
-  description?: string
-  images?: string[]
-  previewImage?: string
-  domain?: string
-  favicon?: string
-  links?: string[]
-  video?: string
-  videoType?: 'youtube' | 'vimeo' | 'direct' | 'twitter' | 'tiktok'
-  videoDuration?: string
-  videoThumbnail?: string
-  embedHtml?: string
-  loading?: boolean
-  error?: boolean
+  url: string;
+  title?: string;
+  description?: string;
+  images?: string[];
+  previewImage?: string;
+  domain?: string;
+  favicon?: string;
+  links?: string[];
+  video?: string;
+  videoType?: "youtube" | "vimeo" | "direct" | "twitter" | "tiktok";
+  videoDuration?: string;
+  videoThumbnail?: string;
+  embedHtml?: string;
+  loading?: boolean;
+  error?: boolean;
 }
 
-export type CurrentChat ={
-    id: string;
-    title: string;
-    messages: Res[];
-    createdAt: string;
-    updatedAt: string
-}
+export type CurrentChat = {
+  id: string;
+  title: string;
+  messages: Res[];
+  createdAt: string;
+  updatedAt: string;
+};
 
 export type ConfirmDialogOptions = {
-    visible?: boolean
-    title: string
-    message: string
-    type?: 'danger' | 'warning' | 'info'
-    confirmText?: string
-    cancelText?: string
-    onConfirm: () => void
-    onCancel?: () => void
-}
+  visible?: boolean;
+  title: string;
+  message: string;
+  type?: "danger" | "warning" | "info";
+  confirmText?: string;
+  cancelText?: string;
+  onConfirm: () => void;
+  onCancel?: () => void;
+};
 
-export type RequestCount ={
-	count: number,
-	timestamp: number
-}
+export type RequestCount = {
+  count: number;
+  timestamp: number;
+};
 
 export interface Transaction {
   id: string;
@@ -94,6 +106,6 @@ export interface UserDetails {
   requestCount?: RequestCount;
   emailVerified: boolean;
   emailSubscribed: boolean;
-  sessionId?: string,
+  sessionId?: string;
   userTransactions?: Transaction[];
 }

@@ -1,93 +1,123 @@
-import { ref } from "vue"
-import { toast } from "vue-sonner"
+import { ref } from "vue";
+import { toast } from "vue-sonner";
 
 function getBaseURL() {
   if (import.meta.env.DEV) {
-    return 'http://localhost:8081'
+    return "http://localhost:8081";
   } else {
     // return window.location.origin
-    return 'https://gemmie.villebiz.com'
+    return "https://gemmie.villebiz.com";
   }
 }
 
+// Helper function to safely extract error status
+export function getErrorStatus(error: any): string {
+  return (
+    error?.status ||
+    error?.code ||
+    error?.response?.status?.toString() ||
+    "unknown"
+  );
+}
+
+// Helper function to create error context
+export function createErrorContext(
+  baseContext: Record<string, any> = {},
+): Record<string, any> {
+  return {
+    ...baseContext,
+    timestamp: new Date().toISOString(),
+    userAgent: navigator.userAgent,
+  };
+}
+
 export function isPromptTooShort(prompt: string): boolean {
-  return prompt.trim().split(/\s+/).length < 30
+  return prompt.trim().split(/\s+/).length < 30;
 }
 
 // Generate unique chat ID
 export function generateChatId(): string {
-  return 'chat_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9)
+  return "chat_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9);
 }
 
 // Generate chat title from first message
 export function generateChatTitle(firstMessage: string): string {
-  const title = firstMessage.slice(0, 50).trim()
-  return title.length < firstMessage.length ? title + '...' : title
+  const title = firstMessage.slice(0, 50).trim();
+  return title.length < firstMessage.length ? title + "..." : title;
 }
 
 // Extract URLs from text using regex (removed extra pipe character)
 export function extractUrls(text: string): string[] {
-  const urlRegex = /https?:\/\/[^\s<>"{}|\\^`[\]]+/gi
-  return text.match(urlRegex) || []
+  const urlRegex = /https?:\/\/[^\s<>"{}|\\^`[\]]+/gi;
+  return text.match(urlRegex) || [];
 }
 
 // Helper function to show confirmation dialog
 export function copyCode(text: string, button?: HTMLElement) {
-  navigator.clipboard.writeText(text)
+  navigator.clipboard
+    .writeText(text)
     .then(() => {
       if (button) {
-        button.innerText = 'Copied!'
-        setTimeout(() => (button.innerText = 'Copy code'), 2000)
+        button.innerText = "Copied!";
+        setTimeout(() => (button.innerText = "Copy code"), 2000);
       }
     })
-    .catch(err => {
-      console.error('Failed to copy text: ', err)
-      toast.error('Failed to copy code to clipboard', {
+    .catch((err) => {
+      console.error("Failed to copy text: ", err);
+      toast.error("Failed to copy code to clipboard", {
         duration: 3000,
-        description: ''
-      })
-    })
+        description: "",
+      });
+    });
 }
 
 // Enhanced validateCredentials function
-export function validateCredentials(username: string, email: string, password: string, agreeToTerms: boolean): string | null {
+export function validateCredentials(
+  username: string,
+  email: string,
+  password: string,
+  agreeToTerms: boolean,
+): string | null {
   if (!username || username.trim().length < 2) {
-    return 'Username must be at least 2 characters long'
-  }
-  
-  if (username.trim().length > 50) {
-    return 'Username must be less than 50 characters'
-  }
-  
-  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    return 'Please enter a valid email address'
-  }
-  
-  if (!password || password.length < 8) {
-    return 'Password must be at least 8 characters long'
-  }
-  
-  if (password.length > 25) {
-    return 'Password must be less than 24 characters'
+    return "Username must be at least 2 characters long";
   }
 
-  if(!agreeToTerms){
-    return 'Must accept our terms of service and privacy policy'
+  if (username.trim().length > 50) {
+    return "Username must be less than 50 characters";
   }
-  
-  return null
+
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return "Please enter a valid email address";
+  }
+
+  if (!password || password.length < 8) {
+    return "Password must be at least 8 characters long";
+  }
+
+  if (password.length > 25) {
+    return "Password must be less than 24 characters";
+  }
+
+  if (!agreeToTerms) {
+    return "Must accept our terms of service and privacy policy";
+  }
+
+  return null;
 }
 
-export async function getTransaction(external_reference: string){
-  try{
-    const parseRes=await fetch(`${API_BASE_URL}/transactions/${external_reference}`,{
-      method:"GET"
-    })
-    const res=await parseRes.json()
-    return res
-  }catch(err:any){
-    console.error("Error fetching transaction:", err)
-    return {success:false,message:"Error fetching transaction"}
+export async function getTransaction(external_reference: string) {
+  try {
+    const parseRes = await fetch(
+      `${API_BASE_URL}/transactions/${external_reference}`,
+      {
+        method: "GET",
+      },
+    );
+    const res = await parseRes.json();
+    return res;
+  } catch (err: any) {
+    console.error("Error fetching transaction:", err);
+    return { success: false, message: "Error fetching transaction" };
   }
 }
 
@@ -136,29 +166,29 @@ export const plans = ref([
     ],
     popular: false,
   },
-])
+]);
 
-export const API_BASE_URL = getBaseURL() + '/api'
-export const SOCKET_URL = getBaseURL().replace(/^http/, 'ws') + '/ws'
-export const WRAPPER_URL = 'https://wrapper.villebiz.com/v1/genai'
-export const SPINDLE_URL = 'https://spindle.villebiz.com'
+export const API_BASE_URL = getBaseURL() + "/api";
+export const SOCKET_URL = getBaseURL().replace(/^http/, "ws") + "/ws";
+export const WRAPPER_URL = "https://wrapper.villebiz.com/v1/genai";
+export const SPINDLE_URL = "https://spindle.villebiz.com";
 
 // connection status checking
 export function checkConnectionStatus(): Promise<boolean> {
   return new Promise((resolve) => {
     // Try to fetch a simple endpoint or ping
-    fetch(`${API_BASE_URL}/health`, { 
-      method: 'GET', 
-      signal: AbortSignal.timeout(5000) 
+    fetch(`${API_BASE_URL}/health`, {
+      method: "GET",
+      signal: AbortSignal.timeout(5000),
     })
-    .then(response => resolve(response.ok))
-    .catch(() => resolve(false))
-  })
+      .then((response) => resolve(response.ok))
+      .catch(() => resolve(false));
+  });
 }
 
 // paste detection function
 export function detectLargePaste(text: string): boolean {
-  const wordCount = text.trim().split(/\s+/).length
-  const charCount = text.length
-  return wordCount > 100 || charCount > 800
+  const wordCount = text.trim().split(/\s+/).length;
+  const charCount = text.length;
+  return wordCount > 100 || charCount > 800;
 }
