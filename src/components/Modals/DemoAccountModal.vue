@@ -1,10 +1,8 @@
 <script setup lang="ts">
-import type { UserDetails } from "@/types";
 import type { Ref } from "vue";
 import { inject } from "vue";
 
-const { parsedUserDetails, isDarkMode } = inject("globalState") as {
-    parsedUserDetails: Ref<UserDetails>;
+const { isDarkMode } = inject("globalState") as {
     isDarkMode: Ref<boolean>;
 };
 

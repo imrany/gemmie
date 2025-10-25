@@ -31,7 +31,6 @@ import {
 import { nextTick } from "vue";
 import { detectAndProcessVideo } from "./utils/videoProcessing";
 import ConfirmDialog from "./components/ConfirmDialog.vue";
-import DemoBadge from "@/components/DemoBadge.vue";
 import type { Theme } from "vue-sonner/src/packages/types.js";
 import UpdateModal from "./components/Modals/UpdateModal.vue";
 import {
@@ -41,6 +40,7 @@ import {
 import { useApiCall } from "@/composables/useApiCall";
 import type { PlatformError } from "./types";
 import { useDebounceFn } from "@vueuse/core";
+import DemoToast from "./components/DemoToast.vue";
 
 const { reportError } = usePlatformError();
 const isUserOnline = ref(navigator.onLine);
@@ -3334,7 +3334,7 @@ provide("globalState", globalState);
             :confirmDialog="confirmDialog"
         />
         <UpdateModal />
-        <DemoBadge />
+        <DemoToast />
         <RouterView />
     </div>
 </template>

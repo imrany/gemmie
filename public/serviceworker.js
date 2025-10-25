@@ -1,4 +1,4 @@
-const CACHE_VERSION = "v0.9.7";
+const CACHE_VERSION = "v0.9.8";
 const staticCacheName = `site-static-${CACHE_VERSION}`;
 const dynamicCache = `site-dynamic-${CACHE_VERSION}`;
 
@@ -132,9 +132,9 @@ self.addEventListener("fetch", (evt) => {
           if (fetchRes.status === 200) {
             const responseClone = fetchRes.clone();
 
-            caches.open(dynamicCache).then((cache) => {
-              cache.put(evt.request.url, responseClone);
-              limitCacheSize(dynamicCache, 15);
+            caches.open(dynamicCache).then(async (cache) => {
+              await cache.put(evt.request, responseClone);
+              await limitCacheSize(dynamicCache, 15);
             });
           }
 
@@ -173,6 +173,7 @@ self.addEventListener("push", (event) => {
     body: data.body,
     icon: data.icon || "/favicon.svg",
     badge: data.badge || "/logo.svg",
+    vibrate: [200, 100, 200],
     silent: false,
     data: { link: data.url },
   };
@@ -216,8 +217,10 @@ self.addEventListener("notificationclose", (event) => {
 self.addEventListener("sync", (event) => {
   if (event.tag === "background-sync") {
     event.waitUntil(
-      // Perform background sync operations
-      console.log("Background sync triggered"),
+      Promise.resolve().then(() => {
+        console.log("Background sync triggered");
+        // Actual sync operations here
+      }),
     );
   }
 });
