@@ -3046,14 +3046,11 @@ onMounted(async () => {
         window.addEventListener("scroll", handleScroll, { passive: true });
 
         // Resize handler
-        screenWidth.value = window.innerWidth;
+        screenWidth.value = window.innerWidth; // update screenWidth when app is mounted
         const handleResize = () => {
-            try {
-                if (screenWidth.value <= 768 && isCollapsed.value === false) {
-                    toggleSidebar(true);
-                }
-            } catch (error) {
-                console.error("Error handling resize:", error);
+            screenWidth.value = window.innerWidth; //update screenWidth when user resize screen
+            if (screenWidth.value <= 768 && !isCollapsed.value) {
+                isCollapsed.value = true;
             }
         };
         debouncedResize = useDebounceFn(handleResize, 200);
