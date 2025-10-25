@@ -1497,15 +1497,6 @@ async function fetchLinkPreview(
     }
 }
 
-function toggleSidebar(value?: boolean) {
-    try {
-        isCollapsed.value = value || !isCollapsed.value;
-        localStorage.setItem("isCollapsed", String(isCollapsed.value));
-    } catch (error) {
-        console.error("Error toggling sidebar:", error);
-    }
-}
-
 function handleClickOutside() {
     try {
         activeChatMenu.value = null;
@@ -3004,6 +2995,25 @@ watch(
     { immediate: true },
 );
 
+function toggleSidebar(value?: boolean) {
+    isCollapsed.value = value || !isCollapsed.value;
+}
+
+// watch for isCollapsed
+watch(
+    () => isCollapsed.value,
+    (newVal, oldVal) => {
+        if (newVal !== oldVal) {
+            try {
+                localStorage.setItem("isCollapsed", String(newVal));
+            } catch (error) {
+                console.error("Error saving collapsed state:", error);
+            }
+        }
+    },
+    { immediate: false }, // Set to false to avoid unnecessary initial save, onMounted
+);
+
 let debouncedResize: any = null;
 let systemThemeListener: ((e: MediaQueryListEvent) => void) | null = null;
 let darkModeQuery: MediaQueryList | null = null;
@@ -3043,6 +3053,8 @@ onMounted(async () => {
         } catch (error) {
             console.error("Error loading collapsed state:", error);
         }
+
+        // Scroll listener
         window.addEventListener("scroll", handleScroll, { passive: true });
 
         // Resize handler
