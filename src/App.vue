@@ -31,6 +31,7 @@ import {
 import { nextTick } from "vue";
 import { detectAndProcessVideo } from "./utils/videoProcessing";
 import ConfirmDialog from "./components/ConfirmDialog.vue";
+import DemoBadge from "@/components/DemoBadge.vue";
 import type { Theme } from "vue-sonner/src/packages/types.js";
 import UpdateModal from "./components/Modals/UpdateModal.vue";
 import {
@@ -172,6 +173,12 @@ const parsedUserDetails = ref<UserDetails>(
 );
 
 const syncEnabled = ref(parsedUserDetails.value?.syncEnabled !== false);
+
+const isDemoMode = computed(() => {
+    const user = parsedUserDetails.value;
+    if (!user || typeof user !== "object") return false;
+    return user.email === "demo@example.com";
+});
 
 const isAuthenticated = computed(() => {
     const user = parsedUserDetails.value;
@@ -3112,7 +3119,7 @@ onMounted(async () => {
                     action: `App-onmounted`,
                     message: "Error during initial sync: " + syncError.message,
                     description: `Loading local data instead`,
-                    status: syncError.status,
+                    status: getErrorStatus(syncError),
                     userId: parsedUserDetails.value?.userId || "unknown",
                     severity: "low",
                 } as PlatformError);
@@ -3158,7 +3165,7 @@ onMounted(async () => {
             action: `App-onmounted`,
             message: "Failed to initialize application: " + error.message,
             description: `Some features may not work correctly`,
-            status: error.status,
+            status: getErrorStatus(error),
             userId: parsedUserDetails.value?.userId || "unknown",
             severity: "critical",
         } as PlatformError);
@@ -3209,6 +3216,7 @@ onUnmounted(() => {
 const globalState = {
     // Reactive references
     isOpenTextHighlightPopover,
+    isDemoMode,
     FREE_REQUEST_LIMIT,
     requestCount,
     userDetailsDebounceTimer,
@@ -3326,6 +3334,7 @@ provide("globalState", globalState);
             :confirmDialog="confirmDialog"
         />
         <UpdateModal />
+        <DemoBadge />
         <RouterView />
     </div>
 </template>

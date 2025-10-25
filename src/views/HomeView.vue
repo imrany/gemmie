@@ -81,6 +81,7 @@ const globalState = inject("globalState") as {
         username: string;
         email: string;
         password: string;
+        agreeToTerms: boolean;
     }) => any;
     chatDrafts: Ref<Map<string, string>>;
     userDetailsDebounceTimer: any;
@@ -1609,7 +1610,7 @@ async function handleAuthSuccess(response: any) {
     };
 
     // Load user data
-    await loadRequestCount();
+    loadRequestCount();
 
     // Handle redirect logic
     await handlePostAuthRedirect();
@@ -2825,6 +2826,7 @@ onUnmounted(() => {
                         clearAllChats,
                         toggleSidebar,
                         logout,
+                        handleAuthSuccess,
                         createNewChat,
                         switchToChat,
                         deleteChat,

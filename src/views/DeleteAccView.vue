@@ -1,9 +1,9 @@
 <script lang="ts" setup>
-import { inject, onMounted, ref, watch, type Ref } from "vue";
-import { toast } from "vue-sonner";
-import { API_BASE_URL } from "../utils/globals";
+import { inject, onMounted, ref, type Ref } from "vue";
+import { API_BASE_URL, getErrorStatus } from "../utils/globals";
 import { useRouter } from "vue-router";
-import type { UserDetails } from "@/types";
+import type { PlatformError, UserDetails } from "@/types";
+import { generateErrorId } from "@/composables/usePlatformError";
 
 const username = ref("");
 const email = ref("");
@@ -89,11 +89,20 @@ async function handleDeleteAccount() {
     } catch (err: any) {
         errorMsg.value =
             err.message || "Failed to delete account. Please try again.";
-        showConfirm.value = false; // Reset confirmation dialog
-        toast.error("Account Deletion Failed", {
-            duration: 4000,
+        reportError({
+            action: `handleDeleteAccount`,
+            message: "Account Deletion Failed: " + err.message,
             description: errorMsg.value,
-        });
+            context: {
+                email: parsedUserDetails.value?.email || "unknown email",
+            },
+            createdAt: new Date().toISOString(),
+            id: generateErrorId(),
+            status: getErrorStatus(err),
+            userId: parsedUserDetails.value?.userId || "unknown",
+            severity: "critical",
+        } as PlatformError);
+        showConfirm.value = false; // Reset confirmation dialog
     } finally {
         loading.value = false;
     }
