@@ -39,6 +39,7 @@ import {
 } from "./composables/usePlatformError";
 import { useApiCall } from "@/composables/useApiCall";
 import type { PlatformError } from "./types";
+import { useDebounceFn } from "@vueuse/core";
 
 const { reportError } = usePlatformError();
 const isUserOnline = ref(navigator.onLine);
@@ -3003,7 +3004,7 @@ watch(
     { immediate: true },
 );
 
-let handleResize: (() => void) | null = null;
+let debouncedResize: any = null;
 let systemThemeListener: ((e: MediaQueryListEvent) => void) | null = null;
 let darkModeQuery: MediaQueryList | null = null;
 
@@ -3042,23 +3043,22 @@ onMounted(async () => {
         } catch (error) {
             console.error("Error loading collapsed state:", error);
         }
-
         window.addEventListener("scroll", handleScroll, { passive: true });
+
         // Resize handler
         screenWidth.value = window.innerWidth;
-        handleResize = () => {
+        const handleResize = () => {
             try {
-                screenWidth.value = window.innerWidth;
-                if (screenWidth.value <= 768) {
+                if (screenWidth.value <= 768 && isCollapsed.value === false) {
                     toggleSidebar(true);
-                } else {
-                    toggleSidebar(false);
                 }
             } catch (error) {
                 console.error("Error handling resize:", error);
             }
         };
-        window.addEventListener("resize", handleResize);
+        debouncedResize = useDebounceFn(handleResize, 200);
+        window.addEventListener("resize", debouncedResize);
+        handleResize();
 
         // Authentication and data loading
         if (isAuthenticated.value) {
@@ -3158,8 +3158,8 @@ onMounted(async () => {
 
 onUnmounted(() => {
     // Clean up event listeners
-    if (handleResize) {
-        window.removeEventListener("resize", handleResize);
+    if (debouncedResize) {
+        window.removeEventListener("resize", debouncedResize);
     }
 
     if (darkModeQuery && systemThemeListener) {
