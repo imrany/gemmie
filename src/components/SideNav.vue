@@ -559,7 +559,9 @@ const navLinks = [
                     <div
                         class="w-[35px] h-[35px] flex justify-center items-center bg-gray-300 dark:bg-gray-700 rounded-full relative"
                     >
-                        <span class="text-sm max-md:text-lg dark:text-gray-200">
+                        <span
+                            class="text-sm font-medium text-gray-800 max-md:text-lg dark:text-gray-200"
+                        >
                             {{
                                 props.data.parsedUserDetails.username
                                     .toUpperCase()
@@ -578,13 +580,13 @@ const navLinks = [
                     </div>
                     <div v-if="showFullSidebar">
                         <p
-                            class="text-base max-md:text-lg font-light dark:text-gray-200"
+                            class="text-base font-medium max-md:text-lg dark:text-gray-200"
                         >
                             {{ props.data.parsedUserDetails.username }}
                         </p>
                         <p
                             v-if="props.data.parsedUserDetails.planName"
-                            class="text-xs text-gray-500 dark:text-gray-400"
+                            class="text-xs text-gray-500 font-normal dark:text-gray-400"
                         >
                             {{ props.data.parsedUserDetails.planName }}
                         </p>

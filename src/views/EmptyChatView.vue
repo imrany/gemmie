@@ -38,7 +38,12 @@ const { suggestionPrompts, selectSuggestion } = defineProps<{
         />
 
         <p class="text-gray-700 dark:text-gray-300 text-3xl font-semibold">
-            {{ parsedUserDetails?.username || "Gemmie" }}
+            Hey{{
+                parsedUserDetails?.username &&
+                parsedUserDetails?.username === "demo"
+                    ? ", tester"
+                    : ", " + parsedUserDetails?.username || ", there"
+            }}
         </p>
         <div class="text-center max-w-md space-y-2">
             <p class="text-gray-600 dark:text-gray-400 leading-relaxed">
