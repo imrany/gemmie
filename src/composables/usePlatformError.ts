@@ -86,7 +86,7 @@ export function usePlatformError() {
       if (reportTimeout) clearTimeout(reportTimeout);
       reportTimeout = setTimeout(() => {
         sendErrorBatch();
-      }, 30000); // Retry after 30 seconds
+      }, 30 * 1000); // Retry after 30 seconds
     } finally {
       isReporting = false;
     }
