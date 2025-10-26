@@ -1,78 +1,92 @@
 <script lang="ts" setup>
-import {  copyPasteContent, getHighlightLanguage } from '@/utils/previewPasteContent';
-import hljs from 'highlight.js';
+import {
+    copyPasteContent,
+    getHighlightLanguage,
+} from "@/utils/previewPasteContent";
+import hljs from "highlight.js";
 
 defineProps<{
-    data :{
-        showPasteModal: boolean,
-        currentPasteContent:{
-          content: string;
-          wordCount: number;
-          charCount: number;
-          type: 'text' | 'code' | 'json' | 'markdown' | 'xml' | 'html';
-          } | null,
-    }
-  closePasteModal: ()=>void,
-}>()
-
+    data: {
+        showPasteModal: boolean;
+        currentPasteContent: {
+            content: string;
+            wordCount: number;
+            charCount: number;
+            type: "text" | "code" | "json" | "markdown" | "xml" | "html";
+        } | null;
+    };
+    closePasteModal: () => void;
+}>();
 </script>
 <template>
-  <div
-    v-if="data.showPasteModal"
-    class="fixed inset-0 z-50 flex text-sm items-center justify-center p-4 bg-black bg-opacity-50 dark:bg-opacity-80"
-    @click.self="closePasteModal"
-  >
-    <!-- Desktop Layout -->
     <div
-      class="hidden w-full max-w-6xl h-[80vh] rounded-lg shadow-2xl overflow-hidden lg:flex bg-white dark:bg-gray-800"
+        v-if="data.showPasteModal"
+        class="fixed inset-0 z-50 flex text-sm items-center justify-center p-4 bg-black bg-opacity-50 dark:bg-opacity-80"
+        @click.self="closePasteModal"
     >
-      <!-- Content Area -->
-      <div class="flex-1 flex flex-col">
-        <!-- Header -->
+        <!-- Desktop Layout -->
         <div
-          class="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gray-100 dark:bg-gray-700 dark:border-gray-600"
+            class="hidden w-full max-w-6xl h-[80vh] rounded-lg shadow-2xl overflow-hidden lg:flex bg-white dark:bg-gray-800"
         >
-          <div class="flex items-center gap-3">
-            <i class="pi pi-clipboard text-gray-600 dark:text-gray-400"></i>
-            <div>
-              <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-100">
-                Pasted Content
-              </h3>
-              <p class="text-sm text-gray-600 dark:text-gray-300">
-                {{ data.currentPasteContent?.wordCount }} words •
-                {{ data.currentPasteContent?.charCount }} characters
-              </p>
-            </div>
-          </div>
-          <div class="flex items-center gap-2">
-            <span
-              class="capitalize rounded bg-blue-100 px-2 py-1 text-xs font-medium text-blue-800"
-            >
-              {{ data.currentPasteContent?.type }}
-            </span>
-            <button
-              @click="copyPasteContent(data.currentPasteContent?.content || '')"
-              class="rounded px-3 py-1 text-sm text-gray-700 transition-colors bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 dark:text-gray-200"
-            >
-              <i class="pi pi-copy mr-1"></i>Copy
-            </button>
-             <button
-              @click="closePasteModal"
-              class="flex items-center justify-center w-8 h-8 rounded-full transition-colors hover:bg-gray-200 dark:hover:bg-gray-600"
-            >
-              <i class="pi pi-times text-gray-500 dark:text-gray-400"></i>
-            </button>
-          </div>
-        </div>
+            <!-- Content Area -->
+            <div class="flex-1 flex flex-col">
+                <!-- Header -->
+                <div
+                    class="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gray-100 dark:bg-gray-700 dark:border-gray-600"
+                >
+                    <div class="flex items-center gap-3">
+                        <i
+                            class="pi pi-clipboard text-gray-600 dark:text-gray-400"
+                        ></i>
+                        <div>
+                            <h3
+                                class="text-lg font-semibold text-gray-800 dark:text-gray-100"
+                            >
+                                Pasted Content
+                            </h3>
+                            <p class="text-sm text-gray-600 dark:text-gray-300">
+                                {{ data.currentPasteContent?.wordCount }} words
+                                •
+                                {{ data.currentPasteContent?.charCount }}
+                                characters
+                            </p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span
+                            class="capitalize rounded bg-blue-100 px-2 py-1 text-xs font-medium text-blue-800"
+                        >
+                            {{ data.currentPasteContent?.type }}
+                        </span>
+                        <button
+                            @click="
+                                copyPasteContent(
+                                    data.currentPasteContent?.content || '',
+                                )
+                            "
+                            class="rounded px-3 py-1 text-sm text-gray-700 transition-colors bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 dark:text-gray-200"
+                        >
+                            <i class="pi pi-copy mr-1"></i>Copy
+                        </button>
+                        <button
+                            @click="closePasteModal"
+                            class="flex items-center justify-center w-8 h-8 rounded-full transition-colors hover:bg-gray-200 dark:hover:bg-gray-600"
+                        >
+                            <i
+                                class="pi pi-times text-gray-500 dark:text-gray-400"
+                            ></i>
+                        </button>
+                    </div>
+                </div>
 
-        <!-- Content -->
-        <div class="flex-1 overflow-auto">
-          <!-- Code/JSON/XML content with syntax highlighting -->
-          <div
-            v-if="data.currentPasteContent?.type !== 'text'"
-            class="h-full bg-gray-900 dark:bg-inherit"
-          >
-            <pre class="h-full">
+                <!-- Content -->
+                <div class="flex-1 overflow-auto">
+                    <!-- Code/JSON/XML content with syntax highlighting -->
+                    <div
+                        v-if="data.currentPasteContent?.type !== 'text'"
+                        class="h-full bg-gray-900 dark:bg-inherit"
+                    >
+                        <pre class="h-full">
               <code
                 :class="`hljs language-${getHighlightLanguage(
                   data.currentPasteContent?.type || 'text'
@@ -100,78 +114,88 @@ defineProps<{
                 "
               ></code>
             </pre>
-          </div>
+                    </div>
 
-          <!-- Plain text content -->
-          <div
-            v-else
-            class="h-full p-6 bg-white dark:bg-gray-800"
-          >
-            <div class="prose prose-sm max-w-none dark:prose-invert">
-              <pre
-                class="break-words whitespace-pre-wrap font-mono leading-relaxed text-sm text-gray-800 dark:text-gray-200"
-              >
-{{ data.currentPasteContent?.content }}</pre
-              >
+                    <!-- Plain text content -->
+                    <div v-else class="h-full p-6 bg-white dark:bg-gray-800">
+                        <div
+                            class="prose prose-sm max-w-none dark:prose-invert"
+                        >
+                            <pre
+                                class="break-words whitespace-pre-wrap font-mono leading-relaxed text-sm text-gray-800 dark:text-gray-200"
+                                >{{ data.currentPasteContent?.content }}</pre
+                            >
+                        </div>
+                    </div>
+                </div>
             </div>
-          </div>
+            <!-- Close Button (Desktop) -->
+            <button
+                @click="closePasteModal"
+                class="absolute top-2 right-2 w-8 h-8 rounded-full transition-colors hover:bg-gray-200 dark:hover:bg-gray-600 lg:flex items-center justify-center hidden"
+            >
+                <i class="pi pi-times text-gray-500 dark:text-gray-400"></i>
+            </button>
         </div>
-      </div>
-      <!-- Close Button (Desktop) -->
-      <button
-        @click="closePasteModal"
-        class="absolute top-2 right-2 w-8 h-8 rounded-full transition-colors hover:bg-gray-200 dark:hover:bg-gray-600 lg:flex items-center justify-center hidden"
-      >
-        <i class="pi pi-times text-gray-500 dark:text-gray-400"></i>
-      </button>
-    </div>
 
-    <!-- Mobile Layout -->
-    <div class="fixed inset-0 flex flex-col bg-white lg:hidden dark:bg-gray-800">
-      <!-- Mobile Header -->
-      <div
-        class="flex flex-shrink-0 items-center justify-between px-4 py-3 border-b border-gray-200 bg-gray-100 dark:bg-gray-700 dark:border-gray-600"
-      >
-        <div class="flex items-center gap-2">
-          <button
-            @click="closePasteModal"
-            class="flex items-center justify-center w-8 h-8 rounded-full transition-colors hover:bg-gray-200 dark:hover:bg-gray-600"
-          >
-            <i class="pi pi-arrow-left text-gray-600 dark:text-gray-400"></i>
-          </button>
-          <div>
-            <h3 class="font-semibold text-gray-800 dark:text-gray-100">
-              Pasted Content
-            </h3>
-            <p class="text-xs text-gray-600 dark:text-gray-300">
-              {{ data.currentPasteContent?.wordCount }} words •
-              {{ data.currentPasteContent?.charCount }} chars
-            </p>
-          </div>
-        </div>
-        <div class="flex items-center gap-2">
-          <span
-            class="capitalize rounded bg-blue-100 px-2 py-1 text-xs font-medium text-blue-800"
-          >
-            {{ data.currentPasteContent?.type }}
-          </span>
-          <button
-            @click="copyPasteContent(data.currentPasteContent?.content || '')"
-            class="flex items-center justify-center w-8 h-8 rounded-full transition-colors hover:bg-gray-200 dark:hover:bg-gray-600"
-          >
-            <i class="pi pi-copy text-gray-600 dark:text-gray-400"></i>
-          </button>
-        </div>
-      </div>
-
-      <!-- Mobile Content -->
-      <div class="flex-1 overflow-auto">
-        <!-- Code/JSON/XML content with syntax highlighting -->
+        <!-- Mobile Layout -->
         <div
-          v-if="data.currentPasteContent?.type !== 'text'"
-          class="min-h-full bg-gray-900 dark:bg-inherit"
+            class="fixed inset-0 flex flex-col bg-white lg:hidden dark:bg-gray-800"
         >
-          <pre class="text-xs">
+            <!-- Mobile Header -->
+            <div
+                class="flex flex-shrink-0 items-center justify-between px-4 py-3 border-b border-gray-200 bg-gray-100 dark:bg-gray-700 dark:border-gray-600"
+            >
+                <div class="flex items-center gap-2">
+                    <button
+                        @click="closePasteModal"
+                        class="flex items-center justify-center w-8 h-8 rounded-full transition-colors hover:bg-gray-200 dark:hover:bg-gray-600"
+                    >
+                        <i
+                            class="pi pi-arrow-left text-gray-600 dark:text-gray-400"
+                        ></i>
+                    </button>
+                    <div>
+                        <h3
+                            class="font-semibold text-gray-800 dark:text-gray-100"
+                        >
+                            Pasted Content
+                        </h3>
+                        <p class="text-xs text-gray-600 dark:text-gray-300">
+                            {{ data.currentPasteContent?.wordCount }} words •
+                            {{ data.currentPasteContent?.charCount }} chars
+                        </p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span
+                        class="capitalize rounded bg-blue-100 px-2 py-1 text-xs font-medium text-blue-800"
+                    >
+                        {{ data.currentPasteContent?.type }}
+                    </span>
+                    <button
+                        @click="
+                            copyPasteContent(
+                                data.currentPasteContent?.content || '',
+                            )
+                        "
+                        class="flex items-center justify-center w-8 h-8 rounded-full transition-colors hover:bg-gray-200 dark:hover:bg-gray-600"
+                    >
+                        <i
+                            class="pi pi-copy text-gray-600 dark:text-gray-400"
+                        ></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Mobile Content -->
+            <div class="flex-1 overflow-auto">
+                <!-- Code/JSON/XML content with syntax highlighting -->
+                <div
+                    v-if="data.currentPasteContent?.type !== 'text'"
+                    class="min-h-full bg-gray-900 dark:bg-inherit"
+                >
+                    <pre class="text-xs">
             <code
               :class="`hljs language-${getHighlightLanguage(
                 data.currentPasteContent?.type || 'text'
@@ -199,21 +223,16 @@ defineProps<{
               "
             ></code>
           </pre>
-        </div>
+                </div>
 
-        <!-- Plain text content -->
-        <div
-          v-else
-          class="min-h-full bg-white dark:bg-gray-800"
-        >
-          <pre
-            class="break-words whitespace-pre-wrap font-mono leading-relaxed text-sm text-gray-800 dark:text-gray-200"
-          >
-{{ data.currentPasteContent?.content }}</pre
-          >
+                <!-- Plain text content -->
+                <div v-else class="min-h-full bg-white dark:bg-gray-800">
+                    <pre
+                        class="break-words whitespace-pre-wrap font-mono leading-relaxed text-sm text-gray-800 dark:text-gray-200"
+                        >{{ data.currentPasteContent?.content }}</pre
+                    >
+                </div>
+            </div>
         </div>
-      </div>
-      
     </div>
-  </div>
 </template>
