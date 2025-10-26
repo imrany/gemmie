@@ -5,7 +5,7 @@ import SideNav from "@/components/SideNav.vue";
 import type { Ref } from "vue";
 import type { Chat, UserDetails } from "@/types";
 import {
-    ArrowLeft,
+    ChevronLeft,
     ChevronRight,
     Clock,
     Inbox,
@@ -141,8 +141,8 @@ const clearSearch = () => {
                             class="md:hidden flex items-center justify-center w-10 h-10 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors flex-shrink-0"
                             aria-label="Go back"
                         >
-                            <ArrowLeft
-                                class="w-4 h-4 text-gray-700 dark:text-gray-300"
+                            <ChevronLeft
+                                class="w-5 h-5 text-gray-700 dark:text-gray-300"
                             />
                         </button>
 
@@ -371,7 +371,7 @@ const clearSearch = () => {
                                         <div
                                             class="ml-3 sm:ml-4 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
                                         >
-                                            <ChevronRight class="w-6 h-6" />
+                                            <ChevronRight class="w-5 h-5" />
                                         </div>
                                     </div>
                                 </div>
