@@ -2830,9 +2830,54 @@ onUnmounted(() => {
                             <!-- User Bubble -->
                             <div class="flex w-full chat-message">
                                 <div class="flex flex-col w-full">
+                                    <div class="flex flex-col gap-">
+                                        <div
+                                            v-if="
+                                                item &&
+                                                item.prompt &&
+                                                (item?.prompt
+                                                    ?.trim()
+                                                    .split(/\s+/).length >
+                                                    100 ||
+                                                    item?.prompt?.length > 800)
+                                            "
+                                            class="mb-3"
+                                        >
+                                            <div class="flex justify-start">
+                                                <PastePreview
+                                                    :content="
+                                                        item?.prompt
+                                                            ?.trim()
+                                                            ?.split(
+                                                                '#pastedText#',
+                                                            )[1] || ''
+                                                    "
+                                                    :char-count="
+                                                        item?.prompt
+                                                            ?.trim()
+                                                            ?.split(
+                                                                '#pastedText#',
+                                                            )[1]?.length || 0
+                                                    "
+                                                    :word-count="
+                                                        item?.prompt
+                                                            ?.trim()
+                                                            .split(
+                                                                '#pastedText#',
+                                                            )[1]
+                                                            ?.split(/\s+/)
+                                                            ?.length || 0
+                                                    "
+                                                    :is-clickable="true"
+                                                    class="w-[70%] sm:w-[50%] lg:w-[40%] xl:w-[30%]"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+
                                     <!-- User message bubble -->
                                     <div
-                                        class="flex items-start gap-2 font-medium bg-gray-100 dark:bg-gray-800 text-black dark:text-gray-100 px-4 rounded-2xl prose prose-sm dark:prose-invert chat-bubble w-fit max-w-full"
+                                        class="flex mt-2 items-start gap-2 font-medium bg-gray-100 dark:bg-gray-800 text-black dark:text-gray-100 px-4 rounded-2xl prose prose-sm dark:prose-invert chat-bubble w-fit max-w-full"
                                     >
                                         <!-- Avatar container -->
                                         <div class="flex-shrink-0 py-3">
@@ -2863,50 +2908,6 @@ onUnmounted(() => {
                                                         : item.prompt || ''
                                                 "
                                             />
-                                        </div>
-                                    </div>
-
-                                    <div class="flex flex-col gap-3 mt-2">
-                                        <div
-                                            v-if="
-                                                item &&
-                                                item.prompt &&
-                                                (item?.prompt
-                                                    ?.trim()
-                                                    .split(/\s+/).length >
-                                                    100 ||
-                                                    item?.prompt?.length > 800)
-                                            "
-                                            class="mb-3"
-                                        >
-                                            <div class="flex justify-center">
-                                                <PastePreview
-                                                    :content="
-                                                        item?.prompt
-                                                            ?.trim()
-                                                            ?.split(
-                                                                '#pastedText#',
-                                                            )[1] || ''
-                                                    "
-                                                    :char-count="
-                                                        item?.prompt
-                                                            ?.trim()
-                                                            ?.split(
-                                                                '#pastedText#',
-                                                            )[1]?.length || 0
-                                                    "
-                                                    :word-count="
-                                                        item?.prompt
-                                                            ?.trim()
-                                                            .split(
-                                                                '#pastedText#',
-                                                            )[1]
-                                                            ?.split(/\s+/)
-                                                            ?.length || 0
-                                                    "
-                                                    class="w-[70%] sm:w-[50%] lg:w-[40%] xl:w-[30%]"
-                                                />
-                                            </div>
                                         </div>
                                     </div>
                                 </div>

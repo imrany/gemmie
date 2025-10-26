@@ -1027,21 +1027,19 @@ onUnmounted(() => {
                                                 class="text-sm text-gray-700 dark:text-gray-300 leading-relaxed cursor-pointer"
                                             >
                                                 I agree to the
-                                                <a
-                                                    href="/terms"
-                                                    target="_blank"
+                                                <router-link
+                                                    to="/legal/terms"
                                                     class="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline font-medium"
                                                 >
                                                     Terms of Service
-                                                </a>
+                                                </router-link>
                                                 and
-                                                <a
-                                                    href="/privacy"
-                                                    target="_blank"
+                                                <router-link
+                                                    to="/legal/privacy"
                                                     class="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline font-medium"
                                                 >
                                                     Privacy Policy
-                                                </a>
+                                                </router-link>
                                                 <span class="text-red-500"
                                                     >*</span
                                                 >
@@ -1128,14 +1126,23 @@ onUnmounted(() => {
 
                     <!-- Footer note -->
                     <div class="text-center mt-6">
-                        <p
-                            class="text-xs text-gray-500 dark:text-gray-400 leading-relaxed"
+                        <div
+                            class="flex text-xs flex-wrap gap-4 justify-center leading-relaxed text-gray-600 dark:text-gray-400"
                         >
-                            Your data is securely encrypted and synced across
-                            all your devices.
-                            <br />Create an account to access your chats
-                            anywhere.
-                        </p>
+                            <router-link
+                                to="/legal/privacy"
+                                class="hover:text-blue-600 dark:hover:text-blue-400"
+                            >
+                                Privacy Policy
+                            </router-link>
+                            <router-link
+                                to="/legal/terms"
+                                class="hover:text-blue-600 dark:hover:text-blue-400"
+                            >
+                                Terms of Service
+                            </router-link>
+                            <span>© 2025 Gemmie. All rights reserved.</span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1766,21 +1773,19 @@ onUnmounted(() => {
                                                 class="text-xs text-gray-700 dark:text-gray-300 leading-relaxed cursor-pointer"
                                             >
                                                 I agree to the
-                                                <a
-                                                    href="/terms"
-                                                    target="_blank"
+                                                <router-link
+                                                    to="/legal/terms"
                                                     class="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline font-medium"
                                                 >
                                                     Terms of Service
-                                                </a>
+                                                </router-link>
                                                 and
-                                                <a
-                                                    href="/privacy"
-                                                    target="_blank"
+                                                <router-link
+                                                    to="/legal/privacy"
                                                     class="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline font-medium"
                                                 >
                                                     Privacy Policy
-                                                </a>
+                                                </router-link>
                                                 <span class="text-red-500"
                                                     >*</span
                                                 >
@@ -1867,12 +1872,23 @@ onUnmounted(() => {
 
                     <!-- Mobile Footer note -->
                     <div class="text-center mt-4">
-                        <p
-                            class="text-xs text-gray-500 dark:text-gray-400 leading-relaxed"
+                        <div
+                            class="flex text-xs flex-wrap gap-4 justify-center leading-relaxed text-gray-600 dark:text-gray-400"
                         >
-                            Your data is securely encrypted and synced across
-                            all your devices.
-                        </p>
+                            <router-link
+                                to="/legal/privacy"
+                                class="hover:text-blue-600 dark:hover:text-blue-400"
+                            >
+                                Privacy Policy
+                            </router-link>
+                            <router-link
+                                to="/legal/terms"
+                                class="hover:text-blue-600 dark:hover:text-blue-400"
+                            >
+                                Terms of Service
+                            </router-link>
+                            <span>© 2025 Gemmie. All rights reserved.</span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1896,7 +1912,7 @@ onUnmounted(() => {
         <!-- Footer disclaimer -->
         <div v-if="isAuthenticated" class="absolute bottom-4 text-center">
             <p class="text-xs text-gray-500 dark:text-gray-400">
-                Gemmie can make mistakes. Check important info.
+                © 2025 Gemmie. All rights reserved.
             </p>
         </div>
     </div>
