@@ -361,19 +361,45 @@ function showConfirmDialog(options: ConfirmDialogOptions) {
         onConfirm: () => {
             try {
                 options.onConfirm();
-            } catch (error) {
-                console.error("Error in confirm callback:", error);
-                toast.error("An error occurred while processing your request");
+            } catch (error: any) {
+                reportError({
+                    action: `showConfirmDialog`,
+                    message: "Error in confirm callback :" + error.message,
+                    description: `An error occurred while processing your request`,
+                    status: getErrorStatus(error),
+                    context: createErrorContext({
+                        errorName: error.name,
+                        errorStack: error.stack,
+                    }),
+                    userId: parsedUserDetails.value?.userId || "unknown",
+                    severity: "high",
+                } as PlatformError);
+            } finally {
+                nextTick(() => {
+                    confirmDialog.value.visible = false;
+                });
             }
-            confirmDialog.value.visible = false;
         },
         onCancel: () => {
             try {
                 options.onCancel?.();
-            } catch (error) {
-                console.error("Error in cancel callback:", error);
+            } catch (error: any) {
+                reportError({
+                    action: `showConfirmDialog`,
+                    message: "Error in cancel callback :" + error.message,
+                    status: getErrorStatus(error),
+                    context: createErrorContext({
+                        errorName: error.name,
+                        errorStack: error.stack,
+                    }),
+                    userId: parsedUserDetails.value?.userId || "unknown",
+                    severity: "low",
+                } as PlatformError);
+            } finally {
+                nextTick(() => {
+                    confirmDialog.value.visible = false;
+                });
             }
-            confirmDialog.value.visible = false;
         },
     };
 }
@@ -1911,8 +1937,14 @@ async function performSmartSync() {
             chats.value.length === 0 ||
             (chats.value.length === 1 && chats.value[0].messages.length === 0);
 
-        if (isLocalDataEmpty) {
-            console.log("📥 Local data empty - syncing FROM server");
+        // Check if there are pending local changes (like theme changes)
+        const hasPendingLocalChanges = syncStatus.value.hasUnsyncedChanges;
+        if (isLocalDataEmpty && !hasPendingLocalChanges) {
+            // Only sync FROM server if there are no pending local changes
+            console.log(
+                "📥 Local data empty and no pending changes - syncing FROM server",
+            );
+
             try {
                 syncStatus.value.syncing = true;
                 await syncFromServer();
@@ -1927,8 +1959,11 @@ async function performSmartSync() {
                     severity: "low",
                 } as PlatformError);
             }
-        } else if (syncStatus.value.hasUnsyncedChanges) {
-            console.log("📤 Has unsynced changes - syncing TO server");
+        } else if (hasPendingLocalChanges) {
+            // Always sync TO server first if there are local changes (including theme)
+            console.log(
+                "📤 Has pending local changes (including user details) - syncing TO server",
+            );
 
             const hadUnsyncedChangesBeforeSync =
                 syncStatus.value.hasUnsyncedChanges;
@@ -1969,7 +2004,7 @@ async function performSmartSync() {
                 }
             }
         } else {
-            console.log("🔍 No unsynced changes - checking for server updates");
+            console.log("🔍 No pending changes - checking for server updates");
             try {
                 syncStatus.value.syncing = true;
                 await syncFromServer();
@@ -2824,7 +2859,8 @@ function hasUserDetailsChangedMeaningfully(
             return newValue !== undefined && newValue !== null;
         }
 
-        return JSON.stringify(newValue) !== JSON.stringify(oldValue);
+        const changed = JSON.stringify(newValue) !== JSON.stringify(oldValue);
+        return changed;
     });
 }
 
@@ -3216,6 +3252,7 @@ onUnmounted(() => {
 const globalState = {
     // Reactive references
     isOpenTextHighlightPopover,
+    syncEnabled,
     isDemoMode,
     FREE_REQUEST_LIMIT,
     requestCount,

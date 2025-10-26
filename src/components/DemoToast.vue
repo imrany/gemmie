@@ -15,14 +15,14 @@ const DemoModeToast = () =>
     h(
         "div",
         {
-            class: "flex items-center gap-3 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 border-2 border-amber-300 dark:border-amber-700 rounded-lg shadow-lg px-4 py-3 min-w-[320px]",
+            class: "flex items-center gap-3 bg-amber-100 dark:bg-amber-900 border-2 border-amber-300 dark:border-amber-700 rounded-lg shadow-lg px-4 py-3 min-w-[320px]",
         },
         [
             // Icon container
             h(
                 "div",
                 {
-                    class: "flex-shrink-0 flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br from-amber-400 to-orange-500 rounded-full shadow-md",
+                    class: "flex-shrink-0 flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 bg-amber-400 rounded-full shadow-md",
                 },
                 [
                     h(
@@ -52,7 +52,7 @@ const DemoModeToast = () =>
                 h(
                     "p",
                     {
-                        class: "text-[10px] sm:text-xs text-amber-700 dark:text-amber-300 mt-0.5 line-clamp-2",
+                        class: "text-[10px] sm:text-xs text-amber-900 dark:text-amber-100 mt-0.5 line-clamp-2",
                     },
                     "Data will not be saved permanently",
                 ),
@@ -61,7 +61,7 @@ const DemoModeToast = () =>
             h(
                 "button",
                 {
-                    class: "flex-shrink-0 flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 text-amber-600 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-200 hover:bg-amber-200 dark:hover:bg-amber-800 rounded-full transition-colors",
+                    class: "flex-shrink-0 flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 text-amber-800 dark:text-amber-100 hover:text-amber-800 dark:hover:text-amber-200 hover:bg-amber-200 dark:hover:bg-amber-800 rounded-full transition-colors",
                     onClick: (e: Event) => {
                         e.stopPropagation();
                         toast.dismiss(currentToastId.value);
