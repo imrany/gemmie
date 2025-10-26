@@ -43,7 +43,7 @@ defineProps<{
                             <h3
                                 class="text-lg font-semibold text-gray-800 dark:text-gray-100"
                             >
-                                Pasted Content
+                                Pasted
                             </h3>
                             <p class="text-sm text-gray-600 dark:text-gray-300">
                                 {{ data.currentPasteContent?.wordCount }} words
@@ -67,7 +67,8 @@ defineProps<{
                             "
                             class="rounded px-3 py-1 text-sm text-gray-700 transition-colors bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 dark:text-gray-200"
                         >
-                            <Copy class="w-4 h-4 mr-1" />Copy
+                            <Copy class="w-4 h-4 mr-1" />
+                            <p>Copy</p>
                         </button>
                         <button
                             @click="closePasteModal"

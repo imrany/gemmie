@@ -27,7 +27,7 @@ const clickableClass = isClickable
 <template>
     <div
         :class="[
-            'paste-preview border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden my-2 bg-gray-100 dark:bg-gray-700 hover:shadow-md transition-all duration-300 w-full',
+            'paste-preview border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden my-2 bg-gray-100 dark:bg-gray-900 hover:shadow-md transition-all duration-300 w-full',
             clickableClass,
         ]"
         :id="componentId"
@@ -40,7 +40,7 @@ const clickableClass = isClickable
                 class="bg-gray-600 dark:bg-gray-800 px-3 py-1 text-white dark:text-gray-200 text-xs font-medium flex items-center gap-2 transition-colors duration-200"
             >
                 <i class="pi pi-clipboard text-gray-300 dark:text-gray-400"></i>
-                <span>PASTED CONTENT</span>
+                <span>PASTED</span>
                 <span
                     class="ml-auto text-gray-200 dark:text-gray-400 hidden sm:inline"
                     >{{ wordCount }} words • {{ charCount }} chars</span

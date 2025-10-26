@@ -2867,35 +2867,6 @@ onUnmounted(() => {
                                     </div>
 
                                     <div class="flex flex-col gap-3 mt-2">
-                                        <!-- Link Previews for User Messages -->
-                                        <div
-                                            v-if="
-                                                extractUrls(item.prompt || '')
-                                                    .length > 0
-                                            "
-                                            class="w-full"
-                                        >
-                                            <div
-                                                v-for="url in extractUrls(
-                                                    item.prompt || '',
-                                                ).slice(0, 3)"
-                                                :key="`user-${i}-${url}`"
-                                            >
-                                                <LinkPreviewComponent
-                                                    v-if="
-                                                        linkPreviewCache.get(
-                                                            url,
-                                                        )
-                                                    "
-                                                    :preview="
-                                                        linkPreviewCache.get(
-                                                            url,
-                                                        )!
-                                                    "
-                                                />
-                                            </div>
-                                        </div>
-
                                         <div
                                             v-if="
                                                 item &&
@@ -2910,7 +2881,6 @@ onUnmounted(() => {
                                         >
                                             <div class="flex justify-center">
                                                 <PastePreview
-                                                    :is-clickable="true"
                                                     :content="
                                                         item?.prompt
                                                             ?.trim()
@@ -2934,7 +2904,7 @@ onUnmounted(() => {
                                                             ?.split(/\s+/)
                                                             ?.length || 0
                                                     "
-                                                    class="ml-auto sm:w-[80%] md:w-[70%] lg:w-[60%] xl:w-[50%]"
+                                                    class="w-[70%] sm:w-[50%] lg:w-[40%] xl:w-[30%]"
                                                 />
                                             </div>
                                         </div>
