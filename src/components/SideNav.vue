@@ -17,6 +17,15 @@ import {
     MessageCircle,
     FilePenLine,
     RotateCw,
+    Ellipsis,
+    Clock,
+    ChevronDown,
+    ChevronUp,
+    AlignLeft,
+    AlignJustify,
+    X,
+    CheckCircle,
+    CloudUpload,
 } from "lucide-vue-next";
 import {
     Tooltip,
@@ -121,17 +130,19 @@ const planColor = computed(() => {
 });
 
 const sidebarIconClass = computed(() => {
-    const classes = ["text-gray-500 dark:text-gray-400"];
+    let icon: FunctionalComponent<any>;
 
     if (screenWidth.value > 720) {
-        classes.push(
-            props.data.isCollapsed ? "pi pi-align-justify" : "pi pi-align-left",
-        );
+        if (props.data.isCollapsed) {
+            icon = AlignJustify;
+        } else {
+            icon = AlignLeft;
+        }
     } else {
-        classes.push("pi pi-times text-lg font-bold");
+        icon = X;
     }
 
-    return classes;
+    return icon;
 });
 
 // Constants
@@ -276,7 +287,7 @@ const navLinks: {
                             v-if="syncStatus.syncing"
                             class="flex items-center gap-2 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 px-3 py-1.5 rounded-full text-xs border border-blue-200 dark:border-blue-800 shadow-sm animate-pulse"
                         >
-                            <i class="pi pi-spin pi-spinner"></i>
+                            <RefreshCw class="w-4 h-4 animate-spin" />
                             <span>Syncing...</span>
                         </div>
 
@@ -285,7 +296,7 @@ const navLinks: {
                             class="flex items-center gap-2 bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-400 px-3 py-1.5 rounded-full text-xs border border-orange-200 dark:border-orange-800 shadow-sm cursor-pointer hover:bg-orange-100 dark:hover:bg-orange-900/30 transition"
                             @click="props.functions.manualSync"
                         >
-                            <i class="pi pi-cloud-upload"></i>
+                            <CloudUpload class="w-4 h-4" />
                             <span>Sync pending</span>
                         </div>
 
@@ -293,7 +304,7 @@ const navLinks: {
                             v-else-if="syncStatus.lastSync"
                             class="flex items-center gap-2 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 px-3 py-1.5 rounded-full text-xs border border-green-200 dark:border-green-800 shadow-sm"
                         >
-                            <i class="pi pi-check-circle"></i>
+                            <CheckCircle class="w-4 h-4" />
                             <span>Synced</span>
                         </div>
                     </div>
@@ -305,7 +316,10 @@ const navLinks: {
                                     @click="handleSidebarToggle"
                                     class="w-8 h-8 flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full cursor-pointer transition-colors"
                                 >
-                                    <i :class="sidebarIconClass"></i>
+                                    <component
+                                        :is="sidebarIconClass"
+                                        class="text-gray-500 dark:text-gray-400 w-4 h-4"
+                                    />
                                 </button>
                             </TooltipTrigger>
                             <TooltipContent
@@ -510,9 +524,7 @@ const navLinks: {
                                     'rounded-md text-center p-1 w-6 h-6 flex items-center justify-center',
                                 ]"
                             >
-                                <i
-                                    class="pi pi-ellipsis-h dark:text-gray-300 text-xs"
-                                ></i>
+                                <Ellipsis class="w-4 h-4 dark:text-gray-300" />
                             </div>
                         </div>
 
@@ -554,7 +566,7 @@ const navLinks: {
             >
                 <div class="flex items-center justify-between">
                     <span class="font-normal">{{ planStatus.timeLeft }}</span>
-                    <i class="pi pi-clock"></i>
+                    <Clock class="w-4 h-4" />
                 </div>
             </div>
 
@@ -607,15 +619,13 @@ const navLinks: {
                         </p>
                     </div>
                 </div>
-                <i
-                    v-if="showFullSidebar"
-                    :class="[
-                        showProfileMenu
-                            ? 'pi pi-chevron-up'
-                            : 'pi pi-chevron-down',
-                        'text-xs max-md:text-base dark:text-gray-300',
-                    ]"
-                ></i>
+                <div v-if="showFullSidebar">
+                    <ChevronUp
+                        v-if="showProfileMenu"
+                        class="w-4 h-4 dark:text-gray-300"
+                    />
+                    <ChevronDown v-else class="w-4 h-4 dark:text-gray-300" />
+                </div>
             </div>
 
             <!-- Profile Dropdown -->
