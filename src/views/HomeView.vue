@@ -76,6 +76,8 @@ import {
     BookText,
     HeartPulse,
     Globe,
+    LoaderCircle,
+    CheckCircle,
 } from "lucide-vue-next";
 import {
     Pagination,
@@ -89,6 +91,7 @@ import MarkdownRenderer from "@/components/ui/markdown/MarkdownRenderer.vue";
 import LinkPreviewComponent from "@/components/LinkPreview.vue";
 import EmptyChatView from "./EmptyChatView.vue";
 import type { FunctionalComponent } from "vue";
+import PastePreview from "@/components/PastePreview.vue";
 
 type ModeOption = {
     mode: "light-response" | "web-search" | "deep-search";
@@ -1882,66 +1885,6 @@ function handleModalKeydown(e: KeyboardEvent) {
     }
 }
 
-function PastePreviewComponent(
-    content: string,
-    wordCount: number,
-    charCount: number,
-    isClickable: boolean = false,
-) {
-    const preview =
-        content.length > 200 ? content.substring(0, 200) + "..." : content;
-
-    // Proper HTML escaping
-    const escapedPreview = preview
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#39;")
-        .replace(/\n/g, "<br>")
-        .replace(/\t/g, "&nbsp;&nbsp;&nbsp;&nbsp;");
-
-    // Generate unique ID for this component
-    const componentId = `paste-${Math.random().toString(36).substr(2, 9)}`;
-
-    // For clickable elements, add the data attributes and class to the main container
-    const clickableAttributes = isClickable
-        ? `data-paste-content="${encodeURIComponent(content)}" data-word-count="${wordCount}" data-char-count="${charCount}"`
-        : "";
-
-    const clickableClass = isClickable
-        ? "paste-preview-clickable cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors duration-200"
-        : "";
-
-    return `
-    <div class="paste-preview border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden my-2 bg-gray-100 dark:bg-gray-700 hover:shadow-md transition-all duration-300 w-full ${clickableClass}"
-         id="${componentId}" ${clickableAttributes}>
-      <div class="w-full">
-        <div class="bg-gray-600 dark:bg-gray-800 px-3 py-1 text-white dark:text-gray-200 text-xs font-medium flex items-center gap-2 transition-colors duration-200">
-          <i class="pi pi-clipboard text-gray-300 dark:text-gray-400"></i>
-          <span>PASTED CONTENT</span>
-          <span class="ml-auto text-gray-200 dark:text-gray-400 hidden sm:inline">${wordCount} words • ${charCount} chars</span>
-          <span class="ml-auto text-gray-200 dark:text-gray-400 sm:hidden">${charCount} chars</span>
-          ${isClickable ? '<i class="pi pi-external-link ml-1 text-gray-300 dark:text-gray-500"></i>' : ""}
-        </div>
-        <div class="pb-3 px-3">
-          <div class="relative">
-            <div class="text-sm text-gray-800 dark:text-gray-200 leading-relaxed break-words whitespace-pre-wrap font-mono h-20 sm:h-24 overflow-hidden transition-colors duration-200">
-              ${escapedPreview}
-            </div>
-            <div class="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-gray-100 dark:from-gray-700 via-gray-100/80 dark:via-gray-700/80 to-transparent pointer-events-none transition-colors duration-200"></div>
-          </div>
-          <div class="flex items-center justify-between mt-2 text-xs text-gray-600 dark:text-gray-400 transition-colors duration-200">
-            <span class="hidden sm:inline">${isClickable ? "Click to view full content" : "Large content detected"}</span>
-            <span class="sm:hidden">${isClickable ? "Tap to view" : "Large content"}</span>
-            ${!isClickable ? '<button class="remove-paste-preview text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 underline font-medium transition-colors duration-200" type="button">Remove</button>' : ""}
-          </div>
-        </div>
-      </div>
-    </div>
-  `;
-}
-
 function handlePastePreviewClick(e: Event) {
     const target = e.target as HTMLElement;
 
@@ -2966,32 +2909,33 @@ onUnmounted(() => {
                                             class="mb-3"
                                         >
                                             <div class="flex justify-center">
-                                                <div
-                                                    class="ml-auto sm:w-[80%] md:w-[70%] lg:w-[60%] xl:w-[50%]"
-                                                    v-html="
-                                                        PastePreviewComponent(
-                                                            item?.prompt
-                                                                ?.trim()
-                                                                ?.split(
-                                                                    '#pastedText#',
-                                                                )[1] || '',
-                                                            item?.prompt
-                                                                ?.trim()
-                                                                .split(
-                                                                    '#pastedText#',
-                                                                )[1]
-                                                                ?.split(/\s+/)
-                                                                ?.length || 0,
-                                                            item?.prompt
-                                                                ?.trim()
-                                                                ?.split(
-                                                                    '#pastedText#',
-                                                                )[1]?.length ||
-                                                                0,
-                                                            true,
-                                                        )
+                                                <PastePreview
+                                                    :is-clickable="true"
+                                                    :content="
+                                                        item?.prompt
+                                                            ?.trim()
+                                                            ?.split(
+                                                                '#pastedText#',
+                                                            )[1] || ''
                                                     "
-                                                ></div>
+                                                    :char-count="
+                                                        item?.prompt
+                                                            ?.trim()
+                                                            ?.split(
+                                                                '#pastedText#',
+                                                            )[1]?.length || 0
+                                                    "
+                                                    :word-count="
+                                                        item?.prompt
+                                                            ?.trim()
+                                                            .split(
+                                                                '#pastedText#',
+                                                            )[1]
+                                                            ?.split(/\s+/)
+                                                            ?.length || 0
+                                                    "
+                                                    class="ml-auto sm:w-[80%] md:w-[70%] lg:w-[60%] xl:w-[50%]"
+                                                />
                                             </div>
                                         </div>
                                     </div>
@@ -3010,7 +2954,9 @@ onUnmounted(() => {
                                         v-if="isLoadingState(item.response)"
                                         class="flex w-full rounded-lg bg-gray-50 dark:bg-gray-800 p-2 items-center animate-pulse gap-2 text-gray-500 dark:text-gray-400"
                                     >
-                                        <i class="pi pi-spin pi-spinner"></i>
+                                        <LoaderCircle
+                                            class="w-4 h-4 animate-spin"
+                                        />
                                         <span class="text-sm">{{
                                             getLoadingMessage(item.response)
                                         }}</span>
@@ -3297,15 +3243,11 @@ onUnmounted(() => {
                                 v-if="pastePreview && pastePreview.show"
                                 class="w-full p-3 border-b dark:border-gray-700"
                             >
-                                <div
-                                    v-html="
-                                        PastePreviewComponent(
-                                            pastePreview.content,
-                                            pastePreview.wordCount,
-                                            pastePreview.charCount,
-                                        )
-                                    "
-                                ></div>
+                                <PastePreview
+                                    :content="pastePreview.content"
+                                    :char-count="pastePreview.charCount"
+                                    :word-count="pastePreview.wordCount"
+                                />
                             </div>
 
                             <!-- Request Limit Exceeded Banner -->
@@ -3709,13 +3651,13 @@ onUnmounted(() => {
                                                             }}
                                                         </div>
                                                     </div>
-                                                    <i
+                                                    <CheckCircle
                                                         v-if="
                                                             parsedUserDetails?.responseMode ===
                                                             option.mode
                                                         "
-                                                        class="pi pi-check text-green-600 dark:text-green-400 text-sm font-bold"
-                                                    ></i>
+                                                        class="w-5 h-5 text-green-600 dark:text-green-400"
+                                                    />
                                                 </button>
                                             </div>
                                         </div>
@@ -3732,7 +3674,7 @@ onUnmounted(() => {
                                             class="w-4 h-4 sm:w-5 sm:h-5"
                                         />
 
-                                        <RotateCw
+                                        <LoaderCircle
                                             v-else
                                             class="w-4 h-4 sm:w-5 sm:h-5 animate-spin"
                                         />

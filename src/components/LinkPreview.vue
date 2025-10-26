@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import type { LinkPreview } from "@/types";
-import { ExternalLink, PlayCircle, RotateCw, Video } from "lucide-vue-next";
+import { ExternalLink, LoaderCircle, PlayCircle, Video } from "lucide-vue-next";
 import { ref, onUnmounted, computed } from "vue";
 
 interface Props {
@@ -142,7 +142,7 @@ onUnmounted(() => {
         class="link-preview loading border border-gray-200 dark:border-gray-700 rounded-lg p-3 my-2 bg-gray-50 dark:bg-gray-800 max-w-full transition-colors duration-200"
     >
         <div class="flex items-center gap-2">
-            <RotateCw
+            <LoaderCircle
                 class="w-4 h-4 animate-spin text-gray-400 dark:text-gray-500 flex-shrink-0"
             />
             <span class="text-sm text-gray-500 dark:text-gray-400 truncate"

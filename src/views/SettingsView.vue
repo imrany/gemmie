@@ -234,7 +234,7 @@ watch(
                         class="md:hidden flex items-center justify-center w-8 h-8 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full cursor-pointer transition-colors"
                     >
                         <ChevronLeft
-                            class="w-5 h-5 text-gray-700 dark:text-gray-300"
+                            class="w-6 h-6 text-gray-700 dark:text-gray-300"
                         />
                     </button>
                     <h1
@@ -1104,7 +1104,7 @@ watch(
                                                             class="w-4 h-4 text-green-600 dark:text-green-400"
                                                         />
                                                         <Clock
-                                                            v-if="
+                                                            v-else-if="
                                                                 transaction.Status ===
                                                                 'Pending'
                                                             "
