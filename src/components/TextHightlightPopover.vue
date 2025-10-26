@@ -25,7 +25,7 @@ const currentUtterance = ref<SpeechSynthesisUtterance | null>(null);
 const toastId = ref<string | number | null>(null);
 const isSpeaking = ref(false);
 
-function handleMouseUp(e: MouseEvent) {
+function handleMouseUp() {
     const selection = window.getSelection();
     const text = selection?.toString().trim();
 
@@ -42,20 +42,13 @@ function handleMouseUp(e: MouseEvent) {
             };
 
             isOpenTextHighlightPopover.value = true;
-            // ✅ Prevent default behavior after showing popover
-            e.preventDefault();
         }
     }
 }
 
 function handleContextMenu(e: MouseEvent) {
-    const selection = window.getSelection();
-    const hasSelection = (selection?.toString().trim().length ?? 0) > 0;
-
-    if (hasSelection) {
-        e.preventDefault(); // Prevent default context menu
-        e.stopPropagation(); // Stop event from bubbling
-        return false;
+    if (window.getSelection()?.toString().length ?? 0 > 0) {
+        e.preventDefault();
     }
 }
 
@@ -227,15 +220,8 @@ watch(isSpeaking, (newValue) => {
 });
 
 onMounted(() => {
-    document.removeEventListener("mouseup", handleMouseUp);
-    document.removeEventListener("contextmenu", handleContextMenu, {
-        capture: true,
-    });
-    document.removeEventListener("selectstart", () => {});
-
-    if (window.speechSynthesis.speaking) {
-        stopSpeaking();
-    }
+    document.addEventListener("mouseup", handleMouseUp);
+    document.addEventListener("contextmenu", handleContextMenu);
 });
 
 onUnmounted(() => {
@@ -271,7 +257,6 @@ onUnmounted(() => {
                 class="w-fit h-fit rounded-md shadow-md transition-all duration-200 bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-600 p-0 relative"
                 :side-offset="6"
                 @escape-key-down="isOpenTextHighlightPopover = false"
-                @interact-outside="isOpenTextHighlightPopover = false"
             >
                 <!-- Pointer -->
                 <div
@@ -315,17 +300,3 @@ onUnmounted(() => {
         </Popover>
     </div>
 </template>
-
-<style scoped>
-/* Prevent browser's native text selection tooltip/menu */
-::selection {
-    background-color: rgba(59, 130, 246, 0.3); /* Blue highlight */
-}
-
-:deep(*) {
-    -webkit-user-select: text;
-    user-select: text;
-    -webkit-touch-callout: none; /* Disable iOS callout */
-    -webkit-tap-highlight-color: transparent; /* Disable tap highlight */
-}
-</style>
