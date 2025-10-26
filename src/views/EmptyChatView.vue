@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import type { UserDetails } from "@/types";
+import { Database, RefreshCw, Shield } from "lucide-vue-next";
+import type { FunctionalComponent } from "vue";
 import type { Ref } from "vue";
 import { inject } from "vue";
 
@@ -14,7 +16,7 @@ const { parsedUserDetails, showInput, setShowInput, isDarkMode } = inject(
 
 const { suggestionPrompts, selectSuggestion } = defineProps<{
     suggestionPrompts: {
-        icon: string;
+        icon: FunctionalComponent;
         title: string;
         prompt: string;
     }[];
@@ -54,21 +56,21 @@ const { suggestionPrompts, selectSuggestion } = defineProps<{
                 class="flex items-center justify-center gap-6 text-sm text-gray-500 dark:text-gray-400 mt-4"
             >
                 <div class="flex items-center gap-1">
-                    <i
-                        class="pi pi-shield text-green-500 dark:text-green-400"
-                    ></i>
+                    <Shield
+                        class="w-4 h-4 text-green-500 dark:text-green-400"
+                    />
                     <span>Private</span>
                 </div>
                 <div class="flex items-center gap-1">
-                    <i
-                        class="pi pi-database text-blue-500 dark:text-blue-400"
-                    ></i>
+                    <Database
+                        class="w-4 h-4 text-blue-500 dark:text-blue-400"
+                    />
                     <span>Local Stored</span>
                 </div>
                 <div class="flex items-center gap-1">
-                    <i
-                        class="pi pi-sync text-purple-500 dark:text-purple-400"
-                    ></i>
+                    <RefreshCw
+                        class="w-4 h-4 text-purple-500 dark:text-purple-400"
+                    />
                     <span>Synced</span>
                 </div>
             </div>
@@ -85,12 +87,10 @@ const { suggestionPrompts, selectSuggestion } = defineProps<{
                         @click="selectSuggestion(suggestion.prompt)"
                         class="group flex w-[100px] items-center gap-2 justify-center h-9 bg-white dark:bg-gray-800 border-[1px] border-gray-200 dark:border-gray-700 rounded-lg hover:border-blue-500 dark:hover:border-blue-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-200 transform hover:scale-105 shadow-sm hover:shadow-md"
                     >
-                        <i
-                            :class="[
-                                suggestion.icon,
-                                'text-gray-500 dark:text-gray-300 text-sm group-hover:scale-110 transition-transform',
-                            ]"
-                        ></i>
+                        <component
+                            :is="suggestion.icon"
+                            class="w-4 h-4 text-gray-500 dark:text-gray-300 text-sm group-hover:scale-110 transition-transform"
+                        />
                         <span
                             class="text-xs font-medium text-gray-700 dark:text-gray-300"
                         >

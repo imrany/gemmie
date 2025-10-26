@@ -2,6 +2,28 @@
 import { computed, inject, ref, type Ref, onMounted, onUnmounted } from "vue";
 import type { Chat, UserDetails } from "@/types";
 import DemoAccountModal from "@/components/Modals/DemoAccountModal.vue";
+import {
+    ArrowLeft,
+    BookText,
+    BriefcaseBusiness,
+    ChartColumnBig,
+    Check,
+    Circle,
+    Clock,
+    CloudLightningIcon,
+    Code,
+    Database,
+    Home,
+    Info,
+    Map,
+    MessageCircle,
+    Pencil,
+    RefreshCw,
+    ScrollText,
+    Shield,
+    Star,
+    Sun,
+} from "lucide-vue-next";
 
 const {
     isAuthenticated,
@@ -155,42 +177,42 @@ const chatSuggestions = ref([
     {
         title: "Creative Writing",
         description: "Get help with stories, poems, and creative content",
-        icon: "pi-pencil",
+        icon: Pencil,
         color: "from-purple-500 to-pink-500",
         prompt: "Help me write a creative story about...",
     },
     {
         title: "Code Assistant",
         description: "Debug code, learn programming concepts, and get help",
-        icon: "pi-code",
+        icon: Code,
         color: "from-blue-500 to-cyan-500",
         prompt: "Can you help me debug this code?",
     },
     {
         title: "Learning & Research",
         description: "Explore topics, get explanations, and expand knowledge",
-        icon: "pi-book",
+        icon: BookText,
         color: "from-green-500 to-teal-500",
         prompt: "Explain this topic in simple terms...",
     },
     {
         title: "Problem Solving",
         description: "Work through challenges and find solutions",
-        icon: "pi-sun",
+        icon: Sun,
         color: "from-yellow-500 to-orange-500",
         prompt: "I need help solving this problem...",
     },
     {
         title: "Data Analysis",
         description: "Analyze data, create charts, and find insights",
-        icon: "pi-chart-line",
+        icon: ChartColumnBig,
         color: "from-indigo-500 to-purple-500",
         prompt: "Help me analyze this data...",
     },
     {
         title: "Business Strategy",
         description: "Strategic planning, market analysis, and business advice",
-        icon: "pi-briefcase",
+        icon: BriefcaseBusiness,
         color: "from-orange-500 to-red-500",
         prompt: "I need business advice on...",
     },
@@ -201,40 +223,40 @@ const features = ref([
         title: "Privacy First",
         description:
             "Your conversations stay private and secure with end-to-end encryption",
-        icon: "pi-shield",
+        icon: Shield,
         color: "text-green-500",
     },
     {
         title: "Local Storage",
         description:
             "All data is stored locally on your device for maximum privacy",
-        icon: "pi-database",
+        icon: Database,
         color: "text-blue-500",
     },
     {
         title: "Cross-Device Sync",
         description: "Seamlessly access your chats from any device, anywhere",
-        icon: "pi-sync",
+        icon: RefreshCw,
         color: "text-purple-500",
     },
     {
         title: "Always Available",
         description: "24/7 AI assistance at your fingertips, even offline",
-        icon: "pi-clock",
+        icon: Clock,
         color: "text-indigo-500",
     },
     {
         title: "Fast Response",
         description:
             "Lightning-fast AI responses powered by advanced algorithms",
-        icon: "pi-bolt",
+        icon: CloudLightningIcon,
         color: "text-yellow-500",
     },
     {
         title: "Smart Memory",
         description:
             "Remembers context across conversations for better assistance",
-        icon: "pi-book",
+        icon: BookText,
         color: "text-pink-500",
     },
 ]);
@@ -243,21 +265,21 @@ const tips = ref([
     {
         title: "Be Specific",
         description: "The more details you provide, the better I can help you",
-        icon: "pi-pencil",
+        icon: Pencil,
         example:
             "Instead of 'help with code', try 'debug my React component that won't render'",
     },
     {
         title: "Ask Follow-ups",
         description: "Don't hesitate to ask for clarification or more details",
-        icon: "pi-comments",
+        icon: MessageCircle,
         example:
             "Can you explain that in simpler terms? or What about edge cases?",
     },
     {
         title: "Use Examples",
         description: "Provide examples of what you're working with",
-        icon: "pi-list",
+        icon: ScrollText,
         example:
             "Here's my current code... or This is the error I'm getting...",
     },
@@ -265,16 +287,16 @@ const tips = ref([
         title: "Set Context",
         description:
             "Let me know your skill level and what you're trying to achieve",
-        icon: "pi-map",
+        icon: Map,
         example: "I'm a beginner in Python and want to build a web scraper",
     },
 ]);
 
 const carouselSlides = computed(() => [
-    { id: "welcome", title: "Welcome", icon: "pi-home" },
-    { id: "suggestions", title: "Chat Ideas", icon: "pi-comment" },
-    { id: "features", title: "Features", icon: "pi-star" },
-    { id: "tips", title: "Tips", icon: "pi-info-circle" },
+    { id: "welcome", title: "Welcome", icon: Home },
+    { id: "suggestions", title: "Chat Ideas", icon: MessageCircle },
+    { id: "features", title: "Features", icon: Star },
+    { id: "tips", title: "Tips", icon: Info },
 ]);
 
 // Carousel functions
@@ -448,9 +470,9 @@ onUnmounted(() => {
                                     <div
                                         class="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center"
                                     >
-                                        <i
-                                            class="pi pi-shield text-green-600 dark:text-green-400"
-                                        ></i>
+                                        <Shield
+                                            class="w-6 h-6 text-green-600 dark:text-green-400"
+                                        />
                                     </div>
                                     <span
                                         class="text-gray-700 dark:text-gray-300 font-medium"
@@ -461,9 +483,9 @@ onUnmounted(() => {
                                     <div
                                         class="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center"
                                     >
-                                        <i
-                                            class="pi pi-database text-blue-600 dark:text-blue-400"
-                                        ></i>
+                                        <Database
+                                            class="w-6 h-6 text-blue-600 dark:text-blue-400"
+                                        />
                                     </div>
                                     <span
                                         class="text-gray-700 dark:text-gray-300 font-medium"
@@ -474,9 +496,9 @@ onUnmounted(() => {
                                     <div
                                         class="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-full flex items-center justify-center"
                                     >
-                                        <i
-                                            class="pi pi-sync text-purple-600 dark:text-purple-400"
-                                        ></i>
+                                        <RefreshCw
+                                            class="w-6 h-6 text-purple-600 dark:text-purple-400"
+                                        />
                                     </div>
                                     <span
                                         class="text-gray-700 dark:text-gray-300 font-medium"
@@ -520,9 +542,10 @@ onUnmounted(() => {
                                 <div
                                     :class="`w-10 h-10 rounded-lg bg-gradient-to-r ${suggestion.color} flex items-center justify-center mb-4 group-hover:scale-110 transition-transform`"
                                 >
-                                    <i
-                                        :class="`pi ${suggestion.icon} text-white`"
-                                    ></i>
+                                    <component
+                                        :is="suggestion.icon"
+                                        :class="`w-4 h-4 text-white`"
+                                    />
                                 </div>
                                 <h3
                                     class="font-semibold text-gray-900 dark:text-white mb-2"
@@ -571,9 +594,11 @@ onUnmounted(() => {
                                 <div
                                     class="flex-shrink-0 w-10 h-10 rounded-lg bg-gray-100 dark:bg-gray-600 flex items-center justify-center"
                                 >
-                                    <i
-                                        :class="`pi ${feature.icon} ${feature.color} dark:${feature.color}`"
-                                    ></i>
+                                    <component
+                                        :is="feature.icon"
+                                        :class="`w-4 h-4 ${feature.color} dark:${feature.color}`"
+                                    />
+                                    <i></i>
                                 </div>
                                 <div>
                                     <h3
@@ -623,9 +648,10 @@ onUnmounted(() => {
                                     <div
                                         class="flex-shrink-0 w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center"
                                     >
-                                        <i
-                                            :class="`pi ${tip.icon} text-blue-600 dark:text-blue-400`"
-                                        ></i>
+                                        <component
+                                            :is="tip.icon"
+                                            :class="`w-4 h-4 text-blue-600 dark:text-blue-400`"
+                                        />
                                     </div>
                                     <div>
                                         <h3
@@ -669,13 +695,15 @@ onUnmounted(() => {
                             class="group w-10 h-10 rounded-full transition-all duration-300 flex items-center justify-center"
                             :title="slide.title"
                         >
-                            <i
-                                :class="
+                            <component
+                                :is="slide.icon"
+                                :class="[
+                                    'w-4 h-4',
                                     currentSlide === index
-                                        ? `text-white dark:text-gray-900 pi ${slide.icon}`
-                                        : `text-gray-500 dark:text-gray-300 pi ${slide.icon}`
-                                "
-                            ></i>
+                                        ? `text-white dark:text-gray-900`
+                                        : `text-gray-500 dark:text-gray-300`,
+                                ]"
+                            />
                         </button>
                     </div>
                 </div>
@@ -833,7 +861,7 @@ onUnmounted(() => {
                                         @click="props.functions.prevAuthStep"
                                         class="flex-1 flex gap-2 items-center justify-center bg-gray-100 dark:bg-gray-700 backdrop-blur-sm text-gray-700 dark:text-gray-300 rounded-xl px-4 py-3 font-medium hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200"
                                     >
-                                        <i class="pi pi-arrow-left"></i> Back
+                                        <ArrowLeft class="w-4 h-4" /> Back
                                     </button>
                                     <button
                                         type="submit"
@@ -910,16 +938,18 @@ onUnmounted(() => {
                                                 "
                                                 class="flex items-center gap-1"
                                             >
-                                                <i
-                                                    :class="
+                                                <Check
+                                                    v-if="
                                                         props.data.authData
                                                             .password.length >=
                                                         8
-                                                            ? 'pi pi-check'
-                                                            : 'pi pi-circle'
                                                     "
-                                                    class="text-xs"
-                                                ></i>
+                                                    class="w-4 h-4"
+                                                />
+                                                <Circle
+                                                    class="w-4 h-4"
+                                                    v-else
+                                                />
                                                 <span
                                                     >At least 8 characters</span
                                                 >
@@ -934,7 +964,7 @@ onUnmounted(() => {
                                         @click="props.functions.prevAuthStep"
                                         class="flex-1 flex gap-2 items-center justify-center bg-gray-100 dark:bg-gray-700 backdrop-blur-sm text-gray-700 dark:text-gray-300 rounded-xl px-4 py-3 font-medium hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200"
                                     >
-                                        <i class="pi pi-arrow-left"></i> Back
+                                        <ArrowLeft class="w-4 h-4" /> Back
                                     </button>
                                     <button
                                         type="submit"
@@ -1027,9 +1057,9 @@ onUnmounted(() => {
                                             <div
                                                 class="flex-shrink-0 w-6 h-6 bg-blue-100 dark:bg-blue-800 rounded-full flex items-center justify-center"
                                             >
-                                                <i
-                                                    class="pi pi-info-circle text-blue-600 dark:text-blue-400 text-xs"
-                                                ></i>
+                                                <Info
+                                                    class="w-4 h-4 text-blue-600 dark:text-blue-400"
+                                                />
                                             </div>
                                             <div
                                                 class="text-xs text-blue-800 dark:text-blue-200 space-y-2"
@@ -1070,7 +1100,7 @@ onUnmounted(() => {
                                         @click="props.functions.prevAuthStep"
                                         class="flex-1 flex gap-2 items-center justify-center bg-gray-100 dark:bg-gray-700 backdrop-blur-sm text-gray-700 dark:text-gray-300 rounded-xl px-4 py-3 font-medium hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200"
                                     >
-                                        <i class="pi pi-arrow-left"></i> Back
+                                        <ArrowLeft class="w-4 h-4" /> Back
                                     </button>
                                     <button
                                         type="submit"
@@ -1080,15 +1110,11 @@ onUnmounted(() => {
                                         "
                                         class="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 disabled:from-gray-300 disabled:to-gray-400 dark:disabled:from-gray-600 dark:disabled:to-gray-700 disabled:cursor-not-allowed flex-1 flex gap-2 items-center justify-center transform hover:scale-[1.02] shadow-lg rounded-xl px-4 py-3 font-medium text-white transition-all duration-200"
                                     >
-                                        <i
+                                        <RotateCw
                                             v-if="props.data.isLoading"
-                                            class="pi pi-spin pi-spinner"
-                                            :class="
-                                                props.data.isLoading
-                                                    ? ''
-                                                    : 'pi pi-check'
-                                            "
-                                        ></i>
+                                            class="animate-spin w-4 h-4"
+                                        />
+                                        <Check v-else class="w-4 h-4" />
                                         <span>{{
                                             props.data.isLoading
                                                 ? "Creating..."
@@ -1174,9 +1200,9 @@ onUnmounted(() => {
                                     <div
                                         class="w-8 h-8 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center"
                                     >
-                                        <i
-                                            class="pi pi-shield text-green-600 dark:text-green-400 text-sm"
-                                        ></i>
+                                        <Shield
+                                            class="w-5 h-5 text-green-600 dark:text-green-400"
+                                        />
                                     </div>
                                     <span
                                         class="text-gray-700 dark:text-gray-300 font-medium"
@@ -1187,9 +1213,9 @@ onUnmounted(() => {
                                     <div
                                         class="w-8 h-8 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center"
                                     >
-                                        <i
-                                            class="pi pi-database text-blue-600 dark:text-blue-400 text-sm"
-                                        ></i>
+                                        <Database
+                                            class="w-5 h-5 text-blue-600 dark:text-blue-400"
+                                        />
                                     </div>
                                     <span
                                         class="text-gray-700 dark:text-gray-300 font-medium"
@@ -1200,9 +1226,9 @@ onUnmounted(() => {
                                     <div
                                         class="w-8 h-8 bg-purple-100 dark:bg-purple-900/30 rounded-full flex items-center justify-center"
                                     >
-                                        <i
-                                            class="pi pi-sync text-purple-600 dark:text-purple-400 text-sm"
-                                        ></i>
+                                        <RefreshCw
+                                            class="w-5 h-5 text-purple-600 dark:text-purple-400"
+                                        />
                                     </div>
                                     <span
                                         class="text-gray-700 dark:text-gray-300 font-medium"
@@ -1246,9 +1272,10 @@ onUnmounted(() => {
                                 <div
                                     :class="`w-8 h-8 rounded-lg bg-gradient-to-r ${suggestion.color} flex items-center justify-center mb-2 group-hover:scale-110 transition-transform`"
                                 >
-                                    <i
-                                        :class="`pi ${suggestion.icon} text-white text-sm`"
-                                    ></i>
+                                    <component
+                                        :is="suggestion.icon"
+                                        :class="`w-4 h-4 text-white text-sm`"
+                                    />
                                 </div>
                                 <h3
                                     class="font-semibold text-gray-900 dark:text-white text-xs mb-1"
@@ -1297,9 +1324,10 @@ onUnmounted(() => {
                                 <div
                                     class="flex-shrink-0 w-8 h-8 rounded-lg bg-gray-100 dark:bg-gray-600 flex items-center justify-center"
                                 >
-                                    <i
-                                        :class="`pi ${feature.icon} ${feature.color} dark:${feature.color} text-sm`"
-                                    ></i>
+                                    <component
+                                        :is="feature.icon"
+                                        :class="`w-4 h-4 ${feature.color} dark:${feature.color} text-sm`"
+                                    />
                                 </div>
                                 <div>
                                     <h3
@@ -1349,9 +1377,10 @@ onUnmounted(() => {
                                     <div
                                         class="flex-shrink-0 w-6 h-6 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center"
                                     >
-                                        <i
-                                            :class="`pi ${tip.icon} text-blue-600 dark:text-blue-400 text-xs`"
-                                        ></i>
+                                        <component
+                                            :is="tip.icon"
+                                            :class="`w-4 h-4 text-blue-600 dark:text-blue-400 text-xs`"
+                                        />
                                     </div>
                                     <div>
                                         <h3
@@ -1395,13 +1424,15 @@ onUnmounted(() => {
                             class="group w-8 h-8 rounded-full transition-all duration-300 flex items-center justify-center"
                             :title="slide.title"
                         >
-                            <i
-                                :class="
+                            <component
+                                :is="slide.icon"
+                                :class="[
+                                    'w-4 h-4',
                                     currentSlide === index
-                                        ? `text-white dark:text-gray-900 pi ${slide.icon} text-xs `
-                                        : `text-gray-500 dark:text-gray-300 pi ${slide.icon} text-xs`
-                                "
-                            ></i>
+                                        ? `text-white dark:text-gray-900`
+                                        : `text-gray-500 dark:text-gray-300`,
+                                ]"
+                            />
                         </button>
                     </div>
                 </div>
@@ -1565,7 +1596,7 @@ onUnmounted(() => {
                                         @click="props.functions.prevAuthStep"
                                         class="flex-1 flex gap-2 items-center justify-center bg-gray-100 dark:bg-gray-700 backdrop-blur-sm text-gray-700 dark:text-gray-300 rounded-lg px-4 py-2.5 font-medium hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200"
                                     >
-                                        <i class="pi pi-arrow-left"></i> Back
+                                        <ArrowLeft class="w-4 h-4" /> Back
                                     </button>
                                     <button
                                         type="submit"
@@ -1644,16 +1675,18 @@ onUnmounted(() => {
                                                 "
                                                 class="flex items-center gap-1"
                                             >
-                                                <i
-                                                    :class="
+                                                <Check
+                                                    v-if="
                                                         props.data.authData
                                                             .password.length >=
                                                         8
-                                                            ? 'pi pi-check'
-                                                            : 'pi pi-circle'
                                                     "
-                                                    class="text-xs"
-                                                ></i>
+                                                    class="w-4 h-4"
+                                                />
+                                                <Circle
+                                                    class="w-4 h-4"
+                                                    v-else
+                                                />
                                                 <span
                                                     >At least 8 characters</span
                                                 >
@@ -1668,7 +1701,7 @@ onUnmounted(() => {
                                         @click="props.functions.prevAuthStep"
                                         class="flex-1 flex gap-2 items-center justify-center bg-gray-100 dark:bg-gray-700 backdrop-blur-sm text-gray-700 dark:text-gray-300 rounded-lg px-4 py-2.5 font-medium hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200"
                                     >
-                                        <i class="pi pi-arrow-left"></i> Back
+                                        <ArrowLeft class="w-4 h-4" /> Back
                                     </button>
                                     <button
                                         type="submit"
@@ -1763,9 +1796,9 @@ onUnmounted(() => {
                                             <div
                                                 class="flex-shrink-0 w-5 h-5 bg-blue-100 dark:bg-blue-800 rounded-full flex items-center justify-center"
                                             >
-                                                <i
-                                                    class="pi pi-info-circle text-blue-600 dark:text-blue-400 text-xs"
-                                                ></i>
+                                                <Info
+                                                    class="w-4 h-4 text-blue-600 dark:text-blue-400"
+                                                />
                                             </div>
                                             <div
                                                 class="text-xs text-blue-800 dark:text-blue-200 space-y-1"
@@ -1806,7 +1839,7 @@ onUnmounted(() => {
                                         @click="props.functions.prevAuthStep"
                                         class="flex-1 flex gap-2 items-center justify-center bg-gray-100 dark:bg-gray-700 backdrop-blur-sm text-gray-700 dark:text-gray-300 rounded-lg px-4 py-2.5 font-medium hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200"
                                     >
-                                        <i class="pi pi-arrow-left"></i> Back
+                                        <ArrowLeft class="w-4 h-4" /> Back
                                     </button>
                                     <button
                                         type="submit"
@@ -1816,15 +1849,11 @@ onUnmounted(() => {
                                         "
                                         class="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 disabled:from-gray-300 disabled:to-gray-400 dark:disabled:from-gray-600 dark:disabled:to-gray-700 disabled:cursor-not-allowed flex-1 flex gap-2 items-center justify-center transform hover:scale-[1.02] shadow-lg rounded-lg px-4 py-2.5 font-medium text-white transition-all duration-200"
                                     >
-                                        <i
+                                        <RotateCw
                                             v-if="props.data.isLoading"
-                                            class="pi pi-spin pi-spinner"
-                                            :class="
-                                                props.data.isLoading
-                                                    ? ''
-                                                    : 'pi pi-check'
-                                            "
-                                        ></i>
+                                            class="animate-spin w-4 h-4"
+                                        />
+                                        <Check class="w-4 h-4" v-else />
                                         <span>{{
                                             props.data.isLoading
                                                 ? "Creating..."
@@ -1855,9 +1884,9 @@ onUnmounted(() => {
                     class="group w-full px-6 py-3 bg-gradient-to-r from-indigo-500 to-blue-600 text-white rounded-xl hover:from-indigo-600 hover:to-blue-700 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl font-medium"
                 >
                     <span class="flex items-center justify-center gap-2">
-                        <i
-                            class="pi pi-arrow-right group-hover:translate-x-1 transition-transform"
-                        ></i>
+                        <ArrowRight
+                            class="w-4 h-4 group-hover:translate-x-1 transition-transform"
+                        />
                         Get Started
                     </span>
                 </button>

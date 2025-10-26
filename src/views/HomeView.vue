@@ -64,7 +64,18 @@ import {
     MicOff,
     Pause,
     ArrowUp,
-    RefreshCcw,
+    RotateCw,
+    Ban,
+    X,
+    CircleAlert,
+    TriangleAlert,
+    ArrowDown,
+    Share,
+    Code,
+    Pencil,
+    BookText,
+    HeartPulse,
+    Globe
 } from "lucide-vue-next";
 import {
     Pagination,
@@ -319,27 +330,27 @@ const getLoadingMessage = (response: string): string => {
 
 const suggestionPrompts = [
     {
-        icon: "pi pi-pencil",
+        icon: Pencil,
         title: "Write",
         prompt: "Write a short story about a time traveler who accidentally changes history",
     },
     {
-        icon: "pi pi-code",
+        icon: Code,
         title: "Code",
         prompt: "Help me debug a JavaScript function that's not working as expected",
     },
     {
-        icon: "pi pi-book",
+        icon: BookText,
         title: "Learn",
         prompt: "Explain quantum computing in simple terms",
     },
     {
-        icon: "pi pi-heart",
+        icon: HeartPulse,
         title: "Health",
         prompt: "Get me daily healthy routines",
     },
     {
-        icon: "pi pi-globe",
+        icon:Globe,
         title: "Events",
         prompt: "What are the latest global events?",
     },
@@ -3182,7 +3193,9 @@ onUnmounted(() => {
                                                 "
                                                 class="flex items-center gap-1 hover:text-blue-600 dark:hover:text-blue-400 transition-colors min-h-[32px]"
                                             >
-                                                <ClipboardList :size="16" />
+                                                <ClipboardList
+                                                    class="w-4 h-4 sm:w-5 sm:h-5"
+                                                />
                                                 <span>{{
                                                     copiedIndex === i
                                                         ? "Copied!"
@@ -3199,7 +3212,9 @@ onUnmounted(() => {
                                                 "
                                                 class="flex items-center gap-1 hover:text-green-600 dark:hover:text-green-400 transition-colors min-h-[32px]"
                                             >
-                                                <i class="pi pi-share-alt"></i>
+                                                <Share
+                                                    class="w-4 h-4 sm:w-5 sm:h-5"
+                                                />
                                                 <span>Share</span>
                                             </button>
 
@@ -3210,7 +3225,9 @@ onUnmounted(() => {
                                                 :disabled="isLoading"
                                                 class="flex items-center gap-1 hover:text-orange-600 dark:hover:text-orange-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-h-[32px]"
                                             >
-                                                <i class="pi pi-refresh"></i>
+                                                <RotateCw
+                                                    class="w-4 h-4 sm:w-5 sm:h-5"
+                                                />
                                                 <span>Retry</span>
                                             </button>
 
@@ -3219,7 +3236,9 @@ onUnmounted(() => {
                                                 :disabled="isLoading"
                                                 class="flex items-center gap-1 hover:text-red-600 dark:hover:text-red-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-h-[32px]"
                                             >
-                                                <Trash :size="16" />
+                                                <Trash
+                                                    class="w-4 h-4 sm:w-5 sm:h-5"
+                                                />
                                                 <span>Delete</span>
                                             </button>
                                         </div>
@@ -3249,10 +3268,10 @@ onUnmounted(() => {
                             : 'Scroll to bottom'
                     "
                 >
-                    <i
-                        class="pi pi-arrow-down text-xs"
+                    <ArrowDown
+                        class="w-4 h-4"
                         :class="{ 'animate-bounce': !isRecording }"
-                    ></i>
+                    />
                     <span class="text-sm font-medium">Scroll Down</span>
                 </button>
 
@@ -3311,9 +3330,9 @@ onUnmounted(() => {
                                             <div
                                                 class="w-6 h-6 sm:w-8 sm:h-8 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center flex-shrink-0"
                                             >
-                                                <i
-                                                    class="pi pi-ban text-red-600 dark:text-red-400 text-xs sm:text-sm"
-                                                ></i>
+                                                <Ban
+                                                    class="w-4 h-4 sm:w-5 sm:h-5 text-red-600 dark:text-red-400"
+                                                />
                                             </div>
                                             <div class="min-w-0 flex-1">
                                                 <h3
@@ -3355,9 +3374,9 @@ onUnmounted(() => {
                                         <div
                                             class="w-8 h-8 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center flex-shrink-0"
                                         >
-                                            <i
-                                                class="pi pi-ban text-red-600 dark:text-red-400 text-sm"
-                                            ></i>
+                                            <Ban
+                                                class="w-4 h-4 sm:w-5 sm:h-5 text-red-600 dark:text-red-400"
+                                            />
                                         </div>
                                         <div class="min-w-0 flex-1">
                                             <h3
@@ -3409,9 +3428,9 @@ onUnmounted(() => {
                                             <div
                                                 class="w-6 h-6 sm:w-8 sm:h-8 bg-yellow-100 dark:bg-yellow-900/30 rounded-full flex items-center justify-center flex-shrink-0"
                                             >
-                                                <i
-                                                    class="pi pi-exclamation-triangle text-yellow-600 dark:text-yellow-400 text-xs sm:text-sm"
-                                                ></i>
+                                                <TriangleAlert
+                                                    class="w-4 h-4 sm:w-5 sm:h-5 text-yellow-600 dark:text-yellow-400"
+                                                />
                                             </div>
                                             <div class="min-w-0 flex-1">
                                                 <h3
@@ -3442,9 +3461,9 @@ onUnmounted(() => {
                                         <div
                                             class="w-8 h-8 bg-yellow-100 dark:bg-yellow-900/30 rounded-full flex items-center justify-center flex-shrink-0"
                                         >
-                                            <i
-                                                class="pi pi-exclamation-triangle text-yellow-600 dark:text-yellow-400 text-sm"
-                                            ></i>
+                                            <CircleAlert
+                                                class="w-4 h-4 sm:w-5 sm:h-5 text-yellow-600 dark:text-yellow-400"
+                                            />
                                         </div>
                                         <div class="min-w-0 flex-1">
                                             <h3
@@ -3512,15 +3531,7 @@ onUnmounted(() => {
                                         class="rounded-lg w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center transition-colors text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 flex-shrink-0"
                                         title="Clear voice transcription"
                                     >
-                                        <svg
-                                            class="w-4 h-4 sm:w-5 sm:h-5"
-                                            fill="currentColor"
-                                            viewBox="0 0 24 24"
-                                        >
-                                            <path
-                                                d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"
-                                            />
-                                        </svg>
+                                        <X class="w-4 h-4 sm:w-5 sm:h-5" />
                                     </button>
 
                                     <!-- Textarea - Now takes remaining space alongside the indicator -->
@@ -3727,7 +3738,7 @@ onUnmounted(() => {
                                             class="w-4 h-4 sm:w-5 sm:h-5"
                                         />
 
-                                        <RefreshCcw
+                                        <RotateCw
                                             v-else
                                             class="w-4 h-4 sm:w-5 sm:h-5 animate-spin"
                                         />
