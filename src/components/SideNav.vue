@@ -12,13 +12,19 @@ import {
 import { useRouter } from "vue-router";
 import ChatDropdown from "./Dropdowns/ChatDropdown.vue";
 import ProfileDropdown from "./Dropdowns/ProfileDropdown.vue";
-import { WalletCards } from "lucide-vue-next";
+import {
+    CirclePlus,
+    MessageCircle,
+    FilePenLine,
+    RotateCw,
+} from "lucide-vue-next";
 import {
     Tooltip,
     TooltipContent,
     TooltipProvider,
     TooltipTrigger,
 } from "@/components/ui/tooltip";
+import type { FunctionalComponent } from "vue";
 
 const globalState = inject("globalState") as {
     currentChatId: Ref<string>;
@@ -202,17 +208,22 @@ const handleSidebarToggle = () => {
     }
 };
 
-const navLinks = [
+const navLinks: {
+    label: string;
+    description: string;
+    icon: FunctionalComponent<any>;
+    action: () => void;
+}[] = [
     {
         label: "New Chat",
         description: "New Chat",
-        icon: '<i class="pi pi-plus text-gray-500 dark:text-gray-400"></i>',
+        icon: CirclePlus,
         action: () => handleNavAction(() => router.push("/new")),
     },
     {
         label: "Chats",
         description: "Recent Chats",
-        icon: '<i class="pi pi-comments text-gray-500 dark:text-gray-400"></i>',
+        icon: MessageCircle,
         action: () => handleNavAction(() => router.push("/chats")),
     },
 ];
@@ -314,7 +325,7 @@ const navLinks = [
                 v-if="props.data.parsedUserDetails.username"
                 class="px-3 mb-4 mt-2 max-md:text-lg flex flex-col gap-1 font-light text-sm"
             >
-                <div v-for="navlink in navLinks">
+                <div v-for="navlink in navLinks" :key="navlink.label">
                     <TooltipProvider>
                         <Tooltip>
                             <TooltipTrigger as-child>
@@ -322,7 +333,10 @@ const navLinks = [
                                     @click="navlink.action"
                                     class="w-full font-normal flex items-center gap-2 h-[40px] hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg px-2 transition-colors"
                                 >
-                                    <span v-html="navlink.icon"></span>
+                                    <component
+                                        :is="navlink.icon"
+                                        class="text-gray-500 dark:text-gray-400 w-5 h-5"
+                                    />
                                     <span
                                         v-if="showFullSidebar"
                                         class="dark:text-gray-200"
@@ -350,9 +364,9 @@ const navLinks = [
                                     @click="openWorkplace"
                                     class="w-full font-normal flex items-center gap-2 h-[40px] hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg px-2 transition-colors"
                                 >
-                                    <i
-                                        class="pi pi-pencil text-gray-500 dark:text-gray-400"
-                                    ></i>
+                                    <FilePenLine
+                                        class="text-gray-500 dark:text-gray-400 w-5 h-5"
+                                    />
                                     <span
                                         v-if="showFullSidebar"
                                         class="dark:text-gray-200"
@@ -383,14 +397,15 @@ const navLinks = [
                                     "
                                     class="w-full font-normal flex items-center gap-2 h-[40px] hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg px-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                                 >
-                                    <i
+                                    <RotateCw
                                         :class="[
                                             syncStatus.syncing
-                                                ? 'pi pi-spin pi-spinner'
-                                                : 'pi pi-refresh',
-                                            'text-gray-500 dark:text-gray-400',
+                                                ? 'animate-spin'
+                                                : '',
+                                            'text-gray-500 dark:text-gray-400 w-5 h-5',
                                         ]"
-                                    ></i>
+                                    />
+
                                     <span
                                         v-if="showFullSidebar"
                                         class="dark:text-gray-200"
