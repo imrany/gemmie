@@ -24,7 +24,7 @@ const close = () => {
                 v-if="props.confirmDialog.type === 'danger'"
             />
             <AlertCircle
-                v-else-if="props.confirmDialog.type === 'warning"
+                v-else-if="props.confirmDialog.type === 'warning'"
                 class="w-6 h-6 text-orange-500 dark:text-orange-400"
             />
             <Info class="w-6 h-6 text-blue-500 dark:text-blue-400" v-else />

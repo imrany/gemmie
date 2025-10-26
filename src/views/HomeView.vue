@@ -77,7 +77,7 @@ import {
     HeartPulse,
     Globe,
     LoaderCircle,
-    CheckCircle,
+    Check,
 } from "lucide-vue-next";
 import {
     Pagination,
@@ -3651,7 +3651,7 @@ onUnmounted(() => {
                                                             }}
                                                         </div>
                                                     </div>
-                                                    <CheckCircle
+                                                    <Check
                                                         v-if="
                                                             parsedUserDetails?.responseMode ===
                                                             option.mode
