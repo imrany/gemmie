@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { updateState, hideUpdateModal, installUpdate } from "@/main";
 import DialogBox from "../Dialog/DialogBox.vue";
-import { DownloadCloud } from "lucide-vue-next";
+import { Download, DownloadCloud, Info, X } from "lucide-vue-next";
 
 const handleUpdate = () => {
     installUpdate();
@@ -47,9 +47,9 @@ const handleDismiss = () => {
             <div
                 class="flex items-center justify-center gap-2 p-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg"
             >
-                <i
-                    class="pi pi-info-circle text-blue-600 dark:text-blue-400 text-base flex-shrink-0"
-                ></i>
+                <Info
+                    class="w-4 h-4 text-blue-600 dark:text-blue-400 text-base flex-shrink-0"
+                />
                 <p
                     class="text-sm text-blue-900 dark:text-blue-300 leading-snug"
                 >
@@ -65,7 +65,7 @@ const handleDismiss = () => {
                 type="button"
                 class="flex-1 px-6 py-3 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 active:scale-98 text-gray-700 dark:text-gray-300 font-semibold rounded-xl transition-all duration-200 flex items-center justify-center gap-2 border border-gray-200 dark:border-gray-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
             >
-                <i class="pi pi-times"></i>
+                <X class="w-4 h-4" />
                 <span>Later</span>
             </button>
             <button
@@ -73,7 +73,7 @@ const handleDismiss = () => {
                 type="button"
                 class="flex-1 px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 active:scale-98 text-white font-semibold rounded-xl transition-all duration-200 flex items-center justify-center gap-2 shadow-lg shadow-blue-500/40 hover:shadow-xl hover:shadow-blue-500/50 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
             >
-                <i class="pi pi-download"></i>
+                <Download class="w-4 h-4" />
                 <span>Update Now</span>
             </button>
         </div>

@@ -55,7 +55,7 @@ import PastePreviewModal from "@/components/Modals/PastePreviewModal.vue";
 import { useRoute } from "vue-router";
 import TextHightlightPopover from "@/components/TextHightlightPopover.vue";
 import {
-    BotMessageSquare,
+    Brain,
     ClipboardList,
     Library,
     Search,
@@ -75,7 +75,7 @@ import {
     Pencil,
     BookText,
     HeartPulse,
-    Globe
+    Globe,
 } from "lucide-vue-next";
 import {
     Pagination,
@@ -350,7 +350,7 @@ const suggestionPrompts = [
         prompt: "Get me daily healthy routines",
     },
     {
-        icon:Globe,
+        icon: Globe,
         title: "Events",
         prompt: "What are the latest global events?",
     },
@@ -2318,7 +2318,7 @@ const modeOptions: Record<string, ModeOption> = {
         mode: "light-response",
         label: "Quick Response",
         description: "Fast & concise",
-        icon: BotMessageSquare,
+        icon: Brain,
         title: "Quick Response - Click to change mode",
     },
     "web-search": {
@@ -3194,7 +3194,7 @@ onUnmounted(() => {
                                                 class="flex items-center gap-1 hover:text-blue-600 dark:hover:text-blue-400 transition-colors min-h-[32px]"
                                             >
                                                 <ClipboardList
-                                                    class="w-4 h-4 sm:w-5 sm:h-5"
+                                                    class="w-4 h-4"
                                                 />
                                                 <span>{{
                                                     copiedIndex === i
@@ -3212,9 +3212,7 @@ onUnmounted(() => {
                                                 "
                                                 class="flex items-center gap-1 hover:text-green-600 dark:hover:text-green-400 transition-colors min-h-[32px]"
                                             >
-                                                <Share
-                                                    class="w-4 h-4 sm:w-5 sm:h-5"
-                                                />
+                                                <Share class="w-4 h-4" />
                                                 <span>Share</span>
                                             </button>
 
@@ -3225,9 +3223,7 @@ onUnmounted(() => {
                                                 :disabled="isLoading"
                                                 class="flex items-center gap-1 hover:text-orange-600 dark:hover:text-orange-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-h-[32px]"
                                             >
-                                                <RotateCw
-                                                    class="w-4 h-4 sm:w-5 sm:h-5"
-                                                />
+                                                <RotateCw class="w-4 h-4" />
                                                 <span>Retry</span>
                                             </button>
 
@@ -3236,9 +3232,7 @@ onUnmounted(() => {
                                                 :disabled="isLoading"
                                                 class="flex items-center gap-1 hover:text-red-600 dark:hover:text-red-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-h-[32px]"
                                             >
-                                                <Trash
-                                                    class="w-4 h-4 sm:w-5 sm:h-5"
-                                                />
+                                                <Trash class="w-4 h-4" />
                                                 <span>Delete</span>
                                             </button>
                                         </div>
