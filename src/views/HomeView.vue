@@ -54,7 +54,13 @@ import {
 import PastePreviewModal from "@/components/Modals/PastePreviewModal.vue";
 import { useRoute } from "vue-router";
 import TextHightlightPopover from "@/components/TextHightlightPopover.vue";
-import { ClipboardList, Trash } from "lucide-vue-next";
+import {
+    BotMessageSquare,
+    ClipboardList,
+    Library,
+    Search,
+    Trash,
+} from "lucide-vue-next";
 import {
     Pagination,
     PaginationContent,
@@ -66,12 +72,13 @@ import {
 import MarkdownRenderer from "@/components/ui/markdown/MarkdownRenderer.vue";
 import LinkPreviewComponent from "@/components/LinkPreview.vue";
 import EmptyChatView from "./EmptyChatView.vue";
+import type { FunctionalComponent } from "vue";
 
 type ModeOption = {
     mode: "light-response" | "web-search" | "deep-search";
     label: string;
     description: string;
-    icon: string;
+    icon: FunctionalComponent<any>;
     title: string;
 };
 
@@ -2295,21 +2302,21 @@ const modeOptions: Record<string, ModeOption> = {
         mode: "light-response",
         label: "Quick Response",
         description: "Fast & concise",
-        icon: "pi pi-bolt",
+        icon: BotMessageSquare,
         title: "Quick Response - Click to change mode",
     },
     "web-search": {
         mode: "web-search",
         label: "Web Search",
         description: "Include web results",
-        icon: "pi pi-search",
+        icon: Search,
         title: "Web Search - Click to change mode",
     },
     "deep-search": {
         mode: "deep-search",
         label: "Deep Search",
         description: "Detailed analysis",
-        icon: "pi pi-code",
+        icon: Library,
         title: "Deep Search - Click to change mode",
     },
 };
@@ -3670,15 +3677,15 @@ onUnmounted(() => {
                                                 "
                                             >
                                                 <!-- Dynamic icon based on selected mode -->
-                                                <i
-                                                    :class="
+                                                <component
+                                                    :is="
                                                         modeOptions[
                                                             parsedUserDetails.responseMode ||
                                                                 ''
                                                         ].icon
                                                     "
                                                     class="text-xs sm:text-sm"
-                                                ></i>
+                                                />
                                             </button>
 
                                             <!-- Dropdown Menu -->
@@ -3713,15 +3720,16 @@ onUnmounted(() => {
                                                             : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200',
                                                     ]"
                                                 >
-                                                    <i
+                                                    <i></i>
+                                                    <component
                                                         :class="[
-                                                            option.icon,
                                                             parsedUserDetails?.responseMode ===
                                                             option.mode
                                                                 ? ' text-green-600 dark:text-green-400'
                                                                 : ' text-gray-600 dark:text-gray-400',
                                                         ]"
-                                                    ></i>
+                                                        :is="option.icon"
+                                                    />
                                                     <div class="flex-1 min-w-0">
                                                         <div
                                                             class="font-semibold"
