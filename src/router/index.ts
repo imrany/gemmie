@@ -6,6 +6,7 @@ import SettingsView from "@/views/SettingsView.vue";
 import WorkplaceView from "@/views/WorkplaceView.vue";
 import ChatsView from "@/views/ChatsView.vue";
 import type { UserDetails } from "@/types";
+import LegalPage from "@/views/LegalPage.vue";
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -53,6 +54,12 @@ const router = createRouter({
       component: SettingsView,
       props: true,
       meta: { requiresAuth: true },
+    },
+    {
+      path: "/legal/:section?",
+      name: "legal",
+      component: LegalPage,
+      meta: { title: "Legal - Gemmie", requiresAuth: false },
     },
     {
       path: "/:pathMatch(.*)*",
