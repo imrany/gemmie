@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import type { ConfirmDialogOptions } from "@/types";
 import DialogBox from "./Dialog/DialogBox.vue";
+import { AlertCircle, Info, TriangleAlert } from "lucide-vue-next";
 let props = defineProps<{
     confirmDialog: ConfirmDialogOptions;
 }>();
@@ -18,16 +19,15 @@ const close = () => {
         name="confirmDialog"
     >
         <div class="flex items-center gap-3 mb-4">
-            <i
-                :class="
-                    props.confirmDialog.type === 'danger'
-                        ? 'pi pi-exclamation-triangle text-red-500 dark:text-red-400'
-                        : props.confirmDialog.type === 'warning'
-                          ? 'pi pi-exclamation-circle text-orange-500 dark:text-orange-400'
-                          : 'pi pi-info-circle text-blue-500 dark:text-blue-400'
-                "
-                class="text-2xl"
-            ></i>
+            <TriangleAlert
+                class="w-6 h-6 text-red-500 dark:text-red-400"
+                v-if="props.confirmDialog.type === 'danger'"
+            />
+            <AlertCircle
+                v-else-if="props.confirmDialog.type === 'warning"
+                class="w-6 h-6 text-orange-500 dark:text-orange-400"
+            />
+            <Info class="w-6 h-6 text-blue-500 dark:text-blue-400" v-else />
             <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
                 {{ props.confirmDialog.title }}
             </h3>

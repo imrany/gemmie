@@ -16,7 +16,6 @@ import {
     CirclePlus,
     MessageCircle,
     FilePenLine,
-    RotateCw,
     Ellipsis,
     Clock,
     ChevronDown,
@@ -26,6 +25,7 @@ import {
     X,
     CheckCircle,
     CloudUpload,
+    LoaderCircle,
 } from "lucide-vue-next";
 import {
     Tooltip,
@@ -411,7 +411,7 @@ const navLinks: {
                                     "
                                     class="w-full font-normal flex items-center gap-2 h-[40px] hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg px-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                                 >
-                                    <RotateCw
+                                    <LoaderCircle
                                         :class="[
                                             syncStatus.syncing
                                                 ? 'animate-spin'

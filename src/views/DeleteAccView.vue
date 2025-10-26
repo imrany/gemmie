@@ -4,6 +4,7 @@ import { API_BASE_URL, getErrorStatus } from "../utils/globals";
 import { useRouter } from "vue-router";
 import type { PlatformError, UserDetails } from "@/types";
 import { generateErrorId } from "@/composables/usePlatformError";
+import { LoaderCircle, TriangleAlert } from "lucide-vue-next";
 
 const username = ref("");
 const email = ref("");
@@ -232,10 +233,7 @@ onMounted(() => {
                         :disabled="loading"
                         class="flex-1 flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 dark:bg-red-500 dark:hover:bg-red-600 text-white py-2 px-2 rounded-md transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
                     >
-                        <i
-                            v-if="loading"
-                            class="pi pi-spin pi-spinner text-sm"
-                        ></i>
+                        <LoaderCircle v-if="loading" class="w-5 h-5" />
                         <span>{{ loading ? "Verifying..." : "Continue" }}</span>
                     </button>
                 </div>
@@ -250,9 +248,9 @@ onMounted(() => {
                         <div
                             class="flex-shrink-0 w-6 h-6 bg-yellow-100 dark:bg-yellow-800 rounded-full flex items-center justify-center"
                         >
-                            <i
-                                class="pi pi-exclamation-triangle text-yellow-600 dark:text-yellow-400 text-sm"
-                            ></i>
+                            <TriangleAlert
+                                class="w-5 h-6 text-yellow-600 dark:text-yellow-400"
+                            />
                         </div>
                         <div>
                             <h3
@@ -315,10 +313,10 @@ onMounted(() => {
                         "
                         class="flex-1 flex items-center justify-center gap-2 text-white py-2 px-2 rounded-md transition-colors duration-200 disabled:opacity-50 font-medium"
                     >
-                        <i
+                        <LoaderCircle
                             v-if="loading"
-                            class="pi pi-spin pi-spinner text-sm"
-                        ></i>
+                            class="w-5 h-5 animate-spin"
+                        />
                         <span>{{
                             loading ? "Deleting..." : "Delete Account"
                         }}</span>

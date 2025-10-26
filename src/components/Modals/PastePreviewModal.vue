@@ -4,6 +4,7 @@ import {
     getHighlightLanguage,
 } from "@/utils/previewPasteContent";
 import hljs from "highlight.js";
+import { ChevronLeft, Clipboard, Copy, X } from "lucide-vue-next";
 
 defineProps<{
     data: {
@@ -35,9 +36,9 @@ defineProps<{
                     class="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gray-100 dark:bg-gray-700 dark:border-gray-600"
                 >
                     <div class="flex items-center gap-3">
-                        <i
-                            class="pi pi-clipboard text-gray-600 dark:text-gray-400"
-                        ></i>
+                        <Clipboard
+                            class="w-4 h-4 text-gray-600 dark:text-gray-400"
+                        />
                         <div>
                             <h3
                                 class="text-lg font-semibold text-gray-800 dark:text-gray-100"
@@ -66,15 +67,15 @@ defineProps<{
                             "
                             class="rounded px-3 py-1 text-sm text-gray-700 transition-colors bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 dark:text-gray-200"
                         >
-                            <i class="pi pi-copy mr-1"></i>Copy
+                            <Copy class="w-4 h-4 mr-1" />Copy
                         </button>
                         <button
                             @click="closePasteModal"
                             class="flex items-center justify-center w-8 h-8 rounded-full transition-colors hover:bg-gray-200 dark:hover:bg-gray-600"
                         >
-                            <i
-                                class="pi pi-times text-gray-500 dark:text-gray-400"
-                            ></i>
+                            <X
+                                class="w-4 h-4 text-gray-500 dark:text-gray-400"
+                            />
                         </button>
                     </div>
                 </div>
@@ -134,7 +135,7 @@ defineProps<{
                 @click="closePasteModal"
                 class="absolute top-2 right-2 w-8 h-8 rounded-full transition-colors hover:bg-gray-200 dark:hover:bg-gray-600 lg:flex items-center justify-center hidden"
             >
-                <i class="pi pi-times text-gray-500 dark:text-gray-400"></i>
+                <X class="w-4 h-4 text-gray-500 dark:text-gray-400" />
             </button>
         </div>
 
@@ -151,9 +152,9 @@ defineProps<{
                         @click="closePasteModal"
                         class="flex items-center justify-center w-8 h-8 rounded-full transition-colors hover:bg-gray-200 dark:hover:bg-gray-600"
                     >
-                        <i
-                            class="pi pi-arrow-left text-gray-600 dark:text-gray-400"
-                        ></i>
+                        <ChevronLeft
+                            class="w-5 h-5 text-gray-600 dark:text-gray-400"
+                        />
                     </button>
                     <div>
                         <h3
@@ -181,9 +182,9 @@ defineProps<{
                         "
                         class="flex items-center justify-center w-8 h-8 rounded-full transition-colors hover:bg-gray-200 dark:hover:bg-gray-600"
                     >
-                        <i
-                            class="pi pi-copy text-gray-600 dark:text-gray-400"
-                        ></i>
+                        <Copy
+                            class="w-4 h-4 text-gray-600 dark:text-gray-400"
+                        />
                     </button>
                 </div>
             </div>
