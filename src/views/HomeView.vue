@@ -60,6 +60,11 @@ import {
     Library,
     Search,
     Trash,
+    Mic,
+    MicOff,
+    Pause,
+    ArrowUp,
+    RefreshCcw,
 } from "lucide-vue-next";
 import {
     Pagination,
@@ -3568,85 +3573,40 @@ onUnmounted(() => {
                                             "
                                         >
                                             <!-- Microphone Icon -->
-                                            <svg
+                                            <Mic
                                                 v-if="
                                                     microphonePermission ===
                                                     'prompt'
                                                 "
                                                 class="w-4 h-4 sm:w-5 sm:h-5"
-                                                fill="currentColor"
-                                                viewBox="0 0 24 24"
-                                            >
-                                                <path
-                                                    d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"
-                                                />
-                                                <path
-                                                    d="M19 10v1a7 7 0 0 1-14 0v-1a1 1 0 0 1 2 0v1a5 5 0 0 0 10 0v-1a1 1 0 0 1 2 0Z"
-                                                />
-                                            </svg>
+                                            />
 
-                                            <svg
+                                            <Mic
                                                 v-else-if="
                                                     !isRecording &&
                                                     microphonePermission ===
                                                         'granted'
                                                 "
                                                 class="w-4 h-4 sm:w-5 sm:h-5"
-                                                fill="currentColor"
-                                                viewBox="0 0 24 24"
-                                            >
-                                                <path
-                                                    d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"
-                                                />
-                                                <path
-                                                    d="M19 10v1a7 7 0 0 1-14 0v-1a1 1 0 0 1 2 0v1a5 5 0 0 0 10 0v-1a1 1 0 0 1 2 0Z"
-                                                />
-                                            </svg>
+                                            />
 
                                             <!-- Stop Icon -->
-                                            <svg
+                                            <Pause
                                                 v-else-if="
                                                     microphonePermission ===
                                                         'granted' && isRecording
                                                 "
                                                 class="w-4 h-4 sm:w-5 sm:h-5"
-                                                fill="currentColor"
-                                                viewBox="0 0 24 24"
-                                            >
-                                                <rect
-                                                    x="6"
-                                                    y="6"
-                                                    width="12"
-                                                    height="12"
-                                                    rx="2"
-                                                />
-                                            </svg>
+                                            />
 
                                             <!-- Microphone Denied Icon -->
-                                            <svg
+                                            <MicOff
                                                 v-else-if="
                                                     microphonePermission ===
                                                         'denied' && !isRecording
                                                 "
                                                 class="w-4 h-4 sm:w-5 sm:h-5 text-red-500 dark:text-red-400"
-                                                fill="currentColor"
-                                                viewBox="0 0 24 24"
-                                            >
-                                                <path
-                                                    d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"
-                                                />
-                                                <path
-                                                    d="M19 10v1a7 7 0 0 1-14 0v-1a1 1 0 0 1 2 0v1a5 5 0 0 0 10 0v-1a1 1 0 0 1 2 0Z"
-                                                />
-                                                <line
-                                                    x1="4"
-                                                    y1="4"
-                                                    x2="20"
-                                                    y2="20"
-                                                    stroke="currentColor"
-                                                    stroke-width="2"
-                                                />
-                                            </svg>
+                                            />
                                         </button>
 
                                         <!-- Mode Dropdown Container -->
@@ -3684,7 +3644,7 @@ onUnmounted(() => {
                                                                 ''
                                                         ].icon
                                                     "
-                                                    class="text-xs sm:text-sm"
+                                                    class="w-4 h-4 sm:w-5 sm:h-5"
                                                 />
                                             </button>
 
@@ -3720,9 +3680,9 @@ onUnmounted(() => {
                                                             : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200',
                                                     ]"
                                                 >
-                                                    <i></i>
                                                     <component
                                                         :class="[
+                                                            'w-5 h-5',
                                                             parsedUserDetails?.responseMode ===
                                                             option.mode
                                                                 ? ' text-green-600 dark:text-green-400'
@@ -3762,14 +3722,15 @@ onUnmounted(() => {
                                         :disabled="inputDisabled"
                                         class="rounded-lg w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center transition-colors text-white bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50 disabled:bg-gray-400 flex-shrink-0 shadow-sm"
                                     >
-                                        <i
+                                        <ArrowUp
                                             v-if="!isLoading"
-                                            class="pi pi-arrow-up text-xs sm:text-sm"
-                                        ></i>
-                                        <i
+                                            class="w-4 h-4 sm:w-5 sm:h-5"
+                                        />
+
+                                        <RefreshCcw
                                             v-else
-                                            class="pi pi-spin pi-spinner text-xs sm:text-sm"
-                                        ></i>
+                                            class="w-4 h-4 sm:w-5 sm:h-5 animate-spin"
+                                        />
                                     </button>
                                 </div>
                             </div>
