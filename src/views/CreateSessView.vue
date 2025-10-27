@@ -1127,21 +1127,28 @@ onUnmounted(() => {
                     <!-- Footer note -->
                     <div class="text-center mt-6">
                         <div
-                            class="flex text-xs flex-wrap gap-4 justify-center leading-relaxed text-gray-600 dark:text-gray-400"
+                            class="text-xs text-center leading-relaxed text-gray-600 dark:text-gray-400"
                         >
-                            <router-link
-                                to="/legal/privacy"
-                                class="hover:text-blue-600 dark:hover:text-blue-400"
+                            <div class="flex gap-2 items-center justify-center">
+                                <span>Please review our</span>
+                                <router-link
+                                    to="/legal/privacy"
+                                    class="text-blue-600 dark:text-blue-400"
+                                >
+                                    Privacy Policy
+                                </router-link>
+                                <span> and </span>
+                                <router-link
+                                    to="/legal/terms"
+                                    class="text-blue-600 dark:text-blue-400"
+                                >
+                                    Terms of Service
+                                </router-link>
+                            </div>
+                            <span
+                                >© {{ new Date().getFullYear() }} Gemmie. All
+                                rights reserved.</span
                             >
-                                Privacy Policy
-                            </router-link>
-                            <router-link
-                                to="/legal/terms"
-                                class="hover:text-blue-600 dark:hover:text-blue-400"
-                            >
-                                Terms of Service
-                            </router-link>
-                            <span>© 2025 Gemmie. All rights reserved.</span>
                         </div>
                     </div>
                 </div>
@@ -1873,21 +1880,28 @@ onUnmounted(() => {
                     <!-- Mobile Footer note -->
                     <div class="text-center mt-4">
                         <div
-                            class="flex text-xs flex-wrap gap-4 justify-center leading-relaxed text-gray-600 dark:text-gray-400"
+                            class="text-xs text-center leading-relaxed text-gray-600 dark:text-gray-400"
                         >
-                            <router-link
-                                to="/legal/privacy"
-                                class="hover:text-blue-600 dark:hover:text-blue-400"
+                            <div class="flex gap-2 items-center justify-center">
+                                <span>Please review our</span>
+                                <router-link
+                                    to="/legal/privacy"
+                                    class="text-blue-600 dark:text-blue-400"
+                                >
+                                    Privacy Policy
+                                </router-link>
+                                <span> and </span>
+                                <router-link
+                                    to="/legal/terms"
+                                    class="text-blue-600 dark:text-blue-400"
+                                >
+                                    Terms of Service
+                                </router-link>
+                            </div>
+                            <span
+                                >© {{ new Date().getFullYear() }} Gemmie. All
+                                rights reserved.</span
                             >
-                                Privacy Policy
-                            </router-link>
-                            <router-link
-                                to="/legal/terms"
-                                class="hover:text-blue-600 dark:hover:text-blue-400"
-                            >
-                                Terms of Service
-                            </router-link>
-                            <span>© 2025 Gemmie. All rights reserved.</span>
                         </div>
                     </div>
                 </div>
@@ -1912,7 +1926,7 @@ onUnmounted(() => {
         <!-- Footer disclaimer -->
         <div v-if="isAuthenticated" class="absolute bottom-4 text-center">
             <p class="text-xs text-gray-500 dark:text-gray-400">
-                © 2025 Gemmie. All rights reserved.
+                © {{ new Date().getFullYear() }} Gemmie. All rights reserved.
             </p>
         </div>
     </div>
