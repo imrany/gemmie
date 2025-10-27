@@ -41,11 +41,7 @@ const clickableClass = isClickable
             >
                 <i class="pi pi-clipboard text-gray-300 dark:text-gray-400"></i>
                 <span>PASTED</span>
-                <span
-                    class="ml-auto text-gray-200 dark:text-gray-400 hidden sm:inline"
-                    >{{ wordCount }} words • {{ charCount }} chars</span
-                >
-                <span class="ml-auto text-gray-200 dark:text-gray-400 sm:hidden"
+                <span class="ml-auto text-gray-200 dark:text-gray-400"
                     >{{ charCount }} chars</span
                 >
                 <ExternalLink
