@@ -17,7 +17,7 @@ function switchTab(tab: "privacy" | "terms") {
     router.push({ name: "legal", params: { section: tab } });
 }
 
-const lastUpdated = "January 15, 2025";
+const lastUpdated = "October 27, 2025";
 </script>
 
 <template>
@@ -86,13 +86,12 @@ const lastUpdated = "January 15, 2025";
                         <p
                             class="text-gray-700 dark:text-gray-300 leading-relaxed"
                         >
-                            Gemmie ("we", "us", or "our") is committed to
-                            protecting your privacy in accordance with the Data
-                            Protection Act, 2019 (Kenya) and other applicable
-                            Kenyan laws. This Privacy Policy explains how we
-                            collect, use, disclose, and safeguard your
-                            information when you use our AI-powered chat
-                            application.
+                            We are committed to protecting your privacy in
+                            accordance with the Data Protection Act, 2019
+                            (Kenya) and other applicable Kenyan laws. This
+                            Privacy Policy explains how we collect, use,
+                            disclose, and safeguard your information when you
+                            use our AI-powered chat application.
                         </p>
                     </section>
 
@@ -219,7 +218,7 @@ const lastUpdated = "January 15, 2025";
                         >
                             <li>
                                 <strong>Payment Processors:</strong>
-                                M-Pesa/Safaricom for payment processing
+                                M-Pesa for payment processing
                             </li>
                             <li>
                                 <strong>AI Service Providers:</strong>
