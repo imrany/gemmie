@@ -22,16 +22,11 @@ const lastUpdated = "October 27, 2025";
 
 <template>
     <div
-        class="min-h-screen bg-gray-50 dark:bg-gray-900 py-8 px-4 sm:px-6 lg:px-8 transition-colors duration-300"
+        class="min-h-screen font-light bg-gray-50 dark:bg-gray-900 py-8 px-4 sm:px-6 lg:px-8 transition-colors duration-300"
     >
         <div class="max-w-4xl mx-auto">
             <!-- Header -->
             <div class="text-center mb-8">
-                <h1
-                    class="text-4xl font-bold text-gray-900 dark:text-white mb-2"
-                >
-                    Gemmie Legal
-                </h1>
                 <p class="text-gray-600 dark:text-gray-400">
                     Last updated: {{ lastUpdated }}
                 </p>
@@ -48,7 +43,7 @@ const lastUpdated = "October 27, 2025";
                             ? 'bg-blue-600 text-white'
                             : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
                     "
-                    class="flex-1 py-3 px-4 rounded-md font-medium transition-all duration-200"
+                    class="flex-1 py-2 px-4 text-sm rounded-md font-medium transition-all duration-200"
                 >
                     Privacy Policy
                 </button>
@@ -59,7 +54,7 @@ const lastUpdated = "October 27, 2025";
                             ? 'bg-blue-600 text-white'
                             : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
                     "
-                    class="flex-1 py-3 px-4 rounded-md font-medium transition-all duration-200"
+                    class="flex-1 py-2 px-4 text-sm rounded-md font-medium transition-all duration-200"
                 >
                     Terms of Service
                 </button>
@@ -956,17 +951,6 @@ const lastUpdated = "October 27, 2025";
                         </p>
                     </section>
                 </div>
-            </div>
-
-            <!-- Back to Home Button -->
-            <div class="mt-8 text-center">
-                <button
-                    @click="router.push('/')"
-                    class="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors duration-200 shadow-sm"
-                >
-                    <ChevronLeft class="w-5 h-5" />
-                    <span>Back to Gemmie</span>
-                </button>
             </div>
         </div>
     </div>
