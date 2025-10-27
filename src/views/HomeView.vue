@@ -2877,7 +2877,7 @@ onUnmounted(() => {
 
                                     <!-- User message bubble -->
                                     <div
-                                        class="flex mt-2 items-start gap-2 font-medium bg-gray-100 dark:bg-gray-800 text-black dark:text-gray-100 px-4 rounded-2xl prose prose-sm dark:prose-invert chat-bubble w-fit max-w-full"
+                                        class="flex mt-[2px] items-start gap-2 font-medium bg-gray-100 dark:bg-gray-800 text-black dark:text-gray-100 px-4 rounded-2xl prose prose-sm dark:prose-invert chat-bubble w-fit max-w-full"
                                     >
                                         <!-- Avatar container -->
                                         <div class="flex-shrink-0 py-3">

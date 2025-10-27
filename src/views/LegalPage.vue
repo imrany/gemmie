@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ref } from "vue";
-import { ChevronLeft } from "lucide-vue-next";
 import { useRouter, useRoute } from "vue-router";
 
 const router = useRouter();
