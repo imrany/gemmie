@@ -1113,11 +1113,15 @@ onUnmounted(() => {
                                             class="animate-spin w-4 h-4"
                                         />
                                         <Check v-else class="w-4 h-4" />
-                                        <span>{{
-                                            props.data.isLoading
-                                                ? "Creating..."
-                                                : "Create Session"
-                                        }}</span>
+                                        <span v-if="props.data.isLoading"
+                                            >Creating...</span
+                                        >
+                                        <span class="flex gap-[2px]" v-else>
+                                            <span>Create</span>
+                                            <span class="max-sm:hidden"
+                                                >Session</span
+                                            >
+                                        </span>
                                     </button>
                                 </div>
                             </form>
@@ -1866,11 +1870,15 @@ onUnmounted(() => {
                                             class="animate-spin w-4 h-4"
                                         />
                                         <Check class="w-4 h-4" v-else />
-                                        <span>{{
-                                            props.data.isLoading
-                                                ? "Creating..."
-                                                : "Create Session"
-                                        }}</span>
+                                        <span v-if="props.data.isLoading"
+                                            >Creating...</span
+                                        >
+                                        <span class="flex gap-[2px]" v-else>
+                                            <span>Create</span>
+                                            <span class="max-sm:hidden"
+                                                >Session</span
+                                            >
+                                        </span>
                                     </button>
                                 </div>
                             </form>
