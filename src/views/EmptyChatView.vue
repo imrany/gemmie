@@ -1,16 +1,12 @@
 <script setup lang="ts">
 import type { UserDetails } from "@/types";
-import { Database, Pencil, RefreshCw, Shield } from "lucide-vue-next";
+import { Database, RefreshCw, Shield } from "lucide-vue-next";
 import type { FunctionalComponent } from "vue";
 import type { Ref } from "vue";
 import { inject } from "vue";
 
-const { parsedUserDetails, showInput, setShowInput, isDarkMode } = inject(
-    "globalState",
-) as {
+const { parsedUserDetails, isDarkMode } = inject("globalState") as {
     parsedUserDetails: UserDetails;
-    showInput: Ref<boolean>;
-    setShowInput: () => void;
     isDarkMode: Ref<boolean>;
 };
 
@@ -99,20 +95,6 @@ const { suggestionPrompts, selectSuggestion } = defineProps<{
                     </button>
                 </div>
             </div>
-
-            <!-- Start Writing Button -->
-            <button
-                v-if="!showInput"
-                @click="setShowInput"
-                class="group px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 dark:from-blue-600 dark:to-purple-700 text-white rounded-lg hover:from-blue-600 hover:to-purple-700 dark:hover:from-blue-700 dark:hover:to-purple-800 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl font-medium"
-            >
-                <span class="flex items-center justify-center gap-2">
-                    <Pencil
-                        class="w-4 h-4 group-hover:rotate-12 transition-transform"
-                    />
-                    Start Writing
-                </span>
-            </button>
         </div>
     </div>
 </template>
