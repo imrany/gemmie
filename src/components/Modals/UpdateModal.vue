@@ -74,7 +74,8 @@ const handleDismiss = () => {
                 class="flex-1 px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 active:scale-98 text-white font-semibold rounded-xl transition-all duration-200 flex items-center justify-center gap-2 shadow-lg shadow-blue-500/40 hover:shadow-xl hover:shadow-blue-500/50 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
             >
                 <Download class="w-4 h-4" />
-                <span>Update Now</span>
+                <span>Update</span>
+                <span class="max-sm:hidden"> Now</span>
             </button>
         </div>
     </DialogBox>
