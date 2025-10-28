@@ -38,7 +38,7 @@ export function useAuth(config: AuthConfig = {}) {
   // Validation patterns
   const USERNAME_PATTERN = /^[a-zA-Z0-9_]+$/;
   const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  const PASSWORD_PATTERN = /^(?=.*[A-Za-z])(?=.*\d).+$/; // At least one letter and one number
+  // const PASSWORD_PATTERN = /^(?=.*[A-Za-z])(?=.*\d).+$/; // At least one letter and one number
 
   function nextAuthStep() {
     if (authStep.value < 4) {
@@ -76,10 +76,12 @@ export function useAuth(config: AuthConfig = {}) {
         case 3: {
           const password = authData.value.password;
           return !!(
-            password &&
-            password.length >= minPasswordLength &&
-            password.length <= maxPasswordLength &&
-            PASSWORD_PATTERN.test(password)
+            (
+              password &&
+              password.length >= minPasswordLength &&
+              password.length <= maxPasswordLength
+            )
+            // && PASSWORD_PATTERN.test(password)
           );
         }
         case 4: {
