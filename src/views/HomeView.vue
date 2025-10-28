@@ -91,6 +91,7 @@ import { useHandlePaste } from "@/composables/useHandlePaste";
 import { useVoiceRecord } from "@/composables/useVoiceRecord";
 import { usePagination } from "@/composables/usePagination";
 import { useChat } from "@/composables/useChat";
+import { useMessage } from "@/composables/useMessage";
 
 type ModeOption = {
     mode: "light-response" | "web-search" | "deep-search";
@@ -335,11 +336,19 @@ const isLoadingState = (response: string): boolean => {
     );
 };
 
-const { copyResponse, shareResponse, loadChats } = useChat({
+const {
+    copyResponse,
+    shareResponse,
+    loadChats,
+    processLinksInUserPrompt,
+    processLinksInResponse,
+} = useChat({
     copiedIndex,
     chats,
     currentChatId,
     updateExpandedArray,
+    linkPreviewCache,
+    fetchLinkPreview,
 });
 
 const { prevResult, goToPage, nextResult, getPagination } = usePagination({
@@ -349,14 +358,15 @@ const { prevResult, goToPage, nextResult, getPagination } = usePagination({
     deepSearchPagination,
     scrollToLastMessage,
 });
-const getLoadingMessage = (response: string): string => {
-    if (response === "web-search..." || response === "light-search...")
-        return "Web searching...";
-    if (response === "deep-search...") return "Deep searching...";
-    if (response === "light-response...") return "Thinking...";
-    if (response === "refreshing...") return "Refreshing...";
-    return "Thinking...";
-};
+
+const { getLoadingMessage, formatSearchResults, removeTemporaryMessage } =
+    useMessage({
+        chats,
+        currentChatId,
+        deepSearchPagination,
+        updateExpandedArray,
+        saveChats,
+    });
 
 const suggestionPrompts = [
     {
@@ -729,95 +739,6 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
         // Observe new video containers
         observeNewVideoContainers();
     }
-}
-
-// Helper function to remove temporary message on error/abort
-function removeTemporaryMessage(chatId: string, messageIndex: number) {
-    if (messageIndex < 0) return;
-
-    const targetChat = chats.value.find((chat) => chat.id === chatId);
-    if (targetChat && targetChat.messages.length > messageIndex) {
-        // Remove the temporary message
-        targetChat.messages.splice(messageIndex, 1);
-
-        // If this was the only message, we might want to handle the empty chat
-        if (targetChat.messages.length === 0) {
-            // Optionally delete the empty chat or keep it with a default title
-            targetChat.title = "New Chat";
-        }
-
-        targetChat.updatedAt = new Date().toISOString();
-        updateExpandedArray();
-        saveChats();
-    }
-}
-
-// Helper function to format search results
-function formatSearchResults(
-    searchData: any,
-    mode: string,
-    messageIndex?: number,
-): string {
-    const results = searchData.results || searchData.json || [];
-    if (results.length === 0) {
-        return "No search results found for your query.";
-    }
-
-    // For deep-search, set up pagination
-    if (mode === "deep-search" && messageIndex !== undefined) {
-        // Get or create chat pagination map
-        let chatPagination = deepSearchPagination.value.get(
-            currentChatId.value,
-        );
-        if (!chatPagination) {
-            chatPagination = new Map();
-            deepSearchPagination.value.set(currentChatId.value, chatPagination);
-        }
-
-        chatPagination.set(messageIndex, {
-            currentPage: 0,
-            totalPages: results.length,
-        });
-
-        // Force reactivity
-        deepSearchPagination.value = new Map(deepSearchPagination.value);
-    }
-
-    // Store results as JSON for client-side pagination
-    if (mode === "deep-search") {
-        return JSON.stringify({
-            mode: "deep-search",
-            results: results,
-            metadata: {
-                total_pages: searchData.total_pages,
-                content_depth: searchData.content_depth,
-                search_time: searchData.search_time,
-            },
-        });
-    }
-
-    // For web-search, keep existing format (all results shown)
-    let formatted = "";
-    const { total_pages } = searchData;
-
-    formatted += `Showing **${results.length}** of **${total_pages || results.length}** total results\n\n`;
-    formatted += `\n\n`;
-
-    results.forEach((result: any, index: number) => {
-        const title = result.title || "No Title";
-        const url = result.url || "#";
-        const description = result.description || "No description available";
-
-        formatted += `#### ${index + 1}. ${title} \n\n`;
-        formatted += `${description} \n`;
-        formatted += `[${url}](${url}) \n\n`;
-
-        if (index < results.length - 1) {
-            formatted += `\n\n\n`;
-        }
-    });
-
-    return formatted;
 }
 
 // Function to render a single deep search result
@@ -1274,43 +1195,6 @@ const scrollContainerPadding = computed(() => {
         return "pb-[110px] sm:pb-[120px]";
     }
 });
-
-// Process links in a response and generate previews
-async function processLinksInResponse(index: number) {
-    const targetChat = chats.value.find(
-        (chat) => chat.id === currentChatId.value,
-    );
-    if (
-        !targetChat ||
-        !targetChat.messages[index] ||
-        !targetChat.messages[index].response ||
-        targetChat.messages[index].response === "..."
-    )
-        return;
-
-    const urls = extractUrls(targetChat.messages[index].response);
-    if (urls.length > 0) {
-        urls.slice(0, 3).forEach((url) => {
-            fetchLinkPreview(url).then(() => {
-                linkPreviewCache.value = new Map(linkPreviewCache.value);
-            });
-        });
-    }
-}
-
-// Process links in user prompts
-async function processLinksInUserPrompt(prompt: string) {
-    const urls = extractUrls(prompt);
-    if (urls.length > 0) {
-        // Start loading previews for user prompt links
-        urls.slice(0, 3).forEach((url) => {
-            fetchLinkPreview(url).then(() => {
-                // Trigger reactivity update
-                linkPreviewCache.value = new Map(linkPreviewCache.value);
-            });
-        });
-    }
-}
 
 let resizeTimeout: any;
 window.onresize = () => {

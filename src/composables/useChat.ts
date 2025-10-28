@@ -1,5 +1,5 @@
-import type { Chat } from "@/types";
-import { copyCode } from "@/utils/globals";
+import type { Chat, LinkPreview } from "@/types";
+import { copyCode, extractUrls } from "@/utils/globals";
 import type { Ref } from "vue";
 import { toast } from "vue-sonner/src/packages/state.js";
 
@@ -8,11 +8,15 @@ export function useChat({
   chats,
   currentChatId,
   updateExpandedArray,
+  linkPreviewCache,
+  fetchLinkPreview,
 }: {
   copiedIndex: Ref<number | null>;
   chats: Ref<Chat[]>;
   currentChatId: Ref<string | null>;
   updateExpandedArray: () => void;
+  linkPreviewCache: Ref<Map<string, LinkPreview | null>>;
+  fetchLinkPreview: (url: string) => Promise<LinkPreview | null>;
 }) {
   function copyResponse(text: string, index?: number) {
     navigator.clipboard
@@ -77,9 +81,55 @@ export function useChat({
     }
   }
 
+  // Process links in a response and generate previews
+  async function processLinksInResponse(index: number) {
+    const targetChat = chats.value.find(
+      (chat) => chat.id === currentChatId.value,
+    );
+    if (
+      !targetChat ||
+      !targetChat.messages[index] ||
+      !targetChat.messages[index].response ||
+      targetChat.messages[index].response === "..."
+    )
+      return;
+
+    processLinks(targetChat.messages[index].response);
+  }
+
+  // Process links in user prompts
+  async function processLinksInUserPrompt(index: number) {
+    const targetChat = chats.value.find(
+      (chat) => chat.id === currentChatId.value,
+    );
+    if (
+      !targetChat ||
+      !targetChat.messages[index] ||
+      !targetChat.messages[index].prompt ||
+      targetChat.messages[index].prompt === ""
+    )
+      return;
+    processLinks(targetChat.messages[index].prompt || "");
+  }
+
+  const processLinks = (message: string) => {
+    const urls = extractUrls(message);
+    if (urls.length > 0) {
+      // Start loading previews for user prompt links
+      urls.slice(0, 3).forEach((url) => {
+        fetchLinkPreview(url).then(() => {
+          // Trigger reactivity update
+          linkPreviewCache.value = new Map(linkPreviewCache.value);
+        });
+      });
+    }
+  };
+
   return {
     copyResponse,
     shareResponse,
     loadChats,
+    processLinksInUserPrompt,
+    processLinksInResponse,
   };
 }
