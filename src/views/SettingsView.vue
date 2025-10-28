@@ -65,7 +65,7 @@ const {
     hideSidebar: () => void;
     setShowInput: () => void;
     clearAllChats: () => void;
-    switchToChat: (chatId: string) => void;
+    switchToChat: (chatId: string) => boolean;
     createNewChat: (initialMessage?: string) => void;
     deleteChat: (chatId: string) => void;
     renameChat: (chatId: string, newTitle: string) => void;

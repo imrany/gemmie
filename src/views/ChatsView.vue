@@ -30,7 +30,7 @@ const {
     parsedUserDetails: Ref<UserDetails>;
     screenWidth: Ref<number>;
     isCollapsed: Ref<boolean>;
-    switchToChat: (chatId: string) => void;
+    switchToChat: (chatId: string) => boolean;
     createNewChat: (initialMessage?: string) => string;
 };
 
@@ -56,8 +56,10 @@ const filteredChats = computed(() => {
 });
 
 const handleChatClick = (chatId: string) => {
-    switchToChat(chatId);
-    router.push("/");
+    const success = switchToChat(chatId);
+    if (success) {
+        router.push("/");
+    }
 };
 
 const handleNewChat = () => {

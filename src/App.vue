@@ -101,11 +101,18 @@ const syncStatus = ref({
 });
 const isOpenTextHighlightPopover = ref(false);
 const currentChat: ComputedRef<CurrentChat | undefined> = computed(() => {
+    if (!currentChatId.value || !chats.value.length) {
+        return undefined;
+    }
     return chats.value.find((chat) => chat.id === currentChatId.value);
 });
 
 const currentMessages = computed(() => {
     return currentChat.value?.messages || [];
+});
+
+const isCurrentChatValid = computed(() => {
+    return currentChatId.value && currentChat.value !== undefined;
 });
 
 const parsedUserDetailsNullValues: UserDetails = {
@@ -543,11 +550,12 @@ function deleteChat(chatId: string) {
                     // If we deleted the current chat, switch to another one
                     if (currentChatId.value === chatId) {
                         if (chats.value.length > 0) {
-                            currentChatId.value = chats.value[0].id;
+                            switchToChat(chats.value[0].id);
                         } else {
                             currentChatId.value = "";
+                            localStorage.removeItem("currentChatId");
+                            updateExpandedArray();
                         }
-                        updateExpandedArray();
                     }
 
                     clearCurrentDraft();
@@ -1053,19 +1061,28 @@ function autoSaveDraft() {
     }, 1000);
 }
 
-function switchToChat(chatId: string) {
+function switchToChat(chatId: string): boolean {
     try {
         if (!chatId || typeof chatId !== "string") {
             console.error("Invalid chat ID provided");
-            return;
+            return false;
         }
 
-        const chatExists = chats.value.find((chat) => chat.id === chatId);
-        if (!chatExists) {
+        // Validate chat exists
+        const targetChat = chats.value.find((chat) => chat.id === chatId);
+        if (!targetChat) {
+            console.warn(`Chat with ID ${chatId} not found`);
             toast.error("Chat not found");
-            return;
+            return false;
         }
 
+        // Skip if already on the target chat
+        if (currentChatId.value === chatId) {
+            console.log("Already on target chat, skipping switch");
+            return true;
+        }
+
+        // Save current draft if switching from another chat
         if (currentChatId.value) {
             const textarea = document.getElementById(
                 "prompt",
@@ -1088,23 +1105,34 @@ function switchToChat(chatId: string) {
             saveChatDrafts();
         }
 
+        // Update current chat ID
+        const previousChatId = currentChatId.value;
         currentChatId.value = chatId;
+
+        // Update expanded array for new chat
         updateExpandedArray();
 
+        // Persist to localStorage
         try {
             localStorage.setItem("currentChatId", currentChatId.value);
         } catch (error) {
             console.error("Failed to save current chat ID:", error);
+            // Don't fail the entire operation for localStorage issues
         }
 
+        // Load draft for new chat and update UI
         nextTick(() => {
             loadChatDrafts();
             // scrollToLastMessage()
         });
+
+        console.log(`✅ Switched from chat ${previousChatId} to ${chatId}`);
+        return true;
     } catch (error: any) {
+        console.error("Error in switchToChat:", error);
         reportError({
             action: `switchToChat`,
-            message: "Error swicthing to chat: " + error.message,
+            message: "Error switching to chat: " + error.message,
             description: `Failed to switch to chat : ${chatId.slice(0, 10)}...`,
             status: getErrorStatus(error),
             userId: parsedUserDetails.value?.userId || "unknown",
@@ -1115,6 +1143,7 @@ function switchToChat(chatId: string) {
                 errorName: error.name,
             }),
         } as PlatformError);
+        return false;
     }
 }
 
@@ -2231,21 +2260,47 @@ function loadLocalData() {
             }
         }
 
+        // Initialize currentChatId with validation
         const storedChatId = localStorage.getItem("currentChatId");
-        if (storedChatId && typeof storedChatId === "string") {
+        if (
+            storedChatId &&
+            typeof storedChatId === "string" &&
+            storedChatId.trim()
+        ) {
             const chatExists = chats.value.some(
                 (chat) => chat.id === storedChatId,
             );
             if (chatExists) {
                 currentChatId.value = storedChatId;
+                console.log(`✅ Restored current chat ID: ${storedChatId}`);
             } else {
                 console.warn(
-                    "Stored currentChatId does not exist in chats, clearing",
+                    `Stored currentChatId '${storedChatId}' does not exist in chats, selecting fallback`,
                 );
                 currentChatId.value =
                     chats.value.length > 0 ? chats.value[0].id : "";
-                localStorage.setItem("currentChatId", currentChatId.value);
+                if (currentChatId.value) {
+                    localStorage.setItem("currentChatId", currentChatId.value);
+                    console.log(
+                        `✅ Set fallback current chat ID: ${currentChatId.value}`,
+                    );
+                } else {
+                    localStorage.removeItem("currentChatId");
+                    console.log("No chats available, cleared currentChatId");
+                }
             }
+        } else if (chats.value.length > 0) {
+            // No stored chat ID but we have chats, select the first one
+            currentChatId.value = chats.value[0].id;
+            localStorage.setItem("currentChatId", currentChatId.value);
+            console.log(
+                `✅ No stored chat ID, selected first chat: ${currentChatId.value}`,
+            );
+        } else {
+            // No stored chat ID and no chats
+            currentChatId.value = "";
+            localStorage.removeItem("currentChatId");
+            console.log("No chats available and no stored chat ID");
         }
 
         loadLinkPreviewCache();
@@ -3293,6 +3348,7 @@ const globalState = {
     linkPreviewCache,
     currentChat,
     currentMessages,
+    isCurrentChatValid,
     activeChatMenu,
     showProfileMenu,
     planStatus,

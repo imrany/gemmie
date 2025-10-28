@@ -93,7 +93,7 @@ const props = defineProps<{
         toggleSidebar: () => void;
         logout: () => void;
         createNewChat: () => void;
-        switchToChat: (chatId: string) => void;
+        switchToChat: (chatId: string) => boolean;
         deleteChat: (chatId: string) => void;
         renameChat: (chatId: string, newTitle: string) => void;
         manualSync: () => void;
@@ -199,9 +199,15 @@ function cancelRename() {
 }
 
 function handleChatClick(chatId: string) {
-    props.functions.switchToChat(chatId);
-    if (router.currentRoute.value.path !== "/") router.push("/");
-    if (screenWidth.value < 720) hideSidebar();
+    const success = props.functions.switchToChat(chatId);
+    if (success) {
+        if (router.currentRoute.value.path !== "/") {
+            router.push("/");
+        }
+        if (screenWidth.value < 720) {
+            hideSidebar();
+        }
+    }
 }
 
 function handleNavAction(action: () => void) {

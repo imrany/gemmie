@@ -199,7 +199,7 @@ const {
     scrollToLastMessage: () => void;
     showConfirmDialog: (options: ConfirmDialogOptions) => void;
     clearAllChats: () => void;
-    switchToChat: (chatId: string) => void;
+    switchToChat: (chatId: string) => boolean;
     createNewChat: (initialMessage?: string) => string;
     deleteChat: (chatId: string) => void;
     loadChatDrafts: () => void;
@@ -1490,8 +1490,7 @@ onMounted(() => {
         }
     }
 
-    const savedChatId = localStorage.getItem("currentChatId");
-    if (savedChatId) currentChatId.value = savedChatId;
+    // currentChatId initialization is handled in loadLocalData() with proper validation
 
     // 2. Load cached data and setup handlers
     loadLinkPreviewCache();
