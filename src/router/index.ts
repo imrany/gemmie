@@ -128,5 +128,4 @@ function checkAuthStatus(): boolean {
   }
 }
 
-export { checkAuthStatus };
 export default router;

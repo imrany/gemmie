@@ -15,10 +15,12 @@ const {
     deleteChat,
     renameChat,
     manualSync,
+    isAuthenticated,
 } = inject("globalState") as {
     chats: Ref<Chat[]>;
     parsedUserDetails: Ref<UserDetails>;
     isCollapsed: Ref<boolean>;
+    isAuthenticated: Ref<boolean>;
 
     clearAllChats: () => void;
     toggleSidebar: () => void;
@@ -32,6 +34,7 @@ const {
 </script>
 <template>
     <div
+        v-if="isAuthenticated"
         class="flex h-[100vh] bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
     >
         <!-- Sidebar -->
