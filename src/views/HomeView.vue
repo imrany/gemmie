@@ -90,6 +90,7 @@ import PastePreview from "@/components/PastePreview.vue";
 import { useHandlePaste } from "@/composables/useHandlePaste";
 import { useVoiceRecord } from "@/composables/useVoiceRecord";
 import { usePagination } from "@/composables/usePagination";
+import { useChat } from "@/composables/useChat";
 
 type ModeOption = {
     mode: "light-response" | "web-search" | "deep-search";
@@ -334,6 +335,13 @@ const isLoadingState = (response: string): boolean => {
     );
 };
 
+const { copyResponse, shareResponse, loadChats } = useChat({
+    copiedIndex,
+    chats,
+    currentChatId,
+    updateExpandedArray,
+});
+
 const { prevResult, goToPage, nextResult, getPagination } = usePagination({
     currentChatId,
     currentMessages,
@@ -392,26 +400,6 @@ function selectSuggestion(prompt: string) {
             textarea.focus();
         }
     });
-}
-
-// Load chats from localStorage
-function loadChats() {
-    try {
-        const stored = localStorage.getItem("chats");
-        if (stored) {
-            const parsedChats = JSON.parse(stored);
-            if (Array.isArray(parsedChats)) {
-                chats.value = parsedChats;
-                if (chats.value.length > 0 && !currentChatId.value) {
-                    currentChatId.value = chats.value[0].id;
-                }
-            }
-        }
-        updateExpandedArray();
-    } catch (error) {
-        console.error("Failed to load chats:", error);
-        chats.value = [];
-    }
 }
 
 // Debounced scroll handler to improve performance
@@ -1320,50 +1308,6 @@ async function processLinksInUserPrompt(prompt: string) {
                 // Trigger reactivity update
                 linkPreviewCache.value = new Map(linkPreviewCache.value);
             });
-        });
-    }
-}
-
-// ---------- Extra actions ----------
-function copyResponse(text: string, index?: number) {
-    navigator.clipboard
-        .writeText(text)
-        .then(() => {
-            copiedIndex.value = index ?? null;
-
-            setTimeout(() => {
-                copiedIndex.value = null;
-            }, 2000);
-        })
-        .catch((err) => {
-            console.error("Failed to copy text: ", err);
-            toast.error("Copy Failed", {
-                duration: 3000,
-                description: "",
-            });
-        });
-}
-
-function shareResponse(text: string, prompt?: string) {
-    if (navigator.share) {
-        navigator
-            .share({
-                title:
-                    prompt && prompt.length > 200
-                        ? `${prompt.slice(0, 200)}...\n\n`
-                        : `${prompt || "Gemmie Chat"}\n\n`,
-                text,
-            })
-            .then(() => {
-                console.log("Share successful");
-            })
-            .catch((err) => {
-                console.log("Share canceled", err);
-            });
-    } else {
-        copyCode(text);
-        toast.info("Copied Instead", {
-            duration: 3000,
         });
     }
 }
