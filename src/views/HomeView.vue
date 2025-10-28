@@ -102,7 +102,65 @@ type ModeOption = {
 };
 
 // Inject global state
-const globalState = inject("globalState") as {
+const {
+    shouldHaveLimit,
+    chatDrafts,
+    screenWidth,
+    isCollapsed,
+    syncStatus,
+    isAuthenticated,
+    currentChatId,
+    pastePreviews,
+    chats,
+    planStatus,
+    userDetailsDebounceTimer,
+    chatsDebounceTimer,
+    logout,
+    isLoading,
+    cancelAllRequests,
+    checkRequestLimitBeforeSubmit,
+    clearAllChats,
+    switchToChat,
+    createNewChat,
+    deleteChat,
+    loadChatDrafts,
+    saveChatDrafts,
+    clearCurrentDraft,
+    renameChat,
+    deleteMessage,
+    scrollToLastMessage,
+    scrollableElem,
+    showScrollDownButton,
+    handleScroll,
+    scrollToBottom,
+    saveChats,
+    linkPreviewCache,
+    fetchLinkPreview,
+    loadLinkPreviewCache,
+    saveLinkPreviewCache,
+    syncToServer,
+    currentChat,
+    currentMessages,
+    updateExpandedArray,
+    manualSync,
+    toggleSidebar,
+    autoGrow,
+    isFreeUser,
+    isUserOnline,
+    checkInternetConnection,
+    activeRequests,
+    requestChatMap,
+    performSmartSync,
+    resetRequestCount,
+    incrementRequestCount,
+    loadRequestCount,
+    FREE_REQUEST_LIMIT,
+    requestsRemaining,
+    shouldShowUpgradePrompt,
+    isRequestLimitExceeded,
+    parsedUserDetails,
+} = inject("globalState") as {
+    shouldHaveLimit: boolean;
     chatDrafts: Ref<Map<string, string>>;
     userDetailsDebounceTimer: any;
     chatsDebounceTimer: any;
@@ -199,64 +257,6 @@ const globalState = inject("globalState") as {
     shouldShowUpgradePrompt: Ref<boolean>;
     isRequestLimitExceeded: Ref<boolean>;
 };
-
-const {
-    chatDrafts,
-    screenWidth,
-    isCollapsed,
-    syncStatus,
-    isAuthenticated,
-    currentChatId,
-    pastePreviews,
-    chats,
-    planStatus,
-    userDetailsDebounceTimer,
-    chatsDebounceTimer,
-    logout,
-    isLoading,
-    cancelAllRequests,
-    checkRequestLimitBeforeSubmit,
-    clearAllChats,
-    switchToChat,
-    createNewChat,
-    deleteChat,
-    loadChatDrafts,
-    saveChatDrafts,
-    clearCurrentDraft,
-    renameChat,
-    deleteMessage,
-    scrollToLastMessage,
-    scrollableElem,
-    showScrollDownButton,
-    handleScroll,
-    scrollToBottom,
-    saveChats,
-    linkPreviewCache,
-    fetchLinkPreview,
-    loadLinkPreviewCache,
-    saveLinkPreviewCache,
-    syncToServer,
-    currentChat,
-    currentMessages,
-    updateExpandedArray,
-    manualSync,
-    toggleSidebar,
-    autoGrow,
-    isFreeUser,
-    isUserOnline,
-    checkInternetConnection,
-    activeRequests,
-    requestChatMap,
-    performSmartSync,
-    resetRequestCount,
-    incrementRequestCount,
-    loadRequestCount,
-    FREE_REQUEST_LIMIT,
-    requestsRemaining,
-    shouldShowUpgradePrompt,
-    isRequestLimitExceeded,
-    parsedUserDetails,
-} = globalState;
 
 const route = useRoute();
 // ---------- State ----------
@@ -1121,12 +1121,6 @@ const inputPlaceholderText = computed(() => {
     if (isLoading.value) {
         return "Please wait...";
     }
-
-    const shouldHaveLimit =
-        isFreeUser.value ||
-        planStatus.value.isExpired ||
-        planStatus.value.status === "no-plan" ||
-        planStatus.value.status === "expired";
 
     if (shouldHaveLimit) {
         return `Ask me a question... (${requestsRemaining.value} requests left)`;
