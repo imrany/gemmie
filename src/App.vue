@@ -41,8 +41,11 @@ import { useApiCall } from "@/composables/useApiCall";
 import type { PlatformError } from "./types";
 import { useDebounceFn } from "@vueuse/core";
 import DemoToast from "./components/DemoToast.vue";
+import { checkAuthStatus } from "@/router";
+import { useRouter } from "vue-router";
 
 const { reportError } = usePlatformError();
+const router = useRouter();
 const isUserOnline = ref(navigator.onLine);
 const connectionStatus = ref<"online" | "offline" | "checking">("online");
 const screenWidth = ref(screen.width);
@@ -180,17 +183,7 @@ const isDemoMode = computed(() => {
     return user.email === "demo@example.com";
 });
 
-const isAuthenticated = computed(() => {
-    const user = parsedUserDetails.value;
-    if (!user || typeof user !== "object") return false;
-
-    return !!(
-        user.email &&
-        user.username &&
-        user.sessionId &&
-        /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(user.email)
-    );
-});
+const isAuthenticated = computed(() => checkAuthStatus());
 
 const currentChatId = ref<string>("");
 const chats = ref<Chat[]>([]);
@@ -686,6 +679,7 @@ async function logout() {
                             );
                         }
                     });
+                    router.replace("/auth");
                 } catch (stateError) {
                     console.error(
                         "Error clearing application state:",

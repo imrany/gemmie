@@ -95,11 +95,7 @@ router.beforeEach((to, from, next) => {
     // Redirect authenticated users to intended destination or home
     const redirectPath = (to.query.redirect as string) || "/";
     // Prevent redirect loops
-    if (redirectPath === "/auth") {
-      next("/");
-    } else {
-      next(redirectPath);
-    }
+    next(redirectPath === "/auth" ? "/" : redirectPath);
   } else if (to.path === "/" && to.query.redirect && isAuthenticated) {
     // Handle redirect on home page for authenticated users
     const redirectPath = to.query.redirect as string;

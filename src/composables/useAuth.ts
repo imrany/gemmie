@@ -158,6 +158,9 @@ export function useAuth() {
   }
 
   async function handleAuthSuccess() {
+    // Handle redirect logic
+    await handlePostAuthRedirect();
+
     // Reset form state
     authStep.value = 1;
     authData.value = {
@@ -166,9 +169,6 @@ export function useAuth() {
       password: "",
       agreeToTerms: false,
     };
-
-    // Handle redirect logic
-    await handlePostAuthRedirect();
   }
 
   async function handlePostAuthRedirect() {
