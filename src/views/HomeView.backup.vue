@@ -45,6 +45,7 @@ import {
     detectLargePaste,
     SPINDLE_URL,
 } from "@/utils/globals";
+import CreateSessView from "./CreateSessView.vue";
 import router from "@/router";
 import {
     copyPasteContent,
@@ -155,6 +156,7 @@ const globalState = inject("globalState") as {
     logout: () => void;
     isLoading: Ref<boolean>;
     expanded: Ref<boolean[]>;
+    showInput: Ref<boolean>;
     scrollToLastMessage: () => void;
     showConfirmDialog: (options: ConfirmDialogOptions) => void;
     setShowInput: () => void;
@@ -216,6 +218,7 @@ const {
     chatDrafts,
     screenWidth,
     isCollapsed,
+    authData,
     syncStatus,
     isAuthenticated,
     currentChatId,
@@ -226,8 +229,10 @@ const {
     chatsDebounceTimer,
     logout,
     isLoading,
+    showInput,
     cancelAllRequests,
     checkRequestLimitBeforeSubmit,
+    setShowInput,
     clearAllChats,
     switchToChat,
     createNewChat,
@@ -273,6 +278,8 @@ const {
 
 const route = useRoute();
 // ---------- State ----------
+const authStep = ref(1);
+const showCreateSession = ref(false);
 const copiedIndex = ref<number | null>(null);
 const now = ref(Date.now());
 const showInputModeDropdown = ref(false);
@@ -355,6 +362,7 @@ const suggestionPrompts = [
 // Handle suggestion selection
 function selectSuggestion(prompt: string) {
     showSuggestionsDropup.value = false;
+    setShowInput();
 
     nextTick(() => {
         const textarea = document.getElementById(
@@ -385,6 +393,60 @@ function loadChats() {
     } catch (error) {
         console.error("Failed to load chats:", error);
         chats.value = [];
+    }
+}
+
+// ---------- Authentication Functions ----------
+function nextAuthStep() {
+    if (authStep.value < 4) {
+        authStep.value++;
+    }
+}
+
+function prevAuthStep() {
+    if (authStep.value > 1) {
+        authStep.value--;
+    }
+}
+
+function validateCurrentStep(): boolean {
+    try {
+        switch (authStep.value) {
+            case 1: {
+                const username = authData.value.username?.trim();
+                return !!(
+                    username &&
+                    username.length >= 2 &&
+                    username.length <= 50
+                );
+            }
+            case 2: {
+                const email = authData.value.email?.trim();
+                return !!(
+                    email &&
+                    email.length > 0 &&
+                    email.length <= 100 &&
+                    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+                );
+            }
+            case 3: {
+                const password = authData.value.password;
+                return !!(
+                    password &&
+                    password.length > 7 &&
+                    password.length < 25
+                );
+            }
+            case 4: {
+                const agreeToTerms = authData.value.agreeToTerms;
+                return agreeToTerms;
+            }
+            default:
+                return false;
+        }
+    } catch (error) {
+        console.error("Error validating current step:", error);
+        return false;
     }
 }
 
@@ -1472,6 +1534,235 @@ const scrollContainerPadding = computed(() => {
     }
 });
 
+// Add connection checking before authentication
+async function handleStepSubmit(e: Event) {
+    e.preventDefault();
+
+    // Early validation with improved error handling
+    if (!validateCurrentStep()) {
+        handleValidationError();
+        return;
+    }
+
+    // Handle step progression vs final submission
+    if (authStep.value < 4) {
+        nextAuthStep();
+        return;
+    }
+
+    // Final step - create session
+    await handleFinalAuthStep();
+}
+
+function handleValidationError() {
+    const errorMessages = {
+        1: {
+            title: "Invalid Username",
+            message:
+                "Username must be 2-50 characters and contain only letters, numbers, and underscores",
+        },
+        2: {
+            title: "Invalid Email",
+            message:
+                "Please enter a valid email address (e.g., name@example.com)",
+        },
+        3: {
+            title: "Weak Password",
+            message:
+                "Password must be at least 7 characters with a mix of letters and numbers",
+        },
+        4: {
+            title: "Terms Required",
+            message:
+                "Please accept the Terms of Service and Privacy Policy to continue",
+        },
+    };
+
+    const error = errorMessages[authStep.value as keyof typeof errorMessages];
+    if (error) {
+        toast.warning(error.title, {
+            duration: 4000,
+            description: error.message,
+            action: {
+                label: "Got it",
+                onClick: () => {},
+            },
+        });
+    }
+}
+
+async function handleFinalAuthStep() {
+    try {
+        isLoading.value = true;
+
+        // Add a small delay to show the loading state
+        await new Promise((resolve) => setTimeout(resolve, 500));
+
+        const response = await handleAuth(authData.value);
+
+        // Validate response structure
+        if (!response) {
+            throw new Error("No response received from authentication service");
+        }
+
+        if (response.error) {
+            throw new Error(response.error);
+        }
+
+        if (!response.data || !response.success) {
+            throw new Error(
+                "Authentication failed - invalid response structure",
+            );
+        }
+
+        // Success handling
+        await handleAuthSuccess(response);
+    } catch (err: any) {
+        await handleAuthError(err);
+    } finally {
+        isLoading.value = false;
+    }
+}
+
+async function handleAuthSuccess(response: any) {
+    // Reset form state
+    setShowCreateSession(false);
+    authStep.value = 1;
+    authData.value = {
+        username: "",
+        email: "",
+        password: "",
+        agreeToTerms: false,
+    };
+
+    // Load user data
+    loadRequestCount();
+
+    // Handle redirect logic
+    await handlePostAuthRedirect();
+
+    // Focus input field
+    nextTick(() => {
+        const textarea = document.getElementById(
+            "prompt",
+        ) as HTMLTextAreaElement;
+        if (textarea) {
+            textarea.focus();
+            // Add a subtle animation to draw attention to the input
+            textarea.classList.add("ring-2", "ring-blue-500");
+            setTimeout(() => {
+                textarea.classList.remove("ring-2", "ring-blue-500");
+            }, 2000);
+        }
+    });
+}
+
+async function handlePostAuthRedirect() {
+    // Check multiple sources for upgrade redirect
+    const previousRoute = document.referrer;
+    const urlParams = new URLSearchParams(window.location.search);
+    const isFromUpgrade =
+        previousRoute.includes("/upgrade") ||
+        (urlParams.has("from") && urlParams.get("from") === "upgrade") ||
+        (urlParams.has("redirect") && urlParams.get("redirect") === "upgrade");
+
+    if (isFromUpgrade) {
+        console.log("Redirecting to upgrade page after authentication");
+        // Small delay for better UX flow
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        router.push("/upgrade");
+    }
+}
+
+async function handleAuthError(err: any) {
+    console.error("Authentication error:", err);
+
+    // Map specific error types to user-friendly messages
+    const errorMap = {
+        timeout: {
+            title: "Connection Timeout",
+            message:
+                "Server took too long to respond. Please check your connection and try again.",
+        },
+        network: {
+            title: "Network Error",
+            message:
+                "Unable to reach our servers. Please check your internet connection.",
+        },
+        credentials: {
+            title: "Invalid Credentials",
+            message:
+                "The username, email, or password you entered is incorrect.",
+        },
+        server: {
+            title: "Server Error",
+            message:
+                "Our servers are experiencing issues. Please try again in a few minutes.",
+        },
+        rate_limit: {
+            title: "Too Many Attempts",
+            message: "Please wait a moment before trying again.",
+        },
+        default: {
+            title: "Authentication Failed",
+            message: "An unexpected error occurred. Please try again.",
+        },
+    };
+
+    // Determine error type
+    let errorType: keyof typeof errorMap = "default";
+    const errorMessage = err.message?.toLowerCase() || "";
+
+    if (errorMessage.includes("timeout")) errorType = "timeout";
+    else if (
+        errorMessage.includes("failed to fetch") ||
+        errorMessage.includes("network")
+    )
+        errorType = "network";
+    else if (
+        errorMessage.includes("http 4") ||
+        errorMessage.includes("invalid") ||
+        errorMessage.includes("credential")
+    )
+        errorType = "credentials";
+    else if (errorMessage.includes("http 5")) errorType = "server";
+    else if (errorMessage.includes("rate") || errorMessage.includes("limit"))
+        errorType = "rate_limit";
+
+    const error = errorMap[errorType];
+
+    // Show error with retry option
+    toast.error(error.title, {
+        duration: 6000,
+        description: error.message,
+        action: {
+            label: "Try Again",
+            onClick: () => {
+                // Auto-focus the relevant input field based on step
+                nextTick(() => {
+                    const focusMap = {
+                        1: "username",
+                        2: "email",
+                        3: "password",
+                        4: "agreeToTerms",
+                    };
+                    const fieldToFocus =
+                        focusMap[authStep.value as keyof typeof focusMap];
+                    if (fieldToFocus && fieldToFocus !== "agreeToTerms") {
+                        const input = document.querySelector(
+                            `[name="${fieldToFocus}"]`,
+                        ) as HTMLInputElement;
+                        if (input) {
+                            input.focus();
+                            input.select();
+                        }
+                    }
+                });
+            },
+        },
+    });
+}
+
 // Process links in a response and generate previews
 async function processLinksInResponse(index: number) {
     const targetChat = chats.value.find(
@@ -1728,6 +2019,16 @@ function cleanupPastePreviewHandlers() {
     document.removeEventListener("click", handlePastePreviewClick, true);
     document.removeEventListener("click", handleRemovePastePreview, true);
     console.log("Paste preview handlers cleaned up"); // Debug log
+}
+
+function updateAuthData(
+    data: Partial<{ username: string; email: string; password: string }>,
+) {
+    Object.assign(authData.value, data);
+}
+
+function setShowCreateSession(value: boolean) {
+    showCreateSession.value = value;
 }
 
 // Initialize Speech Recognition (add this in the onMounted hook)
@@ -2121,6 +2422,7 @@ watch(
     (newPath, oldPath) => {
         if (newPath === "/new") {
             createNewChat();
+            setShowInput();
             router.replace(`${oldPath}`);
         }
     },
@@ -2165,6 +2467,7 @@ onMounted(() => {
     // Handle /new route redirect first
     if (route.path === "/new") {
         createNewChat();
+        setShowInput();
         router.replace("/");
         return; // Early return since we're redirecting
     }
@@ -2257,6 +2560,11 @@ onMounted(() => {
         }
 
         loadChats();
+
+        // Only show input if no messages exist
+        if (currentMessages.value.length === 0) {
+            setShowInput();
+        }
 
         // Initial sync from server
         setTimeout(() => {
@@ -2422,6 +2730,7 @@ onUnmounted(() => {
                 isCollapsed,
             }"
             :functions="{
+                setShowInput,
                 clearAllChats,
                 toggleSidebar,
                 logout,
@@ -2462,8 +2771,42 @@ onUnmounted(() => {
                     }"
                 />
                 <!-- Empty State -->
+                <CreateSessView
+                    v-if="!isAuthenticated"
+                    :data="{
+                        chats,
+                        currentChatId,
+                        isCollapsed,
+                        parsedUserDetails,
+                        screenWidth,
+                        syncStatus,
+                        isLoading,
+                        authStep,
+                        showCreateSession,
+                        authData,
+                        currentMessages,
+                    }"
+                    :functions="{
+                        validateCurrentStep,
+                        setShowInput,
+                        clearAllChats,
+                        toggleSidebar,
+                        logout,
+                        handleAuthSuccess,
+                        createNewChat,
+                        switchToChat,
+                        deleteChat,
+                        renameChat,
+                        manualSync,
+                        handleStepSubmit,
+                        prevAuthStep,
+                        updateAuthData,
+                        setShowCreateSession,
+                    }"
+                />
+
                 <EmptyChatView
-                    v-if="currentMessages.length === 0"
+                    v-else-if="isAuthenticated && currentMessages.length === 0"
                     :suggestionPrompts="suggestionPrompts"
                     :selectSuggestion="selectSuggestion"
                 />
@@ -2471,11 +2814,14 @@ onUnmounted(() => {
                 <!-- Chat Messages Container -->
                 <div
                     ref="scrollableElem"
-                    v-else
+                    v-else-if="currentMessages.length !== 0 && isAuthenticated"
                     class="relative md:max-w-3xl min-h-[calc(100vh-200px)] max-w-[100vw] flex-grow no-scrollbar overflow-y-auto px-2 w-full space-y-3 sm:space-y-4 mt-[55px] pt-8 scroll-container"
                     :class="scrollContainerPadding"
                 >
-                    <div class="flex flex-col gap-1">
+                    <div
+                        v-if="currentMessages.length !== 0"
+                        class="flex flex-col gap-1"
+                    >
                         <div
                             v-for="(item, i) in currentMessages"
                             :key="`chat-${i}`"
@@ -2842,6 +3188,10 @@ onUnmounted(() => {
 
                 <!-- Input Area -->
                 <div
+                    v-if="
+                        (currentMessages.length !== 0 || showInput === true) &&
+                        isAuthenticated
+                    "
                     :style="
                         screenWidth > 720 && !isCollapsed
                             ? 'left:270px;'

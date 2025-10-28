@@ -7,6 +7,7 @@ import WorkplaceView from "@/views/WorkplaceView.vue";
 import ChatsView from "@/views/ChatsView.vue";
 import type { UserDetails } from "@/types";
 import LegalPage from "@/views/LegalPage.vue";
+import CreateSessView from "@/views/CreateSessView.vue";
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -15,6 +16,12 @@ const router = createRouter({
       path: "/",
       name: "home",
       component: HomeView,
+      meta: { requiresAuth: true },
+    },
+    {
+      path: "/auth",
+      name: "authentication",
+      component: CreateSessView,
       meta: { requiresAuth: false },
     },
     {
@@ -63,70 +70,67 @@ const router = createRouter({
     },
     {
       path: "/:pathMatch(.*)*",
-      redirect: "/",
+      name: "not-found",
+      redirect: () => {
+        // Smart redirect for 404s based on auth status
+        const isAuthenticated = checkAuthStatus();
+        return isAuthenticated ? "/" : "/auth";
+      },
     },
   ],
 });
 
-// Navigation guard to check authentication
+// Simple navigation guard
 router.beforeEach((to, from, next) => {
-  // Check if route requires authentication
   const requiresAuth = to.matched.some((record) => record.meta.requiresAuth);
-
-  // Get authentication status from localStorage
   const isAuthenticated = checkAuthStatus();
 
   if (requiresAuth && !isAuthenticated) {
-    // User is not authenticated but trying to access protected route
-    console.log("Access denied: Authentication required");
-
-    // Redirect to home with return URL
+    // Redirect to auth with intended destination
     next({
-      path: "/",
-      query: {
-        redirect: to.fullPath,
-        from: (to.name as string) || "protected",
-      },
+      path: "/auth",
+      query: { redirect: to.fullPath },
     });
-  } else if (to.path === "/" && isAuthenticated && to.query.redirect) {
-    // User is authenticated and home has a redirect query
-    // Allow them to see home (they might want to create new session)
-    next();
+  } else if (to.path === "/auth" && isAuthenticated) {
+    // Redirect authenticated users to intended destination or home
+    const redirectPath = (to.query.redirect as string) || "/";
+    // Prevent redirect loops
+    if (redirectPath === "/auth") {
+      next("/");
+    } else {
+      next(redirectPath);
+    }
+  } else if (to.path === "/" && to.query.redirect && isAuthenticated) {
+    // Handle redirect on home page for authenticated users
+    const redirectPath = to.query.redirect as string;
+    if (redirectPath && redirectPath !== "/" && redirectPath !== "/auth") {
+      next(redirectPath);
+    } else {
+      next();
+    }
   } else {
     // Allow navigation
     next();
   }
 });
 
-// Helper function to check authentication status
+// Simple authentication check
 function checkAuthStatus(): boolean {
   try {
-    // Check if user details exist in localStorage
     const userDetails = localStorage.getItem("userdetails");
+    if (!userDetails) return false;
 
-    if (!userDetails) {
-      return false;
-    }
-
-    // Parse and validate user details
     const parsedDetails: UserDetails = JSON.parse(userDetails);
-
-    // Check if user has required authentication fields
-    const hasValidAuth = !!(
-      parsedDetails &&
-      parsedDetails.username &&
-      parsedDetails.email &&
-      parsedDetails.userId
+    return !!(
+      parsedDetails?.username &&
+      parsedDetails?.email &&
+      parsedDetails?.userId
     );
-
-    return hasValidAuth;
   } catch (error) {
-    console.error("Error checking authentication status:", error);
+    console.error("Auth check failed:", error);
     return false;
   }
 }
 
-// Optional: Export helper for use in components
 export { checkAuthStatus };
-
 export default router;

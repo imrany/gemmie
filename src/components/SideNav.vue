@@ -25,6 +25,7 @@ import {
     X,
     CheckCircle,
     CloudUpload,
+    RefreshCw,
     LoaderCircle,
 } from "lucide-vue-next";
 import {
@@ -90,7 +91,6 @@ const props = defineProps<{
         };
     };
     functions: {
-        setShowInput: () => void;
         clearAllChats: () => void;
         toggleSidebar: () => void;
         logout: () => void;
