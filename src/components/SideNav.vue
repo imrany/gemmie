@@ -36,7 +36,19 @@ import {
 } from "@/components/ui/tooltip";
 import type { FunctionalComponent } from "vue";
 
-const globalState = inject("globalState") as {
+const {
+    activeChatMenu,
+    toggleChatMenu,
+    showProfileMenu,
+    handleClickOutside,
+    isAuthenticated,
+    planStatus,
+    syncStatus,
+    hideSidebar,
+    isSidebarHidden,
+    screenWidth,
+    currentChatId,
+} = inject("globalState") as {
     currentChatId: Ref<string>;
     activeChatMenu: Ref<string | null>;
     toggleChatMenu: (chatId: string, evenet: Event) => void;
@@ -64,19 +76,6 @@ const globalState = inject("globalState") as {
     isSidebarHidden: Ref<boolean>;
     screenWidth: Ref<number>;
 };
-const {
-    activeChatMenu,
-    toggleChatMenu,
-    showProfileMenu,
-    handleClickOutside,
-    isAuthenticated,
-    planStatus,
-    syncStatus,
-    hideSidebar,
-    isSidebarHidden,
-    screenWidth,
-    currentChatId,
-} = globalState;
 
 const props = defineProps<{
     data: {
