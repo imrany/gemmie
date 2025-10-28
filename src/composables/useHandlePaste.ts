@@ -257,6 +257,7 @@ export function useHandlePaste({
     // Restore body scroll
     document.body.style.overflow = "auto";
   }
+
   return {
     handlePaste,
     removePastePreview,
