@@ -42,15 +42,10 @@ import {
     copyCode,
     isPromptTooShort,
     WRAPPER_URL,
-    detectLargePaste,
     SPINDLE_URL,
 } from "@/utils/globals";
-import CreateSessView from "./CreateSessView.vue";
 import router from "@/router";
-import {
-    copyPasteContent,
-    detectContentType,
-} from "@/utils/previewPasteContent";
+import { copyPasteContent } from "@/utils/previewPasteContent";
 import PastePreviewModal from "@/components/Modals/PastePreviewModal.vue";
 import { useRoute } from "vue-router";
 import TextHightlightPopover from "@/components/TextHightlightPopover.vue";
@@ -92,6 +87,11 @@ import LinkPreviewComponent from "@/components/LinkPreview.vue";
 import EmptyChatView from "./EmptyChatView.vue";
 import type { FunctionalComponent } from "vue";
 import PastePreview from "@/components/PastePreview.vue";
+import { useHandlePaste } from "@/composables/useHandlePaste";
+import { useVoiceRecord } from "@/composables/useVoiceRecord";
+import { usePagination } from "@/composables/usePagination";
+import { useChat } from "@/composables/useChat";
+import { useMessage } from "@/composables/useMessage";
 
 type ModeOption = {
     mode: "light-response" | "web-search" | "deep-search";
@@ -102,25 +102,71 @@ type ModeOption = {
 };
 
 // Inject global state
-const globalState = inject("globalState") as {
-    handleAuth: (data: {
-        username: string;
-        email: string;
-        password: string;
-        agreeToTerms: boolean;
-    }) => any;
+const {
+    shouldHaveLimit,
+    chatDrafts,
+    screenWidth,
+    isCollapsed,
+    syncStatus,
+    isAuthenticated,
+    currentChatId,
+    pastePreviews,
+    chats,
+    planStatus,
+    userDetailsDebounceTimer,
+    chatsDebounceTimer,
+    logout,
+    isLoading,
+    cancelAllRequests,
+    checkRequestLimitBeforeSubmit,
+    clearAllChats,
+    switchToChat,
+    createNewChat,
+    deleteChat,
+    loadChatDrafts,
+    saveChatDrafts,
+    clearCurrentDraft,
+    renameChat,
+    deleteMessage,
+    scrollToLastMessage,
+    scrollableElem,
+    showScrollDownButton,
+    handleScroll,
+    scrollToBottom,
+    saveChats,
+    linkPreviewCache,
+    fetchLinkPreview,
+    loadLinkPreviewCache,
+    saveLinkPreviewCache,
+    syncToServer,
+    currentChat,
+    currentMessages,
+    updateExpandedArray,
+    manualSync,
+    toggleSidebar,
+    autoGrow,
+    isFreeUser,
+    isUserOnline,
+    checkInternetConnection,
+    activeRequests,
+    requestChatMap,
+    performSmartSync,
+    resetRequestCount,
+    incrementRequestCount,
+    loadRequestCount,
+    FREE_REQUEST_LIMIT,
+    requestsRemaining,
+    shouldShowUpgradePrompt,
+    isRequestLimitExceeded,
+    parsedUserDetails,
+} = inject("globalState") as {
+    shouldHaveLimit: boolean;
     chatDrafts: Ref<Map<string, string>>;
     userDetailsDebounceTimer: any;
     chatsDebounceTimer: any;
     screenWidth: Ref<number>;
     confirmDialog: Ref<ConfirmDialogOptions>;
     isCollapsed: Ref<boolean>;
-    authData: Ref<{
-        username: string;
-        email: string;
-        password: string;
-        agreeToTerms: boolean;
-    }>;
     syncStatus: Ref<{
         lastSync: Date | null;
         syncing: boolean;
@@ -156,10 +202,8 @@ const globalState = inject("globalState") as {
     logout: () => void;
     isLoading: Ref<boolean>;
     expanded: Ref<boolean[]>;
-    showInput: Ref<boolean>;
     scrollToLastMessage: () => void;
     showConfirmDialog: (options: ConfirmDialogOptions) => void;
-    setShowInput: () => void;
     clearAllChats: () => void;
     switchToChat: (chatId: string) => void;
     createNewChat: (initialMessage?: string) => string;
@@ -214,72 +258,8 @@ const globalState = inject("globalState") as {
     isRequestLimitExceeded: Ref<boolean>;
 };
 
-const {
-    chatDrafts,
-    screenWidth,
-    isCollapsed,
-    authData,
-    syncStatus,
-    isAuthenticated,
-    currentChatId,
-    pastePreviews,
-    chats,
-    planStatus,
-    userDetailsDebounceTimer,
-    chatsDebounceTimer,
-    logout,
-    isLoading,
-    showInput,
-    cancelAllRequests,
-    checkRequestLimitBeforeSubmit,
-    setShowInput,
-    clearAllChats,
-    switchToChat,
-    createNewChat,
-    deleteChat,
-    loadChatDrafts,
-    saveChatDrafts,
-    clearCurrentDraft,
-    renameChat,
-    deleteMessage,
-    scrollToLastMessage,
-    scrollableElem,
-    showScrollDownButton,
-    handleScroll,
-    scrollToBottom,
-    saveChats,
-    linkPreviewCache,
-    fetchLinkPreview,
-    loadLinkPreviewCache,
-    saveLinkPreviewCache,
-    syncToServer,
-    currentChat,
-    currentMessages,
-    updateExpandedArray,
-    manualSync,
-    toggleSidebar,
-    autoGrow,
-    handleAuth,
-    isFreeUser,
-    isUserOnline,
-    checkInternetConnection,
-    activeRequests,
-    requestChatMap,
-    performSmartSync,
-    resetRequestCount,
-    incrementRequestCount,
-    loadRequestCount,
-    FREE_REQUEST_LIMIT,
-    requestsRemaining,
-    shouldShowUpgradePrompt,
-    isRequestLimitExceeded,
-    parsedUserDetails,
-} = globalState;
-
 const route = useRoute();
 // ---------- State ----------
-const authStep = ref(1);
-const showCreateSession = ref(false);
 const copiedIndex = ref<number | null>(null);
 const now = ref(Date.now());
 const showInputModeDropdown = ref(false);
@@ -292,6 +272,22 @@ const microphonePermission = ref<"granted" | "denied" | "prompt">("prompt");
 const transcriptionDuration = ref(0);
 let transcriptionTimer: number | null = null;
 let updateTimeout: number | null = null;
+const {
+    stopVoiceRecording,
+    clearVoiceTranscription,
+    toggleVoiceRecording,
+    initializeSpeechRecognition,
+} = useVoiceRecord({
+    voiceRecognition,
+    isRecording,
+    isTranscribing,
+    transcribedText,
+    microphonePermission,
+    autoGrow,
+    transcriptionDuration,
+    updateTimeout,
+    transcriptionTimer,
+});
 
 const showSuggestionsDropup = ref(false);
 
@@ -305,6 +301,24 @@ const currentPasteContent = ref<{
     charCount: number;
     type: "text" | "code" | "json" | "markdown" | "xml" | "html";
 } | null>(null);
+const {
+    openPasteModal,
+    handlePastePreviewClick,
+    closePasteModal,
+    cleanupPastePreviewHandlers,
+    setupPastePreviewHandlers,
+    handleRemovePastePreview,
+    removePastePreview,
+    handlePaste,
+} = useHandlePaste({
+    currentChatId,
+    pastePreviews,
+    chatDrafts,
+    saveChatDrafts,
+    autoGrow,
+    currentPasteContent,
+    showPasteModal,
+});
 
 const deepSearchPagination = ref<
     Map<string, Map<number, { currentPage: number; totalPages: number }>>
@@ -322,14 +336,37 @@ const isLoadingState = (response: string): boolean => {
     );
 };
 
-const getLoadingMessage = (response: string): string => {
-    if (response === "web-search..." || response === "light-search...")
-        return "Web searching...";
-    if (response === "deep-search...") return "Deep searching...";
-    if (response === "light-response...") return "Thinking...";
-    if (response === "refreshing...") return "Refreshing...";
-    return "Thinking...";
-};
+const {
+    copyResponse,
+    shareResponse,
+    loadChats,
+    processLinksInUserPrompt,
+    processLinksInResponse,
+} = useChat({
+    copiedIndex,
+    chats,
+    currentChatId,
+    updateExpandedArray,
+    linkPreviewCache,
+    fetchLinkPreview,
+});
+
+const { prevResult, goToPage, nextResult, getPagination } = usePagination({
+    currentChatId,
+    currentMessages,
+    isDeepSearchResult,
+    deepSearchPagination,
+    scrollToLastMessage,
+});
+
+const { getLoadingMessage, formatSearchResults, removeTemporaryMessage } =
+    useMessage({
+        chats,
+        currentChatId,
+        deepSearchPagination,
+        updateExpandedArray,
+        saveChats,
+    });
 
 const suggestionPrompts = [
     {
@@ -362,7 +399,6 @@ const suggestionPrompts = [
 // Handle suggestion selection
 function selectSuggestion(prompt: string) {
     showSuggestionsDropup.value = false;
-    setShowInput();
 
     nextTick(() => {
         const textarea = document.getElementById(
@@ -374,80 +410,6 @@ function selectSuggestion(prompt: string) {
             textarea.focus();
         }
     });
-}
-
-// Load chats from localStorage
-function loadChats() {
-    try {
-        const stored = localStorage.getItem("chats");
-        if (stored) {
-            const parsedChats = JSON.parse(stored);
-            if (Array.isArray(parsedChats)) {
-                chats.value = parsedChats;
-                if (chats.value.length > 0 && !currentChatId.value) {
-                    currentChatId.value = chats.value[0].id;
-                }
-            }
-        }
-        updateExpandedArray();
-    } catch (error) {
-        console.error("Failed to load chats:", error);
-        chats.value = [];
-    }
-}
-
-// ---------- Authentication Functions ----------
-function nextAuthStep() {
-    if (authStep.value < 4) {
-        authStep.value++;
-    }
-}
-
-function prevAuthStep() {
-    if (authStep.value > 1) {
-        authStep.value--;
-    }
-}
-
-function validateCurrentStep(): boolean {
-    try {
-        switch (authStep.value) {
-            case 1: {
-                const username = authData.value.username?.trim();
-                return !!(
-                    username &&
-                    username.length >= 2 &&
-                    username.length <= 50
-                );
-            }
-            case 2: {
-                const email = authData.value.email?.trim();
-                return !!(
-                    email &&
-                    email.length > 0 &&
-                    email.length <= 100 &&
-                    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
-                );
-            }
-            case 3: {
-                const password = authData.value.password;
-                return !!(
-                    password &&
-                    password.length > 7 &&
-                    password.length < 25
-                );
-            }
-            case 4: {
-                const agreeToTerms = authData.value.agreeToTerms;
-                return agreeToTerms;
-            }
-            default:
-                return false;
-        }
-    } catch (error) {
-        console.error("Error validating current step:", error);
-        return false;
-    }
 }
 
 // Debounced scroll handler to improve performance
@@ -478,217 +440,6 @@ function isJustLinks(prompt: string): boolean {
 
     // If only short filler words remain, treat as "just links"
     return promptWithoutUrls.split(/\s+/).filter(Boolean).length <= 3;
-}
-
-function handlePaste(e: ClipboardEvent) {
-    try {
-        const pastedText = e.clipboardData?.getData("text") || "";
-
-        if (!pastedText.trim()) return;
-
-        if (detectLargePaste(pastedText)) {
-            e.preventDefault();
-
-            const wordCount = pastedText
-                .trim()
-                .split(/\s+/)
-                .filter((word) => word.length > 0).length;
-            const charCount = pastedText.length;
-
-            // Enhanced paste preview with proper content handling
-            const processedContent =
-                wordCount > 100 ? `#pastedText#${pastedText}` : pastedText;
-
-            // Store in pastePreviews map using current chat ID
-            if (currentChatId.value) {
-                pastePreviews.value.set(currentChatId.value, {
-                    content: processedContent,
-                    wordCount,
-                    charCount,
-                    show: true,
-                });
-            }
-
-            // Save draft immediately when large content is pasted
-            if (currentChatId.value) {
-                const textarea = document.getElementById(
-                    "prompt",
-                ) as HTMLTextAreaElement;
-                let currentDraft = textarea?.value || "";
-
-                // Combine current textarea content with paste preview content
-                const fullDraft = currentDraft + processedContent;
-                chatDrafts.value.set(currentChatId.value, fullDraft);
-                saveChatDrafts();
-
-                // Clear textarea but keep the draft with paste content
-                if (textarea) {
-                    textarea.value = currentDraft; // Keep only the typed content in textarea
-                    autoGrow({ target: textarea } as any);
-                }
-            }
-
-            toast.info("Large content detected", {
-                duration: 4000,
-                description: `${wordCount} words, ${charCount} characters. Preview shown below.`,
-            });
-        } else {
-            // For small pastes, let the normal paste happen and then save draft
-            setTimeout(() => {
-                if (currentChatId.value) {
-                    const textarea = document.getElementById(
-                        "prompt",
-                    ) as HTMLTextAreaElement;
-                    if (textarea) {
-                        // For small pastes, save the normal content
-                        chatDrafts.value.set(
-                            currentChatId.value,
-                            textarea.value,
-                        );
-                        saveChatDrafts();
-                    }
-                }
-            }, 100);
-        }
-    } catch (error) {
-        console.error("Error handling paste:", error);
-        // Don't prevent default on error - let normal paste proceed
-    }
-}
-
-function removePastePreview() {
-    // Remove paste preview for current chat
-    if (currentChatId.value) {
-        pastePreviews.value.delete(currentChatId.value);
-        saveChatDrafts();
-
-        // Also clear textarea if it contains paste content
-        const textarea = document.getElementById(
-            "prompt",
-        ) as HTMLTextAreaElement;
-        if (textarea && textarea.value.includes("#pastedText#")) {
-            // Extract any non-pasted content
-            const parts = textarea.value.split("#pastedText#");
-            textarea.value = parts[0] || "";
-            autoGrow({ target: textarea } as any);
-        }
-    }
-}
-
-// Helper to get pagination for a message
-function getPagination(messageIndex: number) {
-    if (!currentChatId.value) return { currentPage: 0, totalPages: 0 };
-
-    const message = currentMessages.value[messageIndex];
-    if (!message || !isDeepSearchResult(message.response)) {
-        return { currentPage: 0, totalPages: 0 };
-    }
-
-    // Get or create chat pagination map
-    let chatPagination = deepSearchPagination.value.get(currentChatId.value);
-    if (!chatPagination) {
-        chatPagination = new Map();
-        deepSearchPagination.value.set(currentChatId.value, chatPagination);
-    }
-
-    // Get or initialize pagination for this message
-    let pagination = chatPagination.get(messageIndex);
-    if (!pagination) {
-        // Extract total pages from the deep search result
-        try {
-            const parsed = JSON.parse(message.response);
-            const totalPages = parsed.results?.length || 0;
-            pagination = { currentPage: 0, totalPages };
-            chatPagination.set(messageIndex, pagination);
-        } catch (e) {
-            pagination = { currentPage: 0, totalPages: 0 };
-        }
-    }
-
-    return pagination;
-}
-
-// Navigation functions
-function nextResult(messageIndex: number) {
-    if (!currentChatId.value) return;
-
-    const pagination = getPagination(messageIndex);
-    if (pagination.currentPage < pagination.totalPages - 1) {
-        // Get or create chat pagination map
-        let chatPagination = deepSearchPagination.value.get(
-            currentChatId.value,
-        );
-        if (!chatPagination) {
-            chatPagination = new Map();
-            deepSearchPagination.value.set(currentChatId.value, chatPagination);
-        }
-
-        // Update the specific message pagination
-        chatPagination.set(messageIndex, {
-            ...pagination,
-            currentPage: pagination.currentPage + 1,
-        });
-
-        // Force reactivity
-        deepSearchPagination.value = new Map(deepSearchPagination.value);
-
-        nextTick(() => scrollToLastMessage());
-    }
-}
-
-function prevResult(messageIndex: number) {
-    if (!currentChatId.value) return;
-
-    const pagination = getPagination(messageIndex);
-    if (pagination.currentPage > 0) {
-        // Get or create chat pagination map
-        let chatPagination = deepSearchPagination.value.get(
-            currentChatId.value,
-        );
-        if (!chatPagination) {
-            chatPagination = new Map();
-            deepSearchPagination.value.set(currentChatId.value, chatPagination);
-        }
-
-        // Update the specific message pagination
-        chatPagination.set(messageIndex, {
-            ...pagination,
-            currentPage: pagination.currentPage - 1,
-        });
-
-        // Force reactivity
-        deepSearchPagination.value = new Map(deepSearchPagination.value);
-
-        nextTick(() => scrollToLastMessage());
-    }
-}
-
-function goToPage(messageIndex: number, pageIndex: number) {
-    if (!currentChatId.value) return;
-
-    const pagination = getPagination(messageIndex);
-    if (pageIndex >= 0 && pageIndex < pagination.totalPages) {
-        // FIXED: Proper validation
-        // Get or create chat pagination map
-        let chatPagination = deepSearchPagination.value.get(
-            currentChatId.value,
-        );
-        if (!chatPagination) {
-            chatPagination = new Map();
-            deepSearchPagination.value.set(currentChatId.value, chatPagination);
-        }
-
-        // Update the specific message pagination
-        chatPagination.set(messageIndex, {
-            ...pagination,
-            currentPage: pageIndex,
-        });
-
-        // Force reactivity
-        deepSearchPagination.value = new Map(deepSearchPagination.value);
-
-        nextTick(() => scrollToLastMessage());
-    }
 }
 
 // handleSubmit function
@@ -988,95 +739,6 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
         // Observe new video containers
         observeNewVideoContainers();
     }
-}
-
-// Helper function to remove temporary message on error/abort
-function removeTemporaryMessage(chatId: string, messageIndex: number) {
-    if (messageIndex < 0) return;
-
-    const targetChat = chats.value.find((chat) => chat.id === chatId);
-    if (targetChat && targetChat.messages.length > messageIndex) {
-        // Remove the temporary message
-        targetChat.messages.splice(messageIndex, 1);
-
-        // If this was the only message, we might want to handle the empty chat
-        if (targetChat.messages.length === 0) {
-            // Optionally delete the empty chat or keep it with a default title
-            targetChat.title = "New Chat";
-        }
-
-        targetChat.updatedAt = new Date().toISOString();
-        updateExpandedArray();
-        saveChats();
-    }
-}
-
-// Helper function to format search results
-function formatSearchResults(
-    searchData: any,
-    mode: string,
-    messageIndex?: number,
-): string {
-    const results = searchData.results || searchData.json || [];
-    if (results.length === 0) {
-        return "No search results found for your query.";
-    }
-
-    // For deep-search, set up pagination
-    if (mode === "deep-search" && messageIndex !== undefined) {
-        // Get or create chat pagination map
-        let chatPagination = deepSearchPagination.value.get(
-            currentChatId.value,
-        );
-        if (!chatPagination) {
-            chatPagination = new Map();
-            deepSearchPagination.value.set(currentChatId.value, chatPagination);
-        }
-
-        chatPagination.set(messageIndex, {
-            currentPage: 0,
-            totalPages: results.length,
-        });
-
-        // Force reactivity
-        deepSearchPagination.value = new Map(deepSearchPagination.value);
-    }
-
-    // Store results as JSON for client-side pagination
-    if (mode === "deep-search") {
-        return JSON.stringify({
-            mode: "deep-search",
-            results: results,
-            metadata: {
-                total_pages: searchData.total_pages,
-                content_depth: searchData.content_depth,
-                search_time: searchData.search_time,
-            },
-        });
-    }
-
-    // For web-search, keep existing format (all results shown)
-    let formatted = "";
-    const { total_pages } = searchData;
-
-    formatted += `Showing **${results.length}** of **${total_pages || results.length}** total results\n\n`;
-    formatted += `\n\n`;
-
-    results.forEach((result: any, index: number) => {
-        const title = result.title || "No Title";
-        const url = result.url || "#";
-        const description = result.description || "No description available";
-
-        formatted += `#### ${index + 1}. ${title} \n\n`;
-        formatted += `${description} \n`;
-        formatted += `[${url}](${url}) \n\n`;
-
-        if (index < results.length - 1) {
-            formatted += `\n\n\n`;
-        }
-    });
-
-    return formatted;
 }
 
 // Function to render a single deep search result
@@ -1460,12 +1122,6 @@ const inputPlaceholderText = computed(() => {
         return "Please wait...";
     }
 
-    const shouldHaveLimit =
-        isFreeUser.value ||
-        planStatus.value.isExpired ||
-        planStatus.value.status === "no-plan" ||
-        planStatus.value.status === "expired";
-
     if (shouldHaveLimit) {
         return `Ask me a question... (${requestsRemaining.value} requests left)`;
     }
@@ -1534,316 +1190,6 @@ const scrollContainerPadding = computed(() => {
     }
 });
 
-// Add connection checking before authentication
-async function handleStepSubmit(e: Event) {
-    e.preventDefault();
-
-    // Early validation with improved error handling
-    if (!validateCurrentStep()) {
-        handleValidationError();
-        return;
-    }
-
-    // Handle step progression vs final submission
-    if (authStep.value < 4) {
-        nextAuthStep();
-        return;
-    }
-
-    // Final step - create session
-    await handleFinalAuthStep();
-}
-
-function handleValidationError() {
-    const errorMessages = {
-        1: {
-            title: "Invalid Username",
-            message:
-                "Username must be 2-50 characters and contain only letters, numbers, and underscores",
-        },
-        2: {
-            title: "Invalid Email",
-            message:
-                "Please enter a valid email address (e.g., name@example.com)",
-        },
-        3: {
-            title: "Weak Password",
-            message:
-                "Password must be at least 7 characters with a mix of letters and numbers",
-        },
-        4: {
-            title: "Terms Required",
-            message:
-                "Please accept the Terms of Service and Privacy Policy to continue",
-        },
-    };
-
-    const error = errorMessages[authStep.value as keyof typeof errorMessages];
-    if (error) {
-        toast.warning(error.title, {
-            duration: 4000,
-            description: error.message,
-            action: {
-                label: "Got it",
-                onClick: () => {},
-            },
-        });
-    }
-}
-
-async function handleFinalAuthStep() {
-    try {
-        isLoading.value = true;
-
-        // Add a small delay to show the loading state
-        await new Promise((resolve) => setTimeout(resolve, 500));
-
-        const response = await handleAuth(authData.value);
-
-        // Validate response structure
-        if (!response) {
-            throw new Error("No response received from authentication service");
-        }
-
-        if (response.error) {
-            throw new Error(response.error);
-        }
-
-        if (!response.data || !response.success) {
-            throw new Error(
-                "Authentication failed - invalid response structure",
-            );
-        }
-
-        // Success handling
-        await handleAuthSuccess(response);
-    } catch (err: any) {
-        await handleAuthError(err);
-    } finally {
-        isLoading.value = false;
-    }
-}
-
-async function handleAuthSuccess(response: any) {
-    // Reset form state
-    setShowCreateSession(false);
-    authStep.value = 1;
-    authData.value = {
-        username: "",
-        email: "",
-        password: "",
-        agreeToTerms: false,
-    };
-
-    // Load user data
-    loadRequestCount();
-
-    // Handle redirect logic
-    await handlePostAuthRedirect();
-
-    // Focus input field
-    nextTick(() => {
-        const textarea = document.getElementById(
-            "prompt",
-        ) as HTMLTextAreaElement;
-        if (textarea) {
-            textarea.focus();
-            // Add a subtle animation to draw attention to the input
-            textarea.classList.add("ring-2", "ring-blue-500");
-            setTimeout(() => {
-                textarea.classList.remove("ring-2", "ring-blue-500");
-            }, 2000);
-        }
-    });
-}
-
-async function handlePostAuthRedirect() {
-    // Check multiple sources for upgrade redirect
-    const previousRoute = document.referrer;
-    const urlParams = new URLSearchParams(window.location.search);
-    const isFromUpgrade =
-        previousRoute.includes("/upgrade") ||
-        (urlParams.has("from") && urlParams.get("from") === "upgrade") ||
-        (urlParams.has("redirect") && urlParams.get("redirect") === "upgrade");
-
-    if (isFromUpgrade) {
-        console.log("Redirecting to upgrade page after authentication");
-        // Small delay for better UX flow
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-        router.push("/upgrade");
-    }
-}
-
-async function handleAuthError(err: any) {
-    console.error("Authentication error:", err);
-
-    // Map specific error types to user-friendly messages
-    const errorMap = {
-        timeout: {
-            title: "Connection Timeout",
-            message:
-                "Server took too long to respond. Please check your connection and try again.",
-        },
-        network: {
-            title: "Network Error",
-            message:
-                "Unable to reach our servers. Please check your internet connection.",
-        },
-        credentials: {
-            title: "Invalid Credentials",
-            message:
-                "The username, email, or password you entered is incorrect.",
-        },
-        server: {
-            title: "Server Error",
-            message:
-                "Our servers are experiencing issues. Please try again in a few minutes.",
-        },
-        rate_limit: {
-            title: "Too Many Attempts",
-            message: "Please wait a moment before trying again.",
-        },
-        default: {
-            title: "Authentication Failed",
-            message: "An unexpected error occurred. Please try again.",
-        },
-    };
-
-    // Determine error type
-    let errorType: keyof typeof errorMap = "default";
-    const errorMessage = err.message?.toLowerCase() || "";
-
-    if (errorMessage.includes("timeout")) errorType = "timeout";
-    else if (
-        errorMessage.includes("failed to fetch") ||
-        errorMessage.includes("network")
-    )
-        errorType = "network";
-    else if (
-        errorMessage.includes("http 4") ||
-        errorMessage.includes("invalid") ||
-        errorMessage.includes("credential")
-    )
-        errorType = "credentials";
-    else if (errorMessage.includes("http 5")) errorType = "server";
-    else if (errorMessage.includes("rate") || errorMessage.includes("limit"))
-        errorType = "rate_limit";
-
-    const error = errorMap[errorType];
-
-    // Show error with retry option
-    toast.error(error.title, {
-        duration: 6000,
-        description: error.message,
-        action: {
-            label: "Try Again",
-            onClick: () => {
-                // Auto-focus the relevant input field based on step
-                nextTick(() => {
-                    const focusMap = {
-                        1: "username",
-                        2: "email",
-                        3: "password",
-                        4: "agreeToTerms",
-                    };
-                    const fieldToFocus =
-                        focusMap[authStep.value as keyof typeof focusMap];
-                    if (fieldToFocus && fieldToFocus !== "agreeToTerms") {
-                        const input = document.querySelector(
-                            `[name="${fieldToFocus}"]`,
-                        ) as HTMLInputElement;
-                        if (input) {
-                            input.focus();
-                            input.select();
-                        }
-                    }
-                });
-            },
-        },
-    });
-}
-
-// Process links in a response and generate previews
-async function processLinksInResponse(index: number) {
-    const targetChat = chats.value.find(
-        (chat) => chat.id === currentChatId.value,
-    );
-    if (
-        !targetChat ||
-        !targetChat.messages[index] ||
-        !targetChat.messages[index].response ||
-        targetChat.messages[index].response === "..."
-    )
-        return;
-
-    const urls = extractUrls(targetChat.messages[index].response);
-    if (urls.length > 0) {
-        urls.slice(0, 3).forEach((url) => {
-            fetchLinkPreview(url).then(() => {
-                linkPreviewCache.value = new Map(linkPreviewCache.value);
-            });
-        });
-    }
-}
-
-// Process links in user prompts
-async function processLinksInUserPrompt(prompt: string) {
-    const urls = extractUrls(prompt);
-    if (urls.length > 0) {
-        // Start loading previews for user prompt links
-        urls.slice(0, 3).forEach((url) => {
-            fetchLinkPreview(url).then(() => {
-                // Trigger reactivity update
-                linkPreviewCache.value = new Map(linkPreviewCache.value);
-            });
-        });
-    }
-}
-
-// ---------- Extra actions ----------
-function copyResponse(text: string, index?: number) {
-    navigator.clipboard
-        .writeText(text)
-        .then(() => {
-            copiedIndex.value = index ?? null;
-
-            setTimeout(() => {
-                copiedIndex.value = null;
-            }, 2000);
-        })
-        .catch((err) => {
-            console.error("Failed to copy text: ", err);
-            toast.error("Copy Failed", {
-                duration: 3000,
-                description: "",
-            });
-        });
-}
-
-function shareResponse(text: string, prompt?: string) {
-    if (navigator.share) {
-        navigator
-            .share({
-                title:
-                    prompt && prompt.length > 200
-                        ? `${prompt.slice(0, 200)}...\n\n`
-                        : `${prompt || "Gemmie Chat"}\n\n`,
-                text,
-            })
-            .then(() => {
-                console.log("Share successful");
-            })
-            .catch((err) => {
-                console.log("Share canceled", err);
-            });
-    } else {
-        copyCode(text);
-        toast.info("Copied Instead", {
-            duration: 3000,
-        });
-    }
-}
-
 let resizeTimeout: any;
 window.onresize = () => {
     clearTimeout(resizeTimeout);
@@ -1869,334 +1215,10 @@ function onEnter(e: KeyboardEvent) {
     }
 }
 
-// Function to close paste modal
-function closePasteModal() {
-    showPasteModal.value = false;
-    currentPasteContent.value = null;
-
-    // Restore body scroll
-    document.body.style.overflow = "auto";
-}
-
 // Keyboard handler for modal
 function handleModalKeydown(e: KeyboardEvent) {
     if (e.key === "Escape" && showPasteModal.value) {
         closePasteModal();
-    }
-}
-
-function handlePastePreviewClick(e: Event) {
-    const target = e.target as HTMLElement;
-
-    // Check if the clicked element itself or any parent has the clickable class
-    const clickableElement = target.closest(".paste-preview-clickable");
-
-    if (clickableElement) {
-        // Prevent event bubbling to avoid conflicts
-        e.preventDefault();
-        e.stopPropagation();
-
-        const content = clickableElement.getAttribute("data-paste-content");
-        const wordCount = clickableElement.getAttribute("data-word-count");
-        const charCount = clickableElement.getAttribute("data-char-count");
-
-        if (content && wordCount && charCount) {
-            try {
-                const decodedContent = decodeURIComponent(content);
-                const parsedWordCount = parseInt(wordCount, 10);
-                const parsedCharCount = parseInt(charCount, 10);
-
-                openPasteModal(
-                    decodedContent,
-                    parsedWordCount,
-                    parsedCharCount,
-                );
-            } catch (error) {
-                console.error("Error parsing paste preview data:", error);
-                toast.error("Error opening paste preview", {
-                    duration: 3000,
-                    description: "Could not parse content data",
-                });
-            }
-        }
-    }
-}
-
-function handleRemovePastePreview(e: Event) {
-    const target = e.target as HTMLElement;
-
-    if (target.classList.contains("remove-paste-preview")) {
-        e.preventDefault();
-        e.stopPropagation();
-        removePastePreview();
-    }
-}
-
-function setupPastePreviewHandlers() {
-    // Remove existing listeners to avoid duplicates
-    document.removeEventListener("click", handlePastePreviewClick, true);
-    document.removeEventListener("click", handleRemovePastePreview, true);
-
-    // Add event delegation with capture phase for better reliability
-    document.addEventListener("click", handlePastePreviewClick, true);
-    document.addEventListener("click", handleRemovePastePreview, true);
-
-    console.log("Paste preview handlers setup complete"); // Debug log
-}
-
-// Function to open paste modal
-function openPasteModal(content: string, wordCount: number, charCount: number) {
-    try {
-        // Handle the #pastedText# prefix if present
-        const actualContent = content.startsWith("#pastedText#")
-            ? content.substring(12)
-            : content;
-
-        // Detect content type - provide fallback if function not available
-        let contentType:
-            | "text"
-            | "code"
-            | "json"
-            | "markdown"
-            | "xml"
-            | "html" = "text";
-
-        if (typeof detectContentType === "function") {
-            contentType = detectContentType(actualContent);
-        } else {
-            // Simple content type detection as fallback
-            if (
-                actualContent.trim().startsWith("{") &&
-                actualContent.trim().endsWith("}")
-            ) {
-                contentType = "json";
-            } else if (
-                actualContent.includes("```") ||
-                actualContent.includes("function") ||
-                actualContent.includes("class")
-            ) {
-                contentType = "code";
-            } else if (
-                actualContent.includes("#") ||
-                actualContent.includes("**")
-            ) {
-                contentType = "markdown";
-            } else if (
-                actualContent.includes("<") &&
-                actualContent.includes(">")
-            ) {
-                contentType = "html";
-            }
-        }
-
-        currentPasteContent.value = {
-            content: actualContent,
-            wordCount,
-            charCount,
-            type: contentType,
-        };
-
-        showPasteModal.value = true;
-
-        // Prevent body scroll
-        document.body.style.overflow = "hidden";
-
-        console.log("Paste modal opened successfully", {
-            wordCount,
-            charCount,
-            type: contentType,
-        }); // Debug log
-    } catch (error) {
-        console.error("Error opening paste modal:", error);
-        toast.error("Error opening preview", {
-            duration: 3000,
-            description: "Could not display content preview",
-        });
-    }
-}
-
-function cleanupPastePreviewHandlers() {
-    document.removeEventListener("click", handlePastePreviewClick, true);
-    document.removeEventListener("click", handleRemovePastePreview, true);
-    console.log("Paste preview handlers cleaned up"); // Debug log
-}
-
-function updateAuthData(
-    data: Partial<{ username: string; email: string; password: string }>,
-) {
-    Object.assign(authData.value, data);
-}
-
-function setShowCreateSession(value: boolean) {
-    showCreateSession.value = value;
-}
-
-// Initialize Speech Recognition (add this in the onMounted hook)
-function initializeSpeechRecognition() {
-    const SpeechRecognition =
-        (window as any).SpeechRecognition ||
-        (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-        console.warn("Speech recognition not supported");
-        return;
-    }
-
-    const recognition = new SpeechRecognition();
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = "en-US";
-    recognition.maxAlternatives = 1;
-
-    recognition.onresult = (event: any) => {
-        // Only process if we're still recording (FIX 6)
-        if (!isRecording.value) return;
-
-        let interimTranscript = "";
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-            const transcript = event.results[i][0].transcript;
-            if (event.results[i].isFinal) {
-                transcribedText.value += transcript + " ";
-            } else {
-                interimTranscript += transcript;
-            }
-        }
-        updateTextarea(interimTranscript);
-    };
-
-    recognition.onerror = (event: any) => {
-        console.error("Speech recognition error:", event.error);
-        isRecording.value = false;
-        isTranscribing.value = false;
-        microphonePermission.value =
-            event.error === "not-allowed"
-                ? "denied"
-                : microphonePermission.value;
-
-        if (event.error !== "aborted") {
-            // Don't show toast for manual stops
-            toast.error("Voice Input Error", {
-                duration: 4000,
-                description:
-                    event.error === "not-allowed"
-                        ? "Microphone access denied"
-                        : event.error,
-            });
-        }
-    };
-
-    recognition.onend = () => {
-        // Only restart if we're still supposed to be recording (FIX 5)
-        if (isRecording.value && !isTranscribing.value) {
-            setTimeout(() => {
-                if (isRecording.value) {
-                    // Double check we're still recording
-                    recognition.start();
-                }
-            }, 500);
-        } else {
-            isTranscribing.value = false;
-        }
-    };
-
-    recognition.onstart = () => {
-        isTranscribing.value = true;
-    };
-
-    voiceRecognition.value = recognition;
-}
-
-function updateTextarea(interim: string) {
-    if (updateTimeout) clearTimeout(updateTimeout);
-    updateTimeout = window.setTimeout(() => {
-        const textarea = document.getElementById(
-            "prompt",
-        ) as HTMLTextAreaElement;
-        if (textarea && (isRecording.value || transcribedText.value)) {
-            // Only update if we're actively recording or have transcribed text
-            textarea.value = transcribedText.value + interim;
-            autoGrow({ target: textarea } as any);
-        }
-    }, 100);
-}
-
-// Toggle voice recording
-async function toggleVoiceRecording() {
-    if (!voiceRecognition.value) {
-        toast.error("Speech recognition not available", {
-            duration: 3000,
-            description: "Your browser may not support speech recognition.",
-        });
-        return;
-    }
-
-    if (isRecording.value) {
-        stopVoiceRecording(false); // Don't clear text - let user decide
-    } else {
-        await startVoiceRecording();
-    }
-}
-
-// Start voice recording
-async function startVoiceRecording() {
-    try {
-        await navigator.mediaDevices.getUserMedia({ audio: true });
-        microphonePermission.value = "granted";
-        isRecording.value = true;
-        transcribedText.value = "";
-        transcriptionDuration.value = 0;
-        startTimer();
-
-        const textarea = document.getElementById(
-            "prompt",
-        ) as HTMLTextAreaElement;
-        if (textarea) {
-            textarea.value = "";
-            autoGrow({ target: textarea } as any);
-        }
-
-        voiceRecognition.value?.start();
-    } catch (error) {
-        microphonePermission.value = "denied";
-        isRecording.value = false;
-        toast.error("Microphone Access Denied", {
-            duration: 5000,
-            description: "Please allow microphone access.",
-        });
-    }
-}
-
-// Stop voice recording
-function stopVoiceRecording(clearText: boolean = true) {
-    isRecording.value = false;
-    isTranscribing.value = false;
-    stopTimer();
-    voiceRecognition.value?.stop();
-
-    // Clear transcribed text if requested (FIX 2 & 5)
-    if (clearText) {
-        clearVoiceTranscription();
-    }
-}
-
-function startTimer() {
-    transcriptionTimer = window.setInterval(() => {
-        transcriptionDuration.value += 1;
-    }, 1000);
-}
-
-function stopTimer() {
-    if (transcriptionTimer) clearInterval(transcriptionTimer);
-}
-
-// Clear voice transcription
-function clearVoiceTranscription() {
-    transcribedText.value = "";
-    transcriptionDuration.value = 0; // Reset duration
-    const textarea = document.getElementById("prompt") as HTMLTextAreaElement;
-    if (textarea) {
-        textarea.value = "";
-        autoGrow({ target: textarea } as any);
-        textarea.focus();
     }
 }
 
@@ -2319,12 +1341,6 @@ watch([isRecording, isTranscribing], ([recording, transcribing]) => {
     }
 });
 
-watch(isAuthenticated, (newVal) => {
-    if (newVal) {
-        showCreateSession.value = false;
-    }
-});
-
 // watch for user plan changes
 watch(
     () => ({
@@ -2422,7 +1438,6 @@ watch(
     (newPath, oldPath) => {
         if (newPath === "/new") {
             createNewChat();
-            setShowInput();
             router.replace(`${oldPath}`);
         }
     },
@@ -2467,7 +1482,6 @@ onMounted(() => {
     // Handle /new route redirect first
     if (route.path === "/new") {
         createNewChat();
-        setShowInput();
         router.replace("/");
         return; // Early return since we're redirecting
     }
@@ -2561,11 +1575,6 @@ onMounted(() => {
 
         loadChats();
 
-        // Only show input if no messages exist
-        if (currentMessages.value.length === 0) {
-            setShowInput();
-        }
-
         // Initial sync from server
         setTimeout(() => {
             performSmartSync();
@@ -2621,7 +1630,7 @@ onMounted(() => {
         }
 
         // Auto-focus input only when appropriate
-        if (showInput.value && currentMessages.value.length === 0) {
+        if (currentMessages.value.length === 0) {
             textarea?.focus();
         }
 
@@ -2730,7 +1739,6 @@ onUnmounted(() => {
                 isCollapsed,
             }"
             :functions="{
-                setShowInput,
                 clearAllChats,
                 toggleSidebar,
                 logout,
@@ -2771,42 +1779,8 @@ onUnmounted(() => {
                     }"
                 />
                 <!-- Empty State -->
-                <CreateSessView
-                    v-if="!isAuthenticated"
-                    :data="{
-                        chats,
-                        currentChatId,
-                        isCollapsed,
-                        parsedUserDetails,
-                        screenWidth,
-                        syncStatus,
-                        isLoading,
-                        authStep,
-                        showCreateSession,
-                        authData,
-                        currentMessages,
-                    }"
-                    :functions="{
-                        validateCurrentStep,
-                        setShowInput,
-                        clearAllChats,
-                        toggleSidebar,
-                        logout,
-                        handleAuthSuccess,
-                        createNewChat,
-                        switchToChat,
-                        deleteChat,
-                        renameChat,
-                        manualSync,
-                        handleStepSubmit,
-                        prevAuthStep,
-                        updateAuthData,
-                        setShowCreateSession,
-                    }"
-                />
-
                 <EmptyChatView
-                    v-else-if="isAuthenticated && currentMessages.length === 0"
+                    v-if="currentMessages.length === 0"
                     :suggestionPrompts="suggestionPrompts"
                     :selectSuggestion="selectSuggestion"
                 />
@@ -2814,14 +1788,11 @@ onUnmounted(() => {
                 <!-- Chat Messages Container -->
                 <div
                     ref="scrollableElem"
-                    v-else-if="currentMessages.length !== 0 && isAuthenticated"
+                    v-else
                     class="relative md:max-w-3xl min-h-[calc(100vh-200px)] max-w-[100vw] flex-grow no-scrollbar overflow-y-auto px-2 w-full space-y-3 sm:space-y-4 mt-[55px] pt-8 scroll-container"
                     :class="scrollContainerPadding"
                 >
-                    <div
-                        v-if="currentMessages.length !== 0"
-                        class="flex flex-col gap-1"
-                    >
+                    <div class="flex flex-col gap-1">
                         <div
                             v-for="(item, i) in currentMessages"
                             :key="`chat-${i}`"
@@ -3188,10 +2159,6 @@ onUnmounted(() => {
 
                 <!-- Input Area -->
                 <div
-                    v-if="
-                        (currentMessages.length !== 0 || showInput === true) &&
-                        isAuthenticated
-                    "
                     :style="
                         screenWidth > 720 && !isCollapsed
                             ? 'left:270px;'

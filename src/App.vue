@@ -326,6 +326,11 @@ const shouldShowUpgradePrompt = computed(
 );
 const requestsRemaining = computed(() => requestLimitInfo.value.remaining);
 const isFreeUser = computed(() => userHasRequestLimits.value);
+const shouldHaveLimit =
+    isFreeUser.value ||
+    planStatus.value.isExpired ||
+    planStatus.value.status === "no-plan" ||
+    planStatus.value.status === "expired";
 const requestCount = computed(() => requestLimitInfo.value.currentCount);
 const { apiCall, unsecureApiCall, checkInternetConnection } = useApiCall({
     isUserOnline,
@@ -3292,6 +3297,7 @@ const globalState = {
     isUserOnline,
     connectionStatus,
     hasActiveRequestsForCurrentChat,
+    shouldHaveLimit,
 
     // Core functions
     cancelAllRequests,
