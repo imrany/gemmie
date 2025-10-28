@@ -45,9 +45,7 @@ import {
     SPINDLE_URL,
 } from "@/utils/globals";
 import router from "@/router";
-import {
-    copyPasteContent,
-} from "@/utils/previewPasteContent";
+import { copyPasteContent } from "@/utils/previewPasteContent";
 import PastePreviewModal from "@/components/Modals/PastePreviewModal.vue";
 import { useRoute } from "vue-router";
 import TextHightlightPopover from "@/components/TextHightlightPopover.vue";
@@ -90,6 +88,8 @@ import EmptyChatView from "./EmptyChatView.vue";
 import type { FunctionalComponent } from "vue";
 import PastePreview from "@/components/PastePreview.vue";
 import { useHandlePaste } from "@/composables/useHandlePaste";
+import { useVoiceRecord } from "@/composables/useVoiceRecord";
+import { usePagination } from "@/composables/usePagination";
 
 type ModeOption = {
     mode: "light-response" | "web-search" | "deep-search";
@@ -270,6 +270,22 @@ const microphonePermission = ref<"granted" | "denied" | "prompt">("prompt");
 const transcriptionDuration = ref(0);
 let transcriptionTimer: number | null = null;
 let updateTimeout: number | null = null;
+const {
+    stopVoiceRecording,
+    clearVoiceTranscription,
+    toggleVoiceRecording,
+    initializeSpeechRecognition,
+} = useVoiceRecord({
+    voiceRecognition,
+    isRecording,
+    isTranscribing,
+    transcribedText,
+    microphonePermission,
+    autoGrow,
+    transcriptionDuration,
+    updateTimeout,
+    transcriptionTimer,
+});
 
 const showSuggestionsDropup = ref(false);
 
@@ -318,6 +334,13 @@ const isLoadingState = (response: string): boolean => {
     );
 };
 
+const { prevResult, goToPage, nextResult, getPagination } = usePagination({
+    currentChatId,
+    currentMessages,
+    isDeepSearchResult,
+    deepSearchPagination,
+    scrollToLastMessage,
+});
 const getLoadingMessage = (response: string): string => {
     if (response === "web-search..." || response === "light-search...")
         return "Web searching...";
@@ -419,122 +442,6 @@ function isJustLinks(prompt: string): boolean {
 
     // If only short filler words remain, treat as "just links"
     return promptWithoutUrls.split(/\s+/).filter(Boolean).length <= 3;
-}
-
-// Helper to get pagination for a message
-function getPagination(messageIndex: number) {
-    if (!currentChatId.value) return { currentPage: 0, totalPages: 0 };
-
-    const message = currentMessages.value[messageIndex];
-    if (!message || !isDeepSearchResult(message.response)) {
-        return { currentPage: 0, totalPages: 0 };
-    }
-
-    // Get or create chat pagination map
-    let chatPagination = deepSearchPagination.value.get(currentChatId.value);
-    if (!chatPagination) {
-        chatPagination = new Map();
-        deepSearchPagination.value.set(currentChatId.value, chatPagination);
-    }
-
-    // Get or initialize pagination for this message
-    let pagination = chatPagination.get(messageIndex);
-    if (!pagination) {
-        // Extract total pages from the deep search result
-        try {
-            const parsed = JSON.parse(message.response);
-            const totalPages = parsed.results?.length || 0;
-            pagination = { currentPage: 0, totalPages };
-            chatPagination.set(messageIndex, pagination);
-        } catch (e) {
-            pagination = { currentPage: 0, totalPages: 0 };
-        }
-    }
-
-    return pagination;
-}
-
-// Navigation functions
-function nextResult(messageIndex: number) {
-    if (!currentChatId.value) return;
-
-    const pagination = getPagination(messageIndex);
-    if (pagination.currentPage < pagination.totalPages - 1) {
-        // Get or create chat pagination map
-        let chatPagination = deepSearchPagination.value.get(
-            currentChatId.value,
-        );
-        if (!chatPagination) {
-            chatPagination = new Map();
-            deepSearchPagination.value.set(currentChatId.value, chatPagination);
-        }
-
-        // Update the specific message pagination
-        chatPagination.set(messageIndex, {
-            ...pagination,
-            currentPage: pagination.currentPage + 1,
-        });
-
-        // Force reactivity
-        deepSearchPagination.value = new Map(deepSearchPagination.value);
-
-        nextTick(() => scrollToLastMessage());
-    }
-}
-
-function prevResult(messageIndex: number) {
-    if (!currentChatId.value) return;
-
-    const pagination = getPagination(messageIndex);
-    if (pagination.currentPage > 0) {
-        // Get or create chat pagination map
-        let chatPagination = deepSearchPagination.value.get(
-            currentChatId.value,
-        );
-        if (!chatPagination) {
-            chatPagination = new Map();
-            deepSearchPagination.value.set(currentChatId.value, chatPagination);
-        }
-
-        // Update the specific message pagination
-        chatPagination.set(messageIndex, {
-            ...pagination,
-            currentPage: pagination.currentPage - 1,
-        });
-
-        // Force reactivity
-        deepSearchPagination.value = new Map(deepSearchPagination.value);
-
-        nextTick(() => scrollToLastMessage());
-    }
-}
-
-function goToPage(messageIndex: number, pageIndex: number) {
-    if (!currentChatId.value) return;
-
-    const pagination = getPagination(messageIndex);
-    if (pageIndex >= 0 && pageIndex < pagination.totalPages) {
-        // FIXED: Proper validation
-        // Get or create chat pagination map
-        let chatPagination = deepSearchPagination.value.get(
-            currentChatId.value,
-        );
-        if (!chatPagination) {
-            chatPagination = new Map();
-            deepSearchPagination.value.set(currentChatId.value, chatPagination);
-        }
-
-        // Update the specific message pagination
-        chatPagination.set(messageIndex, {
-            ...pagination,
-            currentPage: pageIndex,
-        });
-
-        // Force reactivity
-        deepSearchPagination.value = new Map(deepSearchPagination.value);
-
-        nextTick(() => scrollToLastMessage());
-    }
 }
 
 // handleSubmit function
@@ -1490,175 +1397,6 @@ function onEnter(e: KeyboardEvent) {
 function handleModalKeydown(e: KeyboardEvent) {
     if (e.key === "Escape" && showPasteModal.value) {
         closePasteModal();
-    }
-}
-
-// Initialize Speech Recognition (add this in the onMounted hook)
-function initializeSpeechRecognition() {
-    const SpeechRecognition =
-        (window as any).SpeechRecognition ||
-        (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-        console.warn("Speech recognition not supported");
-        return;
-    }
-
-    const recognition = new SpeechRecognition();
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = "en-US";
-    recognition.maxAlternatives = 1;
-
-    recognition.onresult = (event: any) => {
-        // Only process if we're still recording (FIX 6)
-        if (!isRecording.value) return;
-
-        let interimTranscript = "";
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-            const transcript = event.results[i][0].transcript;
-            if (event.results[i].isFinal) {
-                transcribedText.value += transcript + " ";
-            } else {
-                interimTranscript += transcript;
-            }
-        }
-        updateTextarea(interimTranscript);
-    };
-
-    recognition.onerror = (event: any) => {
-        console.error("Speech recognition error:", event.error);
-        isRecording.value = false;
-        isTranscribing.value = false;
-        microphonePermission.value =
-            event.error === "not-allowed"
-                ? "denied"
-                : microphonePermission.value;
-
-        if (event.error !== "aborted") {
-            // Don't show toast for manual stops
-            toast.error("Voice Input Error", {
-                duration: 4000,
-                description:
-                    event.error === "not-allowed"
-                        ? "Microphone access denied"
-                        : event.error,
-            });
-        }
-    };
-
-    recognition.onend = () => {
-        // Only restart if we're still supposed to be recording (FIX 5)
-        if (isRecording.value && !isTranscribing.value) {
-            setTimeout(() => {
-                if (isRecording.value) {
-                    // Double check we're still recording
-                    recognition.start();
-                }
-            }, 500);
-        } else {
-            isTranscribing.value = false;
-        }
-    };
-
-    recognition.onstart = () => {
-        isTranscribing.value = true;
-    };
-
-    voiceRecognition.value = recognition;
-}
-
-function updateTextarea(interim: string) {
-    if (updateTimeout) clearTimeout(updateTimeout);
-    updateTimeout = window.setTimeout(() => {
-        const textarea = document.getElementById(
-            "prompt",
-        ) as HTMLTextAreaElement;
-        if (textarea && (isRecording.value || transcribedText.value)) {
-            // Only update if we're actively recording or have transcribed text
-            textarea.value = transcribedText.value + interim;
-            autoGrow({ target: textarea } as any);
-        }
-    }, 100);
-}
-
-// Toggle voice recording
-async function toggleVoiceRecording() {
-    if (!voiceRecognition.value) {
-        toast.error("Speech recognition not available", {
-            duration: 3000,
-            description: "Your browser may not support speech recognition.",
-        });
-        return;
-    }
-
-    if (isRecording.value) {
-        stopVoiceRecording(false); // Don't clear text - let user decide
-    } else {
-        await startVoiceRecording();
-    }
-}
-
-// Start voice recording
-async function startVoiceRecording() {
-    try {
-        await navigator.mediaDevices.getUserMedia({ audio: true });
-        microphonePermission.value = "granted";
-        isRecording.value = true;
-        transcribedText.value = "";
-        transcriptionDuration.value = 0;
-        startTimer();
-
-        const textarea = document.getElementById(
-            "prompt",
-        ) as HTMLTextAreaElement;
-        if (textarea) {
-            textarea.value = "";
-            autoGrow({ target: textarea } as any);
-        }
-
-        voiceRecognition.value?.start();
-    } catch (error) {
-        microphonePermission.value = "denied";
-        isRecording.value = false;
-        toast.error("Microphone Access Denied", {
-            duration: 5000,
-            description: "Please allow microphone access.",
-        });
-    }
-}
-
-// Stop voice recording
-function stopVoiceRecording(clearText: boolean = true) {
-    isRecording.value = false;
-    isTranscribing.value = false;
-    stopTimer();
-    voiceRecognition.value?.stop();
-
-    // Clear transcribed text if requested (FIX 2 & 5)
-    if (clearText) {
-        clearVoiceTranscription();
-    }
-}
-
-function startTimer() {
-    transcriptionTimer = window.setInterval(() => {
-        transcriptionDuration.value += 1;
-    }, 1000);
-}
-
-function stopTimer() {
-    if (transcriptionTimer) clearInterval(transcriptionTimer);
-}
-
-// Clear voice transcription
-function clearVoiceTranscription() {
-    transcribedText.value = "";
-    transcriptionDuration.value = 0; // Reset duration
-    const textarea = document.getElementById("prompt") as HTMLTextAreaElement;
-    if (textarea) {
-        textarea.value = "";
-        autoGrow({ target: textarea } as any);
-        textarea.focus();
     }
 }
 
