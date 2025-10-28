@@ -157,7 +157,6 @@ const globalState = inject("globalState") as {
     expanded: Ref<boolean[]>;
     scrollToLastMessage: () => void;
     showConfirmDialog: (options: ConfirmDialogOptions) => void;
-    setShowInput: () => void;
     clearAllChats: () => void;
     switchToChat: (chatId: string) => void;
     createNewChat: (initialMessage?: string) => string;
@@ -2018,12 +2017,6 @@ watch([isRecording, isTranscribing], ([recording, transcribing]) => {
     }
 });
 
-watch(isAuthenticated, (newVal) => {
-    if (newVal) {
-        showCreateSession.value = false;
-    }
-});
-
 // watch for user plan changes
 watch(
     () => ({
@@ -2313,7 +2306,7 @@ onMounted(() => {
         }
 
         // Auto-focus input only when appropriate
-        if (showInput.value && currentMessages.value.length === 0) {
+        if (currentMessages.value.length === 0) {
             textarea?.focus();
         }
 
