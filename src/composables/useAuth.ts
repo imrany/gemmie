@@ -9,8 +9,22 @@ export interface AuthData {
   agreeToTerms: boolean;
 }
 
-export function useAuth() {
+export interface AuthConfig {
+  loadingDelay?: number;
+  redirectDelay?: number;
+  minPasswordLength?: number;
+  maxPasswordLength?: number;
+}
+
+export function useAuth(config: AuthConfig = {}) {
   const router = useRouter();
+
+  const {
+    loadingDelay = 0,
+    redirectDelay = 0,
+    minPasswordLength = 8,
+    maxPasswordLength = 128,
+  } = config;
 
   const authStep = ref(1);
   const authData: Ref<AuthData> = ref({
@@ -20,6 +34,11 @@ export function useAuth() {
     agreeToTerms: false,
   });
   const isLoading = ref(false);
+
+  // Validation patterns
+  const USERNAME_PATTERN = /^[a-zA-Z0-9_]+$/;
+  const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const PASSWORD_PATTERN = /^(?=.*[A-Za-z])(?=.*\d).+$/; // At least one letter and one number
 
   function nextAuthStep() {
     if (authStep.value < 4) {
@@ -38,7 +57,12 @@ export function useAuth() {
       switch (authStep.value) {
         case 1: {
           const username = authData.value.username?.trim();
-          return !!(username && username.length >= 2 && username.length <= 50);
+          return !!(
+            username &&
+            username.length >= 2 &&
+            username.length <= 50 &&
+            USERNAME_PATTERN.test(username)
+          );
         }
         case 2: {
           const email = authData.value.email?.trim();
@@ -46,16 +70,20 @@ export function useAuth() {
             email &&
             email.length > 0 &&
             email.length <= 100 &&
-            /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+            EMAIL_PATTERN.test(email)
           );
         }
         case 3: {
           const password = authData.value.password;
-          return !!(password && password.length > 7 && password.length < 25);
+          return !!(
+            password &&
+            password.length >= minPasswordLength &&
+            password.length <= maxPasswordLength &&
+            PASSWORD_PATTERN.test(password)
+          );
         }
         case 4: {
-          const agreeToTerms = authData.value.agreeToTerms;
-          return agreeToTerms;
+          return authData.value.agreeToTerms;
         }
         default:
           return false;
@@ -79,8 +107,7 @@ export function useAuth() {
       },
       3: {
         title: "Weak Password",
-        message:
-          "Password must be at least 7 characters with a mix of letters and numbers",
+        message: `Password must be ${minPasswordLength}-${maxPasswordLength} characters with at least one letter and one number`,
       },
       4: {
         title: "Terms Required",
@@ -108,19 +135,16 @@ export function useAuth() {
   ) {
     e.preventDefault();
 
-    // Early validation with improved error handling
     if (!validateCurrentStep()) {
       handleValidationError();
       return;
     }
 
-    // Handle step progression vs final submission
     if (authStep.value < 4) {
       nextAuthStep();
       return;
     }
 
-    // Final step - create session
     await handleFinalAuthStep(handleAuth);
   }
 
@@ -130,12 +154,20 @@ export function useAuth() {
     try {
       isLoading.value = true;
 
-      // Add a small delay to show the loading state
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      if (loadingDelay > 0) {
+        await new Promise((resolve) => setTimeout(resolve, loadingDelay));
+      }
 
-      const response = await handleAuth(authData.value);
+      // Sanitize data before submission
+      const sanitizedData: AuthData = {
+        username: authData.value.username.trim(),
+        email: authData.value.email.trim().toLowerCase(),
+        password: authData.value.password,
+        agreeToTerms: authData.value.agreeToTerms,
+      };
 
-      // Validate response structure
+      const response = await handleAuth(sanitizedData);
+
       if (!response) {
         throw new Error("No response received from authentication service");
       }
@@ -148,7 +180,6 @@ export function useAuth() {
         throw new Error("Authentication failed - invalid response structure");
       }
 
-      // Success handling
       await handleAuthSuccess();
     } catch (err: any) {
       await handleAuthError(err);
@@ -158,7 +189,6 @@ export function useAuth() {
   }
 
   async function handleAuthSuccess() {
-    // Handle redirect logic
     await handlePostAuthRedirect();
 
     // Reset form state
@@ -172,23 +202,25 @@ export function useAuth() {
   }
 
   async function handlePostAuthRedirect() {
-    // Check multiple sources for upgrade redirect
-    const previousRoute = document.referrer;
+    // Check URL parameters for redirect intent
     const urlParams = new URLSearchParams(window.location.search);
-    const isFromUpgrade =
-      previousRoute.includes("/upgrade") ||
-      (urlParams.has("from") && urlParams.get("from") === "upgrade") ||
-      (urlParams.has("redirect") && urlParams.get("redirect") === "upgrade");
+    const redirectParam = urlParams.get("redirect") || urlParams.get("from");
 
-    if (isFromUpgrade) {
-      console.log("Redirecting to upgrade page after authentication");
-      // Small delay for better UX flow
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      router.push("/upgrade");
+    // Whitelist of allowed redirects to prevent open redirect vulnerabilities
+    const allowedRedirects = ["upgrade", "dashboard", "profile"];
+
+    const isValidRedirect =
+      redirectParam && allowedRedirects.includes(redirectParam);
+
+    if (redirectDelay > 0) {
+      await new Promise((resolve) => setTimeout(resolve, redirectDelay));
+    }
+
+    if (isValidRedirect) {
+      console.log(`Redirecting to ${redirectParam} page after authentication`);
+      router.push(`/${redirectParam}`);
     } else {
       console.log("Redirecting to home page after authentication");
-      // Small delay for better UX flow
-      await new Promise((resolve) => setTimeout(resolve, 1000));
       router.push("/");
     }
   }
@@ -196,7 +228,6 @@ export function useAuth() {
   async function handleAuthError(err: any) {
     console.error("Authentication error:", err);
 
-    // Map specific error types to user-friendly messages
     const errorMap = {
       timeout: {
         title: "Connection Timeout",
@@ -212,6 +243,10 @@ export function useAuth() {
         title: "Invalid Credentials",
         message: "The username, email, or password you entered is incorrect.",
       },
+      duplicate: {
+        title: "Account Exists",
+        message: "An account with this email or username already exists.",
+      },
       server: {
         title: "Server Error",
         message:
@@ -221,31 +256,45 @@ export function useAuth() {
         title: "Validation Error",
         message: "Please check your information and try again.",
       },
+      ratelimit: {
+        title: "Too Many Attempts",
+        message: "Please wait a few minutes before trying again.",
+      },
       unknown: {
         title: "Authentication Failed",
         message: "An unexpected error occurred. Please try again.",
       },
     };
 
-    // Determine error type from error object
     let errorType = "unknown";
     const errorMessage = err?.message?.toLowerCase() || "";
+    const errorCode = err?.code?.toLowerCase() || "";
 
-    if (errorMessage.includes("timeout")) {
+    if (errorMessage.includes("timeout") || errorCode === "etimedout") {
       errorType = "timeout";
     } else if (
       errorMessage.includes("network") ||
-      errorMessage.includes("fetch")
+      errorMessage.includes("fetch") ||
+      errorCode === "network_error"
     ) {
       errorType = "network";
     } else if (
       errorMessage.includes("credentials") ||
-      errorMessage.includes("unauthorized")
+      errorMessage.includes("unauthorized") ||
+      err?.status === 401
     ) {
       errorType = "credentials";
+    } else if (
+      errorMessage.includes("duplicate") ||
+      errorMessage.includes("already exists") ||
+      err?.status === 409
+    ) {
+      errorType = "duplicate";
+    } else if (errorMessage.includes("rate limit") || err?.status === 429) {
+      errorType = "ratelimit";
     } else if (errorMessage.includes("server") || err?.status >= 500) {
       errorType = "server";
-    } else if (errorMessage.includes("validation")) {
+    } else if (errorMessage.includes("validation") || err?.status === 400) {
       errorType = "validation";
     }
 
@@ -257,7 +306,6 @@ export function useAuth() {
       action: {
         label: "Retry",
         onClick: () => {
-          // Reset to step 1 for retry
           authStep.value = 1;
         },
       },
@@ -266,6 +314,17 @@ export function useAuth() {
 
   function updateAuthData(field: keyof AuthData, value: any) {
     authData.value[field] = value as never;
+  }
+
+  function resetAuth() {
+    authStep.value = 1;
+    authData.value = {
+      username: "",
+      email: "",
+      password: "",
+      agreeToTerms: false,
+    };
+    isLoading.value = false;
   }
 
   return {
@@ -281,5 +340,6 @@ export function useAuth() {
     handleAuthError,
     handleFinalAuthStep,
     updateAuthData,
+    resetAuth,
   };
 }
