@@ -26,7 +26,7 @@ const {
     toggleSidebar: () => void;
     logout: () => void;
     createNewChat: () => void;
-    switchToChat: (id: string) => void;
+    switchToChat: (id: string) => boolean;
     deleteChat: (id: string) => void;
     renameChat: (id: string, name: string) => void;
     manualSync: () => void;
