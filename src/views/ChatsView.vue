@@ -1,7 +1,6 @@
 <script lang="ts" setup>
 import { inject, ref, computed } from "vue";
 import { useRouter } from "vue-router";
-import SideNav from "@/components/SideNav.vue";
 import type { Ref } from "vue";
 import type { Chat, UserDetails } from "@/types";
 import {
@@ -15,6 +14,7 @@ import {
     Search,
     X,
 } from "lucide-vue-next";
+import ProtectedPage from "@/layout/ProtectedPage.vue";
 
 const {
     chats,
@@ -24,13 +24,6 @@ const {
     isCollapsed,
     switchToChat,
     createNewChat,
-    deleteChat,
-    setShowInput,
-    clearAllChats,
-    toggleSidebar,
-    logout,
-    renameChat,
-    manualSync,
 } = inject("globalState") as {
     chats: Ref<Chat[]>;
     currentChatId: Ref<string>;
@@ -39,13 +32,6 @@ const {
     isCollapsed: Ref<boolean>;
     switchToChat: (chatId: string) => void;
     createNewChat: (initialMessage?: string) => string;
-    deleteChat: (chatId: string) => void;
-    setShowInput: () => void;
-    clearAllChats: () => void;
-    toggleSidebar: () => void;
-    logout: () => void;
-    renameChat: (chatId: string, newTitle: string) => void;
-    manualSync: () => void;
 };
 
 const router = useRouter();
@@ -89,30 +75,7 @@ const clearSearch = () => {
 </script>
 
 <template>
-    <div
-        class="flex h-screen w-screen bg-white dark:bg-gray-900 overflow-hidden"
-    >
-        <!-- Sidebar -->
-        <SideNav
-            v-if="parsedUserDetails?.username"
-            :data="{
-                chats,
-                parsedUserDetails,
-                isCollapsed,
-            }"
-            :functions="{
-                setShowInput,
-                clearAllChats,
-                toggleSidebar,
-                logout,
-                createNewChat,
-                switchToChat,
-                deleteChat,
-                renameChat,
-                manualSync,
-            }"
-        />
-
+    <ProtectedPage>
         <!-- Main Content - Centered -->
         <div
             :class="[
@@ -381,5 +344,5 @@ const clearSearch = () => {
                 </div>
             </div>
         </div>
-    </div>
+    </ProtectedPage>
 </template>

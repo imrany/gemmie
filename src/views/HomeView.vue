@@ -10,7 +10,6 @@ import {
     watch,
     onUnmounted,
 } from "vue";
-import SideNav from "../components/SideNav.vue";
 import TopNav from "../components/TopNav.vue";
 import type {
     Chat,
@@ -92,6 +91,7 @@ import { useVoiceRecord } from "@/composables/useVoiceRecord";
 import { usePagination } from "@/composables/usePagination";
 import { useChat } from "@/composables/useChat";
 import { useMessage } from "@/composables/useMessage";
+import ProtectedPage from "@/layout/ProtectedPage.vue";
 
 type ModeOption = {
     mode: "light-response" | "web-search" | "deep-search";
@@ -115,18 +115,13 @@ const {
     planStatus,
     userDetailsDebounceTimer,
     chatsDebounceTimer,
-    logout,
     isLoading,
     cancelAllRequests,
     checkRequestLimitBeforeSubmit,
-    clearAllChats,
-    switchToChat,
     createNewChat,
-    deleteChat,
     loadChatDrafts,
     saveChatDrafts,
     clearCurrentDraft,
-    renameChat,
     deleteMessage,
     scrollToLastMessage,
     scrollableElem,
@@ -143,7 +138,6 @@ const {
     currentMessages,
     updateExpandedArray,
     manualSync,
-    toggleSidebar,
     autoGrow,
     isFreeUser,
     isUserOnline,
@@ -1727,29 +1721,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-    <div
-        class="flex h-[100vh] bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
-    >
-        <!-- Sidebar -->
-        <SideNav
-            v-if="isAuthenticated"
-            :data="{
-                chats,
-                parsedUserDetails,
-                isCollapsed,
-            }"
-            :functions="{
-                clearAllChats,
-                toggleSidebar,
-                logout,
-                createNewChat,
-                switchToChat,
-                deleteChat,
-                renameChat,
-                manualSync,
-            }"
-        />
-
+    <ProtectedPage>
         <!-- Main Chat Window -->
         <div
             :class="
@@ -2632,5 +2604,5 @@ onUnmounted(() => {
             }"
             :closePasteModal="closePasteModal"
         />
-    </div>
+    </ProtectedPage>
 </template>
