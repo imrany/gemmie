@@ -25,7 +25,6 @@ import {
     X,
     CheckCircle,
     CloudUpload,
-    RefreshCw,
     LoaderCircle,
 } from "lucide-vue-next";
 import {
@@ -286,7 +285,7 @@ const navLinks: {
                             v-if="syncStatus.syncing"
                             class="flex items-center gap-2 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 px-3 py-1.5 rounded-full text-xs border border-blue-200 dark:border-blue-800 shadow-sm animate-pulse"
                         >
-                            <RefreshCw class="w-4 h-4 animate-spin" />
+                            <LoaderCircle class="w-4 h-4 animate-spin" />
                             <span>Syncing...</span>
                         </div>
 
