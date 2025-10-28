@@ -2,7 +2,6 @@
 import router from "@/router";
 import type { Chat, ConfirmDialogOptions, UserDetails } from "@/types";
 import { inject, ref, reactive, type Ref, computed, watch } from "vue";
-import SideNav from "@/components/SideNav.vue";
 import { toast } from "vue-sonner";
 import { useRoute } from "vue-router";
 import {
@@ -18,23 +17,16 @@ import {
     RotateCw,
     Sun,
 } from "lucide-vue-next";
+import ProtectedPage from "@/layout/ProtectedPage.vue";
 
 const {
     screenWidth,
     isCollapsed,
     planStatus,
     isAuthenticated,
-    chats,
     logout,
     syncStatus,
-    toggleSidebar,
     manualSync,
-    setShowInput,
-    clearAllChats,
-    switchToChat,
-    createNewChat,
-    deleteChat,
-    renameChat,
     toggleTheme,
     toggleSync,
     parsedUserDetails,
@@ -192,30 +184,7 @@ watch(
 </script>
 
 <template>
-    <div
-        class="flex h-[100vh] bg-white dark:bg-gray-900 transition-colors duration-300"
-    >
-        <!-- Sidebar -->
-        <SideNav
-            v-if="isAuthenticated"
-            :data="{
-                chats,
-                parsedUserDetails,
-                isCollapsed,
-            }"
-            :functions="{
-                setShowInput,
-                clearAllChats,
-                toggleSidebar,
-                logout,
-                createNewChat,
-                switchToChat,
-                deleteChat,
-                renameChat,
-                manualSync,
-            }"
-        />
-
+    <ProtectedPage>
         <!-- Main Content -->
         <div
             :class="
@@ -1347,5 +1316,5 @@ watch(
                 </div>
             </div>
         </div>
-    </div>
+    </ProtectedPage>
 </template>
