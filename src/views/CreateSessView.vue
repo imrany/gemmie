@@ -23,7 +23,7 @@ import {
     Shield,
     Star,
     Sun,
-    RotateCw,
+    LoaderCircle,
 } from "lucide-vue-next";
 
 // Global state
@@ -1036,7 +1036,7 @@ onUnmounted(() => {
                                         "
                                         class="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 disabled:from-gray-300 disabled:to-gray-400 dark:disabled:from-gray-600 dark:disabled:to-gray-700 disabled:cursor-not-allowed flex-1 flex gap-2 items-center justify-center transform hover:scale-[1.02] shadow-lg rounded-xl px-4 py-3 font-medium text-white transition-all duration-200"
                                     >
-                                        <RotateCw
+                                        <LoaderCircle
                                             v-if="isLoading"
                                             class="animate-spin w-4 h-4"
                                         />
@@ -1244,23 +1244,23 @@ onUnmounted(() => {
                         </div>
                     </div>
 
-                    <!-- Mobile form -->
-                    <form @submit.prevent="handleFormSubmit" class="space-y-4">
-                        <!-- Mobile Step 1: Username -->
-                        <div v-if="authStep === 1" class="space-y-4">
-                            <div class="text-center mb-6">
-                                <h2
-                                    class="text-xl font-semibold text-gray-900 dark:text-white mb-2"
-                                >
-                                    Welcome!
-                                </h2>
-                                <p
-                                    class="text-gray-600 dark:text-gray-300 text-sm"
-                                >
-                                    Let's start by creating your username
-                                </p>
-                            </div>
+                    <!-- Mobile Step 1: Username -->
+                    <div v-if="authStep === 1" class="space-y-4">
+                        <div class="text-center mb-6">
+                            <h2
+                                class="text-xl font-semibold text-gray-900 dark:text-white mb-2"
+                            >
+                                Welcome!
+                            </h2>
+                            <p class="text-gray-600 dark:text-gray-300 text-sm">
+                                Let's start by creating your username
+                            </p>
+                        </div>
 
+                        <form
+                            @submit.prevent="handleFormSubmit"
+                            class="space-y-4"
+                        >
                             <div>
                                 <label
                                     class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
@@ -1273,6 +1273,12 @@ onUnmounted(() => {
                                     type="text"
                                     placeholder="johndoe"
                                     class="border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2.5 w-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
+                                    :class="
+                                        authData.username &&
+                                        !validateCurrentStep()
+                                            ? 'border-red-300 dark:border-red-500'
+                                            : ''
+                                    "
                                     @input="handleUsernameInput"
                                 />
                                 <p
@@ -1289,26 +1295,306 @@ onUnmounted(() => {
                             >
                                 Continue
                             </button>
+                        </form>
+                    </div>
+
+                    <!-- Mobile Step 2: Email -->
+                    <div v-if="authStep === 2" class="space-y-4">
+                        <div class="text-center mb-6">
+                            <h2
+                                class="text-xl font-semibold text-gray-900 dark:text-white mb-2"
+                            >
+                                Hi {{ authData.username }}!
+                            </h2>
+                            <p class="text-gray-600 dark:text-gray-300 text-sm">
+                                What's your email address?
+                            </p>
                         </div>
 
-                        <!-- Mobile navigation buttons for other steps -->
-                        <div v-if="authStep > 1" class="flex gap-3">
-                            <button
-                                type="button"
-                                @click="prevAuthStep"
-                                class="flex-1 flex gap-2 items-center justify-center bg-gray-100 dark:bg-gray-700 backdrop-blur-sm text-gray-700 dark:text-gray-300 rounded-lg px-4 py-2.5 font-medium hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200"
+                        <form
+                            @submit.prevent="handleFormSubmit"
+                            class="space-y-4"
+                        >
+                            <div>
+                                <label
+                                    class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+                                >
+                                    Email address
+                                </label>
+                                <input
+                                    v-model="authData.email"
+                                    required
+                                    type="email"
+                                    placeholder="johndoe@example.com"
+                                    class="border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2.5 w-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
+                                    :class="
+                                        authData.email && !validateCurrentStep()
+                                            ? 'border-red-300 dark:border-red-500'
+                                            : ''
+                                    "
+                                    @input="handleEmailInput"
+                                />
+                                <p
+                                    class="text-xs text-gray-500 dark:text-gray-400 mt-1"
+                                >
+                                    Used for session identification only
+                                </p>
+                            </div>
+
+                            <div class="flex gap-3">
+                                <button
+                                    type="button"
+                                    @click="prevAuthStep"
+                                    class="flex-1 flex gap-2 items-center justify-center bg-gray-100 dark:bg-gray-700 backdrop-blur-sm text-gray-700 dark:text-gray-300 rounded-lg px-4 py-2.5 font-medium hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200"
+                                >
+                                    <ArrowLeft class="w-4 h-4" /> Back
+                                </button>
+                                <button
+                                    type="submit"
+                                    :disabled="!validateCurrentStep()"
+                                    class="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 disabled:from-gray-300 disabled:to-gray-400 dark:disabled:from-gray-600 dark:disabled:to-gray-700 disabled:cursor-not-allowed flex-1 flex gap-2 items-center justify-center transform hover:scale-[1.02] shadow-lg rounded-lg px-4 py-2.5 font-medium text-white transition-all duration-200"
+                                >
+                                    Continue
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- Mobile Step 3: Password -->
+                    <div v-if="authStep === 3" class="space-y-4">
+                        <div class="text-center mb-6">
+                            <h2
+                                class="text-xl font-semibold text-gray-900 dark:text-white mb-2"
                             >
-                                <ArrowLeft class="w-4 h-4" /> Back
-                            </button>
-                            <button
-                                type="submit"
-                                :disabled="!validateCurrentStep()"
-                                class="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 disabled:from-gray-300 disabled:to-gray-400 dark:disabled:from-gray-600 dark:disabled:to-gray-700 disabled:cursor-not-allowed flex-1 flex gap-2 items-center justify-center transform hover:scale-[1.02] shadow-lg rounded-lg px-4 py-2.5 font-medium text-white transition-all duration-200"
-                            >
-                                {{ authStep === 4 ? "Create" : "Continue" }}
-                            </button>
+                                Almost there!
+                            </h2>
+                            <p class="text-gray-600 dark:text-gray-300 text-sm">
+                                Create a secure password
+                            </p>
                         </div>
-                    </form>
+
+                        <form
+                            @submit.prevent="handleFormSubmit"
+                            class="space-y-4"
+                        >
+                            <div>
+                                <label
+                                    class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+                                >
+                                    Password
+                                </label>
+                                <input
+                                    v-model="authData.password"
+                                    required
+                                    type="password"
+                                    placeholder="Enter a secure password"
+                                    minlength="8"
+                                    class="border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2.5 w-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
+                                    :class="
+                                        authData.password &&
+                                        !validateCurrentStep()
+                                            ? 'border-red-300 dark:border-red-500'
+                                            : ''
+                                    "
+                                    @input="handlePasswordInput"
+                                />
+                                <div class="mt-2">
+                                    <div
+                                        class="flex items-center gap-2 text-xs"
+                                    >
+                                        <div
+                                            :class="
+                                                authData.password.length >= 8
+                                                    ? 'text-green-600 dark:text-green-400'
+                                                    : 'text-gray-400 dark:text-gray-500'
+                                            "
+                                            class="flex items-center gap-1"
+                                        >
+                                            <Check
+                                                v-if="
+                                                    authData.password.length >=
+                                                    8
+                                                "
+                                                class="w-3 h-3"
+                                            />
+                                            <Circle class="w-3 h-3" v-else />
+                                            <span>At least 8 characters</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="flex gap-3">
+                                <button
+                                    type="button"
+                                    @click="prevAuthStep"
+                                    class="flex-1 flex gap-2 items-center justify-center bg-gray-100 dark:bg-gray-700 backdrop-blur-sm text-gray-700 dark:text-gray-300 rounded-lg px-4 py-2.5 font-medium hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200"
+                                >
+                                    <ArrowLeft class="w-4 h-4" /> Back
+                                </button>
+                                <button
+                                    type="submit"
+                                    :disabled="!validateCurrentStep()"
+                                    class="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 disabled:from-gray-300 disabled:to-gray-400 dark:disabled:from-gray-600 dark:disabled:to-gray-700 disabled:cursor-not-allowed flex-1 flex gap-2 items-center justify-center transform hover:scale-[1.02] shadow-lg rounded-lg px-4 py-2.5 font-medium text-white transition-all duration-200"
+                                >
+                                    Continue
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- Mobile Step 4: Terms & Conditions -->
+                    <div v-if="authStep === 4" class="space-y-4">
+                        <div class="text-center mb-6">
+                            <h2
+                                class="text-xl font-semibold text-gray-900 dark:text-white mb-2"
+                            >
+                                One last step
+                            </h2>
+                            <p class="text-gray-600 dark:text-gray-300 text-sm">
+                                Please review and accept our terms
+                            </p>
+                        </div>
+
+                        <form
+                            @submit.prevent="handleFormSubmit"
+                            class="space-y-4"
+                        >
+                            <!-- Terms and Conditions -->
+                            <div class="space-y-3">
+                                <div
+                                    class="border border-gray-200 dark:border-gray-600 rounded-lg p-3 bg-gray-50 dark:bg-gray-700/50"
+                                >
+                                    <div class="flex items-start gap-2">
+                                        <input
+                                            id="agree-terms-mobile"
+                                            v-model="authData.agreeToTerms"
+                                            type="checkbox"
+                                            required
+                                            class="mt-0.5 h-4 w-4 text-blue-600 dark:text-blue-500 focus:ring-blue-500 border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700"
+                                            @change="handleTermsToggle"
+                                        />
+                                        <label
+                                            for="agree-terms-mobile"
+                                            class="text-xs text-gray-700 dark:text-gray-300 leading-relaxed cursor-pointer"
+                                        >
+                                            I agree to the
+                                            <router-link
+                                                to="/legal/terms"
+                                                class="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline font-medium"
+                                            >
+                                                Terms of Service
+                                            </router-link>
+                                            and
+                                            <router-link
+                                                to="/legal/privacy"
+                                                class="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline font-medium"
+                                            >
+                                                Privacy Policy
+                                            </router-link>
+                                            <span class="text-red-500">*</span>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <!-- Key points about terms -->
+                                <div
+                                    class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3"
+                                >
+                                    <div class="flex items-start gap-2">
+                                        <div
+                                            class="flex-shrink-0 w-5 h-5 bg-blue-100 dark:bg-blue-800 rounded-full flex items-center justify-center mt-0.5"
+                                        >
+                                            <Info
+                                                class="w-3 h-3 text-blue-600 dark:text-blue-400"
+                                            />
+                                        </div>
+                                        <div
+                                            class="text-xs text-blue-800 dark:text-blue-200 space-y-1.5"
+                                        >
+                                            <p>
+                                                <strong>Key highlights:</strong>
+                                            </p>
+                                            <ul
+                                                class="list-disc list-inside space-y-0.5 ml-1"
+                                            >
+                                                <li>
+                                                    Your data remains private
+                                                    and encrypted
+                                                </li>
+                                                <li>
+                                                    We don't sell your personal
+                                                    information
+                                                </li>
+                                                <li>
+                                                    Delete your account anytime
+                                                </li>
+                                                <li>
+                                                    Local storage with optional
+                                                    sync
+                                                </li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="flex gap-3">
+                                <button
+                                    type="button"
+                                    @click="prevAuthStep"
+                                    class="flex-1 flex gap-2 items-center justify-center bg-gray-100 dark:bg-gray-700 backdrop-blur-sm text-gray-700 dark:text-gray-300 rounded-lg px-4 py-2.5 font-medium hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200"
+                                >
+                                    <ArrowLeft class="w-4 h-4" /> Back
+                                </button>
+                                <button
+                                    type="submit"
+                                    :disabled="
+                                        !authData.agreeToTerms || isLoading
+                                    "
+                                    class="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 disabled:from-gray-300 disabled:to-gray-400 dark:disabled:from-gray-600 dark:disabled:to-gray-700 disabled:cursor-not-allowed flex-1 flex gap-2 items-center justify-center transform hover:scale-[1.02] shadow-lg rounded-lg px-4 py-2.5 font-medium text-white transition-all duration-200"
+                                >
+                                    <LoaderCircle
+                                        v-if="isLoading"
+                                        class="animate-spin w-4 h-4"
+                                    />
+                                    <Check v-else class="w-4 h-4" />
+                                    <span v-if="isLoading">Creating...</span>
+                                    <span v-else> Create </span>
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- Footer note -->
+                    <div class="text-center mt-4">
+                        <div
+                            class="text-xs text-center leading-relaxed text-gray-600 dark:text-gray-400 space-y-1"
+                        >
+                            <div
+                                class="flex flex-wrap gap-1 items-center justify-center"
+                            >
+                                <span>Please review our</span>
+                                <router-link
+                                    to="/legal/privacy"
+                                    class="text-blue-600 dark:text-blue-400"
+                                >
+                                    Privacy Policy
+                                </router-link>
+                                <span>and</span>
+                                <router-link
+                                    to="/legal/terms"
+                                    class="text-blue-600 dark:text-blue-400"
+                                >
+                                    Terms of Service
+                                </router-link>
+                            </div>
+                            <span
+                                >© {{ new Date().getFullYear() }} Gemmie. All
+                                rights reserved.</span
+                            >
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
