@@ -45,7 +45,7 @@ func main() {
 
 	// Set up viper to read from environment
 	viper.AutomaticEnv()
-	
+
 	// Bind flags to viper, but environment variables take precedence
 	viper.BindPFlag("DB_HOST", pflag.Lookup("db-host"))
 	viper.BindPFlag("DB_PORT", pflag.Lookup("db-port"))
@@ -179,7 +179,7 @@ func main() {
 	fmt.Printf("  - Users: %d/%d\n", userCount, len(legacy.Users))
 	fmt.Printf("  - User Data: %d/%d\n", userDataCount, len(legacy.UserData))
 	fmt.Printf("  - Transactions: %d/%d\n", txCount, len(legacy.Transactions))
-	
+
 	totalErrors := userErrors + userDataErrors + txErrors
 	if totalErrors > 0 {
 		fmt.Printf("⚠ Total errors: %d\n", totalErrors)
@@ -191,7 +191,7 @@ func main() {
 
 func displaySampleData(legacy LegacyStorage) {
 	fmt.Println("=== Sample Data Preview ===")
-	
+
 	// Show first user
 	if len(legacy.Users) > 0 {
 		fmt.Println("Sample User:")
@@ -212,7 +212,6 @@ func displaySampleData(legacy LegacyStorage) {
 		fmt.Println("Sample User Data:")
 		for _, userData := range legacy.UserData {
 			fmt.Printf("  User ID: %s\n", userData.UserID)
-			fmt.Printf("  Current Chat ID: %s\n", userData.CurrentChatID)
 			fmt.Printf("  Chats Length: %d characters\n", len(userData.Chats))
 			fmt.Printf("  Updated: %s\n", userData.UpdatedAt.Format("2006-01-02 15:04:05"))
 			break
