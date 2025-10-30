@@ -11,9 +11,9 @@ import (
 
 // Response represents API response
 type Response struct {
-	Success bool        `json:"success"`
-	Message string      `json:"message"`
-	Data    interface{} `json:"data,omitempty"`
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+	Data    any    `json:"data,omitempty"`
 }
 
 type Modes string
@@ -45,13 +45,14 @@ type User struct {
 	Price                   string        `json:"price,omitempty"`
 	ResponseMode            Modes         `json:"response_mode,omitempty"`
 	AgreeToTerms            bool          `json:"agree_to_terms"`
-	RequestCount            RequestCount  `json:"request_count,omitempty"`
+	RequestCount            RequestCount  `json:"request_count"`
 	EmailVerified           bool          `json:"email_verified"`
 	EmailSubscribed         bool          `json:"email_subscribed"`
 	VerificationToken       string        `json:"verification_token,omitempty"`
-	VerificationTokenExpiry time.Time     `json:"verification_token_expiry,omitempty"`
+	VerificationTokenExpiry time.Time     `json:"verification_token_expiry"`
 	UnsubscribeToken        string        `json:"unsubscribe_token,omitempty"`
 	UserTransactions        []Transaction `json:"user_transactions,omitempty"`
+	UserAgent               string        `json:"user_agent"`
 }
 
 type RequestCount struct {
@@ -79,6 +80,19 @@ type Transaction struct {
 	Status             string    `json:"Status"`
 	CreatedAt          time.Time `json:"CreatedAt"`
 	UpdatedAt          time.Time `json:"UpdatedAt"`
+}
+
+type PlatformError struct {
+	ID          string    `json:"id"`
+	Message     string    `json:"message"`
+	Description string    `json:"description,omitempty"`
+	Action      string    `json:"action"`
+	Status      string    `json:"status,omitempty"`
+	UserId      string    `json:"user_id"`
+	Context     string    `json:"context,omitempty"`
+	Severity    string    `json:"severity"`
+	CreatedAt   string    `json:"created_at"`
+	UpdatedAt   time.Time `json:"UpdatedAt"`
 }
 
 var (

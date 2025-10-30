@@ -25,6 +25,7 @@ type LoginRequest struct {
 	Password     string `json:"password"`
 	AgreeToTerms bool   `json:"agree_to_terms"`
 	Username     string `json:"username"`
+	UserAgent    string `json:"user_agent"`
 }
 
 // RegisterRequest represents registration request payload
@@ -33,6 +34,7 @@ type RegisterRequest struct {
 	Email        string `json:"email"`
 	Password     string `json:"password"`
 	AgreeToTerms bool   `json:"agree_to_terms"`
+	UserAgent    string `json:"user_agent"`
 }
 
 // SyncRequest represents data sync request
@@ -82,7 +84,7 @@ type AuthResponse struct {
 	Price           string             `json:"price,omitempty"`
 	EmailVerified   bool               `json:"email_verified"`
 	EmailSubscribed bool               `json:"email_subscribed"`
-	RequestCount    store.RequestCount `json:"request_count,omitempty"`
+	RequestCount    store.RequestCount `json:"request_count"`
 }
 
 type ProfileUpdateRequest struct {
@@ -391,6 +393,16 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// update user agent if need
+	if user.UserAgent != req.UserAgent {
+		user.UserAgent = req.UserAgent
+		user.UpdatedAt = time.Now()
+
+		if err := store.UpdateUser(*user); err != nil {
+			slog.Error("Failed to update user agent", "user_id", user.ID, "error", err)
+		}
+	}
+
 	// Create user data if doesn't exist
 	if userData == nil {
 		userData = &store.UserData{
@@ -502,7 +514,7 @@ func SyncHandler(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(store.Response{
 			Success: true,
 			Message: "Data retrieved successfully",
-			Data: map[string]interface{}{
+			Data: map[string]any{
 				"chats":             userData.Chats,
 				"link_previews":     userData.LinkPreviews,
 				"updated_at":        userData.UpdatedAt,
