@@ -9,8 +9,8 @@ import (
 	"time"
 
 	v1 "github.com/imrany/gemmie/gemmie-server/internal/handlers"
-	"github.com/imrany/gemmie/gemmie-server/store"
 	"github.com/imrany/gemmie/gemmie-server/internal/mailer"
+	"github.com/imrany/gemmie/gemmie-server/store"
 
 	"log/slog"
 
@@ -185,7 +185,7 @@ func runServer() {
 
 	// Validate SMTP configuration and log status
 	if smtpConfig.Host == "" || smtpConfig.Username == "" || smtpConfig.Password == "" {
-		slog.Warn("SMTP not fully configured, email features will be disabled", 
+		slog.Warn("SMTP not fully configured, email features will be disabled",
 			"host_set", smtpConfig.Host != "",
 			"username_set", smtpConfig.Username != "",
 			"password_set", smtpConfig.Password != "",
@@ -197,7 +197,7 @@ func runServer() {
 	// Configure email scheduler
 	schedulerConfig := v1.EmailSchedulerConfig{
 		SMTPConfig:      smtpConfig,
-		SendInterval:    7 * 24 * time.Hour, // Send every 7 days (recommended)
+		SendInterval:    7 * 24 * time.Hour,    // Send every 7 days (recommended)
 		EnableScheduler: smtpConfig.Host != "", // Only enable if SMTP is configured
 	}
 
@@ -209,7 +209,7 @@ func runServer() {
 		slog.Error("Failed to initialize database", "error", err)
 		os.Exit(1)
 	}
-	
+
 	// Register cleanup on shutdown
 	defer func() {
 		if err := store.Close(); err != nil {
@@ -223,7 +223,7 @@ func runServer() {
 
 	// Router setup
 	r := mux.NewRouter()
-	
+
 	// Auth routes
 	r.HandleFunc("/api/register", v1.RegisterHandler).Methods(http.MethodPost)
 	r.HandleFunc("/api/login", v1.LoginHandler).Methods(http.MethodPost)
@@ -232,24 +232,28 @@ func runServer() {
 	r.HandleFunc("/api/delete_account", v1.DeleteAccountHandler).Methods(http.MethodDelete)
 	r.HandleFunc("/api/profile", v1.ProfileHandler)
 
+	// Errors Handler - stores user errors for later support and fix
+	r.HandleFunc("/api/errors", v1.ErrorsHandler).Methods(http.MethodPost, http.MethodGet, http.MethodDelete)
+	r.HandleFunc("/api/errors/:id", v1.ErrorHandler).Methods(http.MethodDelete, http.MethodGet, http.MethodPut)
+
 	// Payment routes
 	r.HandleFunc("/api/payments/stk", v1.SendSTKHandler).Methods(http.MethodPost)
 	r.HandleFunc("/api/transactions", v1.GetTransactionsHandler).Methods(http.MethodGet)
 	r.HandleFunc("/api/transactions/{external_reference}", v1.GetTransactionByRefHandler).Methods(http.MethodGet)
 	r.HandleFunc("/api/callback", v1.StoreTransactionHandler).Methods(http.MethodPost)
-	
+
 	// Email management routes
 	r.HandleFunc("/unsubscribe", v1.UnsubscribeHandler).Methods(http.MethodGet, http.MethodPost)
 	r.HandleFunc("/resubscribe", v1.ResubscribeHandler).Methods(http.MethodGet, http.MethodPost)
 	r.HandleFunc("/api/email-subscription", v1.UpdateEmailSubscriptionHandler).Methods(http.MethodPut)
-	
+
 	// Email verification routes
 	r.HandleFunc("/api/send-verification", func(w http.ResponseWriter, r *http.Request) {
 		v1.SendVerificationEmailHandler(w, r, smtpConfig)
 	}).Methods(http.MethodPost)
-	
+
 	r.HandleFunc("/api/verify-email", v1.VerifyEmailHandler).Methods(http.MethodGet, http.MethodPost)
-	
+
 	// Handle CORS preflight
 	r.Methods(http.MethodOptions).HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -285,7 +289,7 @@ func runServer() {
 	// Graceful shutdown on SIGINT/SIGTERM
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
-	
+
 	sig := <-quit
 	slog.Info("Shutdown signal received", "signal", sig, "shutting down gracefully...", "")
 
