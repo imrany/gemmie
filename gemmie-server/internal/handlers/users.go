@@ -14,87 +14,85 @@ import (
 
 // DeleteAccountRequest represents request payload for account deletion
 type DeleteAccountRequest struct {
-    Email    string `json:"email"`
-    Username string `json:"username"`
-    Password string `json:"password"`
+	Email    string `json:"email"`
+	Username string `json:"username"`
+	Password string `json:"password"`
 }
 
 // LoginRequest represents login request payload
 type LoginRequest struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
-	AgreeToTerms bool		`json:"agree_to_terms"`
-	Username string `json:"username"`
+	Email        string `json:"email"`
+	Password     string `json:"password"`
+	AgreeToTerms bool   `json:"agree_to_terms"`
+	Username     string `json:"username"`
 }
 
 // RegisterRequest represents registration request payload
 type RegisterRequest struct {
-	Username string `json:"username"`
-	Email    string `json:"email"`
-	Password string `json:"password"`
-	AgreeToTerms bool		`json:"agree_to_terms"`
+	Username     string `json:"username"`
+	Email        string `json:"email"`
+	Password     string `json:"password"`
+	AgreeToTerms bool   `json:"agree_to_terms"`
 }
 
 // SyncRequest represents data sync request
 type SyncRequest struct {
-	Chats           string `json:"chats"`
-	LinkPreviews    string `json:"link_previews"`
-	CurrentChatID   string `json:"current_chat_id"`
-	Preferences     string `json:"preferences,omitempty"`
-	WorkFunction    string `json:"work_function,omitempty"`
-	Theme           string `json:"theme,omitempty"`
-	SyncEnabled     bool   `json:"sync_enabled"`
-	Username        string `json:"username"`
-	Plan            string `json:"plan,omitempty"`
-	PlanName        string `json:"plan_name,omitempty"`
-	ResponseMode store.Modes    `json:"response_mode,omitempty"`
-	Amount          int    `json:"amount,omitempty"`
-	Duration        string `json:"duration,omitempty"`
-	PhoneNumber     string `json:"phone_number,omitempty"`     // Consistent naming
-	ExpiryTimestamp int64  `json:"expiry_timestamp,omitempty"`
-	ExpireDuration  int64  `json:"expire_duration,omitempty"`
-	Price           string `json:"price,omitempty"`
-	ExternalReference string `json:"external_reference,omitempty"` // For payment tracking
-	EmailVerified   bool      `json:"email_verified"`      // Whether email is verified
-	EmailSubscribed bool      `json:"email_subscribed"`    // Whether user subscribed to promotional emails
-	RequestCount store.RequestCount `json:"request_count,omitempty"`
+	Chats             string             `json:"chats"`
+	LinkPreviews      string             `json:"link_previews"`
+	Preferences       string             `json:"preferences,omitempty"`
+	WorkFunction      string             `json:"work_function,omitempty"`
+	Theme             string             `json:"theme,omitempty"`
+	SyncEnabled       bool               `json:"sync_enabled"`
+	Username          string             `json:"username"`
+	Plan              string             `json:"plan,omitempty"`
+	PlanName          string             `json:"plan_name,omitempty"`
+	ResponseMode      store.Modes        `json:"response_mode,omitempty"`
+	Amount            int                `json:"amount,omitempty"`
+	Duration          string             `json:"duration,omitempty"`
+	PhoneNumber       string             `json:"phone_number,omitempty"` // Consistent naming
+	ExpiryTimestamp   int64              `json:"expiry_timestamp,omitempty"`
+	ExpireDuration    int64              `json:"expire_duration,omitempty"`
+	Price             string             `json:"price,omitempty"`
+	ExternalReference string             `json:"external_reference,omitempty"` // For payment tracking
+	EmailVerified     bool               `json:"email_verified"`               // Whether email is verified
+	EmailSubscribed   bool               `json:"email_subscribed"`             // Whether user subscribed to promotional emails
+	RequestCount      store.RequestCount `json:"request_count,omitempty"`
 }
 
 // Update AuthResponse struct
 type AuthResponse struct {
-	UserID          string    `json:"user_id"`
-	Username        string    `json:"username"`
-	Email           string    `json:"email"`
-	CreatedAt       time.Time `json:"created_at"`
-	Chats           string    `json:"chats,omitempty"`
-	LinkPreviews    string    `json:"link_previews,omitempty"`
-	CurrentChatID   string    `json:"current_chat_id,omitempty"`
-	Preferences     string    `json:"preferences,omitempty"`
-	WorkFunction    string    `json:"work_function,omitempty"`
-	Theme           string    `json:"theme,omitempty"`
-	SyncEnabled     bool      `json:"sync_enabled"`
-	Plan            string    `json:"plan,omitempty"`
-	PlanName        string    `json:"plan_name,omitempty"`
-	Amount          int       `json:"amount,omitempty"`
-	ResponseMode store.Modes    `json:"response_mode,omitempty"`
-	Duration        string    `json:"duration,omitempty"`
-	PhoneNumber     string    `json:"phone_number,omitempty"`
-	ExpiryTimestamp int64     `json:"expiry_timestamp,omitempty"`
-	ExpireDuration  int64     `json:"expire_duration,omitempty"`
-	Price           string    `json:"price,omitempty"`
-	EmailVerified   bool      `json:"email_verified"`
-	EmailSubscribed bool      `json:"email_subscribed"`
-	RequestCount store.RequestCount `json:"request_count,omitempty"`
+	UserID          string             `json:"user_id"`
+	Username        string             `json:"username"`
+	Email           string             `json:"email"`
+	CreatedAt       time.Time          `json:"created_at"`
+	Chats           string             `json:"chats,omitempty"`
+	LinkPreviews    string             `json:"link_previews,omitempty"`
+	Preferences     string             `json:"preferences,omitempty"`
+	WorkFunction    string             `json:"work_function,omitempty"`
+	Theme           string             `json:"theme,omitempty"`
+	SyncEnabled     bool               `json:"sync_enabled"`
+	Plan            string             `json:"plan,omitempty"`
+	PlanName        string             `json:"plan_name,omitempty"`
+	Amount          int                `json:"amount,omitempty"`
+	ResponseMode    store.Modes        `json:"response_mode,omitempty"`
+	Duration        string             `json:"duration,omitempty"`
+	PhoneNumber     string             `json:"phone_number,omitempty"`
+	ExpiryTimestamp int64              `json:"expiry_timestamp,omitempty"`
+	ExpireDuration  int64              `json:"expire_duration,omitempty"`
+	Price           string             `json:"price,omitempty"`
+	EmailVerified   bool               `json:"email_verified"`
+	EmailSubscribed bool               `json:"email_subscribed"`
+	RequestCount    store.RequestCount `json:"request_count,omitempty"`
 }
 
 type ProfileUpdateRequest struct {
-	Username     string `json:"username,omitempty"`
-	WorkFunction string `json:"workFunction,omitempty"`
-	Preferences  string `json:"preferences,omitempty"`
-	Theme        string `json:"theme,omitempty"`
-	SyncEnabled  *bool  `json:"sync_enabled,omitempty"` // Pointer to handle explicit false
-	ResponseMode store.Modes    `json:"response_mode,omitempty"`
-	PhoneNumber  string `json:"phone_number,omitempty"`  // Added phone number support
+	Username     string      `json:"username,omitempty"`
+	WorkFunction string      `json:"workFunction,omitempty"`
+	Preferences  string      `json:"preferences,omitempty"`
+	Theme        string      `json:"theme,omitempty"`
+	SyncEnabled  *bool       `json:"sync_enabled,omitempty"` // Pointer to handle explicit false
+	ResponseMode store.Modes `json:"response_mode,omitempty"`
+	PhoneNumber  string      `json:"phone_number,omitempty"` // Added phone number support
 }
 
 // Phone number validation function
@@ -102,7 +100,7 @@ func validatePhoneNumber(phone string) bool {
 	if phone == "" {
 		return true // Optional field
 	}
-	
+
 	// Kenyan phone number regex - supports Safaricom, Airtel, Telkom
 	// Formats: +254XXXXXXXXX, 254XXXXXXXXX, 07XXXXXXXX, 01XXXXXXXX
 	phoneRegex := regexp.MustCompile(`^(\+254|254|0)(7[0-9]{8}|1[0-9]{8})$`)
@@ -157,7 +155,7 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	req.Username = sanitizeString(req.Username)
 	req.Email = sanitizeString(req.Email)
 
-	// Validation 
+	// Validation
 	if req.Username == "" || req.Email == "" || req.Password == "" {
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(store.Response{
@@ -228,22 +226,22 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	userID := encrypt.GenerateUserID()
 	passwordHash := encrypt.HashCredentials(req.Username, req.Email, req.Password)
 	unsubscribeToken := encrypt.GenerateUnsubscribeToken(userID)
-	
+
 	user := store.User{
-		ID:              userID,
-		Username:        req.Username,
-		Email:           req.Email,
-		PasswordHash:    passwordHash,
-		CreatedAt:       time.Now(),
-		UpdatedAt:       time.Now(),
-		Theme:           "system",
-		SyncEnabled:     true,
-		Plan:            "free",
-		PlanName:        "Free",
-		ResponseMode:    "light-response",
-		AgreeToTerms:    req.AgreeToTerms,
-		EmailVerified:   false,
-		EmailSubscribed: true,
+		ID:               userID,
+		Username:         req.Username,
+		Email:            req.Email,
+		PasswordHash:     passwordHash,
+		CreatedAt:        time.Now(),
+		UpdatedAt:        time.Now(),
+		Theme:            "system",
+		SyncEnabled:      true,
+		Plan:             "free",
+		PlanName:         "Free",
+		ResponseMode:     "light-response",
+		AgreeToTerms:     req.AgreeToTerms,
+		EmailVerified:    false,
+		EmailSubscribed:  true,
 		UnsubscribeToken: unsubscribeToken,
 		RequestCount: store.RequestCount{
 			Count:     0,
@@ -264,11 +262,10 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Create empty user data record
 	userData := store.UserData{
-		UserID:        userID,
-		Chats:         "[]",
-		LinkPreviews:  "{}",
-		CurrentChatID: "",
-		UpdatedAt:     time.Now(),
+		UserID:       userID,
+		Chats:        "[]",
+		LinkPreviews: "{}",
+		UpdatedAt:    time.Now(),
 	}
 
 	// Save user data to database
@@ -294,7 +291,6 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 			CreatedAt:       user.CreatedAt,
 			Chats:           userData.Chats,
 			LinkPreviews:    userData.LinkPreviews,
-			CurrentChatID:   userData.CurrentChatID,
 			Preferences:     user.Preferences,
 			WorkFunction:    user.WorkFunction,
 			Theme:           user.Theme,
@@ -389,7 +385,7 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	if user.AgreeToTerms != req.AgreeToTerms {
 		user.AgreeToTerms = req.AgreeToTerms
 		user.UpdatedAt = time.Now()
-		
+
 		if err := store.UpdateUser(*user); err != nil {
 			slog.Error("Failed to update terms acceptance", "user_id", user.ID, "error", err)
 		}
@@ -398,13 +394,12 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 	// Create user data if doesn't exist
 	if userData == nil {
 		userData = &store.UserData{
-			UserID:        user.ID,
-			Chats:         "[]",
-			LinkPreviews:  "{}",
-			CurrentChatID: "",
-			UpdatedAt:     time.Now(),
+			UserID:       user.ID,
+			Chats:        "[]",
+			LinkPreviews: "{}",
+			UpdatedAt:    time.Now(),
 		}
-		
+
 		if err := store.CreateUserData(*userData); err != nil {
 			slog.Error("Failed to create user data", "user_id", user.ID, "error", err)
 		}
@@ -421,7 +416,6 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 			CreatedAt:       user.CreatedAt,
 			Chats:           userData.Chats,
 			LinkPreviews:    userData.LinkPreviews,
-			CurrentChatID:   userData.CurrentChatID,
 			Preferences:     user.Preferences,
 			WorkFunction:    user.WorkFunction,
 			Theme:           user.Theme,
@@ -511,7 +505,6 @@ func SyncHandler(w http.ResponseWriter, r *http.Request) {
 			Data: map[string]interface{}{
 				"chats":             userData.Chats,
 				"link_previews":     userData.LinkPreviews,
-				"current_chat_id":   userData.CurrentChatID,
 				"updated_at":        userData.UpdatedAt,
 				"preferences":       user.Preferences,
 				"work_function":     user.WorkFunction,
@@ -563,11 +556,10 @@ func SyncHandler(w http.ResponseWriter, r *http.Request) {
 
 		// Update user data in database
 		userData := store.UserData{
-			UserID:        userID,
-			Chats:         req.Chats,
-			LinkPreviews:  req.LinkPreviews,
-			CurrentChatID: req.CurrentChatID,
-			UpdatedAt:     time.Now(),
+			UserID:       userID,
+			Chats:        req.Chats,
+			LinkPreviews: req.LinkPreviews,
+			UpdatedAt:    time.Now(),
 		}
 
 		if err := store.UpdateUserData(userData); err != nil {
@@ -597,7 +589,7 @@ func SyncHandler(w http.ResponseWriter, r *http.Request) {
 		if user.SyncEnabled != req.SyncEnabled {
 			user.SyncEnabled = req.SyncEnabled
 		}
-		
+
 		if req.Amount != 0 {
 			user.Amount = req.Amount
 		}
@@ -625,7 +617,7 @@ func SyncHandler(w http.ResponseWriter, r *http.Request) {
 		if req.ResponseMode != "" {
 			user.ResponseMode = req.ResponseMode
 		}
-		
+
 		if req.RequestCount.Count != 0 || req.RequestCount.Timestamp != 0 {
 			incomingTime := time.Unix(0, req.RequestCount.Timestamp*int64(time.Millisecond))
 			existingTime := time.Unix(0, user.RequestCount.Timestamp*int64(time.Millisecond))
@@ -634,7 +626,7 @@ func SyncHandler(w http.ResponseWriter, r *http.Request) {
 				user.RequestCount = req.RequestCount
 			}
 		}
-		
+
 		user.UpdatedAt = time.Now()
 
 		if err := store.UpdateUser(*user); err != nil {
@@ -764,7 +756,7 @@ func ProfileHandler(w http.ResponseWriter, r *http.Request) {
 	if req.ResponseMode != "" {
 		existingUser.ResponseMode = req.ResponseMode
 	}
-	
+
 	existingUser.UpdatedAt = time.Now()
 
 	// Save to database
@@ -798,7 +790,7 @@ func HealthHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	version := store.GetVersion()
-	
+
 	json.NewEncoder(w).Encode(store.Response{
 		Success: true,
 		Message: "Server is healthy",
