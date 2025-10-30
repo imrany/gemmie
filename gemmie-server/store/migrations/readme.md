@@ -127,7 +127,7 @@ go run main.go
 ### Scenario 2: Rollback Last Change
 ```bash
 # Use CLI tool to rollback
-go run cmd/migrate/main.go -command=down
+go run cmd/migrate/main.go --command=down
 
 # Or in code:
 store.MigrateDown()
@@ -136,42 +136,42 @@ store.MigrateDown()
 ### Scenario 3: Test a Migration
 ```bash
 # Apply migration
-go run cmd/migrate/main.go -command=up
+go run cmd/migrate/main.go --command=up
 
 # Test it...
 
 # Rollback if there's an issue
-go run cmd/migrate/main.go -command=down
+go run cmd/migrate/main.go --command=down
 
 # Fix migration file, then re-apply
-go run cmd/migrate/main.go -command=up
+go run cmd/migrate/main.go --command=up
 ```
 
 ### Scenario 4: Production Rollback
 ```bash
 # Check current version
-go run cmd/migrate/main.go -command=version
+go run cmd/migrate/main.go --command=version
 # Output: Current version: 5
 
 # Rollback to version 3
-go run cmd/migrate/main.go -command=goto -target=3
+go run cmd/migrate/main.go --command=goto --target=3
 
 # Verify
-go run cmd/migrate/main.go -command=version
+go run cmd/migrate/main.go --command=version
 # Output: Current version: 3
 ```
 
 ### Scenario 5: Migration Failed (Dirty State)
 ```bash
 # Check status
-go run cmd/migrate/main.go -command=version
+go run cmd/migrate/main.go --command=version
 # Output: Current version: 3, Dirty: true
 
 # Force to last known good version
-go run cmd/migrate/main.go -command=force -version=2
+go run cmd/migrate/main.go --command=force --version=2
 
 # Then re-run migrations
-go run cmd/migrate/main.go -command=up
+go run cmd/migrate/main.go --command=up
 ```
 
 ---
@@ -222,7 +222,7 @@ ALTER TABLE users DROP COLUMN IF EXISTS settings;
 go run main.go
 
 # Or manual
-go run cmd/migrate/main.go -command=up
+go run cmd/migrate/main.go --command=up
 ```
 
 ---
@@ -243,8 +243,8 @@ go run cmd/migrate/main.go -command=up
 ### Problem: "Migration is dirty"
 ```bash
 # Solution: Force to last good version
-go run cmd/migrate/main.go -command=force -version=1
-go run cmd/migrate/main.go -command=up
+go run cmd/migrate/main.go --command=force --version=1
+go run cmd/migrate/main.go --command=up
 ```
 
 ### Problem: "No change" error
@@ -258,7 +258,7 @@ go run cmd/migrate/main.go -command=up
 # 1. Check the error message
 # 2. Fix the SQL in the migration file
 # 3. Force to version before the failed one
-go run cmd/migrate/main.go -command=force -version=X
+go run cmd/migrate/main.go --command=force --version=X
 # 4. Re-run migrations
-go run cmd/migrate/main.go -command=up
+go run cmd/migrate/main.go --command=up
 ```

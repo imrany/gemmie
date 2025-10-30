@@ -60,11 +60,10 @@ type RequestCount struct {
 }
 
 type UserData struct {
-	UserID        string    `json:"user_id"`
-	Chats         string    `json:"chats"`
-	LinkPreviews  string    `json:"link_previews"`
-	CurrentChatID string    `json:"current_chat_id"`
-	UpdatedAt     time.Time `json:"updated_at"`
+	UserID       string    `json:"user_id"`
+	Chats        string    `json:"chats"`
+	LinkPreviews string    `json:"link_previews"`
+	UpdatedAt    time.Time `json:"updated_at"`
 }
 
 type Transaction struct {
@@ -130,7 +129,6 @@ func initStorage(connString string, runMigrations bool) error {
 	slog.Info("PostgreSQL storage initialized")
 	return nil
 }
-
 
 // Close closes the database connection
 func Close() error {

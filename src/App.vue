@@ -1733,19 +1733,6 @@ async function syncFromServer(serverData?: any) {
                 } as PlatformError);
             }
         }
-
-        // Process current chat ID
-        if (data.current_chat_id && typeof data.current_chat_id === "string") {
-            const chatExists = chats.value.some(
-                (chat) => chat.id === data.current_chat_id,
-            );
-            if (chatExists) {
-                currentChatId.value = data.current_chat_id;
-                localStorage.setItem("currentChatId", data.current_chat_id);
-                console.log(`✅ Set current chat ID: ${data.current_chat_id}`);
-            }
-        }
-
         updateSyncProgress("Updating preferences...", 95);
 
         // Update user details if provided
