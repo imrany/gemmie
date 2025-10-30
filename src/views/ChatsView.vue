@@ -94,11 +94,12 @@ const clearSearch = () => {
                 class="flex-1 flex overflow-hidden h-full justify-center p-3 sm:p-4 md:p-6 max-w-full"
             >
                 <div
-                    class="w-full flex flex-col h-full overflow-hidden md:max-w-3xl max-w-[100vw]"
+                    class="w-full px-2 flex flex-col h-full overflow-hidden md:max-w-4xl max-w-[100vw]"
                 >
                     <!-- Top Header -->
                     <div
-                        class="flex-shrink-0 w-full items-center justify-between mb-4 sm:mb-6 flex gap-2 min-w-0"
+                        v-if="chats.length !== 0"
+                        class="flex-shrink-0 w-full items-center justify-between mb-4 flex gap-2 min-w-0"
                     >
                         <!-- Back Button (Mobile Only) -->
                         <button
@@ -112,14 +113,14 @@ const clearSearch = () => {
                         </button>
 
                         <p
-                            class="text-gray-700 dark:text-gray-300 text-xl sm:text-2xl font-semibold truncate min-w-0"
+                            class="text-gray-700 dark:text-gray-300 text-xl font-semibold truncate min-w-0"
                         >
                             Your chat history
                         </p>
 
                         <button
                             @click="handleNewChat"
-                            class="px-3 py-2 bg-blue-600 text-xs sm:text-sm hover:bg-blue-700 text-white rounded-lg transition-colors flex items-center gap-1.5 sm:gap-2 shadow-lg hover:shadow-xl flex-shrink-0 whitespace-nowrap"
+                            class="px-3 py-2 bg-white text-sm hover:bg-gray-200 text-gray-800 rounded-lg transition-colors flex items-center gap-1.5 shadow-lg hover:shadow-xl flex-shrink-0 whitespace-nowrap"
                         >
                             <Plus class="w-5 h-5" />
                             <span class="font-medium hidden sm:inline">
@@ -130,7 +131,7 @@ const clearSearch = () => {
                     </div>
 
                     <!-- Search Bar -->
-                    <div class="mb-4 sm:mb-6 flex-shrink-0">
+                    <div v-if="chats.length !== 0" class="mb-4 flex-shrink-0">
                         <div class="relative">
                             <Search
                                 class="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
@@ -139,7 +140,7 @@ const clearSearch = () => {
                                 v-model="searchQuery"
                                 type="text"
                                 placeholder="Search chats and messages..."
-                                class="w-full text-sm pl-10 pr-10 py-2.5 sm:py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                                class="w-full text-base font-medium pl-10 pr-10 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent transition-all"
                             />
                             <button
                                 v-if="searchQuery"
@@ -160,14 +161,11 @@ const clearSearch = () => {
                     <!-- Empty State -->
                     <div
                         v-if="filteredChats.length === 0"
-                        class="flex-1 flex items-center justify-center overflow-y-auto"
+                        class="h-[80vh] flex items-center justify-center"
                     >
-                        <div class="text-center py-8 sm:py-12 px-4">
-                            <div class="text-gray-300 dark:text-gray-600 mb-4">
-                                <Inbox class="w-6 h-6" />
-                            </div>
+                        <div class="text-center">
                             <h3
-                                class="text-base sm:text-lg font-medium text-gray-900 dark:text-white mb-2"
+                                class="text-base font-medium text-gray-900 dark:text-white mb-2"
                             >
                                 {{
                                     searchQuery
@@ -176,7 +174,7 @@ const clearSearch = () => {
                                 }}
                             </h3>
                             <p
-                                class="text-sm sm:text-base text-gray-500 dark:text-gray-400 mb-6 max-w-md mx-auto px-4"
+                                class="text-sm text-gray-500 dark:text-gray-400 mb-6 max-w-md mx-auto px-4"
                             >
                                 {{
                                     searchQuery
@@ -190,7 +188,7 @@ const clearSearch = () => {
                                         ? clearSearch()
                                         : handleNewChat()
                                 "
-                                class="px-5 sm:px-6 py-2.5 sm:py-3 bg-blue-600 hover:bg-blue-700 text-white text-sm sm:text-base rounded-lg transition-colors inline-flex items-center gap-2 shadow-lg"
+                                class="px-5 py-2 bg-white hover:bg-gray-200 text-black text-sm rounded-lg transition-colors inline-flex items-center gap-2 shadow-lg"
                             >
                                 <RefreshCw class="w-4 h-4" v-if="searchQuery" />
                                 <Plus class="w-4 h-5" v-else />
@@ -206,7 +204,7 @@ const clearSearch = () => {
                     <!-- Chat List -->
                     <div
                         v-else
-                        class="flex-1 mt-4 md:max-w-3xl max-w-[100vw] overflow-y-auto overflow-x-hidden custom-scrollbar pr-1 sm:pr-2"
+                        class="flex-1 mt-4 md:max-w-4xl max-w-[100vw] overflow-y-auto overflow-x-hidden custom-scrollbar pr-1 sm:pr-2"
                     >
                         <div class="flex flex-col gap-3 sm:gap-4 pb-4">
                             <div
@@ -214,13 +212,13 @@ const clearSearch = () => {
                                 :key="chat.id"
                                 @click="handleChatClick(chat.id)"
                                 :class="[
-                                    'bg-white dark:bg-gray-800 rounded-xl border-[1px] cursor-pointer transition-all hover:shadow-lg group',
+                                    'rounded-xl border-[1px] cursor-pointer transition-all hover:shadow-lg group',
                                     currentChatId === chat.id
                                         ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
                                         : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600',
                                 ]"
                             >
-                                <div class="p-4 sm:p-5">
+                                <div class="p-4">
                                     <div
                                         class="flex items-start justify-between"
                                     >
@@ -228,33 +226,18 @@ const clearSearch = () => {
                                             <div
                                                 class="flex items-center gap-2 sm:gap-3 mb-2"
                                             >
-                                                <h3
-                                                    class="text-lg sm:text-xl font-semibold text-gray-900 dark:text-white truncate"
+                                                <p
+                                                    class="text-base font-medium text-gray-900 dark:text-gray-100 truncate"
                                                 >
                                                     {{
                                                         chat.title ||
                                                         "Untitled Chat"
                                                     }}
-                                                </h3>
-                                                <div
-                                                    v-if="
-                                                        currentChatId ===
-                                                        chat.id
-                                                    "
-                                                    class="flex items-center gap-1 px-2 py-1 bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-300 rounded-full text-xs font-medium flex-shrink-0"
-                                                >
-                                                    <div
-                                                        class="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-blue-500 rounded-full animate-pulse"
-                                                    ></div>
-                                                    <span
-                                                        class="hidden sm:inline"
-                                                        >Active</span
-                                                    >
-                                                </div>
+                                                </p>
                                             </div>
 
                                             <div
-                                                class="flex items-center gap-3 sm:gap-4 text-xs sm:text-sm text-gray-500 dark:text-gray-400 mb-2 sm:mb-3 flex-wrap"
+                                                class="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400 flex-wrap"
                                             >
                                                 <span
                                                     class="flex items-center gap-1"
@@ -294,42 +277,6 @@ const clearSearch = () => {
                                                         )
                                                     }}
                                                 </span>
-                                            </div>
-
-                                            <!-- Preview of last message -->
-                                            <div
-                                                v-if="
-                                                    chat.messages &&
-                                                    chat.messages.length > 0
-                                                "
-                                                class="text-gray-600 dark:text-gray-300 line-clamp-2 text-xs sm:text-sm bg-gray-50 dark:bg-gray-700/50 rounded-lg p-2.5 sm:p-3"
-                                            >
-                                                {{
-                                                    chat.messages[
-                                                        chat.messages.length - 1
-                                                    ]?.response?.substring(
-                                                        0,
-                                                        screenWidth < 640
-                                                            ? 100
-                                                            : 150,
-                                                    ) || "No messages yet"
-                                                }}
-                                                {{
-                                                    chat.messages[
-                                                        chat.messages.length - 1
-                                                    ]?.response?.length >
-                                                    (screenWidth < 640
-                                                        ? 100
-                                                        : 150)
-                                                        ? "..."
-                                                        : ""
-                                                }}
-                                            </div>
-                                            <div
-                                                v-else
-                                                class="text-gray-400 dark:text-gray-500 text-xs sm:text-sm italic"
-                                            >
-                                                No messages yet
                                             </div>
                                         </div>
 

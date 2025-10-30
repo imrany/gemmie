@@ -18,12 +18,10 @@ import type {
     UserDetails,
 } from "./types";
 import {
-    generateChatId,
     generateChatTitle,
     extractUrls,
     validateCredentials,
     getTransaction,
-    detectLargePaste,
     createErrorContext,
     getErrorStatus,
     SPINDLE_URL,
@@ -33,15 +31,15 @@ import { detectAndProcessVideo } from "./utils/videoProcessing";
 import ConfirmDialog from "./components/ConfirmDialog.vue";
 import type { Theme } from "vue-sonner/src/packages/types.js";
 import UpdateModal from "./components/Modals/UpdateModal.vue";
-import {
-    usePlatformError,
-    generateErrorId,
-} from "./composables/usePlatformError";
+import { usePlatformError } from "./composables/usePlatformError";
 import { useApiCall } from "@/composables/useApiCall";
 import type { PlatformError } from "./types";
 import { useDebounceFn } from "@vueuse/core";
 import DemoToast from "./components/DemoToast.vue";
-import { useRouter } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
+import { useChat } from "./composables/useChat";
+import { useCache } from "./composables/useCache";
+import { useSync } from "./composables/useSync";
 
 const { reportError } = usePlatformError();
 const router = useRouter();
@@ -79,7 +77,7 @@ const confirmDialog = ref<ConfirmDialogOptions>({
     onConfirm: () => {},
     onCancel: () => {},
 });
-const isCollapsed = ref(false);
+const isCollapsed = ref(true);
 const isSidebarHidden = ref(true);
 const authData = ref({
     username: "",
@@ -88,17 +86,6 @@ const authData = ref({
     agreeToTerms: false,
 });
 const FREE_REQUEST_LIMIT = 20;
-const syncStatus = ref({
-    lastSync: null as Date | null,
-    syncing: false,
-    hasUnsyncedChanges: false,
-    lastError: null as string | null,
-    retryCount: 0,
-    maxRetries: 3,
-    showSyncIndicator: false,
-    syncMessage: "",
-    syncProgress: 0,
-});
 const isOpenTextHighlightPopover = ref(false);
 const currentChat: ComputedRef<CurrentChat | undefined> = computed(() => {
     if (!currentChatId.value || !chats.value.length) {
@@ -126,47 +113,6 @@ const parsedUserDetailsNullValues: UserDetails = {
     username: "",
     theme: "system",
 };
-
-const linkPreviewCache = ref<Map<string, LinkPreview>>(new Map());
-
-function loadLinkPreviewCache() {
-    try {
-        const cached = localStorage.getItem("linkPreviews");
-        if (cached) {
-            const parsedCache = JSON.parse(cached);
-            if (typeof parsedCache === "object" && parsedCache !== null) {
-                linkPreviewCache.value = new Map(Object.entries(parsedCache));
-            }
-        }
-    } catch (error) {
-        console.error("Failed to load link preview cache:", error);
-        localStorage.removeItem("linkPreviews");
-        linkPreviewCache.value.clear();
-    }
-}
-
-function saveLinkPreviewCache() {
-    try {
-        const cacheObject = Object.fromEntries(linkPreviewCache.value);
-        localStorage.setItem("linkPreviews", JSON.stringify(cacheObject));
-    } catch (error) {
-        console.error("Failed to save link preview cache:", error);
-        if (linkPreviewCache.value.size > 100) {
-            const entries = Array.from(linkPreviewCache.value.entries());
-            const recent = entries.slice(-50);
-            linkPreviewCache.value = new Map(recent);
-            try {
-                const reducedCache = Object.fromEntries(linkPreviewCache.value);
-                localStorage.setItem(
-                    "linkPreviews",
-                    JSON.stringify(reducedCache),
-                );
-            } catch (retryError) {
-                console.error("Failed to save reduced cache:", retryError);
-            }
-        }
-    }
-}
 
 let userDetails: any = localStorage.getItem("userdetails");
 const parsedUserDetails = ref<UserDetails>(
@@ -201,12 +147,10 @@ const isAuthenticated = computed(() => {
     );
 });
 
+const route = useRoute();
 const currentChatId = ref<string>("");
 const chats = ref<Chat[]>([]);
 const isLoading = ref(false);
-const expanded = ref<boolean[]>([]);
-const showInput = ref(false);
-const activeChatMenu = ref<string | null>(null);
 const showProfileMenu = ref(false);
 const now = ref(Date.now());
 
@@ -341,28 +285,62 @@ const shouldHaveLimit =
     planStatus.value.status === "no-plan" ||
     planStatus.value.status === "expired";
 const requestCount = computed(() => requestLimitInfo.value.currentCount);
+const copiedIndex = ref<number | null>(null);
+
+// composables
+const { linkPreviewCache, loadLinkPreviewCache, saveLinkPreviewCache } =
+    useCache();
+
+const { syncStatus, showSyncIndicator, hideSyncIndicator, updateSyncProgress } =
+    useSync();
+
 const { apiCall, unsecureApiCall, checkInternetConnection } = useApiCall({
     isUserOnline,
     connectionStatus,
     parsedUserDetails,
     syncStatus,
 });
-function showSyncIndicator(message: string, progress: number = 0) {
-    syncStatus.value.showSyncIndicator = true;
-    syncStatus.value.syncMessage = message;
-    syncStatus.value.syncProgress = progress;
-}
 
-function hideSyncIndicator() {
-    syncStatus.value.showSyncIndicator = false;
-    syncStatus.value.syncMessage = "";
-    syncStatus.value.syncProgress = 0;
-}
+const {
+    expanded,
+    activeChatMenu,
+    renameChat,
+    clearAllChats,
+    toggleChatMenu,
+    draftSaveTimeout,
+    mergeChats,
+    deleteChat,
+    saveChats,
+    autoGrow,
+    saveChatDrafts,
+    loadChatDrafts,
+    clearCurrentDraft,
+    autoSaveDraft,
+    switchToChat,
+    createNewChat,
 
-function updateSyncProgress(message: string, progress: number) {
-    syncStatus.value.syncMessage = message;
-    syncStatus.value.syncProgress = progress;
-}
+    copyResponse,
+    shareResponse,
+    loadChats,
+    processLinksInUserPrompt,
+    processLinksInResponse,
+} = useChat({
+    copiedIndex,
+    chats,
+    currentChatId,
+    updateExpandedArray,
+    linkPreviewCache,
+    fetchLinkPreview,
+    chatDrafts,
+    pastePreviews,
+    parsedUserDetails,
+    performSmartSync,
+    isAuthenticated,
+    syncStatus,
+    saveLinkPreviewCache,
+    isLoading,
+    confirmDialog,
+});
 
 function showConfirmDialog(options: ConfirmDialogOptions) {
     confirmDialog.value = {
@@ -418,192 +396,6 @@ function showConfirmDialog(options: ConfirmDialogOptions) {
     };
 }
 
-function isValidChat(chat: any): chat is Chat {
-    return (
-        chat &&
-        typeof chat === "object" &&
-        chat.id &&
-        typeof chat.id === "string" &&
-        Array.isArray(chat.messages) &&
-        chat.updatedAt &&
-        typeof chat.updatedAt === "string"
-    );
-}
-
-function isNewerChat(serverChat: Chat, localChat: Chat): boolean {
-    try {
-        return (
-            new Date(serverChat.updatedAt).getTime() >
-            new Date(localChat.updatedAt).getTime()
-        );
-    } catch (error) {
-        return false;
-    }
-}
-
-function mergeChats(serverChats: Chat[], localChats: Chat[]): Chat[] {
-    try {
-        if (!Array.isArray(serverChats)) serverChats = [];
-        if (!Array.isArray(localChats)) localChats = [];
-
-        const merged = new Map<string, Chat>();
-
-        localChats.forEach((chat) => {
-            if (isValidChat(chat)) {
-                merged.set(chat.id, chat);
-            }
-        });
-
-        serverChats.forEach((serverChat) => {
-            if (!isValidChat(serverChat)) return;
-
-            const localChat = merged.get(serverChat.id);
-            if (!localChat || isNewerChat(serverChat, localChat)) {
-                merged.set(serverChat.id, serverChat);
-            }
-        });
-
-        return Array.from(merged.values()).sort((a, b) => {
-            try {
-                return (
-                    new Date(b.updatedAt).getTime() -
-                    new Date(a.updatedAt).getTime()
-                );
-            } catch (error) {
-                return 0;
-            }
-        });
-    } catch (error) {
-        console.error("Error merging chats:", error);
-        return localChats || [];
-    }
-}
-
-function deleteChat(chatId: string) {
-    if (isLoading.value || !chatId) return;
-
-    try {
-        const chatIndex = chats.value.findIndex((chat) => chat.id === chatId);
-        if (chatIndex === -1) {
-            toast.error("Chat not found");
-            return;
-        }
-
-        const chatToDelete = chats.value[chatIndex];
-        const chatTitle = chatToDelete.title || "Untitled Chat";
-        const messageCount = chatToDelete.messages?.length || 0;
-
-        showConfirmDialog({
-            visible: true,
-            title: "Delete Chat",
-            message: `Are you sure you want to delete "${chatTitle}"?\n\nThis will permanently remove ${messageCount} message(s). This action cannot be undone.`,
-            type: "danger",
-            confirmText: "Delete",
-            onConfirm: () => {
-                try {
-                    // Remove link previews from cache before deleting
-                    if (chatToDelete.messages?.length > 0) {
-                        chatToDelete.messages.forEach((message) => {
-                            try {
-                                const responseUrls = extractUrls(
-                                    message.response || "",
-                                );
-                                const promptUrls = extractUrls(
-                                    message.prompt || "",
-                                );
-                                const urls = [
-                                    ...new Set([
-                                        ...responseUrls,
-                                        ...promptUrls,
-                                    ]),
-                                ];
-
-                                urls.forEach((url) => {
-                                    linkPreviewCache.value.delete(url);
-                                });
-                            } catch (error: any) {
-                                reportError({
-                                    createdAt: new Date().toISOString(),
-                                    id: generateErrorId(),
-                                    action: "deleteChat",
-                                    message:
-                                        "Error extracting URLs for cache cleanup: " +
-                                        error.message,
-                                    status: getErrorStatus(error),
-                                    userId:
-                                        parsedUserDetails.value?.userId ||
-                                        "unknown",
-                                    context: createErrorContext({
-                                        chatId,
-                                        errorName: error.name,
-                                    }),
-                                    severity: "low",
-                                } as PlatformError);
-                            }
-                        });
-                        saveLinkPreviewCache();
-                    }
-
-                    // Remove chat from array
-                    chats.value.splice(chatIndex, 1);
-
-                    // If we deleted the current chat, switch to another one
-                    if (currentChatId.value === chatId) {
-                        if (chats.value.length > 0) {
-                            switchToChat(chats.value[0].id);
-                        } else {
-                            currentChatId.value = "";
-                            localStorage.removeItem("currentChatId");
-                            updateExpandedArray();
-                        }
-                    }
-
-                    clearCurrentDraft();
-                    saveChats();
-
-                    // Trigger sync after deleting chat
-                    if (
-                        isAuthenticated.value &&
-                        parsedUserDetails.value?.syncEnabled
-                    ) {
-                        setTimeout(() => {
-                            performSmartSync();
-                        }, 1000);
-                    }
-                } catch (error: any) {
-                    reportError({
-                        action: `onconfirm delete chat`,
-                        message: "Failed to delete chat :" + error.message,
-                        description: `Failed to delete this chat. Please try again.`,
-                        status: getErrorStatus(error),
-                        context: createErrorContext({
-                            chatId,
-                            chatTitle,
-                            messageCount,
-                            errorName: error.name,
-                            errorStack: error.stack,
-                        }),
-                        userId: parsedUserDetails.value?.userId || "unknown",
-                        severity: "high",
-                    } as PlatformError);
-                }
-            },
-        });
-    } catch (error: any) {
-        reportError({
-            action: `delete chat`,
-            message: "Failed to delete chat :" + error.message,
-            description: `Failed to delete this chat. Please try again.`,
-            status: getErrorStatus(error),
-            context: createErrorContext({
-                chatId,
-                errorName: error.name,
-            }),
-            userId: parsedUserDetails.value?.userId || "unknown",
-        } as PlatformError);
-    }
-}
-
 async function logout() {
     showConfirmDialog({
         visible: true,
@@ -655,8 +447,7 @@ async function logout() {
                     chats.value = [];
                     currentChatId.value = "";
                     expanded.value = [];
-                    showInput.value = false;
-                    isCollapsed.value = false;
+                    isCollapsed.value = true;
 
                     syncStatus.value = {
                         lastSync: null,
@@ -677,12 +468,9 @@ async function logout() {
                         "chatDrafts",
                         "pastePreviews",
                         "linkPreviews",
+                        "chats",
+                        "isCollapsed",
                     ];
-                    if (syncEnabled) {
-                        keysToRemove.push("chats", "currentChatId");
-                    } else {
-                        keysToRemove.push("chats", "currentChatId");
-                    }
 
                     linkPreviewCache.value.clear();
 
@@ -696,7 +484,7 @@ async function logout() {
                             );
                         }
                     });
-                    router.replace("/auth");
+                    router.replace("/");
                 } catch (stateError) {
                     console.error(
                         "Error clearing application state:",
@@ -749,26 +537,6 @@ async function logout() {
                 isLoading.value = false;
             }
         },
-    });
-}
-
-function setShowInput() {
-    if (currentMessages.value.length !== 0) {
-        return;
-    }
-    if (!isAuthenticated.value) {
-        toast.warning("Please create a session first", {
-            duration: 3000,
-            description: "You need to be logged in.",
-        });
-        return;
-    }
-    showInput.value = true;
-    nextTick(() => {
-        const textarea = document.getElementById(
-            "prompt",
-        ) as HTMLTextAreaElement;
-        if (textarea) textarea.focus();
     });
 }
 
@@ -833,7 +601,6 @@ function scrollToLastMessage() {
 
 function handleScroll() {
     try {
-        console.log("scrolling");
         if (isOpenTextHighlightPopover.value) {
             isOpenTextHighlightPopover.value = false;
         }
@@ -865,353 +632,6 @@ function hideSidebar() {
         isSidebarHidden.value = !isSidebarHidden.value;
     } catch (error) {
         console.error("Error toggling sidebar:", error);
-    }
-}
-
-function toggleChatMenu(chatId: string, event: Event) {
-    try {
-        event.stopPropagation();
-        activeChatMenu.value = activeChatMenu.value === chatId ? null : chatId;
-    } catch (error) {
-        console.error("Error toggling chat menu:", error);
-    }
-}
-
-function autoGrow(e: Event) {
-    const el = e.target as HTMLTextAreaElement;
-    const maxHeight = 200;
-    el.style.height = "auto";
-    if (el.scrollHeight <= maxHeight) {
-        el.style.height = el.scrollHeight + "px";
-        el.style.overflowY = "hidden";
-    } else {
-        el.style.height = maxHeight + "px";
-        el.style.overflowY = "auto";
-    }
-
-    autoSaveDraft();
-}
-
-function saveChatDrafts() {
-    try {
-        const draftsObject = Object.fromEntries(chatDrafts.value);
-        localStorage.setItem("chatDrafts", JSON.stringify(draftsObject));
-
-        const previewsObject = Object.fromEntries(pastePreviews.value);
-        localStorage.setItem("pastePreviews", JSON.stringify(previewsObject));
-    } catch (error) {
-        console.error("Failed to save chat drafts:", error);
-    }
-}
-
-function loadChatDrafts() {
-    try {
-        const saved = localStorage.getItem("chatDrafts");
-        if (saved) {
-            const parsedDrafts = JSON.parse(saved);
-            chatDrafts.value = new Map(Object.entries(parsedDrafts));
-        }
-
-        const savedPastePreviews = localStorage.getItem("pastePreviews");
-        if (savedPastePreviews) {
-            const parsedPreviews = JSON.parse(savedPastePreviews);
-            pastePreviews.value = new Map(Object.entries(parsedPreviews));
-        }
-
-        if (currentChatId.value) {
-            const currentDraft =
-                chatDrafts.value.get(currentChatId.value) || "";
-            const currentPastePreview = pastePreviews.value.get(
-                currentChatId.value,
-            );
-
-            let shouldFocus = false;
-
-            if (currentPastePreview && currentPastePreview.show) {
-                const textarea = document.getElementById(
-                    "prompt",
-                ) as HTMLTextAreaElement;
-                if (textarea) {
-                    const draftWithoutPaste = currentDraft.replace(
-                        currentPastePreview.content,
-                        "",
-                    );
-                    textarea.value = draftWithoutPaste;
-                    autoGrow({ target: textarea } as any);
-                    shouldFocus = true;
-                    console.log("📝 Focus: Paste preview detected");
-                }
-            } else if (currentDraft && detectLargePaste(currentDraft)) {
-                const wordCount = currentDraft
-                    .trim()
-                    .split(/\s+/)
-                    .filter((word) => word.length > 0).length;
-                const charCount = currentDraft.length;
-
-                pastePreviews.value.set(currentChatId.value, {
-                    content: currentDraft,
-                    wordCount,
-                    charCount,
-                    show: true,
-                });
-
-                const textarea = document.getElementById(
-                    "prompt",
-                ) as HTMLTextAreaElement;
-                if (textarea) {
-                    textarea.value = "";
-                    autoGrow({ target: textarea } as any);
-                    shouldFocus = true;
-                    console.log(
-                        "📝 Focus: Large paste detected and converted to preview",
-                    );
-                }
-            } else if (currentDraft.trim()) {
-                const textarea = document.getElementById(
-                    "prompt",
-                ) as HTMLTextAreaElement;
-                if (textarea) {
-                    textarea.value = currentDraft;
-                    autoGrow({ target: textarea } as any);
-                    shouldFocus = true;
-                    console.log("📝 Focus: Draft content detected");
-                }
-                pastePreviews.value.delete(currentChatId.value);
-            } else {
-                const textarea = document.getElementById(
-                    "prompt",
-                ) as HTMLTextAreaElement;
-                if (textarea) {
-                    textarea.value = "";
-                    autoGrow({ target: textarea } as any);
-                    // Don't focus on empty drafts
-                    console.log("📝 No focus: Empty draft");
-                }
-                pastePreviews.value.delete(currentChatId.value);
-            }
-
-            // Focus the textarea if we have content to work with
-            if (shouldFocus) {
-                nextTick(() => {
-                    const textarea = document.getElementById(
-                        "prompt",
-                    ) as HTMLTextAreaElement;
-                    if (textarea) {
-                        // Small delay to ensure DOM is updated
-                        setTimeout(() => {
-                            textarea.focus();
-                            console.log(
-                                "🎯 Textarea focused due to draft/preview content",
-                            );
-                        }, 100);
-                    }
-                });
-            }
-        }
-    } catch (error) {
-        console.error("Failed to load chat drafts:", error);
-    }
-}
-
-function clearCurrentDraft() {
-    if (currentChatId.value) {
-        chatDrafts.value.delete(currentChatId.value);
-        pastePreviews.value.delete(currentChatId.value);
-        saveChatDrafts();
-
-        const textarea = document.getElementById(
-            "prompt",
-        ) as HTMLTextAreaElement;
-        if (textarea) {
-            textarea.value = "";
-            autoGrow({ target: textarea } as any);
-        }
-    }
-}
-
-let draftSaveTimeout: any = null;
-
-function autoSaveDraft() {
-    if (draftSaveTimeout) {
-        clearTimeout(draftSaveTimeout);
-    }
-
-    draftSaveTimeout = setTimeout(() => {
-        if (currentChatId.value) {
-            const textarea = document.getElementById(
-                "prompt",
-            ) as HTMLTextAreaElement;
-            let currentDraft = textarea?.value || "";
-
-            const currentPastePreview = pastePreviews.value.get(
-                currentChatId.value,
-            );
-            if (currentPastePreview?.show) {
-                currentDraft += currentPastePreview.content;
-            }
-
-            if (currentDraft.trim().length > 0) {
-                chatDrafts.value.set(currentChatId.value, currentDraft);
-                saveChatDrafts();
-            } else {
-                chatDrafts.value.delete(currentChatId.value);
-                saveChatDrafts();
-            }
-        }
-    }, 1000);
-}
-
-function switchToChat(chatId: string): boolean {
-    try {
-        if (!chatId || typeof chatId !== "string") {
-            console.error("Invalid chat ID provided");
-            return false;
-        }
-
-        // Validate chat exists
-        const targetChat = chats.value.find((chat) => chat.id === chatId);
-        if (!targetChat) {
-            console.warn(`Chat with ID ${chatId} not found`);
-            toast.error("Chat not found");
-            return false;
-        }
-
-        // Skip if already on the target chat
-        if (currentChatId.value === chatId) {
-            console.log("Already on target chat, skipping switch");
-            return true;
-        }
-
-        // Save current draft if switching from another chat
-        if (currentChatId.value) {
-            const textarea = document.getElementById(
-                "prompt",
-            ) as HTMLTextAreaElement;
-            let currentDraft = textarea?.value || "";
-
-            const currentPastePreview = pastePreviews.value.get(
-                currentChatId.value,
-            );
-            if (currentPastePreview?.show && currentPastePreview.content) {
-                currentDraft += currentPastePreview.content;
-            }
-
-            if (currentDraft.trim().length === 0) {
-                chatDrafts.value.delete(currentChatId.value);
-                pastePreviews.value.delete(currentChatId.value);
-            } else {
-                chatDrafts.value.set(currentChatId.value, currentDraft);
-            }
-            saveChatDrafts();
-        }
-
-        // Update current chat ID
-        const previousChatId = currentChatId.value;
-        currentChatId.value = chatId;
-
-        // Update expanded array for new chat
-        updateExpandedArray();
-
-        // Persist to localStorage
-        try {
-            localStorage.setItem("currentChatId", currentChatId.value);
-        } catch (error) {
-            console.error("Failed to save current chat ID:", error);
-            // Don't fail the entire operation for localStorage issues
-        }
-
-        // Load draft for new chat and update UI
-        nextTick(() => {
-            loadChatDrafts();
-            // scrollToLastMessage()
-        });
-
-        console.log(`✅ Switched from chat ${previousChatId} to ${chatId}`);
-        return true;
-    } catch (error: any) {
-        console.error("Error in switchToChat:", error);
-        reportError({
-            action: `switchToChat`,
-            message: "Error switching to chat: " + error.message,
-            description: `Failed to switch to chat : ${chatId.slice(0, 10)}...`,
-            status: getErrorStatus(error),
-            userId: parsedUserDetails.value?.userId || "unknown",
-            severity: "critical",
-            context: createErrorContext({
-                targetChatId: chatId,
-                currentChatId: currentChatId.value,
-                errorName: error.name,
-            }),
-        } as PlatformError);
-        return false;
-    }
-}
-
-function createNewChat(firstMessage?: string): string {
-    try {
-        const newChatId = generateChatId();
-        const now = new Date().toISOString();
-
-        const newChat: Chat = {
-            id: newChatId,
-            title: firstMessage ? generateChatTitle(firstMessage) : "New Chat",
-            messages: [],
-            createdAt: now,
-            updatedAt: now,
-        };
-
-        if (currentChatId.value) {
-            pastePreviews.value.delete(currentChatId.value);
-        }
-
-        if (currentChatId.value) {
-            const textarea = document.getElementById(
-                "prompt",
-            ) as HTMLTextAreaElement;
-            const currentDraft = textarea?.value || "";
-            if (currentDraft.trim()) {
-                chatDrafts.value.set(currentChatId.value, currentDraft);
-                saveChatDrafts();
-            }
-        }
-
-        chatDrafts.value.set(newChatId, "");
-        pastePreviews.value.delete(newChatId);
-
-        chats.value.unshift(newChat);
-        currentChatId.value = newChatId;
-        updateExpandedArray();
-        saveChats();
-
-        // Trigger sync after creating new chat
-        if (isAuthenticated.value && parsedUserDetails.value?.syncEnabled) {
-            setTimeout(() => {
-                performSmartSync();
-            }, 1000);
-        }
-
-        nextTick(() => {
-            const textarea = document.getElementById(
-                "prompt",
-            ) as HTMLTextAreaElement;
-            if (textarea) {
-                textarea.value = "";
-                autoGrow({ target: textarea } as any);
-                textarea.focus();
-            }
-        });
-
-        return newChatId;
-    } catch (error: any) {
-        reportError({
-            action: `createNewChat`,
-            message: "Error creating new chat: " + error.message,
-            description: `Failed to create a new chat. Try again`,
-            status: getErrorStatus(error),
-            userId: parsedUserDetails.value?.userId || "unknown",
-            severity: "critical",
-        } as PlatformError);
-        return "";
     }
 }
 
@@ -1316,131 +736,6 @@ function deleteMessage(messageIndex: number) {
             action: `deleteMessage`,
             message: "Error in deleteMessage: " + error.message,
             description: `Failed to delete this message.`,
-            status: getErrorStatus(error),
-            userId: parsedUserDetails.value?.userId || "unknown",
-            severity: "critical",
-        } as PlatformError);
-    }
-}
-
-//  renameChat function
-function renameChat(chatId: string, newTitle: string) {
-    try {
-        if (!chatId || !newTitle || typeof newTitle !== "string") {
-            toast.error("Invalid chat title");
-            return;
-        }
-
-        const chat = chats.value.find((c) => c.id === chatId);
-        if (!chat) {
-            toast.error("Chat not found");
-            return;
-        }
-
-        const trimmedTitle = newTitle.trim();
-        if (!trimmedTitle) {
-            toast.error("Chat title cannot be empty");
-            return;
-        }
-
-        chat.title = trimmedTitle;
-        chat.updatedAt = new Date().toISOString();
-        saveChats();
-
-        // Trigger sync after renaming chat
-        if (isAuthenticated.value && parsedUserDetails.value?.syncEnabled) {
-            setTimeout(() => {
-                performSmartSync();
-            }, 1000);
-        }
-    } catch (error: any) {
-        reportError({
-            action: `renameChat`,
-            message: "Error renaming chat: " + error.message,
-            description: `Failed to rename this chat. Please try again.`,
-            status: getErrorStatus(error),
-            userId: parsedUserDetails.value?.userId || "unknown",
-            severity: "critical",
-        } as PlatformError);
-    }
-}
-
-function clearAllChats() {
-    if (isLoading.value) return;
-
-    try {
-        const totalChats = chats.value.length;
-        const totalMessages = chats.value.reduce(
-            (sum, chat) => sum + (chat.messages?.length || 0),
-            0,
-        );
-
-        if (totalChats === 0) {
-            toast.info("There are no chats to clear", {
-                duration: 3000,
-                description: "Your chat list is already empty.",
-            });
-            return;
-        }
-
-        showConfirmDialog({
-            visible: true,
-            title: "Clear All Chats",
-            message: `⚠️ DELETE ALL CHATS?\n\nThis will permanently delete:\n• ${totalChats} chat(s)\n• ${totalMessages} total message(s)\n\nThis action cannot be undone!`,
-            type: "danger",
-            confirmText: "Delete All",
-            onConfirm: () => {
-                try {
-                    chats.value = [];
-                    currentChatId.value = "";
-                    expanded.value = [];
-                    linkPreviewCache.value.clear();
-
-                    chatDrafts.value.clear();
-                    saveChatDrafts();
-
-                    const keysToRemove = [
-                        "chats",
-                        "currentChatId",
-                        "linkPreviews",
-                        "chatDrafts",
-                    ];
-                    keysToRemove.forEach((key) => {
-                        try {
-                            localStorage.removeItem(key);
-                        } catch (error) {
-                            console.error(
-                                `Failed to remove ${key} from localStorage:`,
-                                error,
-                            );
-                        }
-                    });
-
-                    saveChats();
-                    toast.error(
-                        `${totalChats} chats with ${totalMessages} messages deleted`,
-                        {
-                            duration: 5000,
-                            description: "All chat data has been cleared",
-                        },
-                    );
-                } catch (error: any) {
-                    reportError({
-                        action: `clearAllChats`,
-                        message: "Error clearing all chats: " + error.message,
-                        description: `Failed to clear all chats. Try again`,
-                        status: getErrorStatus(error),
-                        userId: parsedUserDetails.value?.userId || "unknown",
-                        severity: "critical",
-                    } as PlatformError);
-                }
-            },
-        });
-    } catch (error: any) {
-        reportError({
-            action: `clearAllChats`,
-            message: "Error clearing all chats: " + error.message,
-            description: `Failed to clear all chats. Try again`,
             status: getErrorStatus(error),
             userId: parsedUserDetails.value?.userId || "unknown",
             severity: "critical",
@@ -1576,41 +871,6 @@ function handleClickOutside() {
     }
 }
 
-function saveChats() {
-    try {
-        if (!Array.isArray(chats.value)) {
-            console.error("Chats is not an array, resetting to empty array");
-            chats.value = [];
-        }
-
-        const chatsJson = JSON.stringify(chats.value);
-
-        if (chatsJson.length > 5000000) {
-            toast.warning("Chat data is getting large", {
-                duration: 5000,
-                description:
-                    "Consider clearing old chats to improve performance",
-            });
-        }
-
-        localStorage.setItem("chats", chatsJson);
-        localStorage.setItem("currentChatId", currentChatId.value);
-
-        if (isAuthenticated.value && parsedUserDetails.value?.syncEnabled) {
-            syncStatus.value.hasUnsyncedChanges = true;
-        }
-    } catch (error: any) {
-        reportError({
-            action: `saveChats`,
-            message: "Failed to save chats: " + error.message,
-            description: `Your recent changes may not be saved.`,
-            status: getErrorStatus(error),
-            userId: parsedUserDetails.value?.userId || "unknown",
-            severity: "critical",
-        } as PlatformError);
-    }
-}
-
 async function syncFromServer(serverData?: any) {
     if (!parsedUserDetails.value?.userId) {
         console.log("❌ syncFromServer: No user ID");
@@ -1733,6 +993,7 @@ async function syncFromServer(serverData?: any) {
                 } as PlatformError);
             }
         }
+
         updateSyncProgress("Updating preferences...", 95);
 
         // Update user details if provided
@@ -1827,7 +1088,6 @@ async function syncFromServer(serverData?: any) {
         syncStatus.value.syncing = false;
     }
 }
-
 async function syncToServer() {
     if (
         !parsedUserDetails.value?.userId ||
@@ -1856,7 +1116,6 @@ async function syncToServer() {
             link_previews: JSON.stringify(
                 Object.fromEntries(linkPreviewCache.value),
             ),
-            current_chat_id: currentChatId.value || "",
             username: parsedUserDetails.value.username,
             preferences: parsedUserDetails.value.preferences || "",
             work_function: parsedUserDetails.value.workFunction || "",
@@ -2091,6 +1350,7 @@ async function handleAuth(data: {
                     email,
                     password,
                     agree_to_terms: agreeToTerms,
+                    user_agent: navigator.userAgent,
                 }),
             });
             isLogin = true;
@@ -2105,6 +1365,7 @@ async function handleAuth(data: {
                         email,
                         password,
                         agree_to_terms: agreeToTerms,
+                        user_agent: navigator.userAgent,
                     }),
                 });
 
@@ -2248,12 +1509,8 @@ function loadLocalData() {
         }
 
         // Initialize currentChatId with validation
-        const storedChatId = localStorage.getItem("currentChatId");
-        if (
-            storedChatId &&
-            typeof storedChatId === "string" &&
-            storedChatId.trim()
-        ) {
+        const storedChatId = currentChatId.value;
+        if (storedChatId) {
             const chatExists = chats.value.some(
                 (chat) => chat.id === storedChatId,
             );
@@ -2267,26 +1524,20 @@ function loadLocalData() {
                 currentChatId.value =
                     chats.value.length > 0 ? chats.value[0].id : "";
                 if (currentChatId.value) {
-                    localStorage.setItem("currentChatId", currentChatId.value);
-                    console.log(
-                        `✅ Set fallback current chat ID: ${currentChatId.value}`,
-                    );
+                    router.push(`/chat/${currentChatId.value}`);
                 } else {
-                    localStorage.removeItem("currentChatId");
+                    router.push("/new");
                     console.log("No chats available, cleared currentChatId");
                 }
             }
         } else if (chats.value.length > 0) {
             // No stored chat ID but we have chats, select the first one
             currentChatId.value = chats.value[0].id;
-            localStorage.setItem("currentChatId", currentChatId.value);
-            console.log(
-                `✅ No stored chat ID, selected first chat: ${currentChatId.value}`,
-            );
+            router.push(`/chat/${currentChatId.value}`);
         } else {
             // No stored chat ID and no chats
             currentChatId.value = "";
-            localStorage.removeItem("currentChatId");
+            router.push("/new");
             console.log("No chats available and no stored chat ID");
         }
 
@@ -2440,7 +1691,6 @@ async function toggleSync() {
                         sync_enabled: false,
                         chats: "[]",
                         link_previews: "{}",
-                        current_chat_id: "",
                     }),
                 });
 
@@ -3000,50 +2250,19 @@ function hasChatsChangedMeaningfully(
     return false;
 }
 
-// watch function to sync currentChatId changes
 watch(
     () => currentChatId.value,
     (newChatId, oldChatId) => {
-        if (!isAuthenticated.value || !parsedUserDetails.value?.syncEnabled) {
+        if (!isAuthenticated.value) {
             return;
         }
 
         if (newChatId && newChatId !== oldChatId) {
             console.log("🔄 Current chat ID changed, marking for sync");
-
-            // Mark as having unsynced changes
-            syncStatus.value.hasUnsyncedChanges = true;
-
-            // Debounced sync
-            if (chatsDebounceTimer) {
-                clearTimeout(chatsDebounceTimer);
-            }
-
-            chatsDebounceTimer = setTimeout(() => {
-                if (
-                    syncStatus.value.hasUnsyncedChanges &&
-                    !syncStatus.value.syncing
-                ) {
-                    console.log(
-                        "🔄 Triggering sync from current chat ID change",
-                    );
-                    performSmartSync().catch((error) => {
-                        reportError({
-                            action: `currentChatId-watcher`,
-                            message:
-                                "Sync from current chat ID changed failed: " +
-                                error.message,
-                            status: getErrorStatus(error),
-                            userId:
-                                parsedUserDetails.value?.userId || "unknown",
-                            severity: "low",
-                        } as PlatformError);
-                    });
-                }
-            }, 500); // 0.5 second debounce
+            router.push(`/chat/${newChatId}`);
         }
     },
-    { immediate: false, deep: true },
+    { immediate: false },
 );
 
 function applyTheme(theme: Theme) {
@@ -3105,6 +2324,46 @@ watch(
         }
     },
     { immediate: false }, // Set to false to avoid unnecessary initial save, onMounted
+);
+
+watch(
+    () => route.path,
+    (newPath, oldPath) => {
+        if (newPath === "/new" && newPath !== oldPath) {
+            const chatId = createNewChat();
+            router.replace(`/chat/${chatId}`);
+        }
+    },
+    { immediate: true },
+);
+
+watch(
+    () => route.params.id,
+    async (newId) => {
+        const chatId = Array.isArray(newId) ? newId[0] : newId;
+
+        // Don't process if no chat ID or same as current
+        if (!chatId || chatId === currentChatId.value) return;
+
+        // Wait a tick for chats to potentially load
+        await nextTick();
+
+        const chatExists = chats.value.find((chat) => chat.id === chatId);
+
+        if (chatExists) {
+            currentChatId.value = chatId;
+            updateExpandedArray();
+            nextTick(() => {
+                loadChatDrafts();
+            });
+            console.log(`🔄 Route sync: Updated currentChatId to ${chatId}`);
+        } else if (chatId && chatId.startsWith("chat_")) {
+            // Only redirect if it's a valid chat ID format but doesn't exist
+            console.warn(`⚠️ Chat ${chatId} not found, but keeping route`);
+            // Don't redirect - keep the invalid chat ID in URL for error handling
+        }
+    },
+    { immediate: true },
 );
 
 let debouncedResize: any = null;
@@ -3215,11 +2474,6 @@ onMounted(async () => {
             loadLocalData();
         }
 
-        // Chat drafts
-        if (currentChatId.value) {
-            loadChatDrafts();
-        }
-
         // Connection setup
         checkInternetConnection().then((isOnline) => {
             console.log(
@@ -3301,6 +2555,7 @@ onUnmounted(() => {
 // Global state object with all functions and reactive references
 const globalState = {
     // Reactive references
+    copiedIndex,
     isOpenTextHighlightPopover,
     syncEnabled,
     isDemoMode,
@@ -3328,7 +2583,6 @@ const globalState = {
     chats,
     isLoading,
     expanded,
-    showInput,
     isFreeUser,
     scrollableElem,
     showScrollDownButton,
@@ -3346,13 +2600,17 @@ const globalState = {
     shouldHaveLimit,
 
     // Core functions
+    copyResponse,
+    shareResponse,
+    loadChats,
+    processLinksInUserPrompt,
+    processLinksInResponse,
     cancelAllRequests,
     cancelChatRequests,
     checkInternetConnection,
     showConfirmDialog,
     apiCall,
     logout,
-    setShowInput,
     updateExpandedArray,
     createNewChat,
     switchToChat,

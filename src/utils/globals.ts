@@ -37,7 +37,7 @@ export function isPromptTooShort(prompt: string): boolean {
 
 // Generate unique chat ID
 export function generateChatId(): string {
-  return "chat_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9);
+  return Date.now() + "_" + Math.random().toString(36).substr(2, 9);
 }
 
 // Generate chat title from first message
