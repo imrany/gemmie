@@ -1,5 +1,5 @@
 import { createRouter, createWebHistory } from "vue-router";
-import HomeView from "../views/HomeView.vue";
+// import HomeView from "../views/HomeView.vue";
 import DeleteAccView from "../views/DeleteAccView.vue";
 import UpgradeView from "@/views/UpgradeView.vue";
 import SettingsView from "@/views/SettingsView.vue";
@@ -8,18 +8,26 @@ import ChatsView from "@/views/ChatsView.vue";
 import type { UserDetails } from "@/types";
 import LegalPage from "@/views/LegalPage.vue";
 import CreateSessView from "@/views/CreateSessView.vue";
+import ChatView from "@/views/ChatView.vue";
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
+    // {
+    //   path: "/",
+    //   name: "home",
+    //   component: HomeView,
+    //   meta: { requiresAuth: false },
+    // },
     {
-      path: "/",
-      name: "home",
-      component: HomeView,
+      path: "/chat/:id?",
+      name: "chat",
+      component: ChatView,
+      props: true,
       meta: { requiresAuth: true },
     },
     {
-      path: "/auth",
+      path: "/",
       name: "authentication",
       component: CreateSessView,
       meta: { requiresAuth: false },
@@ -27,7 +35,7 @@ const router = createRouter({
     {
       path: "/new",
       name: "new_chat",
-      component: HomeView,
+      component: ChatView,
       meta: { requiresAuth: true },
     },
     {
@@ -74,7 +82,7 @@ const router = createRouter({
       redirect: () => {
         // Smart redirect for 404s based on auth status
         const isAuthenticated = checkAuthStatus();
-        return isAuthenticated ? "/" : "/auth";
+        return isAuthenticated ? "/" : "/";
       },
     },
   ],
@@ -88,18 +96,18 @@ router.beforeEach((to, from, next) => {
   if (requiresAuth && !isAuthenticated) {
     // Redirect to auth with intended destination
     next({
-      path: "/auth",
+      path: "/",
       query: { redirect: to.fullPath },
     });
-  } else if (to.path === "/auth" && isAuthenticated) {
+  } else if ((to.path === "/" || to.path === "/") && isAuthenticated) {
     // Redirect authenticated users to intended destination or home
-    const redirectPath = (to.query.redirect as string) || "/";
+    const redirectPath = (to.query.redirect as string) || "/new";
     // Prevent redirect loops
-    next(redirectPath === "/auth" ? "/" : redirectPath);
-  } else if (to.path === "/" && to.query.redirect && isAuthenticated) {
+    next(redirectPath === "/" || to.path === "/" ? "/new" : redirectPath);
+  } else if (to.path === "/new" && to.query.redirect && isAuthenticated) {
     // Handle redirect on home page for authenticated users
     const redirectPath = to.query.redirect as string;
-    if (redirectPath && redirectPath !== "/" && redirectPath !== "/auth") {
+    if (redirectPath && redirectPath !== "/new" && redirectPath !== "/") {
       next(redirectPath);
     } else {
       next();

@@ -199,11 +199,11 @@ function cancelRename() {
 }
 
 function handleChatClick(chatId: string) {
+    // Don't process if already on this chat
+    if (chatId === currentChatId.value) return;
+
     const success = props.functions.switchToChat(chatId);
     if (success) {
-        if (router.currentRoute.value.path !== "/") {
-            router.push("/");
-        }
         if (screenWidth.value < 720) {
             hideSidebar();
         }
@@ -373,88 +373,86 @@ const navLinks: {
                     </TooltipProvider>
                 </div>
 
-                <div v-if="isAuthenticated">
-                    <TooltipProvider>
-                        <Tooltip>
-                            <TooltipTrigger as-child>
-                                <button
-                                    v-if="screenWidth > 720"
-                                    @click="openWorkplace"
-                                    class="w-full font-normal flex items-center gap-2 h-[40px] hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg px-2 transition-colors"
-                                >
-                                    <FilePenLine
-                                        class="text-gray-500 dark:text-gray-400 w-5 h-5"
-                                    />
-                                    <span
-                                        v-if="showFullSidebar"
-                                        class="dark:text-gray-200"
-                                        >Workplace</span
-                                    >
-                                </button>
-                            </TooltipTrigger>
-                            <TooltipContent
-                                v-if="!showFullSidebar"
-                                side="right"
-                                :avoid-collisions="true"
+                <!-- workplace button -->
+                <TooltipProvider>
+                    <Tooltip>
+                        <TooltipTrigger as-child>
+                            <button
+                                v-if="screenWidth > 720"
+                                @click="openWorkplace"
+                                class="w-full font-normal flex items-center gap-2 h-[40px] hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg px-2 transition-colors"
                             >
-                                <p>Workplace</p>
-                            </TooltipContent>
-                        </Tooltip>
-                    </TooltipProvider>
+                                <FilePenLine
+                                    class="text-gray-500 dark:text-gray-400 w-5 h-5"
+                                />
+                                <span
+                                    v-if="showFullSidebar"
+                                    class="dark:text-gray-200"
+                                    >Workplace</span
+                                >
+                            </button>
+                        </TooltipTrigger>
+                        <TooltipContent
+                            v-if="!showFullSidebar"
+                            side="right"
+                            :avoid-collisions="true"
+                        >
+                            <p>Workplace</p>
+                        </TooltipContent>
+                    </Tooltip>
+                </TooltipProvider>
 
-                    <!-- Sync button -->
-                    <TooltipProvider>
-                        <Tooltip>
-                            <TooltipTrigger as-child>
-                                <button
-                                    @click="props.functions.manualSync"
-                                    :disabled="
-                                        syncStatus.syncing ||
-                                        !props.data.parsedUserDetails
-                                            .syncEnabled
+                <!-- Sync button -->
+                <TooltipProvider>
+                    <Tooltip>
+                        <TooltipTrigger as-child>
+                            <button
+                                @click="props.functions.manualSync"
+                                :disabled="
+                                    syncStatus.syncing ||
+                                    !props.data.parsedUserDetails.syncEnabled
+                                "
+                                class="w-full font-normal flex items-center gap-2 h-[40px] hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg px-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            >
+                                <LoaderCircle
+                                    :class="[
+                                        syncStatus.syncing
+                                            ? 'animate-spin'
+                                            : '',
+                                        'text-gray-500 dark:text-gray-400 w-5 h-5',
+                                    ]"
+                                />
+
+                                <span
+                                    v-if="showFullSidebar"
+                                    class="dark:text-gray-200"
+                                >
+                                    {{
+                                        syncStatus.syncing
+                                            ? "Syncing..."
+                                            : "Sync Data"
+                                    }}
+                                </span>
+                                <div
+                                    v-if="
+                                        syncStatus.hasUnsyncedChanges &&
+                                        props.data.parsedUserDetails
+                                            .syncEnabled &&
+                                        showFullSidebar
                                     "
-                                    class="w-full font-normal flex items-center gap-2 h-[40px] hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg px-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                >
-                                    <LoaderCircle
-                                        :class="[
-                                            syncStatus.syncing
-                                                ? 'animate-spin'
-                                                : '',
-                                            'text-gray-500 dark:text-gray-400 w-5 h-5',
-                                        ]"
-                                    />
-
-                                    <span
-                                        v-if="showFullSidebar"
-                                        class="dark:text-gray-200"
-                                    >
-                                        {{
-                                            syncStatus.syncing
-                                                ? "Syncing..."
-                                                : "Sync Data"
-                                        }}
-                                    </span>
-                                    <div
-                                        v-if="
-                                            syncStatus.hasUnsyncedChanges &&
-                                            props.data.parsedUserDetails
-                                                .syncEnabled &&
-                                            showFullSidebar
-                                        "
-                                        class="ml-auto w-2 h-2 bg-orange-500 dark:bg-orange-400 rounded-full"
-                                    ></div>
-                                </button>
-                            </TooltipTrigger>
-                            <TooltipContent
-                                v-if="!showFullSidebar"
-                                side="right"
-                                :avoid-collisions="true"
-                            >
-                                <p>Sync Data</p>
-                            </TooltipContent>
-                        </Tooltip>
-                    </TooltipProvider>
-                </div>
+                                    class="ml-auto w-2 h-2 bg-orange-500 dark:bg-orange-400 rounded-full"
+                                ></div>
+                            </button>
+                        </TooltipTrigger>
+                        <TooltipContent
+                            v-if="!showFullSidebar"
+                            side="right"
+                            :avoid-collisions="true"
+                        >
+                            <p>Sync Data</p>
+                        </TooltipContent>
+                    </Tooltip>
+                </TooltipProvider>
             </div>
 
             <!-- Recent Chats -->
@@ -485,6 +483,7 @@ const navLinks: {
                         <!-- Chat content area -->
                         <div
                             @click="() => handleChatClick(chat.id)"
+                            @dblclick.prevent
                             class="flex max-md:text-lg items-center h-full flex-grow px-2 cursor-pointer relative"
                         >
                             <div

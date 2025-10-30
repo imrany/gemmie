@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import type { Chat, CurrentChat } from "@/types";
+import type { CurrentChat } from "@/types";
 import {
     AlignJustify,
     CheckCircle,
@@ -9,9 +9,18 @@ import {
 import type { Ref } from "vue";
 import { inject } from "vue";
 
-const { hideSidebar, isAuthenticated, screenWidth, syncStatus } = inject(
-    "globalState",
-) as {
+const {
+    hideSidebar,
+    isAuthenticated,
+    screenWidth,
+    syncStatus,
+    manualSync,
+    isCollapsed,
+    currentChat,
+} = inject("globalState") as {
+    isCollapsed: Ref<boolean>;
+    currentChat: Ref<CurrentChat | undefined>;
+
     isAuthenticated: Ref<boolean>;
     syncStatus: Ref<{
         lastSync: Date | null;
@@ -26,27 +35,17 @@ const { hideSidebar, isAuthenticated, screenWidth, syncStatus } = inject(
     }>;
     screenWidth: Ref<number>;
     hideSidebar: () => void;
+    manualSync: () => void;
 };
-let props = defineProps<{
-    data: {
-        isCollapsed?: boolean;
-        parsedUserDetails: { username: string };
-        currentChat: CurrentChat | undefined;
-        chat?: Chat;
-    };
-    functions: {
-        manualSync: () => void;
-    };
-}>();
 </script>
 
 <template>
     <div
         class="bg-white dark:bg-gray-900 h-[52px] z-30 fixed top-0 right-0 transition-all duration-300 ease-in-out"
         :style="
-            screenWidth > 720 && !props.data.isCollapsed
+            screenWidth > 720 && !isCollapsed
                 ? 'left:270px'
-                : screenWidth > 720 && props.data.isCollapsed
+                : screenWidth > 720 && isCollapsed
                   ? 'left:60px'
                   : 'left:0'
         "
@@ -54,13 +53,13 @@ let props = defineProps<{
         <div class="flex h-full px-4 items-center justify-between w-full">
             <!-- Brand -->
             <p
-                v-if="props.data.currentChat && screenWidth > 720"
+                v-if="currentChat && screenWidth > 720"
                 class="text-gray-600 dark:text-gray-400 font-medium truncate text-sm select-none"
             >
-                <span v-if="props.data.currentChat.title.length > 30"
-                    >{{ props.data.currentChat.title.slice(0, 30) }}...</span
+                <span v-if="currentChat.title.length > 30"
+                    >{{ currentChat.title.slice(0, 30) }}...</span
                 >
-                <span v-else>{{ props.data.currentChat.title }}</span>
+                <span v-else>{{ currentChat.title }}</span>
             </p>
             <p
                 v-else-if="screenWidth <= 720"
@@ -83,7 +82,7 @@ let props = defineProps<{
                     <div
                         v-else-if="syncStatus.hasUnsyncedChanges"
                         class="flex items-center gap-2 bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-400 px-3 py-1.5 rounded-full text-xs border border-orange-200 dark:border-orange-800 shadow-sm cursor-pointer hover:bg-orange-100 dark:hover:bg-orange-900/30 transition"
-                        @click="props.functions.manualSync"
+                        @click="manualSync"
                     >
                         <CloudUpload class="w-4 h-4" />
                         <span>Sync pending</span>

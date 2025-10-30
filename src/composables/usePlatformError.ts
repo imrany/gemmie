@@ -64,8 +64,6 @@ export function usePlatformError() {
         method: "POST",
         body: JSON.stringify({
           errors: errorsToSend,
-          timestamp: new Date().toISOString(),
-          userAgent: navigator.userAgent,
         }),
       });
 
