@@ -1486,19 +1486,16 @@ onBeforeUnmount(() => {
     }
 });
 
-watch(
-    () => route.path,
-    (newPath, oldPath) => {
-        if (newPath === "/new" && newPath !== oldPath) {
-            createNewChat();
-        }
-    },
-    { immediate: false },
-);
-
-watch(
-    () => route.params.id,
-    async (newId) => {
+// Consolidated onMounted hook for better organization
+onMounted(async () => {
+    const path = router.currentRoute.value.path;
+    const newId = route.params.id;
+    if (path === "/new" && isAuthenticated.value) {
+        // 1. Handle new chat creation
+        createNewChat();
+    } else if (path === "/" && isAuthenticated.value) {
+        createNewChat();
+    } else if (newId && isAuthenticated.value) {
         const chatId = Array.isArray(newId) ? newId[0] : newId;
 
         // Don't process if no chat ID or same as current
@@ -1518,14 +1515,12 @@ watch(
             console.log(`🔄 Route sync: Updated currentChatId to ${chatId}`);
         } else {
             console.warn(`⚠️ Chat ${chatId} not found, but keeping route`);
-            router.push("/new");
+            createNewChat();
         }
-    },
-    { immediate: true },
-);
+    } else {
+        router.push("/");
+    }
 
-// Consolidated onMounted hook for better organization
-onMounted(() => {
     // 2. Load cached data and setup handlers
     loadLinkPreviewCache();
     setupPastePreviewHandlers();
