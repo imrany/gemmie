@@ -1486,15 +1486,46 @@ onBeforeUnmount(() => {
     }
 });
 
+watch(
+    () => route.path,
+    (newPath, oldPath) => {
+        if (newPath === "/new" && newPath !== oldPath) {
+            createNewChat();
+        }
+    },
+    { immediate: true },
+);
+
+watch(
+    () => route.params.id,
+    async (newId) => {
+        const chatId = Array.isArray(newId) ? newId[0] : newId;
+
+        // Don't process if no chat ID or same as current
+        if (!chatId || chatId === currentChatId.value) return;
+
+        // Wait a tick for chats to potentially load
+        await nextTick();
+
+        const chatExists = chats.value.find((chat) => chat.id === chatId);
+
+        if (chatExists) {
+            currentChatId.value = chatId;
+            updateExpandedArray();
+            nextTick(() => {
+                loadChatDrafts();
+            });
+            console.log(`🔄 Route sync: Updated currentChatId to ${chatId}`);
+        } else {
+            console.warn(`⚠️ Chat ${chatId} not found, but keeping route`);
+            createNewChat();
+        }
+    },
+    { immediate: true },
+);
+
 // Consolidated onMounted hook for better organization
 onMounted(() => {
-    // Handle /new route redirect first
-    if (route.path === "/new") {
-        createNewChat();
-        router.replace("/");
-        return; // Early return since we're redirecting
-    }
-
     // 1. Load basic state (combined operations)
     const saved = localStorage.getItem("isCollapsed");
     if (saved && saved !== "null") {

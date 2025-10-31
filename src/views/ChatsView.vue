@@ -56,7 +56,6 @@ const filteredChats = computed(() => {
 
 const handleNewChat = () => {
     createNewChat();
-    router.push("/new");
 };
 
 const handleBack = () => {
