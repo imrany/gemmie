@@ -2326,6 +2326,20 @@ watch(
     { immediate: false }, // Set to false to avoid unnecessary initial save, onMounted
 );
 
+watch(
+    () => isAuthenticated.value,
+    (newVal, oldVal) => {
+        if (newVal !== oldVal) {
+            if (newVal === true) {
+                router.push("/new");
+            } else {
+                router.push("/");
+            }
+        }
+    },
+    { immediate: true },
+);
+
 let debouncedResize: any = null;
 let systemThemeListener: ((e: MediaQueryListEvent) => void) | null = null;
 let darkModeQuery: MediaQueryList | null = null;
