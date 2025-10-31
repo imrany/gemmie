@@ -231,7 +231,7 @@ const navLinks: {
         label: "New Chat",
         description: "New Chat",
         icon: CirclePlus,
-        action: () => handleNavAction(() => router.push("/new")),
+        action: () => handleNavAction(() => props.functions.createNewChat()),
     },
     {
         label: "Chats",

@@ -56,9 +56,13 @@ const {
                 v-if="currentChat && screenWidth > 720"
                 class="text-gray-600 dark:text-gray-400 font-medium truncate text-sm select-none"
             >
-                <span v-if="currentChat.title.length > 30"
-                    >{{ currentChat.title.slice(0, 30) }}...</span
-                >
+                <span v-if="currentChat.title.length > 30">{{
+                    currentChat.title.includes("#pastedText#")
+                        ? currentChat.title
+                              .split("#pastedText#")[1]
+                              .slice(0, 30) + "..."
+                        : currentChat.title.slice(0, 30) + "..."
+                }}</span>
                 <span v-else>{{ currentChat.title }}</span>
             </p>
             <p

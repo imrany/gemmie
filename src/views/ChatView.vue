@@ -1509,7 +1509,13 @@ onMounted(async () => {
 
     if (chatId) {
         // Check if chat exists
-        const chatExists = chats.value.find((chat) => chat.id === chatId);
+        let chatExists = chats.value.find((chat) => chat.id === chatId);
+
+        if (!chatExists && !isLoading.value) {
+            // If chat doesn't exist and chats are not loading, try loading chats again
+           loadChats();
+            chatExists = chats.value.find((chat) => chat.id === chatId);
+        }
 
         if (chatExists) {
             // Sync with existing chat
@@ -1522,11 +1528,8 @@ onMounted(async () => {
         } else {
             // Chat doesn't exist, redirect to new chat
             console.warn(`⚠️ Chat ${chatId} not found, creating new`);
-            router.push("/new");
+            createNewChat();
         }
-    } else if (path === "/") {
-        // Root path with no chat - create new one
-        createNewChat();
     }
 
     // 2. Load cached data and setup handlers
