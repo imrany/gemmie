@@ -54,13 +54,6 @@ const filteredChats = computed(() => {
     );
 });
 
-const handleChatClick = (chatId: string) => {
-    const success = switchToChat(chatId);
-    if (success) {
-        router.push("/");
-    }
-};
-
 const handleNewChat = () => {
     createNewChat();
     router.push("/new");
@@ -209,7 +202,7 @@ const clearSearch = () => {
                             <div
                                 v-for="chat in filteredChats"
                                 :key="chat.id"
-                                @click="handleChatClick(chat.id)"
+                                @click="switchToChat(chat.id)"
                                 :class="[
                                     'rounded-xl border-[1px] cursor-pointer transition-all hover:shadow-lg group',
                                     currentChatId === chat.id

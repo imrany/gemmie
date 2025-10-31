@@ -149,6 +149,14 @@ const hasUnsavedChanges = computed(() => {
     );
 });
 
+const handleBack = () => {
+    if (window.history.state.back) {
+        router.back();
+        return;
+    }
+    router.push("/chats");
+};
+
 /**
  * Watch tab changes
  */
@@ -198,7 +206,7 @@ watch(
             <div class="flex flex-col p-4 md:p-6 min-h-0 flex-1">
                 <div class="flex items-center justify-between mb-4">
                     <button
-                        @click="router.push('/')"
+                        @click="handleBack"
                         title="Go Back"
                         class="md:hidden flex items-center justify-center w-8 h-8 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full cursor-pointer transition-colors"
                     >

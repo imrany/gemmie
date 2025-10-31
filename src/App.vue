@@ -2357,7 +2357,7 @@ watch(
                 loadChatDrafts();
             });
             console.log(`🔄 Route sync: Updated currentChatId to ${chatId}`);
-        } else if (chatId && chatId.startsWith("chat_")) {
+        } else if (chatId) {
             // Only redirect if it's a valid chat ID format but doesn't exist
             console.warn(`⚠️ Chat ${chatId} not found, but keeping route`);
             // Don't redirect - keep the invalid chat ID in URL for error handling
