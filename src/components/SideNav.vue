@@ -513,13 +513,17 @@ const navLinks: {
                                     ]"
                                     :title="
                                         chat.title.includes('#pastedText#')
-                                            ? chat.title.split('#pastedText')[1]
+                                            ? chat.title.split(
+                                                  '#pastedText#',
+                                              )[1]
                                             : chat.title || 'Untitled Chat'
                                     "
                                 >
                                     {{
                                         chat.title.includes("#pastedText#")
-                                            ? chat.title.split("#pastedText")[1]
+                                            ? chat.title.split(
+                                                  "#pastedText#",
+                                              )[1]
                                             : chat.title || "Untitled Chat"
                                     }}
                                 </span>
