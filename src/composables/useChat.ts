@@ -15,7 +15,6 @@ import {
   getErrorStatus,
 } from "@/utils/globals";
 import { nextTick, ref, type Ref } from "vue";
-import { useRouter } from "vue-router";
 import { toast } from "vue-sonner/src/packages/state.js";
 import { generateErrorId } from "./usePlatformError";
 
@@ -72,7 +71,6 @@ export function useChat({
     >
   >;
 }) {
-  const router = useRouter();
   const activeChatMenu = ref<string | null>(null);
   const expanded = ref<boolean[]>([]);
 
@@ -287,17 +285,23 @@ export function useChat({
               saveLinkPreviewCache();
             }
 
+            // ✅ IMPROVED: Handle current chat deletion better
+            const isDeletingCurrentChat = currentChatId.value === chatId;
+
             // Remove chat from array
             chats.value.splice(chatIndex, 1);
 
-            // If we deleted the current chat, switch to another one
-            if (currentChatId.value === chatId) {
+            // If we deleted the current chat, switch to another one or clear
+            if (isDeletingCurrentChat) {
               if (chats.value.length > 0) {
-                switchToChat(chats.value[0].id);
+                // Switch to the first chat (will trigger navigation via watcher)
+                currentChatId.value = chats.value[0].id;
               } else {
+                // No chats left - clear current chat ID
                 currentChatId.value = "";
-                updateExpandedArray();
+                // Navigation to /new will be handled by router or component logic
               }
+              updateExpandedArray();
             }
 
             clearCurrentDraft();
@@ -309,6 +313,11 @@ export function useChat({
                 performSmartSync();
               }, 1000);
             }
+
+            toast.success("Chat deleted", {
+              duration: 3000,
+              description: `"${chatTitle}" has been removed`,
+            });
           } catch (error: any) {
             reportError({
               action: `onconfirm delete chat`,
@@ -351,9 +360,6 @@ export function useChat({
         const parsedChats = JSON.parse(stored);
         if (Array.isArray(parsedChats)) {
           chats.value = parsedChats;
-          if (chats.value.length > 0 && !currentChatId.value) {
-            currentChatId.value = chats.value[0].id;
-          }
         }
       }
       updateExpandedArray();
@@ -589,7 +595,6 @@ export function useChat({
       // Update current chat ID
       const previousChatId = currentChatId.value;
       currentChatId.value = chatId;
-      router.push(`/chat/${chatId}`);
 
       // Update expanded array for new chat
       updateExpandedArray();
@@ -666,11 +671,11 @@ export function useChat({
         updatedAt: now,
       };
 
+      // Clear paste preview for previous chat
       if (currentChatId.value) {
         pastePreviews.value.delete(currentChatId.value);
-      }
 
-      if (currentChatId.value) {
+        // Save current draft before switching
         const textarea = document.getElementById(
           "prompt",
         ) as HTMLTextAreaElement;
@@ -681,21 +686,27 @@ export function useChat({
         }
       }
 
+      // Initialize new chat drafts
       chatDrafts.value.set(newChatId, "");
       pastePreviews.value.delete(newChatId);
 
+      // Add new chat to beginning of list
       chats.value.unshift(newChat);
+
+      // Update current chat ID (will trigger navigation via watcher)
       currentChatId.value = newChatId;
+
       updateExpandedArray();
       saveChats();
 
-      // Trigger sync after creating new chat
+      // Only sync if we have meaningful changes
+      // Don't sync immediately for empty new chats
       if (isAuthenticated.value && parsedUserDetails.value?.syncEnabled) {
-        setTimeout(() => {
-          performSmartSync();
-        }, 1000);
+        // Mark as having changes but don't force immediate sync
+        syncStatus.value.hasUnsyncedChanges = true;
       }
 
+      // Focus the textarea
       nextTick(() => {
         const textarea = document.getElementById(
           "prompt",
@@ -707,6 +718,7 @@ export function useChat({
         }
       });
 
+      console.log(`✅ Created new chat: ${newChatId}`);
       return newChatId;
     } catch (error: any) {
       reportError({
@@ -842,15 +854,24 @@ export function useChat({
         confirmText: "Delete All",
         onConfirm: () => {
           try {
+            // Clear all data
             chats.value = [];
-            currentChatId.value = "";
+            currentChatId.value = ""; // This will trigger navigation
             expanded.value = [];
             linkPreviewCache.value.clear();
-
             chatDrafts.value.clear();
+            pastePreviews.value.clear();
+
+            // Save changes
             saveChatDrafts();
 
-            const keysToRemove = ["chats", "linkPreviews", "chatDrafts"];
+            // Clean up localStorage
+            const keysToRemove = [
+              "chats",
+              "linkPreviews",
+              "chatDrafts",
+              "pastePreviews",
+            ];
             keysToRemove.forEach((key) => {
               try {
                 localStorage.removeItem(key);
@@ -863,13 +884,19 @@ export function useChat({
             });
 
             saveChats();
-            toast.error(
-              `${totalChats} chats with ${totalMessages} messages deleted`,
-              {
-                duration: 5000,
-                description: "All chat data has been cleared",
-              },
-            );
+
+            // ✅ IMPROVED: Mark for sync after clearing
+            if (isAuthenticated.value && parsedUserDetails.value?.syncEnabled) {
+              syncStatus.value.hasUnsyncedChanges = true;
+              setTimeout(() => {
+                performSmartSync();
+              }, 1000);
+            }
+
+            toast.success("All chats cleared", {
+              duration: 5000,
+              description: `Deleted ${totalChats} chats with ${totalMessages} messages`,
+            });
           } catch (error: any) {
             reportError({
               action: `clearAllChats`,
