@@ -202,11 +202,9 @@ function handleChatClick(chatId: string) {
     // Don't process if already on this chat
     if (chatId === currentChatId.value) return;
 
-    const success = props.functions.switchToChat(chatId);
-    if (success) {
-        if (screenWidth.value < 720) {
-            hideSidebar();
-        }
+    props.functions.switchToChat(chatId);
+    if (screenWidth.value < 720) {
+        hideSidebar();
     }
 }
 
@@ -272,9 +270,9 @@ const navLinks: {
         @click="handleClickOutside"
     >
         <!-- Scrollable area -->
-        <div class="flex-1 overflow-y-auto custom-scrollbar">
+        <div class="flex-1 overflow-y-auto custom-scrollbar px-3">
             <!-- Top Header -->
-            <div class="flex items-center p-3">
+            <div class="flex items-center py-3">
                 <p
                     v-if="showFullSidebar"
                     class="text-gray-700 dark:text-gray-300 text-xl max-md:text-2xl font-semibold tracking-wide select-none"
@@ -341,7 +339,7 @@ const navLinks: {
             <!-- Navigation Menu -->
             <div
                 v-if="props.data.parsedUserDetails.username"
-                class="px-3 mb-4 mt-2 max-md:text-lg flex flex-col gap-1 font-light text-sm"
+                class="mb-4 mt-2 max-md:text-lg flex flex-col gap-1 font-light text-sm"
             >
                 <div v-for="navlink in navLinks" :key="navlink.label">
                     <TooltipProvider>
@@ -462,29 +460,31 @@ const navLinks: {
                     props.data.parsedUserDetails.username &&
                     showFullSidebar
                 "
-                class="flex flex-col px-2 mb-2 py-4"
+                class="flex flex-col"
             >
-                <p class="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                <p
+                    class="text-xs text-gray-500 dark:text-gray-400 mb-3 uppercase tracking-wider"
+                >
                     Chats
                 </p>
-                <div class="flex flex-col gap-2">
+                <div class="flex flex-col gap-1">
                     <div
                         v-for="chat in props.data.chats"
                         :key="chat.id"
-                        @mouseover="hoveredChatId = chat.id"
+                        @mouseenter="hoveredChatId = chat.id"
                         @mouseleave="hoveredChatId = null"
                         :class="[
-                            'w-full flex h-[32px] max-md:h-[36px] text-sm items-center rounded-lg relative transition-colors',
+                            'group w-full flex items-center rounded-lg relative transition-all duration-150',
+                            'h-[35px]',
                             chat.id === currentChatId
-                                ? 'bg-gray-300 dark:bg-gray-700'
-                                : 'hover:bg-gray-300 dark:hover:bg-gray-700',
+                                ? 'bg-gray-200 dark:bg-gray-700/80'
+                                : 'hover:bg-gray-200 dark:hover:bg-gray-700/50',
                         ]"
                     >
                         <!-- Chat content area -->
                         <div
                             @click="() => handleChatClick(chat.id)"
-                            @dblclick.prevent
-                            class="flex max-md:text-lg items-center h-full flex-grow px-2 cursor-pointer relative"
+                            class="flex items-center h-full flex-grow px-3 py-[3px] cursor-pointer overflow-hidden"
                         >
                             <div
                                 v-if="isRenaming === chat.id"
@@ -497,37 +497,42 @@ const navLinks: {
                                     @keyup.enter="submitRename(chat.id)"
                                     @keyup.escape="cancelRename"
                                     @blur="submitRename(chat.id)"
-                                    class="w-full px-1 py-0.5 max-md:text-lg text-xs bg-white dark:bg-gray-800 dark:text-gray-200 border border-blue-500 dark:border-blue-400 rounded focus:outline-none"
+                                    class="w-full px-2 py-[3px] text-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 border-[1px] border-blue-500 dark:border-blue-400 rounded-md focus:outline-none focus:ring-[1px] focus:ring-blue-500 dark:focus:ring-blue-400"
                                 />
                             </div>
                             <div
                                 v-else
-                                class="truncate dark:text-gray-200 font-normal relative flex-grow"
+                                class="flex-grow flex items-center gap-2 min-w-0"
                             >
-                                {{ chat.title.slice(0, 25) || "Untitled Chat"
-                                }}{{ chat.title.length > 25 ? ".." : "" }}
+                                <span
+                                    :class="[
+                                        'truncate text-sm',
+                                        chat.id === currentChatId
+                                            ? 'text-gray-900 dark:text-gray-100'
+                                            : 'text-gray-700 dark:text-gray-300',
+                                    ]"
+                                    :title="chat.title || 'Untitled Chat'"
+                                >
+                                    {{ chat.title || "Untitled Chat" }}
+                                </span>
                             </div>
                         </div>
 
-                        <!-- Menu button -->
+                        <!-- Menu button with smooth transition -->
                         <div
-                            v-if="
-                                showFullSidebar &&
-                                (currentChatId === chat.id ||
-                                    hoveredChatId === chat.id)
+                            v-show="
+                                hoveredChatId === chat.id ||
+                                activeChatMenu === chat.id
                             "
-                            @click="toggleChatMenu(chat.id, $event)"
-                            class="flex items-center justify-center h-full pr-1 rounded-r-lg flex-shrink cursor-pointer transition-colors"
+                            @click.stop="toggleChatMenu(chat.id, $event)"
+                            class="flex-shrink-0 flex items-center justify-center h-full px-2 cursor-pointer"
                         >
                             <div
-                                :class="[
-                                    hoveredChatId === chat.id
-                                        ? ' text-white bg-gray-500 dark:bg-gray-900'
-                                        : 'bg-transparent',
-                                    'rounded-md text-center p-1 w-6 h-6 flex items-center justify-center',
-                                ]"
+                                class="rounded-md p-1.5 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
                             >
-                                <Ellipsis class="w-4 h-4 dark:text-gray-300" />
+                                <Ellipsis
+                                    class="w-4 h-4 text-gray-600 dark:text-gray-300"
+                                />
                             </div>
                         </div>
 

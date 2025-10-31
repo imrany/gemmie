@@ -7,7 +7,6 @@ import {
     ChevronLeft,
     ChevronRight,
     Clock,
-    Inbox,
     MessageCircle,
     Plus,
     RefreshCw,
