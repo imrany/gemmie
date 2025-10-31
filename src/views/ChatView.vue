@@ -1493,7 +1493,7 @@ watch(
             createNewChat();
         }
     },
-    { immediate: true },
+    { immediate: false },
 );
 
 watch(
@@ -1518,7 +1518,7 @@ watch(
             console.log(`🔄 Route sync: Updated currentChatId to ${chatId}`);
         } else {
             console.warn(`⚠️ Chat ${chatId} not found, but keeping route`);
-            createNewChat();
+            router.push("/new");
         }
     },
     { immediate: true },
@@ -1526,18 +1526,6 @@ watch(
 
 // Consolidated onMounted hook for better organization
 onMounted(() => {
-    // 1. Load basic state (combined operations)
-    const saved = localStorage.getItem("isCollapsed");
-    if (saved && saved !== "null") {
-        try {
-            isCollapsed.value = JSON.parse(saved);
-        } catch (err) {
-            console.error("Error parsing isCollapsed:", err);
-        }
-    }
-
-    // currentChatId initialization is handled in loadLocalData() with proper validation
-
     // 2. Load cached data and setup handlers
     loadLinkPreviewCache();
     setupPastePreviewHandlers();
