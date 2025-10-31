@@ -200,7 +200,7 @@ function cancelRename() {
 
 function handleChatClick(chatId: string) {
     // Don't process if already on this chat
-    if (chatId === currentChatId.value) return;
+    if (chatId === currentChatId.value && screenWidth.value > 720) return;
 
     props.functions.switchToChat(chatId);
     if (screenWidth.value < 720) {
@@ -497,7 +497,7 @@ const navLinks: {
                                     @keyup.enter="submitRename(chat.id)"
                                     @keyup.escape="cancelRename"
                                     @blur="submitRename(chat.id)"
-                                    class="w-full px-2 py-[3px] text-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 border-[1px] border-blue-500 dark:border-blue-400 rounded-md focus:outline-none focus:ring-[1px] focus:ring-blue-500 dark:focus:ring-blue-400"
+                                    class="w-full px-2 py-[3px] text-base bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 border-[1px] border-blue-500 dark:border-blue-400 rounded-md focus:outline-none focus:ring-[1px] focus:ring-blue-500 dark:focus:ring-blue-400"
                                 />
                             </div>
                             <div
@@ -506,14 +506,22 @@ const navLinks: {
                             >
                                 <span
                                     :class="[
-                                        'truncate text-sm',
+                                        'truncate text-base',
                                         chat.id === currentChatId
                                             ? 'text-gray-900 dark:text-gray-100'
                                             : 'text-gray-700 dark:text-gray-300',
                                     ]"
-                                    :title="chat.title || 'Untitled Chat'"
+                                    :title="
+                                        chat.title.includes('#pastedText#')
+                                            ? chat.title.split('#pastedText')[1]
+                                            : chat.title || 'Untitled Chat'
+                                    "
                                 >
-                                    {{ chat.title || "Untitled Chat" }}
+                                    {{
+                                        chat.title.includes("#pastedText#")
+                                            ? chat.title.split("#pastedText")[1]
+                                            : chat.title || "Untitled Chat"
+                                    }}
                                 </span>
                             </div>
                         </div>

@@ -323,7 +323,7 @@ async function handlePayment() {
 
                     // Navigate back to home after a short delay
                     setTimeout(() => {
-                        router.push("/");
+                        router.push("/chats");
                     }, 2000);
                     return;
                 }
@@ -425,7 +425,7 @@ function handleBack() {
         router.back();
         return;
     }
-    router.push("/");
+    router.push("/chats");
 }
 
 watch(selectPlanName, (newVal) => {
