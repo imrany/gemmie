@@ -60,13 +60,6 @@ type RequestCount struct {
 	Timestamp int64 `json:"timestamp"`
 }
 
-type UserData struct {
-	UserID       string    `json:"user_id"`
-	Chats        string    `json:"chats"`
-	LinkPreviews string    `json:"link_previews"`
-	UpdatedAt    time.Time `json:"updated_at"`
-}
-
 type Transaction struct {
 	ID                 string    `json:"id"`
 	ExternalReference  string    `json:"ExternalReference"`
@@ -95,6 +88,26 @@ type PlatformError struct {
 	UpdatedAt   time.Time `json:"UpdatedAt"`
 }
 
+type Chat struct {
+	ID            string    `json:"id"`
+	UserId        string    `json:"user_id"`
+	Title         string    `json:"title"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
+	IsArchived    bool      `json:"is_archived"`
+	MessageCount  int       `json:"message_count"`
+	LastMessageAt time.Time `json:"last_message_at"`
+}
+
+type Message struct {
+	ID        string    `json:"id"`
+	ChatId    string    `json:"chat_id"`
+	Role      string    `json:"role"`
+	Content   string    `json:"content"`
+	CreatedAt time.Time `json:"created_at"`
+	Model     string    `json:"model"`
+}
+
 var (
 	DB *sql.DB
 )
@@ -119,9 +132,10 @@ func initStorage(connString string, runMigrations bool) error {
 	}
 
 	// Set connection pool settings
-	DB.SetMaxOpenConns(25)
-	DB.SetMaxIdleConns(5)
+	DB.SetMaxOpenConns(100) // Based on server capacity
+	DB.SetMaxIdleConns(25)  // Keep connections ready
 	DB.SetConnMaxLifetime(5 * time.Minute)
+	DB.SetConnMaxIdleTime(10 * time.Minute)
 
 	// Test the connection
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

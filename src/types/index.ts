@@ -7,6 +7,27 @@ export interface Res {
   requestId?: string;
 }
 
+export interface Message {
+  id: string;
+  chat_id: string;
+  role: "user" | "assistant";
+  content: string;
+  created_at: string;
+  model?: string;
+}
+
+export interface Chat {
+  id: string;
+  user_id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+  is_archived: boolean;
+  message_count: number;
+  last_message_at: string;
+  messages?: Message[];
+}
+
 export interface PlatformError {
   message: string;
   description?: string;
@@ -18,14 +39,6 @@ export interface PlatformError {
   context?: Record<string, any>;
   severity?: "low" | "medium" | "high" | "critical";
 }
-
-export type Chat = {
-  id: string;
-  title: string;
-  messages: Res[];
-  createdAt: string;
-  updatedAt: string;
-};
 
 export interface LinkPreview {
   url: string;
@@ -108,4 +121,27 @@ export interface UserDetails {
   emailSubscribed: boolean;
   sessionId?: string;
   userTransactions?: Transaction[];
+}
+
+// API response wrapper
+export interface ApiResponse<T = any> {
+  success: boolean;
+  message: string;
+  data?: T;
+}
+
+// Utility types for API operations
+export interface CreateChatRequest {
+  title?: string;
+}
+
+export interface UpdateChatRequest {
+  title?: string;
+  is_archived?: boolean;
+}
+
+export interface CreateMessageRequest {
+  role: "user" | "assistant";
+  content: string;
+  model?: string;
 }

@@ -7,7 +7,6 @@ import {
     ChevronLeft,
     ChevronRight,
     Clock,
-    Inbox,
     MessageCircle,
     Plus,
     RefreshCw,
@@ -120,13 +119,11 @@ const clearSearch = () => {
 
                         <button
                             @click="handleNewChat"
-                            class="px-3 py-2 bg-white text-sm hover:bg-gray-200 text-gray-800 rounded-lg transition-colors flex items-center gap-1.5 shadow-lg hover:shadow-xl flex-shrink-0 whitespace-nowrap"
+                            class="px-3 py-2 dark:bg-white text-white bg-gray-900 text-sm dark:text-gray-800 rounded-lg transition-colors flex items-center gap-1.5 shadow-lg hover:shadow-xl flex-shrink-0 whitespace-nowrap"
                         >
                             <Plus class="w-5 h-5" />
-                            <span class="font-medium hidden sm:inline">
-                                New Chat
-                            </span>
-                            <span class="font-medium sm:hidden">New</span>
+                            <span class="hidden sm:inline"> New Chat </span>
+                            <span class="sm:hidden">New</span>
                         </button>
                     </div>
 
@@ -140,7 +137,7 @@ const clearSearch = () => {
                                 v-model="searchQuery"
                                 type="text"
                                 placeholder="Search chats and messages..."
-                                class="w-full text-base font-medium pl-10 pr-10 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent transition-all"
+                                class="w-full text-base pl-10 pr-10 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-inherit text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent transition-all"
                             />
                             <button
                                 v-if="searchQuery"
@@ -188,7 +185,7 @@ const clearSearch = () => {
                                         ? clearSearch()
                                         : handleNewChat()
                                 "
-                                class="px-5 py-2 bg-white hover:bg-gray-200 text-black text-sm rounded-lg transition-colors inline-flex items-center gap-2 shadow-lg"
+                                class="px-5 py-2 bg-gray-900 dark:bg-white text-white dark:text-black text-sm rounded-lg transition-colors inline-flex items-center gap-2 shadow-lg"
                             >
                                 <RefreshCw class="w-4 h-4" v-if="searchQuery" />
                                 <Plus class="w-4 h-5" v-else />

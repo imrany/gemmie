@@ -1,0 +1,2 @@
+-- Dropped table user_data
+DROP TABLE IF EXISTS user_data CASCADE;
