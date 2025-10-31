@@ -14,6 +14,7 @@ import TopNav from "../components/TopNav.vue";
 import type {
     Chat,
     ConfirmDialogOptions,
+    ContextReference,
     CurrentChat,
     LinkPreview,
     Res,
@@ -49,21 +50,9 @@ import PastePreviewModal from "@/components/Modals/PastePreviewModal.vue";
 import { useRoute } from "vue-router";
 import TextHightlightPopover from "@/components/TextHightlightPopover.vue";
 import {
-    Brain,
     ClipboardList,
-    Library,
-    Search,
     Trash,
-    Mic,
-    MicOff,
-    Pause,
-    ArrowUp,
     RotateCw,
-    Ban,
-    X,
-    CircleAlert,
-    TriangleAlert,
-    ArrowDown,
     Share,
     Code,
     Pencil,
@@ -71,7 +60,6 @@ import {
     HeartPulse,
     Globe,
     LoaderCircle,
-    Check,
 } from "lucide-vue-next";
 import {
     Pagination,
@@ -84,21 +72,13 @@ import {
 import MarkdownRenderer from "@/components/ui/markdown/MarkdownRenderer.vue";
 import LinkPreviewComponent from "@/components/LinkPreview.vue";
 import EmptyChatView from "./EmptyChatView.vue";
-import type { FunctionalComponent } from "vue";
 import PastePreview from "@/components/PastePreview.vue";
 import { useHandlePaste } from "@/composables/useHandlePaste";
 import { useVoiceRecord } from "@/composables/useVoiceRecord";
 import { usePagination } from "@/composables/usePagination";
 import { useMessage } from "@/composables/useMessage";
 import ProtectedPage from "@/layout/ProtectedPage.vue";
-
-type ModeOption = {
-    mode: "light-response" | "web-search" | "deep-search";
-    label: string;
-    description: string;
-    icon: FunctionalComponent<any>;
-    title: string;
-};
+import InputArea from "@/components/InputArea.vue";
 
 // Inject global state
 const {
@@ -269,6 +249,7 @@ const now = ref(Date.now());
 const showInputModeDropdown = ref(false);
 
 const isRecording = ref(false);
+const selectedContexts = ref<ContextReference[]>([]);
 const isTranscribing = ref(false);
 const transcribedText = ref("");
 const voiceRecognition = ref<any | null>(null);
@@ -432,7 +413,11 @@ function isJustLinks(prompt: string): boolean {
 }
 
 // handleSubmit function
-async function handleSubmit(e?: any, retryPrompt?: string) {
+async function handleSubmit(
+    e?: any,
+    retryPrompt?: string,
+    contextReferences?: ContextReference[],
+) {
     e?.preventDefault?.();
 
     // Stop voice recording immediately when submitting
@@ -465,7 +450,25 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
         pastePreviews.value.delete(currentChatId.value);
     }
 
+    // **NEW: Add context references to prompt if available**
     let fabricatedPrompt = promptValue;
+    let contextInfo = "";
+
+    if (contextReferences && contextReferences.length > 0) {
+        contextInfo = "\n\n--- Context from previous messages ---\n";
+        contextReferences.forEach((ctx, idx) => {
+            contextInfo += `\n[Reference ${idx + 1}]:\n${ctx.fullText}\n`;
+        });
+        contextInfo += "\n--- End of context ---\n\n";
+        contextInfo += `User's current question: ${promptValue}`;
+
+        fabricatedPrompt = contextInfo;
+
+        console.log(
+            `Added ${contextReferences.length} context reference(s) to prompt`,
+        );
+    }
+
     if (!promptValue || isLoading.value) return;
 
     if (!isAuthenticated.value) {
@@ -496,7 +499,7 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
     }
 
     // Generate unique request ID
-    const requestId = `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const requestId = `req_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
     const abortController = new AbortController();
 
     // Track the active request using global state
@@ -513,7 +516,7 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
         );
     }
 
-    // Determine response mode - use light-response for pasted content, otherwise user preference
+    // Determine response mode
     let responseMode =
         parsedUserDetails?.value.responseMode || "light-response";
 
@@ -526,15 +529,20 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
     const isSearchMode =
         responseMode === "web-search" || responseMode === "deep-search";
 
-    // Merge with context for short prompts in non-search modes
+    // **UPDATED: Only merge context for short prompts and if no explicit context references**
     if (
-        responseMode === "light-response" &&
         isPromptTooShort(promptValue) &&
-        currentMessages.value.length > 0
+        currentMessages.value.length > 0 &&
+        (!contextReferences || contextReferences.length === 0)
     ) {
         const lastMessage =
             currentMessages.value[currentMessages.value.length - 1];
-        fabricatedPrompt = `${lastMessage.prompt || ""} ${lastMessage.response || ""}\nUser: ${promptValue}`;
+
+        if (isSearchMode) {
+            fabricatedPrompt = `User search query: ${promptValue}. Previous interaction: ${lastMessage.prompt || ""} ${lastMessage.response || ""}`;
+        } else {
+            fabricatedPrompt = `${lastMessage.prompt || ""} ${lastMessage.response || ""}\nUser: ${promptValue}`;
+        }
     }
 
     // Clear input field
@@ -551,7 +559,7 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
     isLoading.value = true;
     scrollToLastMessage();
 
-    // Store temporary message reference for potential removal
+    // Store temporary message reference
     let tempMessageIndex = -1;
     const tempResp: Res = {
         prompt: promptValue,
@@ -618,7 +626,6 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
         // Check if request was aborted
         if (abortController.signal.aborted) {
             console.log(`Request ${requestId} was aborted`);
-            // Remove the temporary message if request was aborted
             removeTemporaryMessage(submissionChatId, tempMessageIndex);
             return;
         }
@@ -667,6 +674,16 @@ async function handleSubmit(e?: any, retryPrompt?: string) {
 
         // Increment request count on success
         incrementRequestCount();
+
+        // **NEW: Show feedback about context references used**
+        if (contextReferences && contextReferences.length > 0) {
+            toast.success(`Used ${contextReferences.length} reference(s)`, {
+                duration: 2000,
+                description: "Previous messages added as context",
+            });
+        }
+
+        selectedContexts.value = [];
 
         // Show success notification if user switched away
         if (currentChatId.value !== submissionChatId) {
@@ -1166,16 +1183,16 @@ const scrollContainerPadding = computed(() => {
         (isRequestLimitExceeded.value || shouldShowUpgradePrompt.value) &&
         pastePreview.value?.show
     ) {
-        return "pb-[200px] sm:pb-[190px]";
+        return "pb-[240px] sm:pb-[240px]";
     } else if (isRequestLimitExceeded.value || shouldShowUpgradePrompt.value) {
-        return "pb-[190px] sm:pb-[200px]";
+        return "pb-[240px] sm:pb-[240px]";
     } else if (pastePreview.value?.show) {
-        return "pb-[150px] sm:pb-[140px]";
+        return "pb-[220px] sm:pb-[220px]";
     } else if (showScrollDownButton.value) {
-        return "pb-[140px] sm:pb-[120px]";
+        return "pb-[210px] sm:pb-[190px]";
     } else {
         // Base padding when nothing special is showing
-        return "pb-[110px] sm:pb-[120px]";
+        return "pb-[190px] sm:pb-[195px]";
     }
 });
 
@@ -1265,30 +1282,6 @@ const handleClickOutside = (e: MouseEvent) => {
     ) {
         showSuggestionsDropup.value = false;
     }
-};
-
-const modeOptions: Record<string, ModeOption> = {
-    "light-response": {
-        mode: "light-response",
-        label: "Quick Response",
-        description: "Fast & concise",
-        icon: Brain,
-        title: "Quick Response - Click to change mode",
-    },
-    "web-search": {
-        mode: "web-search",
-        label: "Web Search",
-        description: "Include web results",
-        icon: Search,
-        title: "Web Search - Click to change mode",
-    },
-    "deep-search": {
-        mode: "deep-search",
-        label: "Deep Search",
-        description: "Detailed analysis",
-        icon: Library,
-        title: "Deep Search - Click to change mode",
-    },
 };
 
 onUpdated(() => {
@@ -1513,7 +1506,7 @@ onMounted(async () => {
 
         if (!chatExists && !isLoading.value) {
             // If chat doesn't exist and chats are not loading, try loading chats again
-           loadChats();
+            loadChats();
             chatExists = chats.value.find((chat) => chat.id === chatId);
         }
 
@@ -2138,493 +2131,36 @@ onUnmounted(() => {
                     </div>
                 </div>
 
-                <!-- Responsive Scroll to Bottom Button -->
-                <button
-                    v-if="showScrollDownButton && currentMessages.length !== 0"
-                    @click="scrollToBottom()"
-                    :class="[
-                        'absolute bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border dark:border-gray-700 px-4 h-8 rounded-full shadow-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors z-20 flex items-center justify-center gap-2',
-                        scrollButtonPosition,
-                    ]"
-                    :disabled="isRecording"
-                    :title="
-                        isRecording
-                            ? 'Recording in progress'
-                            : 'Scroll to bottom'
-                    "
-                >
-                    <ArrowDown
-                        class="w-4 h-4"
-                        :class="{ 'animate-bounce': !isRecording }"
-                    />
-                    <span class="text-sm font-medium">Scroll Down</span>
-                </button>
-
                 <!-- Input Area -->
-                <div
-                    :style="
-                        screenWidth > 720 && !isCollapsed
-                            ? 'left:270px;'
-                            : screenWidth > 720 && isCollapsed
-                              ? 'left:60px;'
-                              : 'left:0px;'
+                <InputArea
+                    :is-recording="isRecording"
+                    :is-transcribing="isTranscribing"
+                    :transcribed-text="transcribedText"
+                    :microphone-permission="microphonePermission"
+                    :input-disabled="inputDisabled"
+                    :input-placeholder-text="inputPlaceholderText"
+                    :paste-preview="pastePreview"
+                    :show-input-mode-dropdown="showInputModeDropdown"
+                    :show-limit-exceeded-banner="showLimitExceededBanner"
+                    :show-upgrade-banner="showUpgradeBanner"
+                    :plan-status="planStatus"
+                    :FREE_REQUEST_LIMIT="FREE_REQUEST_LIMIT"
+                    :selected-contexts="ref(selectedContexts)"
+                    :show-scroll-down-button="ref(showScrollDownButton)"
+                    :scroll-button-position="ref(scrollButtonPosition)"
+                    @scroll-to-bottom="scrollToBottom"
+                    @submit="handleSubmit"
+                    @auto-grow="autoGrow"
+                    @handle-paste="handlePaste"
+                    @keydown="onEnter"
+                    @toggle-voice-recording="toggleVoiceRecording"
+                    @clear-voice-transcription="clearVoiceTranscription"
+                    @toggle-input-mode-dropdown="
+                        showInputModeDropdown = !showInputModeDropdown
                     "
-                    class="bg-white dark:bg-gray-900 z-20 bottom-0 right-0 fixed"
-                    :class="pastePreview?.show ? 'pt-2' : ''"
-                >
-                    <div
-                        class="flex items-center justify-center pb-3 sm:pb-5 px-2 sm:px-5"
-                    >
-                        <form
-                            @submit="handleSubmit"
-                            class="w-full md:max-w-3xl relative flex bg-gray-50 dark:bg-gray-800 flex-col border-2 dark:border-gray-700 shadow rounded-2xl items-center"
-                        >
-                            <!-- Paste Preview inside form - above other content -->
-                            <div
-                                v-if="pastePreview && pastePreview.show"
-                                class="w-full p-3 border-b dark:border-gray-700"
-                            >
-                                <PastePreview
-                                    :content="pastePreview.content"
-                                    :char-count="pastePreview.charCount"
-                                    :word-count="pastePreview.wordCount"
-                                />
-                            </div>
-
-                            <!-- Request Limit Exceeded Banner -->
-                            <div
-                                v-if="showLimitExceededBanner"
-                                class="py-2 sm:py-3 w-full px-2 sm:px-3"
-                            >
-                                <div
-                                    class="flex items-center justify-center w-full"
-                                >
-                                    <!-- Mobile: Stacked Layout -->
-                                    <div
-                                        class="flex sm:hidden w-full flex-col gap-2"
-                                    >
-                                        <div class="flex items-center gap-2">
-                                            <div
-                                                class="w-6 h-6 sm:w-8 sm:h-8 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center flex-shrink-0"
-                                            >
-                                                <Ban
-                                                    class="w-4 h-4 sm:w-5 sm:h-5 text-red-600 dark:text-red-400"
-                                                />
-                                            </div>
-                                            <div class="min-w-0 flex-1">
-                                                <h3
-                                                    class="text-xs sm:text-sm font-semibold text-red-800 dark:text-red-400 leading-tight"
-                                                >
-                                                    {{
-                                                        planStatus.isExpired
-                                                            ? "Plan Expired"
-                                                            : "Free Requests Exhausted"
-                                                    }}
-                                                </h3>
-                                                <p
-                                                    class="text-xs text-red-600 dark:text-red-400 leading-tight mt-0.5"
-                                                >
-                                                    {{
-                                                        planStatus.isExpired
-                                                            ? "Renew your plan"
-                                                            : `Used all ${FREE_REQUEST_LIMIT} requests`
-                                                    }}
-                                                </p>
-                                            </div>
-                                        </div>
-                                        <button
-                                            @click="$router.push('/upgrade')"
-                                            class="w-full bg-red-500 hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700 text-white py-2 rounded-md text-xs font-medium transition-colors"
-                                        >
-                                            {{
-                                                planStatus.isExpired
-                                                    ? "Renew Plan"
-                                                    : "Upgrade Plan"
-                                            }}
-                                        </button>
-                                    </div>
-
-                                    <!-- Desktop: Horizontal Layout -->
-                                    <div
-                                        class="hidden sm:flex w-full items-center gap-3"
-                                    >
-                                        <div
-                                            class="w-8 h-8 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center flex-shrink-0"
-                                        >
-                                            <Ban
-                                                class="w-4 h-4 sm:w-5 sm:h-5 text-red-600 dark:text-red-400"
-                                            />
-                                        </div>
-                                        <div class="min-w-0 flex-1">
-                                            <h3
-                                                class="text-sm font-semibold text-red-800 dark:text-red-400 mb-1"
-                                            >
-                                                {{
-                                                    planStatus.isExpired
-                                                        ? "Plan Expired"
-                                                        : "Free Requests Exhausted"
-                                                }}
-                                            </h3>
-                                            <p
-                                                class="text-xs text-red-600 dark:text-red-400"
-                                            >
-                                                {{
-                                                    planStatus.isExpired
-                                                        ? "Please renew your plan to continue using the service."
-                                                        : `You've used all ${FREE_REQUEST_LIMIT} free requests. Upgrade to continue chatting.`
-                                                }}
-                                            </p>
-                                        </div>
-                                        <button
-                                            @click="$router.push('/upgrade')"
-                                            class="bg-red-500 px-3 hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700 text-white py-2 rounded-md text-sm font-medium transition-colors flex-shrink-0 whitespace-nowrap"
-                                        >
-                                            {{
-                                                planStatus.isExpired
-                                                    ? "Renew Plan"
-                                                    : "Upgrade Plan"
-                                            }}
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Upgrade Warning Banner -->
-                            <div
-                                v-if="showUpgradeBanner"
-                                class="py-2 sm:py-3 w-full px-2 sm:px-3"
-                            >
-                                <div
-                                    class="flex items-center justify-center w-full"
-                                >
-                                    <!-- Mobile: Stacked Layout -->
-                                    <div
-                                        class="flex sm:hidden w-full flex-col gap-2"
-                                    >
-                                        <div class="flex items-center gap-2">
-                                            <div
-                                                class="w-6 h-6 sm:w-8 sm:h-8 bg-yellow-100 dark:bg-yellow-900/30 rounded-full flex items-center justify-center flex-shrink-0"
-                                            >
-                                                <TriangleAlert
-                                                    class="w-4 h-4 sm:w-5 sm:h-5 text-yellow-600 dark:text-yellow-400"
-                                                />
-                                            </div>
-                                            <div class="min-w-0 flex-1">
-                                                <h3
-                                                    class="text-xs sm:text-sm font-semibold text-yellow-800 dark:text-yellow-400 leading-tight"
-                                                >
-                                                    {{ requestsRemaining }}
-                                                    requests left
-                                                </h3>
-                                                <p
-                                                    class="text-xs text-yellow-600 dark:text-yellow-400 leading-tight mt-0.5"
-                                                >
-                                                    Upgrade for unlimited access
-                                                </p>
-                                            </div>
-                                        </div>
-                                        <button
-                                            @click="$router.push('/upgrade')"
-                                            class="w-full bg-orange-500 hover:bg-orange-600 dark:bg-orange-600 dark:hover:bg-orange-700 text-white py-2 rounded-md text-xs font-medium transition-colors"
-                                        >
-                                            Upgrade Plan
-                                        </button>
-                                    </div>
-
-                                    <!-- Desktop: Horizontal Layout -->
-                                    <div
-                                        class="hidden sm:flex w-full items-center gap-3"
-                                    >
-                                        <div
-                                            class="w-8 h-8 bg-yellow-100 dark:bg-yellow-900/30 rounded-full flex items-center justify-center flex-shrink-0"
-                                        >
-                                            <CircleAlert
-                                                class="w-4 h-4 sm:w-5 sm:h-5 text-yellow-600 dark:text-yellow-400"
-                                            />
-                                        </div>
-                                        <div class="min-w-0 flex-1">
-                                            <h3
-                                                class="text-sm font-semibold text-yellow-800 dark:text-yellow-400 mb-1"
-                                            >
-                                                {{ requestsRemaining }} free
-                                                requests remaining
-                                            </h3>
-                                            <p
-                                                class="text-xs text-yellow-600 dark:text-yellow-400"
-                                            >
-                                                Upgrade to continue chatting
-                                                without limits
-                                            </p>
-                                        </div>
-                                        <button
-                                            @click="$router.push('/upgrade')"
-                                            class="bg-orange-500 px-3 hover:bg-orange-600 dark:bg-orange-600 dark:hover:bg-orange-700 text-white py-2 rounded-md text-sm font-medium transition-colors flex-shrink-0 whitespace-nowrap"
-                                        >
-                                            Upgrade Plan
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Input Area with Voice Recording -->
-                            <div
-                                class="flex flex-col w-full bg-white dark:bg-gray-900 rounded-2xl px-2 sm:px-3 py-2 gap-1 sm:gap-2"
-                                :class="
-                                    inputDisabled
-                                        ? 'opacity-50 border border-t dark:border-gray-700 pointer-events-none'
-                                        : showUpgradeBanner
-                                          ? 'border border-t dark:border-gray-700'
-                                          : ''
-                                "
-                            >
-                                <div
-                                    class="w-full items-center justify-center flex"
-                                >
-                                    <!-- Voice Recording Indicator (when active) - Now aligned horizontally -->
-                                    <div
-                                        v-if="isRecording || isTranscribing"
-                                        class="flex items-center gap-1 sm:gap-2 px-2 py-1 bg-red-50 dark:bg-red-900/30 rounded-lg border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 text-xs sm:text-sm flex-shrink-0 h-fit"
-                                    >
-                                        <div class="flex items-center gap-1">
-                                            <div
-                                                class="w-2 h-2 bg-red-500 dark:bg-red-400 rounded-full animate-pulse"
-                                            ></div>
-                                            <span class="hidden sm:inline">{{
-                                                isTranscribing
-                                                    ? "Listening..."
-                                                    : "Starting..."
-                                            }}</span>
-                                            <span class="sm:hidden">{{
-                                                isTranscribing ? "🎤" : "⏳"
-                                            }}</span>
-                                        </div>
-                                    </div>
-
-                                    <!-- Clear Voice Button (when transcribed text exists) -->
-                                    <button
-                                        v-if="transcribedText && !isRecording"
-                                        type="button"
-                                        @click="clearVoiceTranscription"
-                                        class="rounded-lg w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center transition-colors text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 flex-shrink-0"
-                                        title="Clear voice transcription"
-                                    >
-                                        <X class="w-4 h-4 sm:w-5 sm:h-5" />
-                                    </button>
-
-                                    <!-- Textarea - Now takes remaining space alongside the indicator -->
-                                    <textarea
-                                        required
-                                        id="prompt"
-                                        name="prompt"
-                                        @keydown="onEnter"
-                                        @input="autoGrow"
-                                        @paste="handlePaste"
-                                        :disabled="inputDisabled"
-                                        rows="1"
-                                        :class="[
-                                            'flex-grow py-3 px-3 placeholder:text-gray-500 dark:placeholder:text-gray-400 rounded-xl bg-white dark:bg-gray-900 dark:text-gray-100 text-sm outline-none resize-none max-h-[120px] sm:max-h-[150px] md:max-h-[200px] overflow-auto leading-relaxed min-w-0',
-                                            'disabled:opacity-50 disabled:cursor-not-allowed',
-                                            isRecording
-                                                ? 'bg-red-50 border-red-200 dark:border-red-800'
-                                                : 'focus:border-blue-500 dark:focus:border-blue-400',
-                                        ]"
-                                        :placeholder="inputPlaceholderText"
-                                    >
-                                    </textarea>
-                                </div>
-
-                                <!-- Buttons Row - Below textarea -->
-                                <div
-                                    class="flex items-center justify-between w-full gap-2"
-                                >
-                                    <!-- Left side buttons -->
-                                    <div class="flex items-center gap-2">
-                                        <!-- Microphone Toggle Button -->
-                                        <button
-                                            type="button"
-                                            @click="toggleVoiceRecording"
-                                            :disabled="inputDisabled"
-                                            :class="[
-                                                'rounded-lg w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center transition-all duration-200 flex-shrink-0',
-                                                isRecording
-                                                    ? 'bg-red-500 hover:bg-red-600 text-white shadow-lg transform scale-105 animate-pulse'
-                                                    : 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-200',
-                                                'disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none',
-                                            ]"
-                                            :title="
-                                                microphonePermission ===
-                                                'denied'
-                                                    ? 'Microphone access denied'
-                                                    : isRecording
-                                                      ? 'Stop voice input'
-                                                      : 'Start voice input'
-                                            "
-                                        >
-                                            <!-- Microphone Icon -->
-                                            <Mic
-                                                v-if="
-                                                    microphonePermission ===
-                                                    'prompt'
-                                                "
-                                                class="w-4 h-4 sm:w-5 sm:h-5"
-                                            />
-
-                                            <Mic
-                                                v-else-if="
-                                                    !isRecording &&
-                                                    microphonePermission ===
-                                                        'granted'
-                                                "
-                                                class="w-4 h-4 sm:w-5 sm:h-5"
-                                            />
-
-                                            <!-- Stop Icon -->
-                                            <Pause
-                                                v-else-if="
-                                                    microphonePermission ===
-                                                        'granted' && isRecording
-                                                "
-                                                class="w-4 h-4 sm:w-5 sm:h-5"
-                                            />
-
-                                            <!-- Microphone Denied Icon -->
-                                            <MicOff
-                                                v-else-if="
-                                                    microphonePermission ===
-                                                        'denied' && !isRecording
-                                                "
-                                                class="w-4 h-4 sm:w-5 sm:h-5 text-red-500 dark:text-red-400"
-                                            />
-                                        </button>
-
-                                        <!-- Mode Dropdown Container -->
-                                        <div class="relative flex-shrink-0">
-                                            <!-- Dropdown Button - Shows current mode -->
-                                            <button
-                                                type="button"
-                                                @click.stop="
-                                                    showInputModeDropdown =
-                                                        !showInputModeDropdown
-                                                "
-                                                :disabled="inputDisabled"
-                                                :class="[
-                                                    'rounded-lg w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm border',
-                                                    parsedUserDetails?.responseMode ===
-                                                    'web-search'
-                                                        ? 'border-green-300 bg-green-50 hover:bg-green-100 dark:border-green-600 dark:bg-green-900/30 dark:hover:bg-green-900/50 text-green-700 dark:text-green-300'
-                                                        : parsedUserDetails?.responseMode ===
-                                                            'deep-search'
-                                                          ? 'border-orange-300 bg-orange-50 hover:bg-orange-100 dark:border-orange-600 dark:bg-orange-900/30 dark:hover:bg-orange-900/50 text-orange-700 dark:text-orange-300'
-                                                          : 'border-blue-300 bg-blue-50 hover:bg-blue-100 dark:border-blue-600 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 text-blue-700 dark:text-blue-300',
-                                                ]"
-                                                :title="
-                                                    modeOptions[
-                                                        parsedUserDetails.responseMode ||
-                                                            ''
-                                                    ].title
-                                                "
-                                            >
-                                                <!-- Dynamic icon based on selected mode -->
-                                                <component
-                                                    :is="
-                                                        modeOptions[
-                                                            parsedUserDetails.responseMode ||
-                                                                ''
-                                                        ].icon
-                                                    "
-                                                    class="w-4 h-4 sm:w-5 sm:h-5"
-                                                />
-                                            </button>
-
-                                            <!-- Dropdown Menu -->
-                                            <div
-                                                v-show="showInputModeDropdown"
-                                                class="absolute bottom-12 left-0 bg-white dark:bg-gray-800 border-[1px] border-gray-300 dark:border-gray-600 rounded-lg shadow-2xl pt-2 z-[100] w-[220px] sm:w-[240px]"
-                                                @click.stop
-                                            >
-                                                <div
-                                                    class="px-2 py-1 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide border-b border-gray-200 dark:border-gray-700"
-                                                >
-                                                    Response Mode
-                                                </div>
-
-                                                <!-- Mode Options -->
-                                                <button
-                                                    v-for="(
-                                                        option, key
-                                                    ) in modeOptions"
-                                                    :key="key"
-                                                    type="button"
-                                                    @click="
-                                                        selectInputMode(
-                                                            option.mode,
-                                                        )
-                                                    "
-                                                    :class="[
-                                                        'w-full px-3 py-2.5 text-left text-sm flex items-center gap-3 transition-colors',
-                                                        parsedUserDetails?.responseMode ===
-                                                        option.mode
-                                                            ? 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 border-r-2 border-green-500'
-                                                            : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200',
-                                                    ]"
-                                                >
-                                                    <component
-                                                        :class="[
-                                                            'w-5 h-5',
-                                                            parsedUserDetails?.responseMode ===
-                                                            option.mode
-                                                                ? ' text-green-600 dark:text-green-400'
-                                                                : ' text-gray-600 dark:text-gray-400',
-                                                        ]"
-                                                        :is="option.icon"
-                                                    />
-                                                    <div class="flex-1 min-w-0">
-                                                        <div
-                                                            class="font-semibold"
-                                                        >
-                                                            {{ option.label }}
-                                                        </div>
-                                                        <div
-                                                            class="text-xs opacity-70"
-                                                        >
-                                                            {{
-                                                                option.description
-                                                            }}
-                                                        </div>
-                                                    </div>
-                                                    <Check
-                                                        v-if="
-                                                            parsedUserDetails?.responseMode ===
-                                                            option.mode
-                                                        "
-                                                        class="w-5 h-5 text-green-600 dark:text-green-400"
-                                                    />
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <!-- Submit Button - Right side -->
-                                    <button
-                                        type="submit"
-                                        :disabled="inputDisabled"
-                                        class="rounded-lg w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center transition-colors text-white bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50 disabled:bg-gray-400 flex-shrink-0 shadow-sm"
-                                    >
-                                        <ArrowUp
-                                            v-if="!isLoading"
-                                            class="w-4 h-4 sm:w-5 sm:h-5"
-                                        />
-
-                                        <LoaderCircle
-                                            v-else
-                                            class="w-4 h-4 sm:w-5 sm:h-5 animate-spin"
-                                        />
-                                    </button>
-                                </div>
-                            </div>
-                        </form>
-                    </div>
-                </div>
+                    @select-input-mode="selectInputMode"
+                    @navigate-to-upgrade="router.push('/upgrade')"
+                />
             </div>
         </div>
         <TextHightlightPopover />

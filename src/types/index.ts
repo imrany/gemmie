@@ -1,4 +1,5 @@
 import type { Theme } from "vue-sonner/src/packages/types.js";
+import type { FunctionalComponent } from "vue";
 
 export interface Res {
   prompt?: string;
@@ -6,6 +7,20 @@ export interface Res {
   status?: number;
   requestId?: string;
 }
+
+export type ModeOption = {
+  mode: "light-response" | "web-search" | "deep-search";
+  label: string;
+  description: string;
+  icon: FunctionalComponent<any>;
+  title: string;
+};
+
+export type ContextReference = {
+  id: string;
+  preview: string;
+  fullText: string;
+};
 
 export interface PlatformError {
   message: string;
