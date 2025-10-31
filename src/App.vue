@@ -443,6 +443,7 @@ async function logout() {
                 const hasChats = chats.value.length > 0;
 
                 try {
+                    // Clear state
                     chats.value = [];
                     currentChatId.value = "";
                     expanded.value = [];
@@ -460,6 +461,7 @@ async function logout() {
                         syncProgress: 0,
                     };
 
+                    // ✅ Clear user details to trigger isAuthenticated = false
                     parsedUserDetails.value = parsedUserDetailsNullValues;
 
                     let keysToRemove = [
@@ -483,7 +485,9 @@ async function logout() {
                             );
                         }
                     });
-                    router.replace("/");
+
+                    // ✅ Don't call router.replace() here
+                    // The isAuthenticated watcher will handle navigation
                 } catch (stateError) {
                     console.error(
                         "Error clearing application state:",
@@ -1416,10 +1420,15 @@ async function handleAuth(data: {
             expireDuration: response.data.expire_duration || "",
             emailVerified: response.data.email_verified || false,
             emailSubscribed: response.data.email_subscribed || true,
+            requestCount: response.data.request_count || {
+                count: 0,
+                timestamp: Date.now(),
+            },
         };
 
-        // ✅ Set in-memory state first
+        // ✅ Set user details FIRST (this will trigger isAuthenticated to become true)
         parsedUserDetails.value = userData;
+        previousUserDetails = JSON.parse(JSON.stringify(userData));
 
         console.log(
             `Authentication successful for user: ${userData.username} (sync: ${userData.syncEnabled})`,
@@ -1427,23 +1436,14 @@ async function handleAuth(data: {
 
         if (userData.syncEnabled) {
             try {
-                // Sync first, then save
                 await performSmartSync();
                 console.log("Initial smart sync completed");
-
-                // ✅ ONLY save to localStorage AFTER successful sync
                 localStorage.setItem("userdetails", JSON.stringify(userData));
                 console.log("User details saved locally after successful sync");
             } catch (syncError) {
                 console.error("Initial sync failed:", syncError);
-
-                // Reset unsynced changes flag
                 syncStatus.value.hasUnsyncedChanges = false;
-
-                // Load local data as fallback
                 loadLocalData();
-
-                // Still save userData to localStorage as fallback
                 localStorage.setItem("userdetails", JSON.stringify(userData));
 
                 toast.warning("Synced with server but failed to merge data", {
@@ -1452,13 +1452,14 @@ async function handleAuth(data: {
                 });
             }
         } else {
-            // If sync is disabled, safe to save immediately
             localStorage.setItem("userdetails", JSON.stringify(userData));
             loadLocalData();
             console.log("Sync disabled, loaded local data only");
         }
 
-        createNewChat();
+        // ✅ Don't call createNewChat() here - let the watcher handle navigation
+        // The isAuthenticated watcher will trigger and navigate appropriately
+
         return response;
     } catch (error: any) {
         console.error("Authentication error:", error);
@@ -1508,43 +1509,13 @@ function loadLocalData() {
             }
         }
 
-        // Initialize currentChatId with validation
-        const storedChatId = currentChatId.value;
-        if (storedChatId) {
-            const chatExists = chats.value.some(
-                (chat) => chat.id === storedChatId,
-            );
-            if (chatExists) {
-                currentChatId.value = storedChatId;
-                console.log(`✅ Restored current chat ID: ${storedChatId}`);
-            } else {
-                console.warn(
-                    `Stored currentChatId '${storedChatId}' does not exist in chats, selecting fallback`,
-                );
-                currentChatId.value =
-                    chats.value.length > 0 ? chats.value[0].id : "";
-                if (currentChatId.value) {
-                    router.push(`/chat/${currentChatId.value}`);
-                } else {
-                    router.push("/new");
-                    console.log("No chats available, cleared currentChatId");
-                }
-            }
-        } else if (chats.value.length > 0) {
-            // No stored chat ID but we have chats, select the first one
-            currentChatId.value = chats.value[0].id;
-            router.push(`/chat/${currentChatId.value}`);
-        } else {
-            // No stored chat ID and no chats
-            currentChatId.value = "";
-            router.push("/new");
-            console.log("No chats available and no stored chat ID");
-        }
-
-        loadLinkPreviewCache();
-
-        updateExpandedArray();
+        // DON'T automatically set currentChatId or navigate here
+        // Let the route handler in ChatView manage this
         console.log("Successfully loaded local data");
+
+        // Only initialize other caches
+        loadLinkPreviewCache();
+        updateExpandedArray();
     } catch (error: any) {
         reportError({
             action: `loadLocalData`,
@@ -2257,9 +2228,21 @@ watch(
             return;
         }
 
+        // Only navigate if chat ID actually changed and is valid
         if (newChatId && newChatId !== oldChatId) {
-            console.log("🔄 Current chat ID changed, marking for sync");
-            router.push(`/chat/${newChatId}`);
+            const currentPath = router.currentRoute.value.path;
+            const targetPath = `/chat/${newChatId}`;
+
+            // Prevent redundant navigation
+            if (currentPath !== targetPath) {
+                console.log(`🔄 Navigating to chat: ${newChatId}`);
+                router.push(targetPath).catch((err) => {
+                    // Ignore navigation duplicated errors
+                    if (err.name !== "NavigationDuplicated") {
+                        console.error("Navigation error:", err);
+                    }
+                });
+            }
         }
     },
     { immediate: false },
@@ -2328,12 +2311,34 @@ watch(
 
 watch(
     () => isAuthenticated.value,
-    (newVal, oldVal) => {
-        if (newVal !== oldVal) {
-            if (newVal === true) {
-                router.push("/new");
-            } else {
-                router.push("/");
+    async (isAuth, wasAuth) => {
+        // Only act on actual auth state changes
+        if (isAuth === wasAuth) return;
+
+        const currentRoute = router.currentRoute.value;
+
+        if (isAuth) {
+            // User just logged in
+            console.log("✅ User authenticated");
+
+            // Don't navigate if already on a valid chat route
+            if (currentRoute.path.startsWith("/chat/")) {
+                console.log("Already on chat route, staying here");
+                return;
+            }
+
+            // Navigate to new chat only if on login/home page
+            if (currentRoute.path === "/") {
+                console.log("Navigating to new chat");
+                await router.push("/new");
+            }
+        } else {
+            // User just logged out
+            console.log("❌ User logged out");
+
+            // Only navigate to home if not already there
+            if (currentRoute.path !== "/") {
+                await router.push("/");
             }
         }
     },

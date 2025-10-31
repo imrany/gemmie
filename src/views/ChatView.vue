@@ -293,7 +293,6 @@ const {
     transcriptionTimer,
 });
 
-const { params } = useRoute();
 const showSuggestionsDropup = ref(false);
 
 const showPasteModal = ref(false);
@@ -1424,33 +1423,34 @@ watch(
 );
 
 watch(
-    () => params.id,
+    () => route.params.id,
     (newId, oldId) => {
         const chatId = Array.isArray(newId) ? newId[0] : newId;
         const oldChatId = Array.isArray(oldId) ? oldId[0] : oldId;
 
-        console.log("new id: ", chatId, "old id: ", oldChatId);
-        // Sync with global currentChatId if different
-        if (chatId && chatId !== currentChatId.value) {
-            const chatExists = chats.value.find((chat) => chat.id === chatId);
-            if (chatExists) {
-                currentChatId.value = chatId;
-                updateExpandedArray();
-                // Load draft for the chat
-                nextTick(() => {
-                    loadChatDrafts();
-                });
-                console.log(`🔄 ChatView: Updated currentChatId to ${chatId}`);
-            }
-        } else if (!chatId && currentChatId.value) {
-            // Clear currentChatId if no route parameter
-            currentChatId.value = "";
-            console.log(`🔄 ChatView: Cleared currentChatId`);
+        // Skip if no change or if it's the same as current
+        if (!chatId || chatId === oldChatId || chatId === currentChatId.value) {
+            return;
+        }
+
+        console.log(`🔄 Route changed: ${oldChatId} → ${chatId}`);
+
+        // Verify chat exists before syncing
+        const chatExists = chats.value.find((chat) => chat.id === chatId);
+
+        if (chatExists) {
+            currentChatId.value = chatId;
+            updateExpandedArray();
+            nextTick(() => {
+                loadChatDrafts();
+            });
+            console.log(`✅ Synced to chat: ${chatId}`);
+        } else {
+            console.warn(`⚠️ Chat ${chatId} not found in route watch`);
+            // Don't create new chat here - let navigation handle it
         }
     },
-    {
-        immediate: true,
-    },
+    { immediate: true },
 );
 
 onBeforeUnmount(() => {
@@ -1489,36 +1489,44 @@ onBeforeUnmount(() => {
 // Consolidated onMounted hook for better organization
 onMounted(async () => {
     const path = router.currentRoute.value.path;
-    const newId = route.params.id;
-    if (path === "/new" && isAuthenticated.value) {
-        // 1. Handle new chat creation
+    const routeChatId = route.params.id;
+    const chatId = Array.isArray(routeChatId) ? routeChatId[0] : routeChatId;
+
+    // Wait for authentication and chats to load
+    await nextTick();
+
+    if (!isAuthenticated.value) {
+        router.push("/");
+        return;
+    }
+
+    // Handle different route scenarios
+    if (path === "/new") {
+        // Create new chat and let it handle routing
         createNewChat();
-    } else if (path === "/" && isAuthenticated.value) {
-        createNewChat();
-    } else if (newId && isAuthenticated.value) {
-        const chatId = Array.isArray(newId) ? newId[0] : newId;
+        return;
+    }
 
-        // Don't process if no chat ID or same as current
-        if (!chatId || chatId === currentChatId.value) return;
-
-        // Wait a tick for chats to potentially load
-        await nextTick();
-
+    if (chatId) {
+        // Check if chat exists
         const chatExists = chats.value.find((chat) => chat.id === chatId);
 
         if (chatExists) {
+            // Sync with existing chat
             currentChatId.value = chatId;
             updateExpandedArray();
             nextTick(() => {
                 loadChatDrafts();
             });
-            console.log(`🔄 Route sync: Updated currentChatId to ${chatId}`);
+            console.log(`🔄 Synced to existing chat: ${chatId}`);
         } else {
-            console.warn(`⚠️ Chat ${chatId} not found, but keeping route`);
-            createNewChat();
+            // Chat doesn't exist, redirect to new chat
+            console.warn(`⚠️ Chat ${chatId} not found, creating new`);
+            router.push("/new");
         }
-    } else {
-        router.push("/");
+    } else if (path === "/") {
+        // Root path with no chat - create new one
+        createNewChat();
     }
 
     // 2. Load cached data and setup handlers
