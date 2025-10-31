@@ -2337,7 +2337,7 @@ watch(
             }
         }
     },
-    { immediate: true },
+    { immediate: false },
 );
 
 let debouncedResize: any = null;
