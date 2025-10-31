@@ -707,6 +707,7 @@ export function useChat({
         }
       });
 
+      router.push(`/chat/${newChatId}`);
       return newChatId;
     } catch (error: any) {
       reportError({

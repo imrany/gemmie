@@ -36,7 +36,7 @@ import { useApiCall } from "@/composables/useApiCall";
 import type { PlatformError } from "./types";
 import { useDebounceFn } from "@vueuse/core";
 import DemoToast from "./components/DemoToast.vue";
-import { useRoute, useRouter } from "vue-router";
+import { useRouter } from "vue-router";
 import { useChat } from "./composables/useChat";
 import { useCache } from "./composables/useCache";
 import { useSync } from "./composables/useSync";
@@ -147,7 +147,6 @@ const isAuthenticated = computed(() => {
     );
 });
 
-const route = useRoute();
 const currentChatId = ref<string>("");
 const chats = ref<Chat[]>([]);
 const isLoading = ref(false);
@@ -1459,6 +1458,7 @@ async function handleAuth(data: {
             console.log("Sync disabled, loaded local data only");
         }
 
+        createNewChat();
         return response;
     } catch (error: any) {
         console.error("Authentication error:", error);
@@ -2324,46 +2324,6 @@ watch(
         }
     },
     { immediate: false }, // Set to false to avoid unnecessary initial save, onMounted
-);
-
-watch(
-    () => route.path,
-    (newPath, oldPath) => {
-        if (newPath === "/new" && newPath !== oldPath) {
-            const chatId = createNewChat();
-            router.replace(`/chat/${chatId}`);
-        }
-    },
-    { immediate: true },
-);
-
-watch(
-    () => route.params.id,
-    async (newId) => {
-        const chatId = Array.isArray(newId) ? newId[0] : newId;
-
-        // Don't process if no chat ID or same as current
-        if (!chatId || chatId === currentChatId.value) return;
-
-        // Wait a tick for chats to potentially load
-        await nextTick();
-
-        const chatExists = chats.value.find((chat) => chat.id === chatId);
-
-        if (chatExists) {
-            currentChatId.value = chatId;
-            updateExpandedArray();
-            nextTick(() => {
-                loadChatDrafts();
-            });
-            console.log(`🔄 Route sync: Updated currentChatId to ${chatId}`);
-        } else if (chatId) {
-            // Only redirect if it's a valid chat ID format but doesn't exist
-            console.warn(`⚠️ Chat ${chatId} not found, but keeping route`);
-            // Don't redirect - keep the invalid chat ID in URL for error handling
-        }
-    },
-    { immediate: true },
 );
 
 let debouncedResize: any = null;
