@@ -41,7 +41,7 @@ function truncateText(text: string, maxLength: number): string {
             :key="context.preview"
             @click="handleSrollIntoView(`chat-${context.fullText}`)"
             :class="[
-                'inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium border transition-colors',
+                'inline-flex cursor-pointer items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium border transition-colors',
                 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300',
                 'dark:border-gray-600 border-gray-200',
                 isCloseable
