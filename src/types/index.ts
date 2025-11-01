@@ -6,6 +6,7 @@ export interface Res {
   response: string;
   status?: number;
   requestId?: string;
+  references: string[];
 }
 
 export type ModeOption = {
@@ -17,7 +18,6 @@ export type ModeOption = {
 };
 
 export type ContextReference = {
-  id: string;
   preview: string;
   fullText: string;
 };
