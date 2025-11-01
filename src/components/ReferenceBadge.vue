@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import type { ContextReference } from "@/types";
 import type { Ref } from "vue";
-import { unref } from "vue";
+import { unref, inject } from "vue";
 import { Link, X } from "lucide-vue-next";
 
+const { handleSrollIntoView } = inject("globalState") as {
+    handleSrollIntoView: (id: string) => void;
+};
 const props = withDefaults(
     defineProps<{
         selectedContexts: Ref<ContextReference[]>;
@@ -36,6 +39,7 @@ function truncateText(text: string, maxLength: number): string {
         <div
             v-for="(context, index) in unref(props.selectedContexts)"
             :key="context.preview"
+            @click="handleSrollIntoView(`chat-${context.fullText}`)"
             :class="[
                 'inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium border transition-colors',
                 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300',
@@ -59,15 +63,8 @@ function truncateText(text: string, maxLength: number): string {
             </component>
 
             <!-- Preview text - more compact for vertical layout -->
-            <span
-                :class="[
-                    'truncate',
-                    !isCloseable
-                        ? 'max-w-[70px]'
-                        : 'max-w-[120px] sm:max-w-[150px]',
-                ]"
-            >
-                {{ truncateText(context.preview, !isCloseable ? 20 : 30) }}
+            <span :class="['truncate', 'max-w-[120px] sm:max-w-[150px]']">
+                {{ truncateText(context.preview, 30) }}
             </span>
 
             <!-- Remove button (only if closeable) -->

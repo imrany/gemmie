@@ -602,28 +602,55 @@ function scrollToLastMessage() {
     });
 }
 
+function handleSrollIntoView(id: string) {
+    try {
+        const element = document.getElementById(id);
+        if (element) {
+            element.scrollIntoView({
+                behavior: "smooth",
+                block: "start",
+                inline: "nearest",
+            });
+        } else {
+            console.warn(`Element with id "${id}" not found for scroll.`);
+        }
+    } catch (error) {
+        console.error("Error scrolling to element:", error);
+    }
+}
+
 function handleScroll() {
     try {
+        // Close text highlight popover on scroll
         if (isOpenTextHighlightPopover.value) {
             isOpenTextHighlightPopover.value = false;
         }
 
+        // Get the scrollable element
         const elem = scrollableElem.value;
         if (!elem) return;
 
+        // Get scroll properties
         const scrollTop = elem.scrollTop;
         const scrollHeight = elem.scrollHeight;
         const clientHeight = elem.clientHeight;
 
+        // Calculate current scroll position and total scrollable height
         const currentScrollPosition = scrollTop + clientHeight;
         const totalScrollableHeight = scrollHeight;
 
-        const threshold = 2;
+        // Define a threshold to determine if the user is at the bottom
+        const threshold = 148;
         const isAtBottom =
             Math.abs(currentScrollPosition - totalScrollableHeight) <=
             threshold;
 
-        const hasSubstantialContent = scrollHeight > clientHeight + 100;
+        // Determine if there's substantial content to warrant a scroll-down button
+        const hasSubstantialContent = scrollHeight > currentScrollPosition;
+
+        // Show the scroll-down button if not at the bottom and content is substantial
+        // hasSubstantialContent ensures the scroll-down button is only visible when there's enough content to scroll
+        // !isAtBottom makes sure it disappears when the user is already at the bottom
         showScrollDownButton.value = !isAtBottom && hasSubstantialContent;
     } catch (error) {
         console.error("Error handling scroll:", error);
@@ -2617,6 +2644,7 @@ const globalState = {
     autoGrow,
     performSmartSync,
     scrollToLastMessage,
+    handleSrollIntoView,
 
     // Sync UI functions
     showSyncIndicator,

@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { computed, ref, watch, onMounted, onBeforeUnmount } from "vue";
+import { computed, ref, watch, onMounted, onBeforeUnmount, unref } from "vue";
 import type { Ref } from "vue";
 import {
     Mic,
@@ -495,7 +495,9 @@ watch(isContextLimitReached, (limitReached) => {
         >
             <!-- Responsive Scroll to Bottom Button -->
             <button
-                v-if="showScrollDownButton && currentMessages.length !== 0"
+                v-if="
+                    unref(showScrollDownButton) && currentMessages.length !== 0
+                "
                 @click="emit('scrollToBottom')"
                 :class="[
                     'bg-gray-50  dark:bg-gray-800 text-gray-500 dark:text-gray-400 border dark:border-gray-700 px-4 h-8 rounded-full shadow-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center justify-center gap-2',
