@@ -837,7 +837,7 @@ watch(isContextLimitReached, (limitReached) => {
                             ]"
                             :placeholder="
                                 currentChat && currentChat.messages?.length > 0
-                                    ? `Use @ to include messages as context • ${inputPlaceholderText.split('...')[1]?.trim() || ''}`
+                                    ? `Use @ to include context • ${inputPlaceholderText.split('...')[1]?.trim() || ''}`
                                     : inputPlaceholderText
                             "
                         />
