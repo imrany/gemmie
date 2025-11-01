@@ -79,6 +79,7 @@ import { usePagination } from "@/composables/usePagination";
 import { useMessage } from "@/composables/useMessage";
 import ProtectedPage from "@/layout/ProtectedPage.vue";
 import InputArea from "@/components/InputArea.vue";
+import ReferenceBadge from "@/components/ReferenceBadge.vue";
 
 // Inject global state
 const {
@@ -420,12 +421,12 @@ async function handleSubmit(
 ) {
     e?.preventDefault?.();
 
-    // Stop voice recording immediately when submitting
+    // Stop voice recording immediately
     if (isRecording.value || isTranscribing.value) {
         stopVoiceRecording(true);
     }
 
-    // Use the global connection check
+    // Check internet connection
     if (!isUserOnline.value) {
         const isActuallyOnline = await checkInternetConnection();
         if (!isActuallyOnline) {
@@ -440,7 +441,7 @@ async function handleSubmit(
 
     let promptValue = retryPrompt || e?.target?.prompt?.value?.trim();
 
-    // Check if we have paste preview content
+    // Handle paste preview content
     const currentPastePreview = pastePreviews.value.get(currentChatId.value);
     const hasPastePreview =
         currentPastePreview && currentPastePreview.show && !retryPrompt;
@@ -450,25 +451,7 @@ async function handleSubmit(
         pastePreviews.value.delete(currentChatId.value);
     }
 
-    // **NEW: Add context references to prompt if available**
-    let fabricatedPrompt = promptValue;
-    let contextInfo = "";
-
-    if (contextReferences && contextReferences.length > 0) {
-        contextInfo = "\n\n--- Context from previous messages ---\n";
-        contextReferences.forEach((ctx, idx) => {
-            contextInfo += `\n[Reference ${idx + 1}]:\n${ctx.fullText}\n`;
-        });
-        contextInfo += "\n--- End of context ---\n\n";
-        contextInfo += `User's current question: ${promptValue}`;
-
-        fabricatedPrompt = contextInfo;
-
-        console.log(
-            `Added ${contextReferences.length} context reference(s) to prompt`,
-        );
-    }
-
+    // Validate prompt
     if (!promptValue || isLoading.value) return;
 
     if (!isAuthenticated.value) {
@@ -479,13 +462,13 @@ async function handleSubmit(
         return;
     }
 
-    // Check request limits
+    // Load and check request limits
     loadRequestCount();
 
     // Clear draft for current chat
     clearCurrentDraft();
 
-    // Create new chat if none exists
+    // Ensure we have a valid chat
     let submissionChatId = currentChatId.value;
     const submissionChat = chats.value.find(
         (chat) => chat.id === submissionChatId,
@@ -498,21 +481,21 @@ async function handleSubmit(
         submissionChatId = newChatId;
     }
 
-    // Generate unique request ID
+    // Generate unique request ID and setup abort controller
     const requestId = `req_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
     const abortController = new AbortController();
 
-    // Track the active request using global state
     activeRequests.value.set(requestId, abortController);
     requestChatMap.value.set(requestId, submissionChatId);
 
-    // Handle link-only prompts
+    // Handle link-only prompts specially
     if (isJustLinks(promptValue)) {
         return handleLinkOnlyRequest(
             promptValue,
             submissionChatId,
             requestId,
             abortController,
+            contextReferences?.map((ref) => ref.preview) || [],
         );
     }
 
@@ -520,7 +503,7 @@ async function handleSubmit(
     let responseMode =
         parsedUserDetails?.value.responseMode || "light-response";
 
-    // Override to light-response if pasted content is detected
+    // Override to light-response if pasted content detected
     if (hasPastePreview) {
         responseMode = "light-response";
         console.log("Pasted content detected - using light-response mode");
@@ -529,11 +512,29 @@ async function handleSubmit(
     const isSearchMode =
         responseMode === "web-search" || responseMode === "deep-search";
 
-    // **UPDATED: Only merge context for short prompts and if no explicit context references**
-    if (
+    // Build fabricated prompt with context
+    let fabricatedPrompt = promptValue;
+
+    // Add explicit context references if provided
+    if (contextReferences && contextReferences.length > 0) {
+        let contextInfo = "\n\n--- Context from previous messages ---\n";
+        contextReferences.forEach((ctx, idx) => {
+            contextInfo += `\n[Reference ${idx + 1}]:\n${ctx.fullText}\n`;
+        });
+        contextInfo += "\n--- End of context ---\n\n";
+
+        // Append context before the current question
+        fabricatedPrompt =
+            contextInfo + `User's current question: ${promptValue}`;
+
+        console.log(
+            `Added ${contextReferences.length} explicit context reference(s)`,
+        );
+    }
+    // Only add implicit context if no explicit references and prompt is short
+    else if (
         isPromptTooShort(promptValue) &&
-        currentMessages.value.length > 0 &&
-        (!contextReferences || contextReferences.length === 0)
+        currentMessages.value.length > 0
     ) {
         const lastMessage =
             currentMessages.value[currentMessages.value.length - 1];
@@ -543,6 +544,8 @@ async function handleSubmit(
         } else {
             fabricatedPrompt = `${lastMessage.prompt || ""} ${lastMessage.response || ""}\nUser: ${promptValue}`;
         }
+
+        console.log("Added implicit context from last message");
     }
 
     // Clear input field
@@ -564,10 +567,14 @@ async function handleSubmit(
     const tempResp: Res = {
         prompt: promptValue,
         response: responseMode ? `${responseMode}...` : "...",
+        references: contextReferences?.map((ref) => ref.preview) || [],
     };
 
+    // Store original selectedContexts for rollback on error
+    const originalSelectedContexts = [...selectedContexts.value];
+
     try {
-        // Add message to submission chat (temporarily)
+        // Add temporary message to chat
         const targetChat = chats.value.find(
             (chat) => chat.id === submissionChatId,
         );
@@ -589,7 +596,7 @@ async function handleSubmit(
         let parseRes: any;
 
         if (isSearchMode) {
-            // Enhanced search request with proper parameters
+            // Enhanced search request
             const searchParams = new URLSearchParams({
                 query: encodeURIComponent(fabricatedPrompt),
                 mode:
@@ -627,6 +634,8 @@ async function handleSubmit(
         if (abortController.signal.aborted) {
             console.log(`Request ${requestId} was aborted`);
             removeTemporaryMessage(submissionChatId, tempMessageIndex);
+            // Restore original context selection
+            selectedContexts.value = originalSelectedContexts;
             return;
         }
 
@@ -639,7 +648,7 @@ async function handleSubmit(
 
         parseRes = await response.json();
 
-        // Enhanced response processing for search modes
+        // Process response based on mode
         let finalResponse = parseRes.error ? parseRes.error : parseRes.response;
 
         if (isSearchMode) {
@@ -655,15 +664,16 @@ async function handleSubmit(
             }
         }
 
-        // Update the response in chat (replace the temporary message)
+        // Update the response in chat (replace temporary message)
         const updatedTargetChat = chats.value.find(
             (chat) => chat.id === submissionChatId,
         );
         if (updatedTargetChat && tempMessageIndex >= 0) {
-            const updatedMessage = {
+            const updatedMessage: Res = {
                 prompt: promptValue,
                 response: finalResponse,
                 status: response.status,
+                references: contextReferences?.map((ref) => ref.preview) || [],
             };
             updatedTargetChat.messages[tempMessageIndex] = updatedMessage;
             updatedTargetChat.updatedAt = new Date().toISOString();
@@ -672,10 +682,10 @@ async function handleSubmit(
             await processLinksInResponse(tempMessageIndex);
         }
 
-        // Increment request count on success
+        // ✅ SUCCESS - Increment request count
         incrementRequestCount();
 
-        // **NEW: Show feedback about context references used**
+        // ✅ Show context feedback ONLY on success
         if (contextReferences && contextReferences.length > 0) {
             toast.success(`Used ${contextReferences.length} reference(s)`, {
                 duration: 2000,
@@ -683,6 +693,7 @@ async function handleSubmit(
             });
         }
 
+        // ✅ Clear selected contexts ONLY on success
         selectedContexts.value = [];
 
         // Show success notification if user switched away
@@ -697,13 +708,18 @@ async function handleSubmit(
         if (err.name === "AbortError") {
             console.log(`Request ${requestId} was aborted`);
             removeTemporaryMessage(submissionChatId, tempMessageIndex);
+            // Restore original context selection
+            selectedContexts.value = originalSelectedContexts;
             return;
         }
 
         console.error("AI Response Error:", err);
 
-        // Remove the temporary message on error
+        // Remove temporary message on error
         removeTemporaryMessage(submissionChatId, tempMessageIndex);
+
+        // Restore original context selection on error
+        selectedContexts.value = originalSelectedContexts;
 
         // More specific error messages
         let errorMessage = err.message;
@@ -735,7 +751,7 @@ async function handleSubmit(
         isLoading.value = false;
         saveChats();
 
-        // Trigger background sync if needed
+        // Trigger background sync
         setTimeout(() => {
             performSmartSync().catch((error) => {
                 console.error("Background sync failed:", error);
@@ -778,6 +794,7 @@ async function handleLinkOnlyRequest(
     chatId: string,
     requestId: string,
     abortController: AbortController,
+    contextReferenceIds: string[],
 ) {
     const urls = extractUrls(promptValue);
 
@@ -786,7 +803,11 @@ async function handleLinkOnlyRequest(
 
     // Store temporary message reference
     let tempMessageIndex = -1;
-    const tempResp: Res = { prompt: promptValue, response: "..." };
+    const tempResp: Res = {
+        prompt: promptValue,
+        response: "...",
+        references: contextReferenceIds,
+    };
     const targetChat = chats.value.find((chat) => chat.id === chatId);
 
     if (targetChat) {
@@ -846,6 +867,7 @@ async function handleLinkOnlyRequest(
                 prompt: promptValue,
                 response: combinedResponse.trim(),
                 status: 200,
+                references: contextReferenceIds,
             };
             updatedTargetChat.updatedAt = new Date().toISOString();
         }
@@ -1840,7 +1862,7 @@ onUnmounted(() => {
                                                             ?.length || 0
                                                     "
                                                     :is-clickable="true"
-                                                    class="w-[70%] sm:w-[50%] lg:w-[40%] xl:w-[30%]"
+                                                    class="w-[40%] sm:w-[50%] lg:w-[40%] xl:w-[30%]"
                                                 />
                                             </div>
                                         </div>
@@ -1865,6 +1887,42 @@ onUnmounted(() => {
 
                                         <!-- Message content container -->
                                         <div class="flex-1 min-w-0">
+                                            <!-- Selected Context Badges  -->
+                                            <ReferenceBadge
+                                                :is-closeable="false"
+                                                :selected-contexts="
+                                                    item.references
+                                                        ? ref(
+                                                              item.references.map(
+                                                                  (id) => {
+                                                                      const messageIndex =
+                                                                          currentMessages.findIndex(
+                                                                              (
+                                                                                  m,
+                                                                              ) =>
+                                                                                  m.prompt ===
+                                                                                  id,
+                                                                          );
+                                                                      const ref =
+                                                                          currentMessages[
+                                                                              messageIndex
+                                                                          ];
+
+                                                                      return {
+                                                                          id,
+                                                                          preview:
+                                                                              ref?.prompt ||
+                                                                              '',
+                                                                          fullText:
+                                                                              ref?.prompt ||
+                                                                              '',
+                                                                      };
+                                                                  },
+                                                              ),
+                                                          )
+                                                        : ref([])
+                                                "
+                                            />
                                             <MarkdownRenderer
                                                 class="break-words text-base leading-relaxed"
                                                 :content="

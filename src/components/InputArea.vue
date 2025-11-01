@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { computed, ref, watch, onMounted, onBeforeUnmount, unref } from "vue";
+import { computed, ref, watch, onMounted, onBeforeUnmount } from "vue";
 import type { Ref } from "vue";
 import {
     Mic,
@@ -24,6 +24,7 @@ import type {
     CurrentChat,
 } from "@/types";
 import { inject } from "vue";
+import ReferenceBadge from "./ReferenceBadge.vue";
 
 const {
     isLoading,
@@ -238,7 +239,11 @@ function selectContext(context: ContextReference) {
         const textAfter = value.substring(cursorPos);
 
         // Add context if not already added
-        if (!props.selectedContexts.value.find((c) => c.id === context.id)) {
+        if (
+            !props.selectedContexts.value.find(
+                (c) => c.preview === context.preview,
+            )
+        ) {
             // eslint-disable-next-line vue/no-mutating-props
             props.selectedContexts.value.push(context);
         }
@@ -257,14 +262,6 @@ function selectContext(context: ContextReference) {
         // Focus back on textarea
         textarea.focus();
     }
-}
-
-// Remove context reference
-function removeContext(contextId: string) {
-    // eslint-disable-next-line vue/no-mutating-props
-    props.selectedContexts.value = props.selectedContexts.value.filter(
-        (c) => c.id !== contextId,
-    );
 }
 
 // Close context dropdown
@@ -678,7 +675,7 @@ watch(showContextDropdown, (newVal) => {
                         </div>
                         <button
                             v-for="(message, index) in filteredMessages"
-                            :key="message.id"
+                            :key="message.preview"
                             type="button"
                             @click="selectContext(message)"
                             :class="[
@@ -709,29 +706,7 @@ watch(showContextDropdown, (newVal) => {
                     </div>
 
                     <!-- Selected Context Badges (INSIDE TEXTAREA AREA) -->
-                    <div
-                        v-if="unref(props.selectedContexts).length > 0"
-                        class="flex flex-wrap gap-1.5 px-2 pt-2"
-                    >
-                        <div
-                            v-for="context in unref(props.selectedContexts)"
-                            :key="context.id"
-                            class="inline-flex items-center gap-1 bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 px-2 py-1 rounded-md text-xs font-medium border border-blue-300 dark:border-blue-700"
-                        >
-                            <MessageSquare class="w-3 h-3 flex-shrink-0" />
-                            <span class="max-w-[120px] truncate">{{
-                                context.preview.slice(0, 30)
-                            }}</span>
-                            <button
-                                type="button"
-                                @click.stop="removeContext(context.id)"
-                                class="hover:bg-blue-200 dark:hover:bg-blue-800 rounded-full p-0.5 transition-colors ml-0.5"
-                                title="Remove context"
-                            >
-                                <X class="w-3 h-3" />
-                            </button>
-                        </div>
-                    </div>
+                    <ReferenceBadge :selected-contexts="selectedContexts" />
 
                     <div class="w-full items-center justify-center flex">
                         <!-- Voice Recording Indicator -->
@@ -784,8 +759,7 @@ watch(showContextDropdown, (newVal) => {
                             ]"
                             :placeholder="
                                 currentChat && currentChat.messages?.length > 0
-                                    ? inputPlaceholderText +
-                                      ' -- @ to include messages as context'
+                                    ? `Use @ to include messages as context ${inputPlaceholderText.split('...')[1].trim()}`
                                     : inputPlaceholderText
                             "
                         />
