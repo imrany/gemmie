@@ -417,10 +417,13 @@ function isJustLinks(prompt: string): boolean {
 async function handleSubmit(
     e?: any,
     retryPrompt?: string,
-    contextReferences?: ContextReference[],
     forceMode?: "web-search" | "deep-search" | "light-response",
 ) {
     e?.preventDefault?.();
+
+    // ✅ FIX: Use contextReferences parameter OR fall back to selectedContexts state
+    const effectiveContextReferences =
+        selectedContexts.value.length > 0 ? selectedContexts.value : undefined;
 
     // Stop voice recording immediately
     if (isRecording.value || isTranscribing.value) {
@@ -496,7 +499,7 @@ async function handleSubmit(
             submissionChatId,
             requestId,
             abortController,
-            contextReferences?.map((ref) => ref.preview) || [],
+            effectiveContextReferences?.map((ref) => ref.preview) || [],
         );
     }
 
@@ -517,20 +520,23 @@ async function handleSubmit(
     let fabricatedPrompt = promptValue;
 
     // Add explicit context references if provided
-    if (contextReferences && contextReferences.length > 0) {
+    if (effectiveContextReferences && effectiveContextReferences.length > 0) {
         let contextInfo = "";
 
         if (isSearchMode) {
             // For search modes, integrate context differently
-            contextReferences.forEach((ctx) => {
+            effectiveContextReferences.forEach((ctx) => {
                 contextInfo += `${ctx.fullText}`;
             });
             fabricatedPrompt = `${promptValue} ${contextInfo}`;
+            console.log(
+                `Added ${effectiveContextReferences.length} explicit context reference(s) for ${responseMode} mode`,
+            );
         } else {
             // For light-response, put context before the question
             contextInfo += "\n\n--- Context from previous messages ---\n";
 
-            contextReferences.forEach((ctx, idx) => {
+            effectiveContextReferences.forEach((ctx, idx) => {
                 contextInfo += `\n[Reference ${idx + 1}]:\n${ctx.fullText}\n`;
             });
             contextInfo += "\n--- End of context ---\n\n";
@@ -539,11 +545,10 @@ async function handleSubmit(
         }
 
         console.log(
-            `Added ${contextReferences.length} explicit context reference(s) for ${responseMode} mode`,
+            `Added ${effectiveContextReferences.length} explicit context reference(s) for ${responseMode} mode`,
         );
-    }
-    // Only add implicit context if no explicit references and prompt is short
-    else if (
+    } else if (
+        // Only add implicit context if no explicit references and prompt is short
         !hasPastePreview &&
         isPromptTooShort(promptValue) &&
         currentMessages.value.length > 0
@@ -552,23 +557,12 @@ async function handleSubmit(
             currentMessages.value[currentMessages.value.length - 1];
 
         if (isSearchMode) {
-            fabricatedPrompt = `${promptValue}\n\nPrevious context: ${lastMessage.prompt || ""} ${lastMessage.response || ""}`;
+            fabricatedPrompt = `${promptValue} ${lastMessage.prompt || ""}`;
         } else {
             fabricatedPrompt = `Previous: ${lastMessage.prompt || ""} ${lastMessage.response || ""}\n\nCurrent: ${promptValue}`;
         }
 
         console.log("Added implicit context from last message");
-    }
-
-    // Clear input field
-    if (!retryPrompt && e?.target?.prompt) {
-        e.target.prompt.value = "";
-        e.target.prompt.style.height = "auto";
-    }
-
-    // Clear voice transcription
-    if (transcribedText.value) {
-        transcribedText.value = "";
     }
 
     isLoading.value = true;
@@ -579,7 +573,7 @@ async function handleSubmit(
     const tempResp: Res = {
         prompt: promptValue,
         response: responseMode ? `${responseMode}...` : "...",
-        references: contextReferences?.map((ref) => ref.preview) || [],
+        references: effectiveContextReferences?.map((ref) => ref.preview) || [],
     };
 
     // Store original selectedContexts for rollback on error
@@ -685,7 +679,8 @@ async function handleSubmit(
                 prompt: promptValue,
                 response: finalResponse,
                 status: response.status,
-                references: contextReferences?.map((ref) => ref.preview) || [],
+                references:
+                    effectiveContextReferences?.map((ref) => ref.preview) || [],
             };
             updatedTargetChat.messages[tempMessageIndex] = updatedMessage;
             updatedTargetChat.updatedAt = new Date().toISOString();
@@ -697,12 +692,29 @@ async function handleSubmit(
         // ✅ SUCCESS - Increment request count
         incrementRequestCount();
 
+        // Clear input field
+        if (!retryPrompt && e?.target?.prompt) {
+            e.target.prompt.value = "";
+            e.target.prompt.style.height = "auto";
+        }
+
+        // Clear voice transcription
+        if (transcribedText.value) {
+            transcribedText.value = "";
+        }
+
         // ✅ Show context feedback ONLY on success
-        if (contextReferences && contextReferences.length > 0) {
-            toast.success(`Used ${contextReferences.length} reference(s)`, {
-                duration: 2000,
-                description: "Previous messages added as context",
-            });
+        if (
+            effectiveContextReferences &&
+            effectiveContextReferences.length > 0
+        ) {
+            toast.success(
+                `Used ${effectiveContextReferences.length} reference(s)`,
+                {
+                    duration: 2000,
+                    description: "Previous messages added as context",
+                },
+            );
         }
 
         // ✅ Clear selected contexts ONLY on success
