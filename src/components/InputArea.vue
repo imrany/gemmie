@@ -79,11 +79,7 @@ const props = defineProps<{
 
 // Emits
 const emit = defineEmits<{
-    submit: [
-        e?: Event,
-        retryPrompt?: string,
-        contextReferences?: ContextReference[],
-    ];
+    submit: [e?: Event, retryPrompt?: string];
     autoGrow: [e: Event];
     handlePaste: [e: ClipboardEvent];
     keydown: [e: KeyboardEvent];
@@ -357,12 +353,7 @@ function handleSubmit(e?: Event) {
     }
 
     // Emit with context references only if they exist
-    emit(
-        "submit",
-        e,
-        undefined,
-        hasContexts ? [...props.selectedContexts.value] : undefined,
-    );
+    emit("submit", e, undefined);
 
     // Clear selected contexts and user input after successful emit
     userInputText.value = "";
