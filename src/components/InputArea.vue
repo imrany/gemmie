@@ -658,7 +658,7 @@ watch(showContextDropdown, (newVal) => {
                         v-if="
                             showContextDropdown && filteredMessages.length > 0
                         "
-                        class="context-dropdown absolute bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-2xl max-h-60 overflow-y-auto custom-scrollbar z-[9999] w-[calc(100%-1rem)]"
+                        class="context-dropdown absolute bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-2xl max-h-60 overflow-y-auto custom-scrollbar z-[9999] w-[20rem]"
                         :style="{
                             bottom: `${dropdownPosition.top}px`,
                             left: `${dropdownPosition.left}px`,
