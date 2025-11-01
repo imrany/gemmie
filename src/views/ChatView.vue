@@ -418,6 +418,7 @@ async function handleSubmit(
     e?: any,
     retryPrompt?: string,
     contextReferences?: ContextReference[],
+    forceMode?: "web-search" | "deep-search" | "light-response",
 ) {
     e?.preventDefault?.();
 
@@ -499,9 +500,9 @@ async function handleSubmit(
         );
     }
 
-    // Determine response mode
+    // Determine response mode (use forceMode for retries, otherwise use current setting)
     let responseMode =
-        parsedUserDetails?.value.responseMode || "light-response";
+        forceMode || parsedUserDetails?.value.responseMode || "light-response";
 
     // Override to light-response if pasted content detected
     if (hasPastePreview) {
@@ -517,22 +518,33 @@ async function handleSubmit(
 
     // Add explicit context references if provided
     if (contextReferences && contextReferences.length > 0) {
-        let contextInfo = "\n\n--- Context from previous messages ---\n";
-        contextReferences.forEach((ctx, idx) => {
-            contextInfo += `\n[Reference ${idx + 1}]:\n${ctx.fullText}\n`;
-        });
-        contextInfo += "\n--- End of context ---\n\n";
+        let contextInfo = "";
 
-        // Append context before the current question
-        fabricatedPrompt =
-            contextInfo + `User's current question: ${promptValue}`;
+        if (isSearchMode) {
+            // For search modes, integrate context differently
+            contextReferences.forEach((ctx) => {
+                contextInfo += `${ctx.fullText}`;
+            });
+            fabricatedPrompt = `${promptValue} ${contextInfo}`;
+        } else {
+            // For light-response, put context before the question
+            contextInfo += "\n\n--- Context from previous messages ---\n";
+
+            contextReferences.forEach((ctx, idx) => {
+                contextInfo += `\n[Reference ${idx + 1}]:\n${ctx.fullText}\n`;
+            });
+            contextInfo += "\n--- End of context ---\n\n";
+            fabricatedPrompt =
+                contextInfo + `User's current question: ${promptValue}`;
+        }
 
         console.log(
-            `Added ${contextReferences.length} explicit context reference(s)`,
+            `Added ${contextReferences.length} explicit context reference(s) for ${responseMode} mode`,
         );
     }
     // Only add implicit context if no explicit references and prompt is short
     else if (
+        !hasPastePreview &&
         isPromptTooShort(promptValue) &&
         currentMessages.value.length > 0
     ) {
@@ -540,9 +552,9 @@ async function handleSubmit(
             currentMessages.value[currentMessages.value.length - 1];
 
         if (isSearchMode) {
-            fabricatedPrompt = `User search query: ${promptValue}. Previous interaction: ${lastMessage.prompt || ""} ${lastMessage.response || ""}`;
+            fabricatedPrompt = `${promptValue}\n\nPrevious context: ${lastMessage.prompt || ""} ${lastMessage.response || ""}`;
         } else {
-            fabricatedPrompt = `${lastMessage.prompt || ""} ${lastMessage.response || ""}\nUser: ${promptValue}`;
+            fabricatedPrompt = `Previous: ${lastMessage.prompt || ""} ${lastMessage.response || ""}\n\nCurrent: ${promptValue}`;
         }
 
         console.log("Added implicit context from last message");
@@ -590,7 +602,7 @@ async function handleSubmit(
         }
 
         updateExpandedArray();
-        processLinksInUserPrompt(promptValue);
+        await processLinksInUserPrompt(tempMessageIndex);
 
         let response: Response;
         let parseRes: any;
@@ -900,7 +912,10 @@ async function handleLinkOnlyRequest(
     }
 }
 
-async function refreshResponse(oldPrompt?: string) {
+async function refreshResponse(
+    oldPrompt?: string,
+    originalReferences?: string[],
+) {
     if (!isUserOnline.value) {
         const isActuallyOnline = await checkInternetConnection();
         if (!isActuallyOnline) {
@@ -924,21 +939,89 @@ async function refreshResponse(oldPrompt?: string) {
 
     const oldMessage = chat.messages[msgIndex];
 
-    // Get the original response mode from message metadata or use current
-    const originalMode =
-        parsedUserDetails?.value?.responseMode || "light-response";
+    // Detect original mode from response content
+    let originalMode: "web-search" | "deep-search" | "light-response" | string =
+        "light-response";
+
+    if (isDeepSearchResult(oldMessage.response || "")) {
+        originalMode = "deep-search";
+    } else if (
+        oldMessage.response?.includes("light-search") ||
+        oldMessage.response?.includes("### 1.") ||
+        oldMessage.response?.includes("**Source:**")
+    ) {
+        originalMode = "web-search";
+    } else {
+        originalMode =
+            parsedUserDetails?.value?.responseMode || "light-response";
+    }
+
     const isSearchMode =
         originalMode === "web-search" || originalMode === "deep-search";
 
+    console.log(`Refreshing with detected mode: ${originalMode}`);
+
+    // Reconstruct context references if they exist
+    let contextReferences: ContextReference[] | undefined;
+
+    if (originalReferences && originalReferences.length > 0) {
+        contextReferences = originalReferences.map((previewText) => {
+            // The preview is a truncated prompt, find the matching message
+            const messageIndex = currentMessages.value.findIndex(
+                (m) =>
+                    m.prompt &&
+                    m.prompt.startsWith(previewText.replace("...", "").trim()),
+            );
+
+            if (messageIndex >= 0) {
+                const refMessage = currentMessages.value[messageIndex];
+
+                return {
+                    preview: previewText, // Keep original preview
+                    fullText:
+                        refMessage.response || refMessage.prompt || previewText, // Use RESPONSE for AI context
+                };
+            }
+
+            // Fallback if message not found
+            return {
+                preview: previewText,
+                fullText: previewText,
+            };
+        });
+
+        console.log(
+            `Refreshing with ${contextReferences.length} context reference(s)`,
+        );
+    }
+
+    // Build fabricated prompt with context
     let fabricatedPrompt = oldPrompt;
-    if (
-        originalMode === "light-response" &&
+
+    // Add context if available
+    if (contextReferences && contextReferences.length > 0) {
+        let contextInfo = "\n\n--- Context from previous messages ---\n";
+        contextReferences.forEach((ctx, idx) => {
+            contextInfo += `\n[Reference ${idx + 1}]:\n${ctx.fullText}\n`;
+        });
+        contextInfo += "\n--- End of context ---\n\n";
+
+        if (isSearchMode) {
+            fabricatedPrompt = `${oldPrompt}\n\nRelevant context:\n${contextInfo}`;
+        } else {
+            fabricatedPrompt =
+                contextInfo + `User's current question: ${oldPrompt}`;
+        }
+    }
+    // Add implicit context if prompt is short and no explicit context
+    else if (
         oldPrompt &&
         isPromptTooShort(oldPrompt) &&
-        currentMessages.value.length > 1
+        currentMessages.value.length > 1 &&
+        !isSearchMode
     ) {
         const lastMessage = currentMessages.value[msgIndex - 1];
-        fabricatedPrompt = `${lastMessage.prompt || ""} ${lastMessage.response || ""}\nUser: ${oldPrompt}`;
+        fabricatedPrompt = `Previous: ${lastMessage.prompt || ""} ${lastMessage.response || ""}\n\nCurrent: ${oldPrompt}`;
     }
 
     // Check request limits for refresh too
@@ -950,6 +1033,7 @@ async function refreshResponse(oldPrompt?: string) {
     chat.messages[msgIndex] = {
         ...oldMessage,
         response: originalMode ? `${originalMode}...` : "Refreshing...",
+        references: originalReferences || [], // PRESERVE REFERENCES
     };
 
     isLoading.value = true;
@@ -978,7 +1062,6 @@ async function refreshResponse(oldPrompt?: string) {
                 try {
                     const linkPreview = await fetchLinkPreview(url);
 
-                    // Use proper markdown with double spaces for line breaks
                     combinedResponse += `### ${linkPreview.title || "Untitled"}  \n\n`;
 
                     if (linkPreview.description) {
@@ -1007,16 +1090,16 @@ async function refreshResponse(oldPrompt?: string) {
                 ...oldMessage,
                 response: combinedResponse.trim(),
                 status: 200,
+                references: originalReferences || [], // PRESERVE REFERENCES
             };
 
             chat.updatedAt = new Date().toISOString();
             saveChats();
 
-            // Re-run link previews if needed
             await processLinksInResponse(msgIndex);
-
             incrementRequestCount();
         } finally {
+            isLoading.value = false;
             observeNewVideoContainers();
         }
 
@@ -1067,7 +1150,6 @@ async function refreshResponse(oldPrompt?: string) {
         let finalResponse = parseRes.error ? parseRes.error : parseRes.response;
 
         if (isSearchMode) {
-            // Check for results in both locations (results or json)
             const hasResults = parseRes.results || parseRes.json;
             if (hasResults) {
                 finalResponse = formatSearchResults(
@@ -1085,14 +1167,13 @@ async function refreshResponse(oldPrompt?: string) {
             ...oldMessage,
             response: finalResponse,
             status: response.status,
+            references: originalReferences || [], // PRESERVE REFERENCES
         };
 
         chat.updatedAt = new Date().toISOString();
         saveChats();
 
-        // Re-run link previews if needed
         await processLinksInResponse(msgIndex);
-
         incrementRequestCount();
     } catch (err: any) {
         console.error("Refresh error:", err);
@@ -2165,7 +2246,10 @@ onUnmounted(() => {
 
                                             <button
                                                 @click="
-                                                    refreshResponse(item.prompt)
+                                                    refreshResponse(
+                                                        item.prompt,
+                                                        item.references,
+                                                    )
                                                 "
                                                 :disabled="isLoading"
                                                 class="flex items-center gap-1 hover:text-orange-600 dark:hover:text-orange-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-h-[32px]"
