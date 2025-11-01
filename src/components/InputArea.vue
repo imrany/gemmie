@@ -14,6 +14,7 @@ import {
     Check,
     MessageSquare,
     ArrowDown,
+    AlertCircle,
 } from "lucide-vue-next";
 import PastePreview from "@/components/PastePreview.vue";
 import type {
@@ -25,6 +26,7 @@ import type {
 } from "@/types";
 import { inject } from "vue";
 import ReferenceBadge from "./ReferenceBadge.vue";
+import { toast } from "vue-sonner";
 
 const {
     isLoading,
@@ -45,6 +47,9 @@ const {
     currentMessages: Ref<Res[]>;
     isCollapsed: Ref<boolean>;
 };
+
+// Constants
+const MAX_CONTEXT_REFERENCES = 3;
 
 // Props
 const props = defineProps<{
@@ -100,6 +105,11 @@ const textareaRef = ref<HTMLTextAreaElement | null>(null);
 const lastAtPosition = ref(-1);
 const userInputText = ref(""); // Store the actual user input
 
+// Computed: Check if context limit is reached
+const isContextLimitReached = computed(() => {
+    return props.selectedContexts.value.length >= MAX_CONTEXT_REFERENCES;
+});
+
 // Mode options
 const modeOptions: Record<string, ModeOption> = {
     "light-response": {
@@ -139,7 +149,7 @@ const availableMessages = computed(() => {
         .map((msg, index) => {
             const text = msg.prompt || msg.response || "";
             return {
-                id: `msg-${index}`,
+                id: msg.prompt || `msg-${index}`, // Use prompt as ID for consistency
                 preview: text.slice(0, 100),
                 fullText: text,
             };
@@ -173,6 +183,17 @@ function handleTextareaInput(e: Event) {
 
         // Check if we're still in the mention (no spaces after @)
         if (!textAfterAt.includes(" ") && !textAfterAt.includes("\n")) {
+            // Check context limit before showing dropdown
+            if (isContextLimitReached.value) {
+                console.log("⚠️ Context limit reached");
+                toast.warning("Context Limit Reached", {
+                    duration: 3000,
+                    description: `You can only add up to ${MAX_CONTEXT_REFERENCES} context references`,
+                });
+                closeContextDropdown();
+                return;
+            }
+
             console.log("✅ SHOWING DROPDOWN!");
             contextSearchQuery.value = textAfterAt;
             lastAtPosition.value = lastAtIndex;
@@ -228,6 +249,16 @@ function selectContext(context: ContextReference) {
     const textarea = textareaRef.value;
     if (!textarea) return;
 
+    // Check limit before adding
+    if (isContextLimitReached.value) {
+        toast.warning("Context Limit Reached", {
+            duration: 3000,
+            description: `You can only add up to ${MAX_CONTEXT_REFERENCES} context references`,
+        });
+        closeContextDropdown();
+        return;
+    }
+
     const value = textarea.value;
     const cursorPos = textarea.selectionStart;
     const textBeforeCursor = value.substring(0, cursorPos);
@@ -246,6 +277,11 @@ function selectContext(context: ContextReference) {
         ) {
             // eslint-disable-next-line vue/no-mutating-props
             props.selectedContexts.value.push(context);
+
+            toast.success("Context Added", {
+                duration: 2000,
+                description: `${props.selectedContexts.value.length}/${MAX_CONTEXT_REFERENCES} references added`,
+            });
         }
 
         // Update textarea value (remove @ mention)
@@ -432,6 +468,13 @@ watch(
 // Watch dropdown state
 watch(showContextDropdown, (newVal) => {
     console.log("🎬 Dropdown state:", newVal);
+});
+
+// Watch context limit
+watch(isContextLimitReached, (limitReached) => {
+    if (limitReached && showContextDropdown.value) {
+        closeContextDropdown();
+    }
 });
 </script>
 
@@ -666,23 +709,56 @@ watch(showContextDropdown, (newVal) => {
                         @click.stop
                     >
                         <div
-                            class="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700 flex items-center gap-2 sticky top-0 bg-white dark:bg-gray-800 z-10"
+                            class="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between sticky top-0 bg-white dark:bg-gray-800 z-10"
                         >
-                            <MessageSquare class="w-4 h-4" />
-                            Reference Previous Messages ({{
-                                filteredMessages.length
-                            }})
+                            <div class="flex items-center gap-2">
+                                <MessageSquare class="w-4 h-4" />
+                                Reference Messages ({{
+                                    filteredMessages.length
+                                }})
+                            </div>
+                            <div
+                                class="flex items-center gap-1 text-blue-600 dark:text-blue-400"
+                            >
+                                <span class="font-bold">{{
+                                    selectedContexts.value.length
+                                }}</span>
+                                <span>/</span>
+                                <span>{{ MAX_CONTEXT_REFERENCES }}</span>
+                            </div>
                         </div>
+
+                        <!-- Context Limit Warning -->
+                        <div
+                            v-if="isContextLimitReached"
+                            class="px-3 py-2 bg-orange-50 dark:bg-orange-900/20 border-b border-orange-200 dark:border-orange-800 flex items-center gap-2"
+                        >
+                            <AlertCircle
+                                class="w-4 h-4 text-orange-600 dark:text-orange-400 flex-shrink-0"
+                            />
+                            <p
+                                class="text-xs text-orange-700 dark:text-orange-300"
+                            >
+                                Maximum {{ MAX_CONTEXT_REFERENCES }} references
+                                reached
+                            </p>
+                        </div>
+
                         <button
                             v-for="(message, index) in filteredMessages"
                             :key="message.preview"
                             type="button"
                             @click="selectContext(message)"
+                            :disabled="isContextLimitReached"
                             :class="[
-                                'w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors',
-                                activeContextIndex === index
+                                'w-full px-3 py-2 text-left text-sm transition-colors',
+                                activeContextIndex === index &&
+                                !isContextLimitReached
                                     ? 'bg-blue-50 dark:bg-blue-900/30'
                                     : '',
+                                isContextLimitReached
+                                    ? 'opacity-50 cursor-not-allowed'
+                                    : 'hover:bg-gray-100 dark:hover:bg-gray-700',
                             ]"
                         >
                             <div class="flex items-start gap-2">
@@ -759,7 +835,7 @@ watch(showContextDropdown, (newVal) => {
                             ]"
                             :placeholder="
                                 currentChat && currentChat.messages?.length > 0
-                                    ? `Use @ to include messages as context ${inputPlaceholderText.split('...')[1].trim()}`
+                                    ? `Use @ to include messages as context • ${inputPlaceholderText.split('...')[1]?.trim() || ''}`
                                     : inputPlaceholderText
                             "
                         />
