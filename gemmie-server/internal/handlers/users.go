@@ -39,8 +39,6 @@ type RegisterRequest struct {
 
 // SyncRequest represents data sync request
 type SyncRequest struct {
-	Chats             string             `json:"chats"`
-	LinkPreviews      string             `json:"link_previews"`
 	Preferences       string             `json:"preferences,omitempty"`
 	WorkFunction      string             `json:"work_function,omitempty"`
 	Theme             string             `json:"theme,omitempty"`
@@ -59,6 +57,7 @@ type SyncRequest struct {
 	EmailVerified     bool               `json:"email_verified"`               // Whether email is verified
 	EmailSubscribed   bool               `json:"email_subscribed"`             // Whether user subscribed to promotional emails
 	RequestCount      store.RequestCount `json:"request_count,omitempty"`
+	Chats             []store.Chat       `json:"chats,omitempty"`
 }
 
 // Update AuthResponse struct
@@ -67,8 +66,7 @@ type AuthResponse struct {
 	Username        string             `json:"username"`
 	Email           string             `json:"email"`
 	CreatedAt       time.Time          `json:"created_at"`
-	Chats           string             `json:"chats,omitempty"`
-	LinkPreviews    string             `json:"link_previews,omitempty"`
+	Chats           []store.Chat       `json:"chats,omitempty"`
 	Preferences     string             `json:"preferences,omitempty"`
 	WorkFunction    string             `json:"work_function,omitempty"`
 	Theme           string             `json:"theme,omitempty"`
@@ -262,25 +260,6 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create empty user data record
-	userData := store.UserData{
-		UserID:       userID,
-		Chats:        "[]",
-		LinkPreviews: "{}",
-		UpdatedAt:    time.Now(),
-	}
-
-	// Save user data to database
-	if err := store.CreateUserData(userData); err != nil {
-		slog.Error("Failed to create user data", "error", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(store.Response{
-			Success: false,
-			Message: "Failed to create user data",
-		})
-		return
-	}
-
 	// Return response
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(store.Response{
@@ -291,8 +270,6 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 			Username:        user.Username,
 			Email:           user.Email,
 			CreatedAt:       user.CreatedAt,
-			Chats:           userData.Chats,
-			LinkPreviews:    userData.LinkPreviews,
 			Preferences:     user.Preferences,
 			WorkFunction:    user.WorkFunction,
 			Theme:           user.Theme,
@@ -371,14 +348,14 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	//  Get user data from database
-	userData, err := store.GetUserData(user.ID)
+	//  Get user chats from database
+	userChats, err := store.GetChatsByUserId(user.ID)
 	if err != nil {
-		slog.Error("Failed to get user data", "user_id", user.ID, "error", err)
+		slog.Error("Failed to get user chats", "user_id", user.ID, "error", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
-			Message: "Failed to retrieve user data",
+			Message: "Failed to retrieve user chats",
 		})
 		return
 	}
@@ -403,20 +380,6 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Create user data if doesn't exist
-	if userData == nil {
-		userData = &store.UserData{
-			UserID:       user.ID,
-			Chats:        "[]",
-			LinkPreviews: "{}",
-			UpdatedAt:    time.Now(),
-		}
-
-		if err := store.CreateUserData(*userData); err != nil {
-			slog.Error("Failed to create user data", "user_id", user.ID, "error", err)
-		}
-	}
-
 	// Return response
 	json.NewEncoder(w).Encode(store.Response{
 		Success: true,
@@ -426,8 +389,7 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 			Username:        user.Username,
 			Email:           user.Email,
 			CreatedAt:       user.CreatedAt,
-			Chats:           userData.Chats,
-			LinkPreviews:    userData.LinkPreviews,
+			Chats:           userChats,
 			Preferences:     user.Preferences,
 			WorkFunction:    user.WorkFunction,
 			Theme:           user.Theme,
@@ -485,39 +447,20 @@ func SyncHandler(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case "GET":
-		// Get user data from database
-		userData, err := store.GetUserData(userID)
-		if err != nil {
-			slog.Error("Failed to get user data", "error", err)
-			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(store.Response{
-				Success: false,
-				Message: "Failed to retrieve data",
-			})
-			return
-		}
-
-		if userData == nil {
-			w.WriteHeader(http.StatusNotFound)
-			json.NewEncoder(w).Encode(store.Response{
-				Success: false,
-				Message: "User data not found",
-			})
-			return
-		}
-
 		userTranx, err := store.GetUserTransactions(user.PhoneNumber)
 		if err != nil {
 			slog.Error("Failed to get user transactions", "user_id", user.ID, "error", err)
+		}
+
+		userChats, err := store.GetChatsByUserId(user.ID)
+		if err != nil {
+			slog.Error("Failed to get user chats", "user_id", user.ID, "error", err)
 		}
 
 		json.NewEncoder(w).Encode(store.Response{
 			Success: true,
 			Message: "Data retrieved successfully",
 			Data: map[string]any{
-				"chats":             userData.Chats,
-				"link_previews":     userData.LinkPreviews,
-				"updated_at":        userData.UpdatedAt,
 				"preferences":       user.Preferences,
 				"work_function":     user.WorkFunction,
 				"theme":             user.Theme,
@@ -536,6 +479,7 @@ func SyncHandler(w http.ResponseWriter, r *http.Request) {
 				"email_subscribed":  user.EmailSubscribed,
 				"request_count":     user.RequestCount,
 				"user_transactions": userTranx,
+				"chats":             userChats,
 			},
 		})
 
@@ -567,14 +511,48 @@ func SyncHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Update user data in database
-		userData := store.UserData{
-			UserID:       userID,
-			Chats:        req.Chats,
-			LinkPreviews: req.LinkPreviews,
-			UpdatedAt:    time.Now(),
+		user.Preferences = req.Preferences
+		user.WorkFunction = req.WorkFunction
+		user.Theme = req.Theme
+		user.SyncEnabled = req.SyncEnabled
+		user.Username = req.Username
+		user.Plan = req.Plan
+		user.PlanName = req.PlanName
+		user.ResponseMode = req.ResponseMode
+		user.Amount = req.Amount
+		user.Duration = req.Duration
+		user.PhoneNumber = req.PhoneNumber
+		user.ExpiryTimestamp = req.ExpiryTimestamp
+		user.ExpireDuration = req.ExpireDuration
+		user.Price = req.Price
+		user.EmailVerified = req.EmailVerified
+		user.EmailSubscribed = req.EmailSubscribed
+		user.RequestCount = req.RequestCount
+
+		// Handle chats synchronization
+		if len(req.Chats) > 0 {
+			// Delete existing chats for the user
+			if err := store.DeleteAllChatsByUserID(userID); err != nil {
+				slog.Error("Failed to delete existing chats", "user_id", userID, "error", err)
+				w.WriteHeader(http.StatusInternalServerError)
+				json.NewEncoder(w).Encode(store.Response{
+					Success: false,
+					Message: "Failed to sync chats",
+				})
+				return
+			}
+
+			// Create new chats
+			for _, chat := range req.Chats {
+				chat.UserId = userID // Ensure the chat belongs to the current user
+				if err := store.CreateChat(chat); err != nil {
+					slog.Error("Failed to create chat", "chat_id", chat.ID, "error", err)
+					// Continue with other chats even if one fails
+				}
+			}
 		}
 
-		if err := store.UpdateUserData(userData); err != nil {
+		if err := store.UpdateUser(*user); err != nil {
 			slog.Error("Failed to update user data", "error", err)
 			w.WriteHeader(http.StatusInternalServerError)
 			json.NewEncoder(w).Encode(store.Response{
@@ -655,7 +633,7 @@ func SyncHandler(w http.ResponseWriter, r *http.Request) {
 			Success: true,
 			Message: "Data synchronized successfully",
 			Data: map[string]interface{}{
-				"updated_at": userData.UpdatedAt,
+				"updated_at": user.UpdatedAt,
 			},
 		})
 

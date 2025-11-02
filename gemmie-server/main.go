@@ -232,6 +232,18 @@ func runServer() {
 	r.HandleFunc("/api/delete_account", v1.DeleteAccountHandler).Methods(http.MethodDelete)
 	r.HandleFunc("/api/profile", v1.ProfileHandler)
 
+	// Chat routes
+	r.HandleFunc("/api/chats", v1.CreateChatHandler).Methods(http.MethodPost)
+	r.HandleFunc("/api/chats", v1.GetChatsHandler).Methods(http.MethodGet)
+	r.HandleFunc("/api/chats/{id}", v1.GetChatHandler).Methods(http.MethodGet)
+	r.HandleFunc("/api/chats/{id}", v1.UpdateChatHandler).Methods(http.MethodPut)
+	r.HandleFunc("/api/chats/{id}", v1.DeleteChatHandler).Methods(http.MethodDelete)
+
+	// Message routes
+	r.HandleFunc("/api/chats/{id}/messages", v1.CreateMessageHandler).Methods(http.MethodPost)
+	r.HandleFunc("/api/chats/{id}/messages", v1.GetMessagesHandler).Methods(http.MethodGet)
+	r.HandleFunc("/api/messages/{id}", v1.DeleteMessageHandler).Methods(http.MethodDelete)
+
 	// Errors Handler - stores user errors for later support and fix
 	r.HandleFunc("/api/errors", v1.ErrorsHandler).Methods(http.MethodPost, http.MethodGet, http.MethodDelete)
 	r.HandleFunc("/api/errors/:id", v1.ErrorHandler).Methods(http.MethodDelete, http.MethodGet, http.MethodPut)

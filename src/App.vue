@@ -301,42 +301,21 @@ const { apiCall, unsecureApiCall, checkInternetConnection } = useApiCall({
 });
 
 const {
-    expanded,
-    activeChatMenu,
-    renameChat,
-    clearAllChats,
-    toggleChatMenu,
-    draftSaveTimeout,
-    mergeChats,
-    deleteChat,
-    saveChats,
-    autoGrow,
-    saveChatDrafts,
-    loadChatDrafts,
-    clearCurrentDraft,
-    autoSaveDraft,
-    switchToChat,
-    createNewChat,
-
-    copyResponse,
-    shareResponse,
     loadChats,
-    processLinksInUserPrompt,
-    processLinksInResponse,
+    createNewChat,
+    sendMessage,
+    deleteChat,
+    renameChat,
+    manualSync,
+    processSyncQueue,
+    syncQueue,
+    isOnline,
 } = useChat({
-    copiedIndex,
     chats,
     currentChatId,
-    updateExpandedArray,
-    linkPreviewCache,
-    fetchLinkPreview,
-    chatDrafts,
-    pastePreviews,
-    parsedUserDetails,
-    performSmartSync,
     isAuthenticated,
+    parsedUserDetails,
     syncStatus,
-    saveLinkPreviewCache,
     isLoading,
     confirmDialog,
 });
@@ -1548,60 +1527,6 @@ function loadLocalData() {
             action: `loadLocalData`,
             message: "Failed to load local data: " + error.message,
             description: `Some data may not be available`,
-            status: getErrorStatus(error),
-            userId: parsedUserDetails.value?.userId || "unknown",
-            severity: "critical",
-        } as PlatformError);
-    }
-}
-
-async function manualSync() {
-    if (!isUserOnline.value) {
-        const isActuallyOnline = await checkInternetConnection();
-        if (!isActuallyOnline) {
-            toast.error("Cannot sync while offline", {
-                duration: 4000,
-                description: "Please check your internet connection",
-            });
-            return;
-        }
-    }
-
-    if (!parsedUserDetails.value?.userId) {
-        toast.warning("Please log in to sync data", {
-            duration: 3000,
-            description: "Authentication required for syncing",
-        });
-        return;
-    }
-
-    if (parsedUserDetails.value.syncEnabled === false) {
-        toast.info("Sync is disabled", {
-            duration: 3000,
-            description: "Enable sync in settings to sync your data",
-        });
-        return;
-    }
-
-    if (syncStatus.value.syncing) {
-        toast.info("Sync already in progress", {
-            duration: 2000,
-            description: "Please wait for current sync to complete",
-        });
-        return;
-    }
-
-    try {
-        console.log("Starting manual smart sync...");
-        showSyncIndicator("Starting manual sync...", 10);
-
-        await performSmartSync();
-        console.log("Manual smart sync completed successfully");
-    } catch (error: any) {
-        reportError({
-            action: `manualSync`,
-            message: "Manual sync failed: " + error.message,
-            description: `Please check your internet connection and try again.`,
             status: getErrorStatus(error),
             userId: parsedUserDetails.value?.userId || "unknown",
             severity: "critical",
