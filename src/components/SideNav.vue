@@ -23,9 +23,6 @@ import {
     AlignLeft,
     AlignJustify,
     X,
-    CheckCircle,
-    CloudUpload,
-    LoaderCircle,
 } from "lucide-vue-next";
 import {
     Tooltip,
@@ -40,9 +37,7 @@ const {
     toggleChatMenu,
     showProfileMenu,
     handleClickOutside,
-    isAuthenticated,
     planStatus,
-    syncStatus,
     hideSidebar,
     isSidebarHidden,
     screenWidth,
@@ -53,23 +48,11 @@ const {
     toggleChatMenu: (chatId: string, evenet: Event) => void;
     showProfileMenu: Ref<boolean>;
     handleClickOutside: () => void;
-    isAuthenticated: Ref<boolean>;
     planStatus: Ref<{
         status: string;
         timeLeft: string;
         expiryDate: string;
         isExpired: boolean;
-    }>;
-    syncStatus: Ref<{
-        lastSync: Date | null;
-        syncing: boolean;
-        hasUnsyncedChanges: boolean;
-        lastError: string | null;
-        retryCount: number;
-        maxRetries: number;
-        showSyncIndicator: boolean;
-        syncMessage: string;
-        syncProgress: number;
     }>;
     hideSidebar: () => void;
     isSidebarHidden: Ref<boolean>;
@@ -281,36 +264,6 @@ const navLinks: {
                 </p>
 
                 <div class="flex ml-auto gap-2 items-center justify-center">
-                    <div
-                        v-if="isAuthenticated && screenWidth < 720"
-                        class="relative"
-                    >
-                        <div
-                            v-if="syncStatus.syncing"
-                            class="flex items-center gap-2 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 px-3 py-1.5 rounded-full text-xs border border-blue-200 dark:border-blue-800 shadow-sm animate-pulse"
-                        >
-                            <LoaderCircle class="w-4 h-4 animate-spin" />
-                            <span>Syncing...</span>
-                        </div>
-
-                        <div
-                            v-else-if="syncStatus.hasUnsyncedChanges"
-                            class="flex items-center gap-2 bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-400 px-3 py-1.5 rounded-full text-xs border border-orange-200 dark:border-orange-800 shadow-sm cursor-pointer hover:bg-orange-100 dark:hover:bg-orange-900/30 transition"
-                            @click="props.functions.manualSync"
-                        >
-                            <CloudUpload class="w-4 h-4" />
-                            <span>Sync pending</span>
-                        </div>
-
-                        <div
-                            v-else-if="syncStatus.lastSync"
-                            class="flex items-center gap-2 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 px-3 py-1.5 rounded-full text-xs border border-green-200 dark:border-green-800 shadow-sm"
-                        >
-                            <CheckCircle class="w-4 h-4" />
-                            <span>Synced</span>
-                        </div>
-                    </div>
-
                     <TooltipProvider>
                         <Tooltip>
                             <TooltipTrigger as-child>
@@ -396,58 +349,6 @@ const navLinks: {
                             :avoid-collisions="true"
                         >
                             <p>Workplace</p>
-                        </TooltipContent>
-                    </Tooltip>
-                </TooltipProvider>
-
-                <!-- Sync button -->
-                <TooltipProvider>
-                    <Tooltip>
-                        <TooltipTrigger as-child>
-                            <button
-                                @click="props.functions.manualSync"
-                                :disabled="
-                                    syncStatus.syncing ||
-                                    !props.data.parsedUserDetails.syncEnabled
-                                "
-                                class="w-full font-normal flex items-center gap-2 h-[40px] hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg px-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                            >
-                                <LoaderCircle
-                                    :class="[
-                                        syncStatus.syncing
-                                            ? 'animate-spin'
-                                            : '',
-                                        'text-gray-500 dark:text-gray-400 w-5 h-5',
-                                    ]"
-                                />
-
-                                <span
-                                    v-if="showFullSidebar"
-                                    class="dark:text-gray-200"
-                                >
-                                    {{
-                                        syncStatus.syncing
-                                            ? "Syncing..."
-                                            : "Sync Data"
-                                    }}
-                                </span>
-                                <div
-                                    v-if="
-                                        syncStatus.hasUnsyncedChanges &&
-                                        props.data.parsedUserDetails
-                                            .syncEnabled &&
-                                        showFullSidebar
-                                    "
-                                    class="ml-auto w-2 h-2 bg-orange-500 dark:bg-orange-400 rounded-full"
-                                ></div>
-                            </button>
-                        </TooltipTrigger>
-                        <TooltipContent
-                            v-if="!showFullSidebar"
-                            side="right"
-                            :avoid-collisions="true"
-                        >
-                            <p>Sync Data</p>
                         </TooltipContent>
                     </Tooltip>
                 </TooltipProvider>

@@ -13,13 +13,13 @@ func CreateChat(chat Chat) error {
 		chat.LastMessageAt = time.Now()
 	}
 	query := `
-		INSERT INTO chats (id, user_id, title, created_at, updated_at, is_archived, message_count, last_message_at, is_private)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		INSERT INTO chats (id, user_id, title, created_at, updated_at, is_archived, last_message_at, is_private)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 	`
 
 	_, err := DB.ExecContext(ctx, query,
 		chat.ID, chat.UserId, chat.Title, chat.CreatedAt,
-		chat.UpdatedAt, chat.IsArchived, chat.MessageCount,
+		chat.UpdatedAt, chat.IsArchived,
 		chat.LastMessageAt, chat.IsPrivate,
 	)
 
@@ -30,14 +30,14 @@ func GetChatById(ID string) (*Chat, error) {
 	ctx := context.Background()
 
 	query := `
-		SELECT id, user_id, title, created_at, updated_at, is_archived, message_count, last_message_at, is_private
+		SELECT id, user_id, title, created_at, updated_at, is_archived, last_message_at, is_private
 		FROM chats WHERE id = $1
 	`
 
 	chat := &Chat{}
 	err := DB.QueryRowContext(ctx, query, ID).Scan(
 		&chat.ID, &chat.UserId, &chat.Title, &chat.CreatedAt,
-		&chat.UpdatedAt, &chat.IsArchived, &chat.MessageCount,
+		&chat.UpdatedAt, &chat.IsArchived,
 		&chat.LastMessageAt, &chat.IsPrivate,
 	)
 
@@ -55,7 +55,7 @@ func GetChatById(ID string) (*Chat, error) {
 		return nil, err
 	}
 	chat.Messages = messages
-
+	chat.MessageCount = len(chat.Messages)
 	return chat, nil
 }
 
@@ -64,7 +64,7 @@ func GetChatsByUserId(userId string) ([]Chat, error) {
 
 	query := `
 			SELECT id, user_id, title, created_at, updated_at,
-			is_archived, message_count, last_message_at, is_private
+			is_archived, last_message_at, is_private
 			FROM chats
 			WHERE user_id = $1
 			ORDER BY updated_at DESC
@@ -82,12 +82,25 @@ func GetChatsByUserId(userId string) ([]Chat, error) {
 		var chat Chat
 		err := rows.Scan(
 			&chat.ID, &chat.UserId, &chat.Title, &chat.CreatedAt,
-			&chat.UpdatedAt, &chat.IsArchived, &chat.MessageCount,
+			&chat.UpdatedAt, &chat.IsArchived,
 			&chat.LastMessageAt, &chat.IsPrivate,
 		)
 		if err != nil {
 			return nil, err
 		}
+
+		// Fetch messages for the chat
+		messages, err := GetMessagesByChatId(chat.ID)
+		if err != nil {
+			return nil, err
+		}
+
+		if messages == nil {
+			chat.Messages = []Message{}
+		} else {
+			chat.Messages = messages
+		}
+		chat.MessageCount = len(chat.Messages)
 
 		chats = append(chats, chat)
 	}
@@ -106,12 +119,12 @@ func UpdateChat(chat Chat) error {
 	query := `
 	UPDATE chats SET
 		user_id = $2, title = $3, created_at = $4,
-		updated_at = $5, is_archived = $6, message_count = $7, last_message_at = $8, is_private = $9
- 		WHERE id = $1
+		updated_at = $5, is_archived = $6, last_message_at = $7, is_private = $8
+			WHERE id = $1
 	`
 	_, err := DB.ExecContext(ctx, query,
 		&chat.ID, &chat.UserId, &chat.Title, &chat.CreatedAt,
-		&chat.UpdatedAt, &chat.IsArchived, &chat.MessageCount,
+		&chat.UpdatedAt, &chat.IsArchived,
 		&chat.LastMessageAt, &chat.IsPrivate,
 	)
 

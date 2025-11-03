@@ -32,27 +32,13 @@ export function useChat({
   chatDrafts,
   pastePreviews,
   parsedUserDetails,
-  performSmartSync,
   isAuthenticated,
-  syncStatus,
   saveLinkPreviewCache,
   isLoading,
   confirmDialog,
 }: {
-  syncStatus: Ref<{
-    lastSync: Date | null;
-    syncing: boolean;
-    hasUnsyncedChanges: boolean;
-    lastError: string | null;
-    retryCount: number;
-    maxRetries: number;
-    showSyncIndicator: boolean;
-    syncMessage: string;
-    syncProgress: number;
-  }>;
   confirmDialog: Ref<ConfirmDialogOptions>;
   isAuthenticated: Ref<boolean>;
-  performSmartSync: () => void;
   parsedUserDetails: Ref<UserDetails>;
   copiedIndex: Ref<number | null>;
   chats: Ref<Chat[]>;
@@ -290,68 +276,74 @@ export function useChat({
         confirmText: "Delete",
         onConfirm: async () => {
           try {
+            let serverDeleteSuccess = true;
+
             if (isAuthenticated.value) {
               try {
                 await apiCall(`/chats/${chatId}`, { method: "DELETE" });
               } catch (apiError: any) {
                 console.error("Failed to delete chat from server:", apiError);
-                toast.warning("Chat deleted locally only", {
-                  description: "Server sync failed. Will retry later.",
+                toast.warning("Chat not fully deleted", {
+                  description:
+                    "Server sync failed. Chat will remain until server deletion succeeds.",
                 });
+                serverDeleteSuccess = false;
               }
             }
 
-            if (chatToDelete.messages?.length) {
-              chatToDelete.messages.forEach((message) => {
-                try {
-                  const promptUrls = extractUrls(message.prompt || "");
-                  const responseUrls = extractUrls(message.response || "");
-                  const urls = [...new Set([...promptUrls, ...responseUrls])];
+            if (serverDeleteSuccess) {
+              if (chatToDelete.messages?.length) {
+                chatToDelete.messages.forEach((message) => {
+                  try {
+                    const promptUrls = extractUrls(message.prompt || "");
+                    const responseUrls = extractUrls(message.response || "");
+                    const urls = [...new Set([...promptUrls, ...responseUrls])];
 
-                  urls.forEach((url) => {
-                    linkPreviewCache.value.delete(url);
-                  });
-                } catch (error: any) {
-                  reportError({
-                    createdAt: new Date().toISOString(),
-                    id: generateErrorId(),
-                    action: "deleteChat",
-                    message:
-                      "Error extracting URLs for cache cleanup: " +
-                      error.message,
-                    status: getErrorStatus(error),
-                    userId: parsedUserDetails.value?.userId || "unknown",
-                    context: createErrorContext({
-                      chatId,
-                      errorName: error.name,
-                    }),
-                    severity: "low",
-                  } as PlatformError);
+                    urls.forEach((url) => {
+                      linkPreviewCache.value.delete(url);
+                    });
+                  } catch (error: any) {
+                    reportError({
+                      createdAt: new Date().toISOString(),
+                      id: generateErrorId(),
+                      action: "deleteChat",
+                      message:
+                        "Error extracting URLs for cache cleanup: " +
+                        error.message,
+                      status: getErrorStatus(error),
+                      userId: parsedUserDetails.value?.userId || "unknown",
+                      context: createErrorContext({
+                        chatId,
+                        errorName: error.name,
+                      }),
+                      severity: "low",
+                    } as PlatformError);
+                  }
+                });
+                saveLinkPreviewCache();
+              }
+
+              const isDeletingCurrentChat = currentChatId.value === chatId;
+
+              chats.value.splice(chatIndex, 1);
+
+              if (isDeletingCurrentChat) {
+                if (chats.value.length > 0) {
+                  currentChatId.value = chats.value[0].id;
+                } else {
+                  currentChatId.value = "";
                 }
-              });
-              saveLinkPreviewCache();
-            }
-
-            const isDeletingCurrentChat = currentChatId.value === chatId;
-
-            chats.value.splice(chatIndex, 1);
-
-            if (isDeletingCurrentChat) {
-              if (chats.value.length > 0) {
-                currentChatId.value = chats.value[0].id;
-              } else {
-                currentChatId.value = "";
+                updateExpandedArray();
               }
-              updateExpandedArray();
+
+              clearCurrentDraft();
+              saveChats();
+
+              toast.success("Chat deleted", {
+                duration: 3000,
+                description: `"${chatTitle}" has been removed`,
+              });
             }
-
-            clearCurrentDraft();
-            saveChats();
-
-            toast.success("Chat deleted", {
-              duration: 3000,
-              description: `"${chatTitle}" has been removed`,
-            });
           } catch (error: any) {
             reportError({
               action: "onconfirm delete chat",
@@ -392,23 +384,23 @@ export function useChat({
 
   async function loadChats() {
     try {
-      const stored = localStorage.getItem("chats");
-      if (stored) {
-        const parsedChats = JSON.parse(stored);
-        if (Array.isArray(parsedChats)) {
-          chats.value = parsedChats;
-        }
-      }
-
       if (isAuthenticated.value) {
         try {
           const response = await apiCall<Chat[]>("/chats");
           if (response.data) {
-            chats.value = mergeChats(response.data, chats.value);
+            chats.value = response.data;
             saveChats();
           }
         } catch (apiError) {
           console.error("Failed to load chats from server:", apiError);
+        }
+      } else {
+        const stored = localStorage.getItem("chats");
+        if (stored) {
+          const parsedChats = JSON.parse(stored);
+          if (Array.isArray(parsedChats)) {
+            chats.value = parsedChats;
+          }
         }
       }
 
@@ -676,10 +668,6 @@ export function useChat({
       }
 
       localStorage.setItem("chats", chatsJson);
-
-      if (isAuthenticated.value && parsedUserDetails.value?.syncEnabled) {
-        syncStatus.value.hasUnsyncedChanges = true;
-      }
     } catch (error: any) {
       reportError({
         action: "saveChats",
@@ -724,11 +712,24 @@ export function useChat({
             newChat.id = response.data.id;
             newChat.created_at = response.data.created_at;
             newChat.updated_at = response.data.updated_at;
+
+            chats.value.unshift(newChat);
+            currentChatId.value = newChat.id;
+            updateExpandedArray();
+            saveChats();
+          } else {
+            console.error("Failed to create chat on server: Invalid response");
+            toast.warning("Chat created locally only, server sync failed");
           }
         } catch (apiError) {
           console.error("Failed to create chat on server:", apiError);
-          toast.warning("Chat created locally only");
+          toast.warning("Chat created locally only, server sync failed");
         }
+      } else {
+        chats.value.unshift(newChat);
+        currentChatId.value = newChat.id;
+        updateExpandedArray();
+        saveChats();
       }
 
       if (currentChatId.value) {
@@ -746,12 +747,6 @@ export function useChat({
 
       chatDrafts.value.set(newChat.id, "");
       pastePreviews.value.delete(newChat.id);
-
-      chats.value.unshift(newChat);
-      currentChatId.value = newChat.id;
-
-      updateExpandedArray();
-      saveChats();
 
       nextTick(() => {
         const textarea = document.getElementById(
@@ -785,7 +780,12 @@ export function useChat({
     const targetChat = chats.value.find(
       (chat) => chat.id === currentChatId.value,
     );
-    if (!targetChat || !targetChat.messages || !targetChat.messages[index])
+    if (
+      !targetChat ||
+      !targetChat.messages ||
+      !targetChat.messages[index] ||
+      !targetChat.messages[index].response
+    )
       return;
 
     const message = targetChat.messages[index];
@@ -844,19 +844,26 @@ export function useChat({
 
       if (isAuthenticated.value) {
         try {
-          await apiCall(`/chats/${chatId}`, {
+          const response = await apiCall(`/chats/${chatId}`, {
             method: "PUT",
             body: JSON.stringify({ title: trimmedTitle } as UpdateChatRequest),
           });
+          if (response.success) {
+            chat.title = trimmedTitle;
+            chat.updated_at = new Date().toISOString();
+            saveChats();
+          } else {
+            console.error("Failed to rename chat on server:", response);
+          }
         } catch (apiError) {
           console.error("Failed to rename chat on server:", apiError);
-          toast.warning("Chat renamed locally only");
+          toast.warning("Chat rename failed");
         }
+      } else {
+        chat.title = trimmedTitle;
+        chat.updated_at = new Date().toISOString();
+        saveChats();
       }
-
-      chat.title = trimmedTitle;
-      chat.updated_at = new Date().toISOString();
-      saveChats();
     } catch (error: any) {
       reportError({
         action: "renameChat",
@@ -894,13 +901,24 @@ export function useChat({
         confirmText: "Delete All",
         onConfirm: async () => {
           try {
+            let allDeletesSuccessful = true;
             if (isAuthenticated.value) {
               const deletePromises = chats.value.map((chat) =>
                 apiCall(`/chats/${chat.id}`, { method: "DELETE" }).catch(
-                  (err) => console.error("Failed to delete chat:", err),
+                  (err) => {
+                    console.error("Failed to delete chat:", err);
+                    allDeletesSuccessful = false;
+                  },
                 ),
               );
               await Promise.allSettled(deletePromises);
+
+              if (!allDeletesSuccessful) {
+                toast.warning(
+                  "Some chats were not deleted from the server. Please try again.",
+                );
+                return;
+              }
             }
 
             chats.value = [];
@@ -930,13 +948,6 @@ export function useChat({
             });
 
             saveChats();
-
-            if (isAuthenticated.value && parsedUserDetails.value?.syncEnabled) {
-              syncStatus.value.hasUnsyncedChanges = true;
-              setTimeout(() => {
-                performSmartSync();
-              }, 1000);
-            }
 
             toast.success("All chats cleared", {
               duration: 5000,

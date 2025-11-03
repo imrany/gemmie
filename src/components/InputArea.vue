@@ -19,10 +19,10 @@ import {
 import PastePreview from "@/components/PastePreview.vue";
 import type {
     UserDetails,
-    Res,
     ContextReference,
     ModeOption,
-    CurrentChat,
+    Chat,
+    Message,
 } from "@/types";
 import { inject } from "vue";
 import ReferenceBadge from "./ReferenceBadge.vue";
@@ -38,13 +38,13 @@ const {
     isCollapsed,
     currentChat,
 } = inject("globalState") as {
-    currentChat: Ref<CurrentChat>;
+    currentChat: Ref<Chat>;
     isLoading: Ref<boolean>;
     parsedUserDetails: Ref<UserDetails>;
     requestsRemaining: Ref<boolean>;
     screenWidth: Ref<number>;
     FREE_REQUEST_LIMIT: Ref<number>;
-    currentMessages: Ref<Res[]>;
+    currentMessages: Ref<Message[]>;
     isCollapsed: Ref<boolean>;
 };
 
@@ -89,6 +89,8 @@ const emit = defineEmits<{
     selectInputMode: [mode: "web-search" | "deep-search" | "light-response"];
     navigateToUpgrade: [];
     scrollToBottom: [];
+    removeContext: [index: number];
+    clearAllContexts: [];
 }>();
 
 // Context References State

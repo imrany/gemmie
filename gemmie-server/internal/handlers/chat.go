@@ -81,6 +81,7 @@ func CreateChatHandler(w http.ResponseWriter, r *http.Request) {
 		UpdatedAt:     time.Now(),
 		IsArchived:    false,
 		MessageCount:  0,
+		Messages:      []store.Message{},
 		LastMessageAt: time.Now(),
 	}
 
@@ -424,6 +425,7 @@ func CreateMessageHandler(w http.ResponseWriter, r *http.Request) {
 	// send request to ai wrapper
 	var req store.Message
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		slog.Error("Invalid request body", "error", err)
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
@@ -433,11 +435,11 @@ func CreateMessageHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate required fields
-	if req.ChatId == "" || req.Prompt == "" {
+	if req.Prompt == "" {
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
-			Message: "Chat ID and prompt are required",
+			Message: "Prompt is required",
 		})
 		return
 	}

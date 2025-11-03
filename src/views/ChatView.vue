@@ -131,6 +131,7 @@ const {
     shouldShowUpgradePrompt,
     isRequestLimitExceeded,
     parsedUserDetails,
+    onMessageAdded,
 
     copyResponse,
     shareResponse,
@@ -143,7 +144,7 @@ const {
     loadChats: () => void;
     processLinksInUserPrompt: (index: number) => Promise<void>;
     processLinksInResponse: (index: number) => Promise<void>;
-
+    onMessageAdded: (message: Message) => void;
     copiedIndex: Ref<number | null>;
     shouldHaveLimit: boolean;
     chatDrafts: Ref<Map<string, string>>;
@@ -412,6 +413,10 @@ function isJustLinks(prompt: string): boolean {
     return promptWithoutUrls.split(/\s+/).filter(Boolean).length <= 3;
 }
 
+function clearContextReferences() {
+    selectedContexts.value = [];
+}
+
 // handleSubmit function
 async function handleSubmit(
     e?: any,
@@ -420,7 +425,7 @@ async function handleSubmit(
 ) {
     e?.preventDefault?.();
 
-    // ✅ FIX: Use contextReferences parameter OR fall back to selectedContexts state
+    // Create context references from selected contexts
     const effectiveContextReferences =
         selectedContexts.value.length > 0 ? selectedContexts.value : undefined;
 
@@ -502,7 +507,7 @@ async function handleSubmit(
         );
     }
 
-    // Determine response mode (use forceMode for retries, otherwise use current setting)
+    // Determine response mode
     let responseMode =
         forceMode || parsedUserDetails?.value.responseMode || "light-response";
 
@@ -525,7 +530,7 @@ async function handleSubmit(
         if (isSearchMode) {
             // For search modes, integrate context differently
             effectiveContextReferences.forEach((ctx) => {
-                contextInfo += `${ctx.fullText}`;
+                contextInfo += `${ctx.fullText} `;
             });
             fabricatedPrompt = `${promptValue} ${contextInfo}`;
             console.log(
@@ -547,7 +552,6 @@ async function handleSubmit(
             `Added ${effectiveContextReferences.length} explicit context reference(s) for ${responseMode} mode`,
         );
     } else if (
-        // Only add implicit context if no explicit references and prompt is short
         !hasPastePreview &&
         isPromptTooShort(promptValue) &&
         currentMessages.value.length > 0
@@ -575,7 +579,7 @@ async function handleSubmit(
         created_at: new Date().toISOString(),
         prompt: promptValue,
         response: responseMode ? `${responseMode}...` : "...",
-        references: effectiveContextReferences?.map((ref) => ref.preview) || [],
+        references: effectiveContextReferences?.map((ref) => ref.preview) || [], // Store preview texts
         model: "gemini-pro",
     };
 
@@ -587,6 +591,7 @@ async function handleSubmit(
         const targetChat = chats.value.find(
             (chat) => chat.id === submissionChatId,
         );
+
         if (targetChat) {
             targetChat.messages.push(tempResp);
             tempMessageIndex = targetChat.messages.length - 1;
@@ -605,7 +610,6 @@ async function handleSubmit(
         let parseRes: any;
 
         if (isSearchMode) {
-            // Enhanced search request
             const searchParams = new URLSearchParams({
                 query: encodeURIComponent(fabricatedPrompt),
                 mode:
@@ -626,7 +630,6 @@ async function handleSubmit(
                 },
             });
         } else {
-            // Standard light-response mode
             console.log("Making light-response request");
 
             response = await fetch(WRAPPER_URL, {
@@ -685,56 +688,60 @@ async function handleSubmit(
                 prompt: promptValue,
                 response: finalResponse,
                 references:
-                    effectiveContextReferences?.map((ref) => ref.preview) || [],
+                    effectiveContextReferences?.map((ref) => ref.preview) || [], // Preserve references
                 model: "gemini-pro",
             };
             updatedTargetChat.messages[tempMessageIndex] = updatedMessage;
             updatedTargetChat.last_message_at = new Date().toISOString();
 
-            // Process links in the response
             await processLinksInResponse(tempMessageIndex);
-        }
 
-        // ✅ SUCCESS - Increment request count
-        incrementRequestCount();
+            // SUCCESS - Increment request count
+            incrementRequestCount();
 
-        // Clear input field
-        if (!retryPrompt && e?.target?.prompt) {
-            e.target.prompt.value = "";
-            e.target.prompt.style.height = "auto";
-        }
+            // Clear input field
+            if (!retryPrompt && e?.target?.prompt) {
+                e.target.prompt.value = "";
+                e.target.prompt.style.height = "auto";
+            }
 
-        // Clear voice transcription
-        if (transcribedText.value) {
-            transcribedText.value = "";
-        }
+            // Clear voice transcription
+            if (transcribedText.value) {
+                transcribedText.value = "";
+            }
 
-        // ✅ Show context feedback ONLY on success
-        if (
-            effectiveContextReferences &&
-            effectiveContextReferences.length > 0
-        ) {
-            toast.success(
-                `Used ${effectiveContextReferences.length} reference(s)`,
-                {
-                    duration: 2000,
-                    description: "Previous messages added as context",
-                },
-            );
-        }
+            // Show context feedback ONLY on success
+            if (
+                effectiveContextReferences &&
+                effectiveContextReferences.length > 0
+            ) {
+                toast.success(
+                    `Used ${effectiveContextReferences.length} reference(s)`,
+                    {
+                        duration: 2000,
+                        description: "Previous messages added as context",
+                    },
+                );
+            }
 
-        // ✅ Clear selected contexts ONLY on success
-        selectedContexts.value = [];
+            // Clear selected contexts ONLY on success
+            selectedContexts.value = [];
 
-        // Show success notification if user switched away
-        if (currentChatId.value !== submissionChatId) {
-            toast.success("Response received", {
-                duration: 3000,
-                description: `Switch to "${targetChat?.title || "chat"}" to view the response`,
-            });
+            // Show success notification if user switched away
+            if (currentChatId.value !== submissionChatId) {
+                const targetChat = chats.value.find(
+                    (chat) => chat.id === submissionChatId,
+                );
+                toast.success("Response received", {
+                    duration: 3000,
+                    description: `Switch to "${targetChat?.title || "chat"}" to view the response`,
+                });
+            }
+
+            // If success and chat stored locally, trigger onMessageAdded
+            onMessageAdded(updatedMessage);
         }
     } catch (err: any) {
-        // Don't show error if request was intentionally aborted
         if (err.name === "AbortError") {
             console.log(`Request ${requestId} was aborted`);
             removeTemporaryMessage(submissionChatId, tempMessageIndex);
@@ -779,14 +786,6 @@ async function handleSubmit(
         requestChatMap.value.delete(requestId);
 
         isLoading.value = false;
-        saveChats();
-
-        // Trigger background sync
-        setTimeout(() => {
-            performSmartSync().catch((error) => {
-                console.error("Background sync failed:", error);
-            });
-        }, 500);
 
         // Observe new video containers
         observeNewVideoContainers();
@@ -897,7 +896,7 @@ async function handleLinkOnlyRequest(
             (chat) => chat.id === chatId,
         );
         if (updatedTargetChat && tempMessageIndex >= 0) {
-            updatedTargetChat.messages[tempMessageIndex] = {
+            const updatedMessage = {
                 id: `msg_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
                 chat_id: chatId,
                 created_at: new Date().toISOString(),
@@ -906,10 +905,14 @@ async function handleLinkOnlyRequest(
                 references: contextReferenceIds,
                 model: "gemini-pro",
             };
+            updatedTargetChat.messages[tempMessageIndex] = updatedMessage;
             updatedTargetChat.last_message_at = new Date().toISOString();
+
+            // If success and chat stored locally, trigger onMessageAdded
+            onMessageAdded(updatedMessage);
         }
 
-        // ✅ ONLY INCREMENT ON SUCCESS for link-only prompts
+        // ONLY INCREMENT ON SUCCESS for link-only prompts
         incrementRequestCount();
 
         // Show notification if user switched away
@@ -933,7 +936,6 @@ async function handleLinkOnlyRequest(
         activeRequests.value.delete(requestId);
         requestChatMap.value.delete(requestId);
         isLoading.value = false;
-        saveChats();
     }
 }
 
@@ -1002,9 +1004,9 @@ async function refreshResponse(
                 const refMessage = currentMessages.value[messageIndex];
 
                 return {
-                    preview: previewText, // Keep original preview
+                    preview: previewText,
                     fullText:
-                        refMessage.response || refMessage.prompt || previewText, // Use RESPONSE for AI context
+                        refMessage.response || refMessage.prompt || previewText,
                 };
             }
 
@@ -1111,17 +1113,18 @@ async function refreshResponse(
             }
 
             // Replace the same message with the refreshed response
-            chat.messages[msgIndex] = {
+            const updatedMessage: Message = {
                 ...oldMessage,
                 response: combinedResponse.trim(),
                 references: originalReferences || [], // PRESERVE REFERENCES
             };
+            chat.messages[msgIndex] = updatedMessage;
 
             chat.updated_at = new Date().toISOString();
-            saveChats();
 
             await processLinksInResponse(msgIndex);
             incrementRequestCount();
+            onMessageAdded(updatedMessage);
         } finally {
             isLoading.value = false;
             observeNewVideoContainers();
@@ -1186,18 +1189,20 @@ async function refreshResponse(
             }
         }
 
-        // Replace the same message with the refreshed response
-        chat.messages[msgIndex] = {
+        const updatedMessage: Message = {
             ...oldMessage,
             response: finalResponse,
             references: originalReferences || [], // PRESERVE REFERENCES
         };
 
+        // Replace the same message with the refreshed response
+        chat.messages[msgIndex] = updatedMessage;
+
         chat.updated_at = new Date().toISOString();
-        saveChats();
 
         await processLinksInResponse(msgIndex);
         incrementRequestCount();
+        onMessageAdded(updatedMessage);
     } catch (err: any) {
         console.error("Refresh error:", err);
         toast.error(`Failed to refresh response: ${err.message}`);
@@ -1206,7 +1211,6 @@ async function refreshResponse(
         chat.messages[msgIndex] = oldMessage;
     } finally {
         isLoading.value = false;
-        saveChats();
         observeNewVideoContainers();
     }
 }
@@ -1563,7 +1567,7 @@ watch(
             nextTick(() => {
                 loadChatDrafts();
             });
-            console.log(`✅ Synced to chat: ${chatId}`);
+            console.log(`Synced to chat: ${chatId}`);
         } else {
             console.warn(`⚠️ Chat ${chatId} not found in route watch`);
             // Don't create new chat here - let navigation handle it
@@ -1996,36 +2000,58 @@ onUnmounted(() => {
                                             <ReferenceBadge
                                                 :is-closeable="false"
                                                 :selected-contexts="
-                                                    item.references
-                                                        ? ref(
-                                                              item.references.map(
-                                                                  (id) => {
+                                                    ref(
+                                                        item.references &&
+                                                            item.references
+                                                                .length > 0
+                                                            ? item.references.map(
+                                                                  (
+                                                                      previewText,
+                                                                  ) => {
                                                                       const messageIndex =
                                                                           currentMessages.findIndex(
                                                                               (
                                                                                   m,
                                                                               ) =>
-                                                                                  m.prompt ===
-                                                                                  id,
+                                                                                  m.prompt &&
+                                                                                  m.prompt.startsWith(
+                                                                                      previewText
+                                                                                          .replace(
+                                                                                              '...',
+                                                                                              '',
+                                                                                          )
+                                                                                          .trim(),
+                                                                                  ),
                                                                           );
-                                                                      const ref =
-                                                                          currentMessages[
-                                                                              messageIndex
-                                                                          ];
+
+                                                                      if (
+                                                                          messageIndex >=
+                                                                          0
+                                                                      ) {
+                                                                          const refMessage =
+                                                                              currentMessages[
+                                                                                  messageIndex
+                                                                              ];
+                                                                          return {
+                                                                              preview:
+                                                                                  previewText,
+                                                                              fullText:
+                                                                                  refMessage.response ||
+                                                                                  refMessage.prompt ||
+                                                                                  previewText,
+                                                                          };
+                                                                      }
 
                                                                       return {
-                                                                          id,
                                                                           preview:
-                                                                              ref?.prompt ||
-                                                                              ref?.response,
+                                                                              previewText,
                                                                           fullText:
-                                                                              ref?.prompt ||
-                                                                              ref?.response,
+                                                                              previewText,
                                                                       };
                                                                   },
-                                                              ),
-                                                          )
-                                                        : ref([])
+                                                              )
+                                                            : [],
+                                                    )
                                                 "
                                             />
                                             <MarkdownRenderer
@@ -2326,6 +2352,10 @@ onUnmounted(() => {
                     "
                     @select-input-mode="selectInputMode"
                     @navigate-to-upgrade="router.push('/upgrade')"
+                    @remove-context="
+                        (index: number) => selectedContexts.splice(index, 1)
+                    "
+                    @clear-all-contexts="clearContextReferences"
                 />
             </div>
         </div>

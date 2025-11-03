@@ -319,9 +319,7 @@ const {
     chatDrafts,
     pastePreviews,
     parsedUserDetails,
-    performSmartSync,
     isAuthenticated,
-    syncStatus,
     saveLinkPreviewCache,
     isLoading,
     confirmDialog,
@@ -626,6 +624,7 @@ async function deleteMessage(messageIndex: number) {
 
                     const chat = currentChat.value;
                     const messageToDelete = chat.messages[messageIndex];
+                    let deleteSuccess = true;
 
                     if (isAuthenticated.value && messageToDelete.id) {
                         try {
@@ -640,54 +639,61 @@ async function deleteMessage(messageIndex: number) {
                                 "Failed to delete message from server:",
                                 apiError,
                             );
-                            toast.warning("Message deleted locally only");
+                            toast.warning(
+                                "Failed to delete message, try again later",
+                            );
+                            deleteSuccess = false;
                         }
                     }
 
-                    const promptUrls = extractUrls(
-                        messageToDelete.prompt || "",
-                    );
-                    const responseUrls = extractUrls(
-                        messageToDelete.response || "",
-                    );
-                    const urls = [...new Set([...promptUrls, ...responseUrls])];
+                    if (deleteSuccess) {
+                        const promptUrls = extractUrls(
+                            messageToDelete.prompt || "",
+                        );
+                        const responseUrls = extractUrls(
+                            messageToDelete.response || "",
+                        );
+                        const urls = [
+                            ...new Set([...promptUrls, ...responseUrls]),
+                        ];
 
-                    chat.messages.splice(messageIndex, 1);
-                    expanded.value.splice(messageIndex, 1);
+                        chat.messages.splice(messageIndex, 1);
+                        expanded.value.splice(messageIndex, 1);
 
-                    chat.updated_at = new Date().toISOString();
-                    chat.message_count = chat.messages.length;
+                        chat.updated_at = new Date().toISOString();
+                        chat.message_count = chat.messages.length;
 
-                    if (messageIndex === 0 && chat.messages.length > 0) {
-                        const firstMessage = chat.messages[0];
-                        const firstContent =
-                            firstMessage.prompt || firstMessage.response;
-                        if (firstContent) {
-                            chat.title = generateChatTitle(firstContent);
+                        if (messageIndex === 0 && chat.messages.length > 0) {
+                            const firstMessage = chat.messages[0];
+                            const firstContent =
+                                firstMessage.prompt || firstMessage.response;
+                            if (firstContent) {
+                                chat.title = generateChatTitle(firstContent);
+                            }
+                        } else if (chat.messages.length === 0) {
+                            chat.title = "New Chat";
                         }
-                    } else if (chat.messages.length === 0) {
-                        chat.title = "New Chat";
+
+                        if (urls.length > 0) {
+                            urls.forEach((url) => {
+                                linkPreviewCache.value.delete(url);
+                            });
+                            saveLinkPreviewCache();
+                        }
+
+                        saveChats();
+
+                        if (
+                            isAuthenticated.value &&
+                            parsedUserDetails.value?.syncEnabled
+                        ) {
+                            setTimeout(() => {
+                                performSmartSync();
+                            }, 1000);
+                        }
+
+                        toast.success("Message deleted");
                     }
-
-                    if (urls.length > 0) {
-                        urls.forEach((url) => {
-                            linkPreviewCache.value.delete(url);
-                        });
-                        saveLinkPreviewCache();
-                    }
-
-                    saveChats();
-
-                    if (
-                        isAuthenticated.value &&
-                        parsedUserDetails.value?.syncEnabled
-                    ) {
-                        setTimeout(() => {
-                            performSmartSync();
-                        }, 1000);
-                    }
-
-                    toast.success("Message deleted");
                 } catch (error: any) {
                     reportError({
                         action: "deleteMessage",
@@ -1226,35 +1232,50 @@ async function syncChatToServer(chatId: string) {
     }
 }
 
-/**
- * Sync individual message to server
- * Most efficient - only syncs the specific message
- */
-async function syncMessageToServer(chatId: string, message: Message) {
-    if (!isAuthenticated.value || !parsedUserDetails.value?.syncEnabled) {
-        return;
-    }
+// Syncs only the new message, not the entire chat history
+async function onMessageAdded(message: Message) {
+    if (!currentChatId.value) return;
 
     try {
-        console.log(`🔄 Syncing message to chat: ${chatId}`);
+        // Then sync the specific message to server
+        if (isAuthenticated.value) {
+            console.log(`🔄 Syncing message to chat: ${currentChatId.value}`);
 
-        // First ensure chat exists on server
-        await syncChatToServer(chatId);
+            // First ensure chat exists on server
+            await syncChatToServer(currentChatId.value);
 
-        // Then add the message
-        await apiCall(`/chats/${chatId}/messages`, {
-            method: "POST",
-            body: JSON.stringify({
-                prompt: message.prompt,
-                response: message.response,
-                model: message.model || "gemini",
-                references: message.references || [],
-            }),
-        });
+            // Then add the message
+            const response = await apiCall(
+                `/chats/${currentChatId.value}/messages`,
+                {
+                    method: "POST",
+                    body: JSON.stringify({
+                        prompt: message.prompt,
+                        response: message.response,
+                        model: message.model || "gemini",
+                        references: message.references || [],
+                    }),
+                },
+            );
 
-        console.log(`✅ Message synced to chat ${chatId}`);
+            console.log(response);
+            if (!response.ok) {
+                throw new Error(
+                    `Failed to sync message: ${response.statusText}`,
+                );
+            }
+
+            if (response.success === true) {
+                // Save locally only if sync was successful
+                saveChats();
+                console.log(`✅ Message synced to chat ${currentChatId.value}`);
+            }
+        }
     } catch (error: any) {
-        console.error(`Failed to sync message to ${chatId}:`, error);
+        console.error(
+            `Failed to sync message to ${currentChatId.value}:`,
+            error,
+        );
         reportError({
             action: "syncMessageToServer",
             message: `Failed to sync message: ${error.message}`,
@@ -1262,27 +1283,6 @@ async function syncMessageToServer(chatId: string, message: Message) {
             userId: parsedUserDetails.value?.userId || "unknown",
             severity: "low",
         } as PlatformError);
-        // Mark as unsynced for retry later
-        syncStatus.value.hasUnsyncedChanges = true;
-    }
-}
-
-// Syncs only the new message, not the entire chat history
-async function onMessageAdded(message: Message) {
-    if (!currentChatId.value) return;
-
-    try {
-        // Save locally first
-        saveChats();
-
-        // Then sync the specific message to server
-        if (isAuthenticated.value && parsedUserDetails.value?.syncEnabled) {
-            await syncMessageToServer(currentChatId.value, message);
-        }
-    } catch (error: any) {
-        console.error("Failed to sync new message:", error);
-        // Will retry on next full sync
-        syncStatus.value.hasUnsyncedChanges = true;
     }
 }
 
@@ -1311,7 +1311,7 @@ async function performSmartSync() {
         return;
     }
 
-    console.log("🔄 Performing SmartSync");
+    console.log("🔄 Performing SmartSync (userDetails only)");
 
     if (!isAuthenticated.value || !parsedUserDetails.value?.userId) {
         console.log("❌ Sync skipped: not authenticated or no user ID");
@@ -1319,33 +1319,11 @@ async function performSmartSync() {
     }
 
     try {
-        const isLocalDataEmpty =
-            chats.value.length === 0 ||
-            (chats.value.length === 1 && chats.value[0].messages?.length === 0);
-
         const hasPendingLocalChanges = syncStatus.value.hasUnsyncedChanges;
-        if (isLocalDataEmpty && !hasPendingLocalChanges) {
-            console.log(
-                "📥 Local data empty and no pending changes - syncing FROM server",
-            );
 
-            try {
-                syncStatus.value.syncing = true;
-                await syncFromServer();
-                console.log("✅ Successfully synced data from server");
-            } catch (error: any) {
-                reportError({
-                    action: "performSmartSync",
-                    message: "Failed to sync from server: " + error.message,
-                    description: "Using local stored data instead.",
-                    status: getErrorStatus(error),
-                    userId: parsedUserDetails.value?.userId || "unknown",
-                    severity: "low",
-                } as PlatformError);
-            }
-        } else if (hasPendingLocalChanges) {
+        if (hasPendingLocalChanges) {
             console.log(
-                "📤 Has pending local changes (including user details) - syncing TO server",
+                "📤 Has pending local user details changes - syncing TO server",
             );
 
             const hadUnsyncedChangesBeforeSync =
@@ -1355,8 +1333,30 @@ async function performSmartSync() {
 
             try {
                 syncStatus.value.syncing = true;
-                await syncToServer();
-                console.log("✅ Successfully synced changes to server");
+
+                const syncData = {
+                    username: parsedUserDetails.value.username,
+                    preferences: parsedUserDetails.value.preferences || "",
+                    work_function: parsedUserDetails.value.workFunction || "",
+                    theme: parsedUserDetails?.value?.theme || "system",
+                    sync_enabled: parsedUserDetails?.value?.syncEnabled,
+                    response_mode:
+                        parsedUserDetails.value.responseMode ||
+                        "light-response",
+                    request_count: {
+                        count: parsedUserDetails.value.requestCount?.count || 0,
+                        timestamp:
+                            parsedUserDetails.value.requestCount?.timestamp ||
+                            Date.now(),
+                    },
+                };
+
+                await apiCall("/sync", {
+                    method: "POST",
+                    body: JSON.stringify(syncData),
+                });
+
+                console.log("✅ Successfully synced user details to server");
             } catch (error: any) {
                 reportError({
                     action: "performSmartSync",
@@ -1385,22 +1385,7 @@ async function performSmartSync() {
                 }
             }
         } else {
-            console.log("🔍 No pending changes - checking for server updates");
-            try {
-                syncStatus.value.syncing = true;
-                await syncFromServer();
-                console.log("✅ Server data is current");
-            } catch (error: any) {
-                reportError({
-                    action: "performSmartSync",
-                    message:
-                        "Failed to check for server updates: " + error.message,
-                    description: "Using local data instead.",
-                    status: getErrorStatus(error),
-                    userId: parsedUserDetails.value?.userId || "unknown",
-                    severity: "low",
-                } as PlatformError);
-            }
+            console.log("🔍 No pending changes - skipping server updates");
         }
     } catch (error: any) {
         reportError({
@@ -1413,7 +1398,7 @@ async function performSmartSync() {
             severity: "critical",
         } as PlatformError);
     } finally {
-        console.log("🔓 Sync completed");
+        console.log("🔓 User details sync completed");
         syncStatus.value.syncing = false;
     }
 }
@@ -2503,6 +2488,8 @@ const globalState = {
     shouldHaveLimit,
 
     // Core functions
+    onChatUpdated,
+    onMessageAdded,
     copyResponse,
     shareResponse,
     loadChats,

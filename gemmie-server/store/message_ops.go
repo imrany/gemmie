@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"time"
+
+	"github.com/lib/pq"
 )
 
 func CreateMessage(msg Message) error {
@@ -12,6 +14,7 @@ func CreateMessage(msg Message) error {
 	if msg.CreatedAt.IsZero() {
 		msg.CreatedAt = time.Now()
 	}
+
 	query := `
 		INSERT INTO messages (id, chat_id, prompt, response, created_at, model, references_ids)
 		VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -20,7 +23,7 @@ func CreateMessage(msg Message) error {
 	_, err := DB.ExecContext(ctx, query,
 		msg.ID, msg.ChatId, msg.Prompt,
 		msg.Response, msg.CreatedAt, msg.Model,
-		msg.References,
+		pq.Array(msg.References),
 	)
 
 	return err
@@ -49,7 +52,7 @@ func GetMessagesByChatId(chatId string) ([]Message, error) {
 		err := rows.Scan(
 			&msg.ID, &msg.ChatId, &msg.Prompt,
 			&msg.Response, &msg.CreatedAt, &msg.Model,
-			&msg.References,
+			pq.Array(&msg.References),
 		)
 		if err != nil {
 			return nil, err
@@ -74,9 +77,9 @@ func UpdateMessage(msg Message) error {
 			WHERE id = $1
 	`
 	_, err := DB.ExecContext(ctx, query,
-		&msg.ID, &msg.ChatId, &msg.Prompt,
-		&msg.Response, &msg.CreatedAt, &msg.Model,
-		&msg.References,
+		msg.ID, msg.ChatId, msg.Prompt,
+		msg.Response, msg.CreatedAt, msg.Model,
+		pq.Array(msg.References),
 	)
 
 	return err
@@ -94,7 +97,7 @@ func GetMessageById(ID string) (*Message, error) {
 	err := DB.QueryRowContext(ctx, query, ID).Scan(
 		&message.ID, &message.ChatId, &message.Prompt,
 		&message.Response, &message.CreatedAt, &message.Model,
-		&message.References,
+		pq.Array(&message.References),
 	)
 
 	if err == sql.ErrNoRows {
