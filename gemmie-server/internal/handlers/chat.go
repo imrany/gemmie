@@ -16,23 +16,10 @@ type CreateChatRequest struct {
 	Title string `json:"title"`
 }
 
-// CreateMessageRequest represents request payload for creating a new message
-type CreateMessageRequest struct {
-	Role    string `json:"role"` // "user" or "assistant"
-	Content string `json:"content"`
-	Model   string `json:"model,omitempty"`
-}
-
 // UpdateChatRequest represents request payload for updating a chat
 type UpdateChatRequest struct {
 	Title      string `json:"title,omitempty"`
 	IsArchived bool   `json:"is_archived,omitempty"`
-}
-
-// ChatResponse represents a chat with its messages
-type ChatResponse struct {
-	store.Chat
-	Messages []store.Message `json:"messages,omitempty"`
 }
 
 // CreateChatHandler handles POST /api/chats
@@ -220,35 +207,22 @@ func GetChatHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Verify chat belongs to user
 	if chat.UserId != userID {
-		w.WriteHeader(http.StatusForbidden)
-		json.NewEncoder(w).Encode(store.Response{
-			Success: false,
-			Message: "Access denied",
-		})
-		return
-	}
-
-	// Get messages for this chat
-	messages, err := store.GetMessagesByChatId(chatID)
-	if err != nil {
-		slog.Error("Failed to get messages", "chat_id", chatID, "error", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(store.Response{
-			Success: false,
-			Message: "Failed to retrieve messages",
-		})
-		return
-	}
-
-	response := ChatResponse{
-		Chat:     *chat,
-		Messages: messages,
+		if chat.IsPrivate == true {
+			// If chat is private, access denied
+			w.WriteHeader(http.StatusForbidden)
+			json.NewEncoder(w).Encode(store.Response{
+				Success: false,
+				Message: "Access denied",
+			})
+			return
+		}
+		chat.IsReadOnly = true
 	}
 
 	json.NewEncoder(w).Encode(store.Response{
 		Success: true,
 		Message: "Chat retrieved successfully",
-		Data:    response,
+		Data:    *chat,
 	})
 }
 
@@ -402,17 +376,6 @@ func DeleteChatHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Delete all messages in the chat first
-	if err := store.DeleteAllMessageByChatID(chatID); err != nil {
-		slog.Error("Failed to delete chat messages", "chat_id", chatID, "error", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(store.Response{
-			Success: false,
-			Message: "Failed to delete chat messages",
-		})
-		return
-	}
-
 	// Delete the chat
 	if err := store.DeleteChatByID(chatID); err != nil {
 		slog.Error("Failed to delete chat", "chat_id", chatID, "error", err)
@@ -458,7 +421,8 @@ func CreateMessageHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req CreateMessageRequest
+	// send request to ai wrapper
+	var req store.Message
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(store.Response{
@@ -469,21 +433,11 @@ func CreateMessageHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate required fields
-	if req.Role == "" || req.Content == "" {
+	if req.ChatId == "" || req.Prompt == "" {
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
-			Message: "Role and content are required",
-		})
-		return
-	}
-
-	// Validate role
-	if req.Role != "user" && req.Role != "assistant" {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(store.Response{
-			Success: false,
-			Message: "Role must be 'user' or 'assistant'",
+			Message: "Chat ID and prompt are required",
 		})
 		return
 	}
@@ -521,12 +475,13 @@ func CreateMessageHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Create new message
 	message := store.Message{
-		ID:        encrypt.GenerateID(nil),
-		ChatId:    chatID,
-		Role:      req.Role,
-		Content:   req.Content,
-		CreatedAt: time.Now(),
-		Model:     req.Model,
+		ID:         encrypt.GenerateID(nil),
+		ChatId:     chatID,
+		Prompt:     req.Prompt,
+		Response:   req.Response,
+		CreatedAt:  time.Now(),
+		Model:      req.Model,
+		References: req.References,
 	}
 
 	if err := store.CreateMessage(message); err != nil {
@@ -556,82 +511,6 @@ func CreateMessageHandler(w http.ResponseWriter, r *http.Request) {
 		Success: true,
 		Message: "Message created successfully",
 		Data:    message,
-	})
-}
-
-// GetMessagesHandler handles GET /api/chats/{id}/messages
-func GetMessagesHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
-	userID := r.Header.Get("X-User-ID")
-	if userID == "" {
-		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(store.Response{
-			Success: false,
-			Message: "User ID header required",
-		})
-		return
-	}
-
-	vars := mux.Vars(r)
-	chatID := vars["id"]
-
-	if chatID == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(store.Response{
-			Success: false,
-			Message: "Chat ID is required",
-		})
-		return
-	}
-
-	// Get chat to verify ownership
-	chat, err := store.GetChatById(chatID)
-	if err != nil {
-		slog.Error("Failed to get chat", "chat_id", chatID, "error", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(store.Response{
-			Success: false,
-			Message: "Failed to retrieve chat",
-		})
-		return
-	}
-
-	if chat == nil {
-		w.WriteHeader(http.StatusNotFound)
-		json.NewEncoder(w).Encode(store.Response{
-			Success: false,
-			Message: "Chat not found",
-		})
-		return
-	}
-
-	// Verify chat belongs to user
-	if chat.UserId != userID {
-		w.WriteHeader(http.StatusForbidden)
-		json.NewEncoder(w).Encode(store.Response{
-			Success: false,
-			Message: "Access denied",
-		})
-		return
-	}
-
-	// Get messages for this chat
-	messages, err := store.GetMessagesByChatId(chatID)
-	if err != nil {
-		slog.Error("Failed to get messages", "chat_id", chatID, "error", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(store.Response{
-			Success: false,
-			Message: "Failed to retrieve messages",
-		})
-		return
-	}
-
-	json.NewEncoder(w).Encode(store.Response{
-		Success: true,
-		Message: "Messages retrieved successfully",
-		Data:    messages,
 	})
 }
 
@@ -719,5 +598,109 @@ func DeleteMessageHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(store.Response{
 		Success: true,
 		Message: "Message deleted successfully",
+	})
+}
+
+// UpdateMessageHandler handles PUT /api/messages/{id}
+func UpdateMessageHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	userID := r.Header.Get("X-User-ID")
+	if userID == "" {
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(store.Response{
+			Success: false,
+			Message: "User ID header required",
+		})
+		return
+	}
+
+	vars := mux.Vars(r)
+	messageID := vars["id"]
+
+	if messageID == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(store.Response{
+			Success: false,
+			Message: "Message ID is required",
+		})
+		return
+	}
+
+	// Get message to verify ownership
+	message, err := store.GetMessageById(messageID)
+	if err != nil {
+		slog.Error("Failed to get message", "message_id", messageID, "error", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(store.Response{
+			Success: false,
+			Message: "Failed to retrieve message",
+		})
+		return
+	}
+
+	if message == nil {
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(store.Response{
+			Success: false,
+			Message: "Message not found",
+		})
+		return
+	}
+
+	// Get chat to verify ownership
+	chat, err := store.GetChatById(message.ChatId)
+	if err != nil {
+		slog.Error("Failed to get chat", "chat_id", message.ChatId, "error", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(store.Response{
+			Success: false,
+			Message: "Failed to retrieve chat",
+		})
+		return
+	}
+
+	if chat == nil || chat.UserId != userID {
+		w.WriteHeader(http.StatusForbidden)
+		json.NewEncoder(w).Encode(store.Response{
+			Success: false,
+			Message: "Access denied",
+		})
+		return
+	}
+
+	// Parse request body
+	var req store.Message
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		slog.Error("Failed to decode request body", "error", err)
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(store.Response{
+			Success: false,
+			Message: "Invalid request body",
+		})
+		return
+	}
+
+	message.Prompt = req.Prompt
+	message.Response = req.Response
+	message.Model = req.Model
+	message.References = req.References
+
+	// Update message
+	if err := store.UpdateMessage(*message); err != nil {
+		slog.Error("Failed to update message", "message_id", messageID, "error", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(store.Response{
+			Success: false,
+			Message: "Failed to update message",
+		})
+		return
+	}
+
+	slog.Info("Message updated successfully", "message_id", messageID, "user_id", userID)
+
+	json.NewEncoder(w).Encode(store.Response{
+		Success: true,
+		Message: "Message updated successfully",
 	})
 }

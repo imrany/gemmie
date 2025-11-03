@@ -12,6 +12,7 @@ import (
 // Response represents API response
 type Response struct {
 	Success bool   `json:"success"`
+	Status  int    `json:"status,omitempty"`
 	Message string `json:"message"`
 	Data    any    `json:"data,omitempty"`
 }
@@ -97,15 +98,19 @@ type Chat struct {
 	IsArchived    bool      `json:"is_archived"`
 	MessageCount  int       `json:"message_count"`
 	LastMessageAt time.Time `json:"last_message_at"`
+	IsPrivate     bool      `json:"is_private"`
+	Messages      []Message `json:"messages"`
+	IsReadOnly    bool      `json:"is_read_only"`
 }
 
 type Message struct {
-	ID        string    `json:"id"`
-	ChatId    string    `json:"chat_id"`
-	Role      string    `json:"role"`
-	Content   string    `json:"content"`
-	CreatedAt time.Time `json:"created_at"`
-	Model     string    `json:"model"`
+	ID         string    `json:"id"`
+	ChatId     string    `json:"chat_id"`
+	Prompt     string    `json:"prompt,omitempty"`
+	Response   string    `json:"response"`
+	CreatedAt  time.Time `json:"created_at"`
+	Model      string    `json:"model,omitempty"`
+	References []string  `json:"references,omitempty"`
 }
 
 var (
@@ -167,5 +172,5 @@ func Close() error {
 }
 
 func GetVersion() string {
-	return "v0.8.0"
+	return "v0.10.0"
 }

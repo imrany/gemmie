@@ -1,20 +1,12 @@
 <script setup lang="ts">
-import {
-    computed,
-    onMounted,
-    onUnmounted,
-    provide,
-    ref,
-    watch,
-    type ComputedRef,
-} from "vue";
+import { computed, onMounted, onUnmounted, provide, ref, watch } from "vue";
 import { toast, Toaster } from "vue-sonner";
 import "vue-sonner/style.css";
 import type {
     Chat,
     ConfirmDialogOptions,
-    CurrentChat,
     LinkPreview,
+    Message,
     UserDetails,
 } from "./types";
 import {
@@ -87,20 +79,6 @@ const authData = ref({
 });
 const FREE_REQUEST_LIMIT = 20;
 const isOpenTextHighlightPopover = ref(false);
-const currentChat: ComputedRef<CurrentChat | undefined> = computed(() => {
-    if (!currentChatId.value || !chats.value.length) {
-        return undefined;
-    }
-    return chats.value.find((chat) => chat.id === currentChatId.value);
-});
-
-const currentMessages = computed(() => {
-    return currentChat.value?.messages || [];
-});
-
-const isCurrentChatValid = computed(() => {
-    return currentChatId.value && currentChat.value !== undefined;
-});
 
 const parsedUserDetailsNullValues: UserDetails = {
     agreeToTerms: false,
@@ -225,7 +203,6 @@ const userPlanStatus = computed(() => {
     return { status: "active", isExpired: false };
 });
 
-// computed property to determine if user has limits
 const userHasRequestLimits = computed(() => {
     if (!parsedUserDetails.value) return true;
 
@@ -238,18 +215,14 @@ const userHasRequestLimits = computed(() => {
     return hasFreePlan || userPlanStatus.value.isExpired;
 });
 
-// Consolidated request limit computations
 const requestLimitInfo = computed(() => {
     const hasLimits = userHasRequestLimits.value;
     const currentCount = parsedUserDetails.value.requestCount?.count || 0;
 
     return {
-        // Core limits
         hasLimits,
         currentCount,
         limit: FREE_REQUEST_LIMIT,
-
-        // Derived states
         isExceeded: hasLimits && currentCount >= FREE_REQUEST_LIMIT,
         shouldShowUpgradePrompt:
             hasLimits &&
@@ -258,8 +231,6 @@ const requestLimitInfo = computed(() => {
         remaining: hasLimits
             ? Math.max(0, FREE_REQUEST_LIMIT - currentCount)
             : Infinity,
-
-        // Status messages
         status: hasLimits
             ? currentCount >= FREE_REQUEST_LIMIT
                 ? "exceeded"
@@ -286,7 +257,22 @@ const shouldHaveLimit =
 const requestCount = computed(() => requestLimitInfo.value.currentCount);
 const copiedIndex = ref<number | null>(null);
 
-// composables
+const currentChat = computed(() => {
+    if (!currentChatId.value || !chats.value.length) {
+        return undefined;
+    }
+    return chats.value.find((chat) => chat.id === currentChatId.value);
+});
+
+const currentMessages = computed(() => {
+    return currentChat.value?.messages || [];
+});
+
+const isCurrentChatValid = computed(() => {
+    return currentChatId.value && currentChat.value !== undefined;
+});
+
+// Composables
 const { linkPreviewCache, loadLinkPreviewCache, saveLinkPreviewCache } =
     useCache();
 
@@ -303,86 +289,53 @@ const { apiCall, unsecureApiCall, checkInternetConnection } = useApiCall({
 const {
     loadChats,
     createNewChat,
-    sendMessage,
     deleteChat,
     renameChat,
-    manualSync,
-    processSyncQueue,
-    syncQueue,
-    isOnline,
+    saveChats,
+    switchToChat,
+    clearAllChats,
+    expanded,
+    activeChatMenu,
+    toggleChatMenu,
+    copyResponse,
+    shareResponse,
+    autoGrow,
+    saveChatDrafts,
+    loadChatDrafts,
+    clearCurrentDraft,
+    autoSaveDraft,
+    processLinksInResponse,
+    processLinksInUserPrompt,
+    mergeChats,
+    draftSaveTimeout,
+    apiCall: apiCallFromChat,
 } = useChat({
+    copiedIndex,
     chats,
     currentChatId,
-    isAuthenticated,
+    updateExpandedArray,
+    linkPreviewCache,
+    fetchLinkPreview,
+    chatDrafts,
+    pastePreviews,
     parsedUserDetails,
+    performSmartSync,
+    isAuthenticated,
     syncStatus,
+    saveLinkPreviewCache,
     isLoading,
     confirmDialog,
 });
 
-function showConfirmDialog(options: ConfirmDialogOptions) {
-    confirmDialog.value = {
-        visible: true,
-        title: options.title,
-        message: options.message,
-        type: options.type || "info",
-        confirmText: options.confirmText || "Confirm",
-        cancelText: options.cancelText || "Cancel",
-        onConfirm: () => {
-            try {
-                options.onConfirm();
-            } catch (error: any) {
-                reportError({
-                    action: `showConfirmDialog`,
-                    message: "Error in confirm callback :" + error.message,
-                    description: `An error occurred while processing your request`,
-                    status: getErrorStatus(error),
-                    context: createErrorContext({
-                        errorName: error.name,
-                        errorStack: error.stack,
-                    }),
-                    userId: parsedUserDetails.value?.userId || "unknown",
-                    severity: "high",
-                } as PlatformError);
-            } finally {
-                nextTick(() => {
-                    confirmDialog.value.visible = false;
-                });
-            }
-        },
-        onCancel: () => {
-            try {
-                options.onCancel?.();
-            } catch (error: any) {
-                reportError({
-                    action: `showConfirmDialog`,
-                    message: "Error in cancel callback :" + error.message,
-                    status: getErrorStatus(error),
-                    context: createErrorContext({
-                        errorName: error.name,
-                        errorStack: error.stack,
-                    }),
-                    userId: parsedUserDetails.value?.userId || "unknown",
-                    severity: "low",
-                } as PlatformError);
-            } finally {
-                nextTick(() => {
-                    confirmDialog.value.visible = false;
-                });
-            }
-        },
-    };
-}
-
 async function logout() {
-    showConfirmDialog({
+    confirmDialog.value = {
         visible: true,
         title: "Logout Confirmation",
         message:
             "Are you sure you want to logout?" +
             (parsedUserDetails.value?.syncEnabled
                 ? ""
-                : " Your unsynced data will permanently lost."),
+                : " Your unsynced data will be permanently lost."),
         type: "warning",
         confirmText: "Logout",
         cancelText: "Cancel",
@@ -390,12 +343,12 @@ async function logout() {
             try {
                 isLoading.value = true;
 
-                const syncEnabled = parsedUserDetails.value?.syncEnabled;
+                const syncEnabledValue = parsedUserDetails.value?.syncEnabled;
                 const hasUnsyncedChanges = syncStatus.value.hasUnsyncedChanges;
 
                 if (
                     hasUnsyncedChanges &&
-                    syncEnabled &&
+                    syncEnabledValue &&
                     !syncStatus.value.syncing
                 ) {
                     try {
@@ -407,9 +360,10 @@ async function logout() {
                         hideSyncIndicator();
                     } catch (syncError: any) {
                         reportError({
-                            action: `sync error in logout`,
+                            action: "sync error in logout",
                             message:
-                                "Sync failed during logout" + syncError.message,
+                                "Sync failed during logout: " +
+                                syncError.message,
                             status: getErrorStatus(syncError),
                             userId:
                                 parsedUserDetails.value?.userId || "unknown",
@@ -422,7 +376,6 @@ async function logout() {
                 const hasChats = chats.value.length > 0;
 
                 try {
-                    // Clear state
                     chats.value = [];
                     currentChatId.value = "";
                     expanded.value = [];
@@ -440,7 +393,6 @@ async function logout() {
                         syncProgress: 0,
                     };
 
-                    // ✅ Clear user details to trigger isAuthenticated = false
                     parsedUserDetails.value = parsedUserDetailsNullValues;
 
                     let keysToRemove = [
@@ -464,9 +416,6 @@ async function logout() {
                             );
                         }
                     });
-
-                    // ✅ Don't call router.replace() here
-                    // The isAuthenticated watcher will handle navigation
                 } catch (stateError) {
                     console.error(
                         "Error clearing application state:",
@@ -474,7 +423,7 @@ async function logout() {
                     );
                     try {
                         parsedUserDetails.value = userBackup;
-                        if (!syncEnabled) {
+                        if (!syncEnabledValue) {
                             loadLocalData();
                         }
                     } catch (restoreError) {
@@ -489,7 +438,7 @@ async function logout() {
                     );
                 }
 
-                if (syncEnabled) {
+                if (syncEnabledValue) {
                     toast.success("Logged out successfully", {
                         duration: 3000,
                         description: hasUnsyncedChanges
@@ -506,20 +455,25 @@ async function logout() {
                 }
             } catch (error: any) {
                 reportError({
-                    action: `logout`,
+                    action: "logout",
                     message:
-                        "Critical error during logout process :" +
+                        "Critical error during logout process: " +
                         error.message,
-                    description: `Some cleanup operations may not have completed. Please refresh the page.`,
+                    description:
+                        "Some cleanup operations may not have completed. Please refresh the page.",
                     status: getErrorStatus(error),
                     userId: parsedUserDetails.value?.userId || "unknown",
                     severity: "critical",
                 } as PlatformError);
             } finally {
                 isLoading.value = false;
+                confirmDialog.value.visible = false;
             }
         },
-    });
+        onCancel: () => {
+            confirmDialog.value.visible = false;
+        },
+    };
 }
 
 function updateExpandedArray() {
@@ -568,10 +522,9 @@ function scrollToLastMessage() {
         const messages =
             scrollableElem.value?.querySelectorAll(".chat-message");
         if (messages && messages.length > 0) {
-            const lastMessage = messages[messages.length - 2] as HTMLElement; // Get user's prompt (second to last)
+            const lastMessage = messages[messages.length - 2] as HTMLElement;
             if (lastMessage) {
-                // Scroll so the last message pair starts at the top with some padding
-                const offsetTop = lastMessage.offsetTop - 10; // 10px padding from top
+                const offsetTop = lastMessage.offsetTop - 10;
                 scrollableElem.value?.scrollTo({
                     top: offsetTop,
                     behavior: "smooth",
@@ -600,36 +553,27 @@ function handleSrollIntoView(id: string) {
 
 function handleScroll() {
     try {
-        // Close text highlight popover on scroll
         if (isOpenTextHighlightPopover.value) {
             isOpenTextHighlightPopover.value = false;
         }
 
-        // Get the scrollable element
         const elem = scrollableElem.value;
         if (!elem) return;
 
-        // Get scroll properties
         const scrollTop = elem.scrollTop;
         const scrollHeight = elem.scrollHeight;
         const clientHeight = elem.clientHeight;
 
-        // Calculate current scroll position and total scrollable height
         const currentScrollPosition = scrollTop + clientHeight;
         const totalScrollableHeight = scrollHeight;
 
-        // Define a threshold to determine if the user is at the bottom
         const threshold = 148;
         const isAtBottom =
             Math.abs(currentScrollPosition - totalScrollableHeight) <=
             threshold;
 
-        // Determine if there's substantial content to warrant a scroll-down button
         const hasSubstantialContent = scrollHeight > currentScrollPosition;
 
-        // Show the scroll-down button if not at the bottom and content is substantial
-        // hasSubstantialContent ensures the scroll-down button is only visible when there's enough content to scroll
-        // !isAtBottom makes sure it disappears when the user is already at the bottom
         showScrollDownButton.value = !isAtBottom && hasSubstantialContent;
     } catch (error) {
         console.error("Error handling scroll:", error);
@@ -644,8 +588,7 @@ function hideSidebar() {
     }
 }
 
-//  deleteMessage function
-function deleteMessage(messageIndex: number) {
+async function deleteMessage(messageIndex: number) {
     if (isLoading.value || !currentChat.value) return;
 
     try {
@@ -664,13 +607,14 @@ function deleteMessage(messageIndex: number) {
             messageContent.slice(0, 50) +
             (messageContent.length > 50 ? "..." : "");
 
-        showConfirmDialog({
+        confirmDialog.value = {
             visible: true,
             title: "Delete Message",
             message: `Are you sure you want to delete this message?\n"${preview}"\n\nThis action cannot be undone.`,
             type: "danger",
             confirmText: "Delete",
-            onConfirm: () => {
+            cancelText: "Cancel",
+            onConfirm: async () => {
                 try {
                     if (
                         !currentChat.value ||
@@ -680,34 +624,49 @@ function deleteMessage(messageIndex: number) {
                         return;
                     }
 
-                    const messageToDelete =
-                        currentChat.value.messages[messageIndex];
-                    const responseUrls = extractUrls(
-                        messageToDelete.response || "",
-                    );
+                    const chat = currentChat.value;
+                    const messageToDelete = chat.messages[messageIndex];
+
+                    if (isAuthenticated.value && messageToDelete.id) {
+                        try {
+                            await apiCallFromChat(
+                                `/messages/${messageToDelete.id}`,
+                                {
+                                    method: "DELETE",
+                                },
+                            );
+                        } catch (apiError) {
+                            console.error(
+                                "Failed to delete message from server:",
+                                apiError,
+                            );
+                            toast.warning("Message deleted locally only");
+                        }
+                    }
+
                     const promptUrls = extractUrls(
                         messageToDelete.prompt || "",
                     );
-                    const urls = [...new Set([...responseUrls, ...promptUrls])];
+                    const responseUrls = extractUrls(
+                        messageToDelete.response || "",
+                    );
+                    const urls = [...new Set([...promptUrls, ...responseUrls])];
 
-                    currentChat.value.messages.splice(messageIndex, 1);
+                    chat.messages.splice(messageIndex, 1);
                     expanded.value.splice(messageIndex, 1);
 
-                    currentChat.value.updatedAt = new Date().toISOString();
+                    chat.updated_at = new Date().toISOString();
+                    chat.message_count = chat.messages.length;
 
-                    if (
-                        messageIndex === 0 &&
-                        currentChat.value.messages.length > 0
-                    ) {
-                        const firstMessage =
-                            currentChat.value.messages[0].prompt ||
-                            currentChat.value.messages[0].response;
-                        if (firstMessage) {
-                            currentChat.value.title =
-                                generateChatTitle(firstMessage);
+                    if (messageIndex === 0 && chat.messages.length > 0) {
+                        const firstMessage = chat.messages[0];
+                        const firstContent =
+                            firstMessage.prompt || firstMessage.response;
+                        if (firstContent) {
+                            chat.title = generateChatTitle(firstContent);
                         }
-                    } else if (currentChat.value.messages.length === 0) {
-                        currentChat.value.title = "New Chat";
+                    } else if (chat.messages.length === 0) {
+                        chat.title = "New Chat";
                     }
 
                     if (urls.length > 0) {
@@ -719,7 +678,6 @@ function deleteMessage(messageIndex: number) {
 
                     saveChats();
 
-                    // Trigger sync after deleting message
                     if (
                         isAuthenticated.value &&
                         parsedUserDetails.value?.syncEnabled
@@ -728,23 +686,30 @@ function deleteMessage(messageIndex: number) {
                             performSmartSync();
                         }, 1000);
                     }
+
+                    toast.success("Message deleted");
                 } catch (error: any) {
                     reportError({
-                        action: `deleteMessage`,
+                        action: "deleteMessage",
                         message: "Error in deleteMessage: " + error.message,
-                        description: `Failed to delete this message.`,
+                        description: "Failed to delete this message.",
                         status: getErrorStatus(error),
                         userId: parsedUserDetails.value?.userId || "unknown",
                         severity: "critical",
                     } as PlatformError);
+                } finally {
+                    confirmDialog.value.visible = false;
                 }
             },
-        });
+            onCancel: () => {
+                confirmDialog.value.visible = false;
+            },
+        };
     } catch (error: any) {
         reportError({
-            action: `deleteMessage`,
+            action: "deleteMessage",
             message: "Error in deleteMessage: " + error.message,
-            description: `Failed to delete this message.`,
+            description: "Failed to delete this message.",
             status: getErrorStatus(error),
             userId: parsedUserDetails.value?.userId || "unknown",
             severity: "critical",
@@ -773,12 +738,10 @@ async function fetchLinkPreview(
         };
     }
 
-    // Only return from cache if caching is enabled
     if (cache && linkPreviewCache.value.has(url)) {
         return linkPreviewCache.value.get(url)!;
     }
 
-    // Create preview object but don't cache it yet if cache is false
     const preview: LinkPreview = {
         url,
         title: "",
@@ -787,7 +750,6 @@ async function fetchLinkPreview(
         error: false,
     };
 
-    // Only set in cache if caching is enabled
     if (cache) {
         linkPreviewCache.value.set(url, preview);
     }
@@ -838,7 +800,6 @@ async function fetchLinkPreview(
             error: false,
         };
 
-        // Only update cache if caching is enabled
         if (cache) {
             linkPreviewCache.value.set(url, updatedPreview);
             saveLinkPreviewCache();
@@ -846,7 +807,7 @@ async function fetchLinkPreview(
         return updatedPreview;
     } catch (error: any) {
         reportError({
-            action: `fetchLinkPreview`,
+            action: "fetchLinkPreview",
             message: "Error in fetching link preview: " + error.message,
             description: `Failed to fetch link preview for ${url}`,
             status: getErrorStatus(error),
@@ -862,7 +823,6 @@ async function fetchLinkPreview(
             error: true,
         };
 
-        // Only update cache if caching is enabled
         if (cache) {
             linkPreviewCache.value.set(url, fallbackPreview);
             saveLinkPreviewCache();
@@ -902,7 +862,9 @@ async function syncFromServer(serverData?: any) {
         if (!data) {
             console.log("📡 Fetching data from server...");
             updateSyncProgress("Fetching data from server...", 50);
-            const response = await apiCall("/sync", { method: "GET" });
+            const response = await apiCall("/sync", {
+                method: "GET",
+            });
             data = response.data;
         }
 
@@ -911,11 +873,10 @@ async function syncFromServer(serverData?: any) {
             return;
         }
 
-        console.log("📥 Server data received:");
+        console.log("📥 Server data received");
 
         updateSyncProgress("Processing chats...", 70);
 
-        // Process chats
         if (data.chats && data.chats !== "[]") {
             try {
                 const serverChatsData =
@@ -935,7 +896,7 @@ async function syncFromServer(serverData?: any) {
                 }
             } catch (parseError: any) {
                 reportError({
-                    action: `syncFromServer`,
+                    action: "syncFromServer",
                     message:
                         "Error parsing server chats: " + parseError.message,
                     status: getErrorStatus(parseError),
@@ -954,7 +915,6 @@ async function syncFromServer(serverData?: any) {
 
         updateSyncProgress("Processing link previews...", 85);
 
-        // Process link previews
         if (data.link_previews && data.link_previews !== "{}") {
             try {
                 const serverPreviewsData =
@@ -987,14 +947,13 @@ async function syncFromServer(serverData?: any) {
                 }
             } catch (parseError: any) {
                 reportError({
-                    action: `syncFromMessage`,
+                    action: "syncFromServer",
                     message:
                         "Error parsing server link previews: " +
                         parseError.message,
                     status: getErrorStatus(parseError),
                     context: createErrorContext({
-                        dataType: "chats",
-                        rawDataLength: data.chats?.length,
+                        dataType: "link_previews",
                         errorName: parseError.name,
                     }),
                     userId: parsedUserDetails.value?.userId || "unknown",
@@ -1005,9 +964,8 @@ async function syncFromServer(serverData?: any) {
 
         updateSyncProgress("Updating preferences...", 95);
 
-        // Update user details if provided
         if (
-            data.syncEnabled !== undefined ||
+            data.sync_enabled !== undefined ||
             data.preferences ||
             data.theme ||
             data.work_function ||
@@ -1039,7 +997,7 @@ async function syncFromServer(serverData?: any) {
                     data.expire_duration ||
                     parsedUserDetails.value.expireDuration,
                 syncEnabled:
-                    data.sync_enabled || parsedUserDetails.value.syncEnabled,
+                    data.sync_enabled ?? parsedUserDetails.value.syncEnabled,
             };
 
             parsedUserDetails.value = updatedUserDetails;
@@ -1066,9 +1024,9 @@ async function syncFromServer(serverData?: any) {
         console.log("✅ Successfully synced data from server");
     } catch (error: any) {
         reportError({
-            action: `syncFromServer`,
+            action: "syncFromServer",
             message: "Sync from server failed: " + error.message,
-            description: `Using local stored data instead.`,
+            description: "Using local stored data instead.",
             status: getErrorStatus(error),
             userId: parsedUserDetails.value?.userId || "unknown",
             context: createErrorContext({
@@ -1097,6 +1055,7 @@ async function syncFromServer(serverData?: any) {
         syncStatus.value.syncing = false;
     }
 }
+
 async function syncToServer() {
     if (
         !parsedUserDetails.value?.userId ||
@@ -1121,7 +1080,6 @@ async function syncToServer() {
         updateSyncProgress("Preparing sync data...", 40);
 
         const syncData = {
-            chats: JSON.stringify(chats.value),
             link_previews: JSON.stringify(
                 Object.fromEntries(linkPreviewCache.value),
             ),
@@ -1172,9 +1130,9 @@ async function syncToServer() {
         return response;
     } catch (error: any) {
         reportError({
-            action: `syncToServer`,
-            message: "Syn to server failed: " + error.message,
-            description: `Changes have been reverted to local.`,
+            action: "syncToServer",
+            message: "Sync to server failed: " + error.message,
+            description: "Changes have been reverted to local.",
             status: getErrorStatus(error),
             userId: parsedUserDetails.value?.userId || "unknown",
             severity: "low",
@@ -1211,6 +1169,142 @@ async function syncToServer() {
     }
 }
 
+/**
+ * Sync individual chat to server
+ * More efficient than syncing all chats
+ */
+async function syncChatToServer(chatId: string) {
+    if (!isAuthenticated.value || !parsedUserDetails.value?.syncEnabled) {
+        return;
+    }
+
+    try {
+        const chat = chats.value.find((c) => c.id === chatId);
+        if (!chat) {
+            console.error(`Chat ${chatId} not found for sync`);
+            return;
+        }
+
+        console.log(`🔄 Syncing individual chat: ${chatId}`);
+
+        // Check if chat exists on server, if not create it
+        try {
+            await apiCall(`/chats/${chatId}`, { method: "GET" });
+            // Chat exists, update it
+            await apiCall(`/chats/${chatId}`, {
+                method: "PUT",
+                body: JSON.stringify({
+                    title: chat.title,
+                    is_archived: chat.is_archived,
+                }),
+            });
+        } catch (error: any) {
+            if (
+                error.message.includes("not found") ||
+                error.message.includes("404")
+            ) {
+                // Chat doesn't exist, create it
+                await apiCall("/chats", {
+                    method: "POST",
+                    body: JSON.stringify({
+                        title: chat.title,
+                    }),
+                });
+            }
+        }
+
+        console.log(`✅ Chat ${chatId} synced successfully`);
+    } catch (error: any) {
+        console.error(`Failed to sync chat ${chatId}:`, error);
+        reportError({
+            action: "syncChatToServer",
+            message: `Failed to sync chat: ${error.message}`,
+            status: getErrorStatus(error),
+            userId: parsedUserDetails.value?.userId || "unknown",
+            severity: "low",
+        } as PlatformError);
+    }
+}
+
+/**
+ * Sync individual message to server
+ * Most efficient - only syncs the specific message
+ */
+async function syncMessageToServer(chatId: string, message: Message) {
+    if (!isAuthenticated.value || !parsedUserDetails.value?.syncEnabled) {
+        return;
+    }
+
+    try {
+        console.log(`🔄 Syncing message to chat: ${chatId}`);
+
+        // First ensure chat exists on server
+        await syncChatToServer(chatId);
+
+        // Then add the message
+        await apiCall(`/chats/${chatId}/messages`, {
+            method: "POST",
+            body: JSON.stringify({
+                prompt: message.prompt,
+                response: message.response,
+                model: message.model || "gemini",
+                references: message.references || [],
+            }),
+        });
+
+        console.log(`✅ Message synced to chat ${chatId}`);
+    } catch (error: any) {
+        console.error(`Failed to sync message to ${chatId}:`, error);
+        reportError({
+            action: "syncMessageToServer",
+            message: `Failed to sync message: ${error.message}`,
+            status: getErrorStatus(error),
+            userId: parsedUserDetails.value?.userId || "unknown",
+            severity: "low",
+        } as PlatformError);
+        // Mark as unsynced for retry later
+        syncStatus.value.hasUnsyncedChanges = true;
+    }
+}
+
+// Syncs only the new message, not the entire chat history
+async function onMessageAdded(message: Message) {
+    if (!currentChatId.value) return;
+
+    try {
+        // Save locally first
+        saveChats();
+
+        // Then sync the specific message to server
+        if (isAuthenticated.value && parsedUserDetails.value?.syncEnabled) {
+            await syncMessageToServer(currentChatId.value, message);
+        }
+    } catch (error: any) {
+        console.error("Failed to sync new message:", error);
+        // Will retry on next full sync
+        syncStatus.value.hasUnsyncedChanges = true;
+    }
+}
+
+/**
+ * Called when chat metadata changes (title, etc)
+ * Syncs only the specific chat, not all chats
+ */
+async function onChatUpdated(chatId: string) {
+    try {
+        // Save locally first
+        saveChats();
+
+        // Then sync the specific chat to server
+        if (isAuthenticated.value && parsedUserDetails.value?.syncEnabled) {
+            await syncChatToServer(chatId);
+        }
+    } catch (error: any) {
+        console.error("Failed to sync chat update:", error);
+        syncStatus.value.hasUnsyncedChanges = true;
+    }
+}
+
 async function performSmartSync() {
     if (syncStatus.value.syncing) {
         console.log("⏳ Sync already in progress, skipping...");
@@ -1227,12 +1321,10 @@ async function performSmartSync() {
     try {
         const isLocalDataEmpty =
             chats.value.length === 0 ||
-            (chats.value.length === 1 && chats.value[0].messages.length === 0);
+            (chats.value.length === 1 && chats.value[0].messages?.length === 0);
 
-        // Check if there are pending local changes (like theme changes)
         const hasPendingLocalChanges = syncStatus.value.hasUnsyncedChanges;
         if (isLocalDataEmpty && !hasPendingLocalChanges) {
-            // Only sync FROM server if there are no pending local changes
             console.log(
                 "📥 Local data empty and no pending changes - syncing FROM server",
             );
@@ -1243,16 +1335,15 @@ async function performSmartSync() {
                 console.log("✅ Successfully synced data from server");
             } catch (error: any) {
                 reportError({
-                    action: `performSmartSync`,
+                    action: "performSmartSync",
                     message: "Failed to sync from server: " + error.message,
-                    description: `Using local stored data instead.`,
+                    description: "Using local stored data instead.",
                     status: getErrorStatus(error),
                     userId: parsedUserDetails.value?.userId || "unknown",
                     severity: "low",
                 } as PlatformError);
             }
         } else if (hasPendingLocalChanges) {
-            // Always sync TO server first if there are local changes (including theme)
             console.log(
                 "📤 Has pending local changes (including user details) - syncing TO server",
             );
@@ -1260,7 +1351,6 @@ async function performSmartSync() {
             const hadUnsyncedChangesBeforeSync =
                 syncStatus.value.hasUnsyncedChanges;
 
-            // Clear the flag BEFORE attempting sync
             syncStatus.value.hasUnsyncedChanges = false;
 
             try {
@@ -1269,9 +1359,9 @@ async function performSmartSync() {
                 console.log("✅ Successfully synced changes to server");
             } catch (error: any) {
                 reportError({
-                    action: `performSmartSync`,
+                    action: "performSmartSync",
                     message: "Failed to sync to server: " + error.message,
-                    description: `Using local stored instead.`,
+                    description: "Using local stored instead.",
                     status: getErrorStatus(error),
                     userId: parsedUserDetails.value?.userId || "unknown",
                     severity: "low",
@@ -1284,7 +1374,6 @@ async function performSmartSync() {
                     );
                 }
 
-                // Auto-retry for network errors
                 if (
                     error.message?.includes("Network") ||
                     error.message?.includes("timeout")
@@ -1303,10 +1392,10 @@ async function performSmartSync() {
                 console.log("✅ Server data is current");
             } catch (error: any) {
                 reportError({
-                    action: `performSmartSync`,
+                    action: "performSmartSync",
                     message:
                         "Failed to check for server updates: " + error.message,
-                    description: `Using local data instead.`,
+                    description: "Using local data instead.",
                     status: getErrorStatus(error),
                     userId: parsedUserDetails.value?.userId || "unknown",
                     severity: "low",
@@ -1315,9 +1404,10 @@ async function performSmartSync() {
         }
     } catch (error: any) {
         reportError({
-            action: `performSmartSync`,
+            action: "performSmartSync",
             message: "Critical error in Sync: " + error.message,
-            description: `Changes have been reverted, using local data instead.`,
+            description:
+                "Changes have been reverted, using local data instead.",
             status: getErrorStatus(error),
             userId: parsedUserDetails.value?.userId || "unknown",
             severity: "critical",
@@ -1432,7 +1522,6 @@ async function handleAuth(data: {
             },
         };
 
-        // ✅ Set user details FIRST (this will trigger isAuthenticated to become true)
         parsedUserDetails.value = userData;
         previousUserDetails = JSON.parse(JSON.stringify(userData));
 
@@ -1462,9 +1551,6 @@ async function handleAuth(data: {
             loadLocalData();
             console.log("Sync disabled, loaded local data only");
         }
-
-        // ✅ Don't call createNewChat() here - let the watcher handle navigation
-        // The isAuthenticated watcher will trigger and navigate appropriately
 
         return response;
     } catch (error: any) {
@@ -1502,7 +1588,7 @@ function loadLocalData() {
                 }
             } catch (parseError: any) {
                 reportError({
-                    action: `loadLocalData`,
+                    action: "loadLocalData",
                     message:
                         "Error parsing local stored chats: " +
                         parseError.message,
@@ -1515,18 +1601,15 @@ function loadLocalData() {
             }
         }
 
-        // DON'T automatically set currentChatId or navigate here
-        // Let the route handler in ChatView manage this
         console.log("Successfully loaded local data");
 
-        // Only initialize other caches
         loadLinkPreviewCache();
         updateExpandedArray();
     } catch (error: any) {
         reportError({
-            action: `loadLocalData`,
+            action: "loadLocalData",
             message: "Failed to load local data: " + error.message,
-            description: `Some data may not be available`,
+            description: "Some data may not be available",
             status: getErrorStatus(error),
             userId: parsedUserDetails.value?.userId || "unknown",
             severity: "critical",
@@ -1537,12 +1620,10 @@ function loadLocalData() {
 async function toggleSync() {
     const targetSyncValue = !parsedUserDetails.value.syncEnabled;
 
-    // Store original state for rollback
     const originalSyncValue = parsedUserDetails.value.syncEnabled;
     const originalUserDetails = { ...parsedUserDetails.value };
 
     try {
-        // Update in-memory state
         parsedUserDetails.value.syncEnabled = targetSyncValue;
         syncEnabled.value = targetSyncValue;
 
@@ -1552,16 +1633,13 @@ async function toggleSync() {
         });
 
         if (targetSyncValue) {
-            // ENABLING sync - sync TO server first to preserve local data
             try {
                 showSyncIndicator("Uploading your local data...", 20);
 
-                // Always sync TO server first when enabling sync
                 await syncToServer();
 
                 console.log("Local data uploaded to server successfully");
 
-                // Then optionally sync FROM server to get any additional server data
                 updateSyncProgress("Checking for server updates...", 70);
                 await syncFromServer();
 
@@ -1573,7 +1651,7 @@ async function toggleSync() {
                 });
             } catch (error: any) {
                 reportError({
-                    action: `toggleSync`,
+                    action: "toggleSync",
                     message: "Failed to sync when enabling: " + error.message,
                     status: getErrorStatus(error),
                     userId: parsedUserDetails.value?.userId || "unknown",
@@ -1581,7 +1659,6 @@ async function toggleSync() {
                 } as PlatformError);
                 hideSyncIndicator();
 
-                // Rollback on failure
                 parsedUserDetails.value.syncEnabled = originalSyncValue;
                 syncEnabled.value = originalSyncValue;
                 parsedUserDetails.value = originalUserDetails;
@@ -1591,9 +1668,10 @@ async function toggleSync() {
                 );
 
                 reportError({
-                    action: `toggleSync`,
+                    action: "toggleSync",
                     message: "Failed to enable sync: " + error.message,
-                    description: `Could not upload your data. Please try again.`,
+                    description:
+                        "Could not upload your data. Please try again.",
                     status: error.status,
                     userId: parsedUserDetails.value?.userId || "unknown",
                     severity: "high",
@@ -1602,11 +1680,9 @@ async function toggleSync() {
                 throw error;
             }
         } else {
-            // DISABLING sync - just update server preference
             try {
                 showSyncIndicator("Updating sync preference...", 50);
 
-                // Update server to disable sync (with empty data)
                 await apiCall("/sync", {
                     method: "POST",
                     body: JSON.stringify({
@@ -1619,7 +1695,6 @@ async function toggleSync() {
 
                 hideSyncIndicator();
 
-                // Save to localStorage after successful server update
                 localStorage.setItem(
                     "userdetails",
                     JSON.stringify(parsedUserDetails.value),
@@ -1632,17 +1707,17 @@ async function toggleSync() {
                 });
             } catch (error: any) {
                 reportError({
-                    action: `toggleSync`,
+                    action: "toggleSync",
                     message:
                         "Failed to disable sync on server: " + error.message,
-                    description: `Changes have been reverted. Please try again.`,
+                    description:
+                        "Changes have been reverted. Please try again.",
                     status: getErrorStatus(error),
                     userId: parsedUserDetails.value?.userId || "unknown",
                     severity: "medium",
                 } as PlatformError);
                 hideSyncIndicator();
 
-                // Even if server update fails, allow local disable
                 localStorage.setItem(
                     "userdetails",
                     JSON.stringify(parsedUserDetails.value),
@@ -1656,7 +1731,6 @@ async function toggleSync() {
             }
         }
     } catch (error: any) {
-        // Rollback: Revert both in-memory AND localStorage
         parsedUserDetails.value.syncEnabled = originalSyncValue;
         syncEnabled.value = originalSyncValue;
         parsedUserDetails.value = originalUserDetails;
@@ -1666,9 +1740,9 @@ async function toggleSync() {
         );
 
         reportError({
-            action: `toggleSync`,
+            action: "toggleSync",
             message: "Failed to update sync setting: " + error.message,
-            description: `Changes have been reverted. Please try again.`,
+            description: "Changes have been reverted. Please try again.",
             status: getErrorStatus(error),
             userId: parsedUserDetails.value?.userId || "unknown",
             severity: "high",
@@ -1685,7 +1759,7 @@ function isLocalDataEmpty(): boolean {
 
         const hasMeaningfulData = chats.value.some((chat) => {
             return (
-                chat.messages.length > 0 ||
+                (chat && chat.messages && chat.messages?.length > 0) ||
                 (chat.title && chat.title !== "New Chat" && chat.title !== "")
             );
         });
@@ -1693,7 +1767,7 @@ function isLocalDataEmpty(): boolean {
         return !hasMeaningfulData;
     } catch (error: any) {
         reportError({
-            action: `isLoadDataEmpty`,
+            action: "isLocalDataEmpty",
             message: "Error checking local data state: " + error.message,
             status: getErrorStatus(error),
             userId: parsedUserDetails.value?.userId || "unknown",
@@ -1761,11 +1835,7 @@ function setupConnectionListeners() {
         if (isActuallyOnline) {
             showConnectionStatus();
 
-            // Auto-sync when coming back online with retry logic
-            if (
-                // syncStatus.value.hasUnsyncedChanges &&
-                parsedUserDetails.value?.syncEnabled
-            ) {
+            if (parsedUserDetails.value?.syncEnabled) {
                 console.log("Connection restored - syncing unsaved changes");
                 setTimeout(() => {
                     performSmartSync().catch((error) => {
@@ -1773,7 +1843,6 @@ function setupConnectionListeners() {
                             "Auto-sync after connection recovery failed:",
                             error,
                         );
-                        // Don't show error toast for auto-sync failures
                     });
                 }, 3000);
             }
@@ -1813,12 +1882,10 @@ function setupConnectionListeners() {
     window.addEventListener("offline", startConnectionMonitoring);
 }
 
-// ---------- Request Limit Functions ----------
 function loadRequestCount() {
     try {
         if (!parsedUserDetails.value) return;
 
-        // Initialize if doesn't exist
         if (!parsedUserDetails.value.requestCount) {
             parsedUserDetails.value.requestCount = {
                 count: 0,
@@ -1829,7 +1896,6 @@ function loadRequestCount() {
 
         const data = parsedUserDetails.value.requestCount;
 
-        // Validate data structure
         if (
             typeof data !== "object" ||
             typeof data.timestamp !== "number" ||
@@ -1843,16 +1909,13 @@ function loadRequestCount() {
             return;
         }
 
-        // Check if 24 hours have passed
         const now = Date.now();
         const timeDiff = now - data.timestamp;
         const twentyFourHours = 24 * 60 * 60 * 1000;
 
         if (timeDiff > twentyFourHours) {
-            // Reset count after 24 hours
             parsedUserDetails.value.requestCount = { count: 0, timestamp: now };
         } else {
-            // Ensure count doesn't exceed limit
             parsedUserDetails.value.requestCount.count = Math.max(
                 0,
                 Math.min(data.count, FREE_REQUEST_LIMIT),
@@ -1872,17 +1935,16 @@ function loadRequestCount() {
 function checkRequestLimitBeforeSubmit(): boolean {
     try {
         if (!userHasRequestLimits.value) {
-            return true; // Unlimited user - allow
+            return true;
         }
 
         if (!parsedUserDetails.value.requestCount) {
-            return true; // No limit data - allow (safety)
+            return true;
         }
 
         const currentCount = parsedUserDetails.value.requestCount?.count || 0;
 
         if (currentCount >= FREE_REQUEST_LIMIT) {
-            // Show error toast here (at submit time, not load time)
             if (userPlanStatus.value.isExpired) {
                 toast.error("Your plan has expired", {
                     duration: 5000,
@@ -1895,26 +1957,26 @@ function checkRequestLimitBeforeSubmit(): boolean {
                     description: "Please upgrade to continue chatting.",
                 });
             }
-            return false; // Block submission
+            return false;
         }
 
-        return true; // Allow submission
+        return true;
     } catch (error: any) {
         reportError({
-            action: `checkRequestLimitBeforeSubmit`,
-            message: `Error checking request limit for user ${parsedUserDetails.value.username} : ${error.message}`,
+            action: "checkRequestLimitBeforeSubmit",
+            message: `Error checking request limit for user ${parsedUserDetails.value.username}: ${error.message}`,
             status: getErrorStatus(error),
             userId: parsedUserDetails.value?.userId || "unknown",
             severity: "low",
         } as PlatformError);
-        return true; // Allow on error (safety)
+        return true;
     }
 }
 
 function incrementRequestCount() {
     try {
         if (!userHasRequestLimits.value) {
-            return; // No limits for unlimited users
+            return;
         }
 
         if (!parsedUserDetails.value) {
@@ -1935,7 +1997,7 @@ function incrementRequestCount() {
         }
     } catch (error: any) {
         reportError({
-            action: `incrementRequestCount`,
+            action: "incrementRequestCount",
             message: "Failed to increment request count: " + error.message,
             status: getErrorStatus(error),
             userId: parsedUserDetails.value?.userId || "unknown",
@@ -1954,7 +2016,7 @@ function resetRequestCount() {
         }
     } catch (error: any) {
         reportError({
-            action: `resetRequestCount`,
+            action: "resetRequestCount",
             message: "Failed to reset request count: " + error.message,
             status: getErrorStatus(error),
             userId: parsedUserDetails.value?.userId || "unknown",
@@ -1980,7 +2042,6 @@ watch(
             return;
         }
 
-        // Clear any pending sync immediately
         if (userDetailsSyncTimeout) {
             clearTimeout(userDetailsSyncTimeout);
         }
@@ -1999,19 +2060,16 @@ watch(
         console.log("User details changed meaningfully");
 
         userDetailsSyncTimeout = setTimeout(async () => {
-            // Store the new state temporarily
             const tempNewState = JSON.parse(JSON.stringify(newUserDetails));
 
             try {
                 console.log("Syncing user details changes to server...");
 
-                // Save to localStorage immediately for good UX
                 localStorage.setItem(
                     "userdetails",
                     JSON.stringify(tempNewState),
                 );
 
-                // Mark as having unsynced changes
                 syncStatus.value.hasUnsyncedChanges = true;
 
                 // Attempt sync
@@ -2085,92 +2143,6 @@ function hasUserDetailsChangedMeaningfully(
         const changed = JSON.stringify(newValue) !== JSON.stringify(oldValue);
         return changed;
     });
-}
-
-watch(
-    () => chats.value,
-    (newChats, oldChats) => {
-        if (!isAuthenticated.value || !parsedUserDetails.value?.syncEnabled) {
-            console.log("🔕 Sync disabled - skipping chat change detection");
-            return;
-        }
-
-        if (!oldChats || oldChats.length === 0) {
-            console.log("🆕 Initial chats load - no previous state to compare");
-            return;
-        }
-
-        if (chatsDebounceTimer) {
-            clearTimeout(chatsDebounceTimer);
-        }
-
-        const hasMeaningfulChanges = hasChatsChangedMeaningfully(
-            newChats,
-            oldChats,
-        );
-
-        if (hasMeaningfulChanges) {
-            console.log("💾 Chat changes detected - will sync");
-            syncStatus.value.hasUnsyncedChanges = true;
-
-            // Use a reasonable debounce but ensure sync happens
-            chatsDebounceTimer = setTimeout(() => {
-                if (
-                    syncStatus.value.hasUnsyncedChanges &&
-                    !syncStatus.value.syncing
-                ) {
-                    console.log("🔄 Triggering sync from chat changes");
-                    performSmartSync().catch((error) => {
-                        reportError({
-                            action: `chats-watcher`,
-                            message:
-                                "Sync from chat changed failed: " +
-                                error.message,
-                            status: getErrorStatus(error),
-                            userId:
-                                parsedUserDetails.value?.userId || "unknown",
-                            severity: "low",
-                        } as PlatformError);
-                    });
-                }
-            }, 1500); // Increased to 1.5 seconds
-        }
-    },
-    { deep: true, immediate: false },
-);
-
-function hasChatsChangedMeaningfully(
-    newChats: Chat[],
-    oldChats: Chat[],
-): boolean {
-    if (!oldChats || !Array.isArray(oldChats)) return true;
-
-    if (newChats.length !== oldChats.length) return true;
-
-    for (let i = 0; i < newChats.length; i++) {
-        const newChat = newChats[i];
-        const oldChat = oldChats[i];
-
-        if (!oldChat) return true;
-
-        if (newChat.messages.length !== oldChat.messages.length) return true;
-
-        for (let j = 0; j < newChat.messages.length; j++) {
-            const newMessage = newChat.messages[j];
-            const oldMessage = oldChat.messages[j];
-
-            if (!oldMessage) return true;
-
-            if (
-                newMessage.prompt !== oldMessage.prompt ||
-                newMessage.response !== oldMessage.response
-            ) {
-                return true;
-            }
-        }
-    }
-
-    return false;
 }
 
 watch(
@@ -2539,7 +2511,6 @@ const globalState = {
     cancelAllRequests,
     cancelChatRequests,
     checkInternetConnection,
-    showConfirmDialog,
     apiCall,
     logout,
     updateExpandedArray,
@@ -2590,7 +2561,6 @@ const globalState = {
     // Sync functions
     syncFromServer,
     syncToServer,
-    manualSync,
 
     // Authentication
     handleAuth,

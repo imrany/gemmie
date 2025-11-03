@@ -15,9 +15,8 @@ import type {
     Chat,
     ConfirmDialogOptions,
     ContextReference,
-    CurrentChat,
     LinkPreview,
-    Res,
+    Message,
     UserDetails,
 } from "@/types";
 import { toast } from "vue-sonner";
@@ -212,8 +211,8 @@ const {
     saveLinkPreviewCache: () => void;
     syncFromServer: (data?: any) => void;
     syncToServer: () => void;
-    currentChat: Ref<CurrentChat | undefined>;
-    currentMessages: Ref<Res[]>;
+    currentChat: Ref<Chat | undefined>;
+    currentMessages: Ref<Message[]>;
     linkPreview: LinkPreview;
     updateExpandedArray: () => void;
     apiCall: (endpoint: string, options: RequestInit) => any;
@@ -570,10 +569,14 @@ async function handleSubmit(
 
     // Store temporary message reference
     let tempMessageIndex = -1;
-    const tempResp: Res = {
+    const tempResp: Message = {
+        id: `temp_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+        chat_id: submissionChatId,
+        created_at: new Date().toISOString(),
         prompt: promptValue,
         response: responseMode ? `${responseMode}...` : "...",
         references: effectiveContextReferences?.map((ref) => ref.preview) || [],
+        model: "gemini-pro",
     };
 
     // Store original selectedContexts for rollback on error
@@ -587,7 +590,7 @@ async function handleSubmit(
         if (targetChat) {
             targetChat.messages.push(tempResp);
             tempMessageIndex = targetChat.messages.length - 1;
-            targetChat.updatedAt = new Date().toISOString();
+            targetChat.last_message_at = new Date().toISOString();
 
             // Update chat title if first message
             if (targetChat.messages.length === 1) {
@@ -675,15 +678,18 @@ async function handleSubmit(
             (chat) => chat.id === submissionChatId,
         );
         if (updatedTargetChat && tempMessageIndex >= 0) {
-            const updatedMessage: Res = {
+            const updatedMessage: Message = {
+                id: `msg_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+                chat_id: submissionChatId,
+                created_at: new Date().toISOString(),
                 prompt: promptValue,
                 response: finalResponse,
-                status: response.status,
                 references:
                     effectiveContextReferences?.map((ref) => ref.preview) || [],
+                model: "gemini-pro",
             };
             updatedTargetChat.messages[tempMessageIndex] = updatedMessage;
-            updatedTargetChat.updatedAt = new Date().toISOString();
+            updatedTargetChat.last_message_at = new Date().toISOString();
 
             // Process links in the response
             await processLinksInResponse(tempMessageIndex);
@@ -827,17 +833,21 @@ async function handleLinkOnlyRequest(
 
     // Store temporary message reference
     let tempMessageIndex = -1;
-    const tempResp: Res = {
+    const tempResp: Message = {
+        id: `temp_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+        chat_id: chatId,
+        created_at: new Date().toISOString(),
         prompt: promptValue,
         response: "...",
         references: contextReferenceIds,
+        model: "gemini-pro",
     };
     const targetChat = chats.value.find((chat) => chat.id === chatId);
 
     if (targetChat) {
         targetChat.messages.push(tempResp);
         tempMessageIndex = targetChat.messages.length - 1;
-        targetChat.updatedAt = new Date().toISOString();
+        targetChat.last_message_at = new Date().toISOString();
     }
 
     try {
@@ -888,12 +898,15 @@ async function handleLinkOnlyRequest(
         );
         if (updatedTargetChat && tempMessageIndex >= 0) {
             updatedTargetChat.messages[tempMessageIndex] = {
+                id: `msg_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+                chat_id: chatId,
+                created_at: new Date().toISOString(),
                 prompt: promptValue,
                 response: combinedResponse.trim(),
-                status: 200,
                 references: contextReferenceIds,
+                model: "gemini-pro",
             };
-            updatedTargetChat.updatedAt = new Date().toISOString();
+            updatedTargetChat.last_message_at = new Date().toISOString();
         }
 
         // ✅ ONLY INCREMENT ON SUCCESS for link-only prompts
@@ -1101,11 +1114,10 @@ async function refreshResponse(
             chat.messages[msgIndex] = {
                 ...oldMessage,
                 response: combinedResponse.trim(),
-                status: 200,
                 references: originalReferences || [], // PRESERVE REFERENCES
             };
 
-            chat.updatedAt = new Date().toISOString();
+            chat.updated_at = new Date().toISOString();
             saveChats();
 
             await processLinksInResponse(msgIndex);
@@ -1178,11 +1190,10 @@ async function refreshResponse(
         chat.messages[msgIndex] = {
             ...oldMessage,
             response: finalResponse,
-            status: response.status,
             references: originalReferences || [], // PRESERVE REFERENCES
         };
 
-        chat.updatedAt = new Date().toISOString();
+        chat.updated_at = new Date().toISOString();
         saveChats();
 
         await processLinksInResponse(msgIndex);
@@ -1776,7 +1787,7 @@ onMounted(async () => {
         }
 
         // Process link previews in responses - avoid duplicate processing
-        currentMessages.value.forEach((msg: Res, index) => {
+        currentMessages.value.forEach((msg: Message, index) => {
             if (
                 msg.response &&
                 msg.response !== "..." &&

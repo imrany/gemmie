@@ -13,13 +13,14 @@ func CreateMessage(msg Message) error {
 		msg.CreatedAt = time.Now()
 	}
 	query := `
-		INSERT INTO messages (id, chat_id, role, content, created_at, model)
-		VALUES ($1, $2, $3, $4, $5, $6)
+		INSERT INTO messages (id, chat_id, prompt, response, created_at, model, references_ids)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
 	`
 
 	_, err := DB.ExecContext(ctx, query,
-		msg.ID, msg.ChatId, msg.Role,
-		msg.Content, msg.CreatedAt, msg.Model,
+		msg.ID, msg.ChatId, msg.Prompt,
+		msg.Response, msg.CreatedAt, msg.Model,
+		msg.References,
 	)
 
 	return err
@@ -29,7 +30,7 @@ func GetMessagesByChatId(chatId string) ([]Message, error) {
 	ctx := context.Background()
 
 	query := `
-			SELECT id, chat_id, role, content, created_at, model
+			SELECT id, chat_id, prompt, response, created_at, model, references_ids
 			FROM messages
 			WHERE chat_id = $1
 			ORDER BY created_at ASC
@@ -46,8 +47,9 @@ func GetMessagesByChatId(chatId string) ([]Message, error) {
 	for rows.Next() {
 		var msg Message
 		err := rows.Scan(
-			&msg.ID, &msg.ChatId, &msg.Role,
-			&msg.Content, &msg.CreatedAt, &msg.Model,
+			&msg.ID, &msg.ChatId, &msg.Prompt,
+			&msg.Response, &msg.CreatedAt, &msg.Model,
+			&msg.References,
 		)
 		if err != nil {
 			return nil, err
@@ -68,12 +70,13 @@ func UpdateMessage(msg Message) error {
 
 	query := `
 	UPDATE messages SET
-		chat_id = $2, role = $3, content = $4, created_at = $5, model = $6
- 		WHERE id = $1
+		chat_id = $2, prompt = $3, response = $4, created_at = $5, model = $6, references_ids = $7
+			WHERE id = $1
 	`
 	_, err := DB.ExecContext(ctx, query,
-		&msg.ID, &msg.ChatId, &msg.Role,
-		&msg.Content, &msg.CreatedAt, &msg.Model,
+		&msg.ID, &msg.ChatId, &msg.Prompt,
+		&msg.Response, &msg.CreatedAt, &msg.Model,
+		&msg.References,
 	)
 
 	return err
@@ -83,14 +86,15 @@ func GetMessageById(ID string) (*Message, error) {
 	ctx := context.Background()
 
 	query := `
-		SELECT id, chat_id, role, content, created_at, model
+		SELECT id, chat_id, prompt, response, created_at, model, references_ids
 		FROM messages WHERE id = $1
 	`
 
 	message := &Message{}
 	err := DB.QueryRowContext(ctx, query, ID).Scan(
-		&message.ID, &message.ChatId, &message.Role,
-		&message.Content, &message.CreatedAt, &message.Model,
+		&message.ID, &message.ChatId, &message.Prompt,
+		&message.Response, &message.CreatedAt, &message.Model,
+		&message.References,
 	)
 
 	if err == sql.ErrNoRows {

@@ -56,7 +56,7 @@ type SyncRequest struct {
 	ExternalReference string             `json:"external_reference,omitempty"` // For payment tracking
 	EmailVerified     bool               `json:"email_verified"`               // Whether email is verified
 	EmailSubscribed   bool               `json:"email_subscribed"`             // Whether user subscribed to promotional emails
-	RequestCount      store.RequestCount `json:"request_count,omitempty"`
+	RequestCount      store.RequestCount `json:"request_count"`
 	Chats             []store.Chat       `json:"chats,omitempty"`
 }
 
@@ -529,29 +529,6 @@ func SyncHandler(w http.ResponseWriter, r *http.Request) {
 		user.EmailSubscribed = req.EmailSubscribed
 		user.RequestCount = req.RequestCount
 
-		// Handle chats synchronization
-		if len(req.Chats) > 0 {
-			// Delete existing chats for the user
-			if err := store.DeleteAllChatsByUserID(userID); err != nil {
-				slog.Error("Failed to delete existing chats", "user_id", userID, "error", err)
-				w.WriteHeader(http.StatusInternalServerError)
-				json.NewEncoder(w).Encode(store.Response{
-					Success: false,
-					Message: "Failed to sync chats",
-				})
-				return
-			}
-
-			// Create new chats
-			for _, chat := range req.Chats {
-				chat.UserId = userID // Ensure the chat belongs to the current user
-				if err := store.CreateChat(chat); err != nil {
-					slog.Error("Failed to create chat", "chat_id", chat.ID, "error", err)
-					// Continue with other chats even if one fails
-				}
-			}
-		}
-
 		if err := store.UpdateUser(*user); err != nil {
 			slog.Error("Failed to update user data", "error", err)
 			w.WriteHeader(http.StatusInternalServerError)
@@ -632,7 +609,7 @@ func SyncHandler(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(store.Response{
 			Success: true,
 			Message: "Data synchronized successfully",
-			Data: map[string]interface{}{
+			Data: map[string]any{
 				"updated_at": user.UpdatedAt,
 			},
 		})

@@ -1,14 +1,6 @@
 import type { Theme } from "vue-sonner/src/packages/types.js";
 import type { FunctionalComponent } from "vue";
 
-export interface Res {
-  prompt?: string;
-  response: string;
-  status?: number;
-  requestId?: string;
-  references: string[];
-}
-
 export type ModeOption = {
   mode: "light-response" | "web-search" | "deep-search";
   label: string;
@@ -25,10 +17,12 @@ export type ContextReference = {
 export interface Message {
   id: string;
   chat_id: string;
-  role: "user" | "assistant";
-  content: string;
+  prompt: string;
+  response: string;
   created_at: string;
-  model?: string;
+  model: string;
+  requestId?: string;
+  references: string[];
 }
 
 export interface Chat {
@@ -40,7 +34,9 @@ export interface Chat {
   is_archived: boolean;
   message_count: number;
   last_message_at: string;
-  messages?: Message[];
+  messages: Message[];
+  is_private: boolean;
+  is_read_only?: boolean;
 }
 
 export interface PlatformError {
@@ -72,14 +68,6 @@ export interface LinkPreview {
   loading?: boolean;
   error?: boolean;
 }
-
-export type CurrentChat = {
-  id: string;
-  title: string;
-  messages: Res[];
-  createdAt: string;
-  updatedAt: string;
-};
 
 export type ConfirmDialogOptions = {
   visible?: boolean;
@@ -147,16 +135,10 @@ export interface ApiResponse<T = any> {
 
 // Utility types for API operations
 export interface CreateChatRequest {
-  title?: string;
+  title: string;
 }
 
 export interface UpdateChatRequest {
-  title?: string;
+  title: string;
   is_archived?: boolean;
-}
-
-export interface CreateMessageRequest {
-  role: "user" | "assistant";
-  content: string;
-  model?: string;
 }

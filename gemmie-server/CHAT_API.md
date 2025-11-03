@@ -14,11 +14,12 @@ Creates a new chat for the authenticated user.
 
 - **URL**: `/api/chats`
 - **Method**: `POST`
-- **Headers**: 
+- **Headers**:
   - `Content-Type: application/json`
   - `X-User-ID: {user_id}`
 
 **Request Body:**
+
 ```json
 {
   "title": "My New Chat"
@@ -26,6 +27,7 @@ Creates a new chat for the authenticated user.
 ```
 
 **Response (201 Created):**
+
 ```json
 {
   "success": true,
@@ -49,10 +51,11 @@ Retrieves all chats for the authenticated user.
 
 - **URL**: `/api/chats`
 - **Method**: `GET`
-- **Headers**: 
+- **Headers**:
   - `X-User-ID: {user_id}`
 
 **Response (200 OK):**
+
 ```json
 {
   "success": true,
@@ -78,10 +81,11 @@ Retrieves a specific chat with its messages.
 
 - **URL**: `/api/chats/{id}`
 - **Method**: `GET`
-- **Headers**: 
+- **Headers**:
   - `X-User-ID: {user_id}`
 
 **Response (200 OK):**
+
 ```json
 {
   "success": true,
@@ -99,18 +103,11 @@ Retrieves a specific chat with its messages.
       {
         "id": "msg_789",
         "chat_id": "chat_123",
-        "role": "user",
-        "content": "Hello!",
+        "prompt": "Hello!",
+        "response": "Hi! How can I help you today?",
         "created_at": "2023-12-01T10:15:00Z",
-        "model": ""
-      },
-      {
-        "id": "msg_790",
-        "chat_id": "chat_123",
-        "role": "assistant",
-        "content": "Hi! How can I help you today?",
-        "created_at": "2023-12-01T10:30:00Z",
-        "model": "gpt-3.5-turbo"
+        "model": "gpt-3.5-turbo",
+        "references": []
       }
     ]
   }
@@ -123,11 +120,12 @@ Updates a chat's title or archive status.
 
 - **URL**: `/api/chats/{id}`
 - **Method**: `PUT`
-- **Headers**: 
+- **Headers**:
   - `Content-Type: application/json`
   - `X-User-ID: {user_id}`
 
 **Request Body:**
+
 ```json
 {
   "title": "Updated Chat Title",
@@ -136,6 +134,7 @@ Updates a chat's title or archive status.
 ```
 
 **Response (200 OK):**
+
 ```json
 {
   "success": true,
@@ -159,10 +158,11 @@ Deletes a chat and all its messages.
 
 - **URL**: `/api/chats/{id}`
 - **Method**: `DELETE`
-- **Headers**: 
+- **Headers**:
   - `X-User-ID: {user_id}`
 
 **Response (200 OK):**
+
 ```json
 {
   "success": true,
@@ -178,25 +178,29 @@ Adds a new message to a chat.
 
 - **URL**: `/api/chats/{id}/messages`
 - **Method**: `POST`
-- **Headers**: 
+- **Headers**:
   - `Content-Type: application/json`
   - `X-User-ID: {user_id}`
 
 **Request Body:**
+
 ```json
 {
-  "role": "user",
-  "content": "What's the weather like today?",
-  "model": "gpt-3.5-turbo"
+  "prompt": "What's the weather like today?",
+  "response": "It is sunny",
+  "model": "gpt-3.5-turbo",
+  "references": []
 }
 ```
 
 **Fields:**
-- `role`: Either "user" or "assistant" (required)
-- `content`: Message content (required)
+- `prompt`: User input message (required)
+- `response`: Assistant response (required)
 - `model`: AI model used (optional, for assistant messages)
+- `references`: List of references used in the response (optional)
 
 **Response (201 Created):**
+
 ```json
 {
   "success": true,
@@ -204,10 +208,11 @@ Adds a new message to a chat.
   "data": {
     "id": "msg_791",
     "chat_id": "chat_123",
-    "role": "user",
-    "content": "What's the weather like today?",
+    "prompt": "What's the weather like today?",
+    "response": "It is sunny",
     "created_at": "2023-12-01T11:00:00Z",
-    "model": ""
+    "model": "gpt-3.5-turbo",
+    "references": []
   }
 }
 ```
@@ -218,10 +223,11 @@ Retrieves all messages for a specific chat.
 
 - **URL**: `/api/chats/{id}/messages`
 - **Method**: `GET`
-- **Headers**: 
+- **Headers**:
   - `X-User-ID: {user_id}`
 
 **Response (200 OK):**
+
 ```json
 {
   "success": true,
@@ -230,18 +236,11 @@ Retrieves all messages for a specific chat.
     {
       "id": "msg_789",
       "chat_id": "chat_123",
-      "role": "user",
-      "content": "Hello!",
+      "prompt": "Hello!",
+      "response": "Hi! How can I help you today?",
       "created_at": "2023-12-01T10:15:00Z",
-      "model": ""
-    },
-    {
-      "id": "msg_790",
-      "chat_id": "chat_123",
-      "role": "assistant",
-      "content": "Hi! How can I help you today?",
-      "created_at": "2023-12-01T10:30:00Z",
-      "model": "gpt-3.5-turbo"
+      "model": "gpt-3.5-turbo",
+      "references": []
     }
   ]
 }
@@ -253,10 +252,11 @@ Deletes a specific message.
 
 - **URL**: `/api/messages/{id}`
 - **Method**: `DELETE`
-- **Headers**: 
+- **Headers**:
   - `X-User-ID: {user_id}`
 
 **Response (200 OK):**
+
 ```json
 {
   "success": true,
@@ -269,6 +269,7 @@ Deletes a specific message.
 All endpoints may return the following error responses:
 
 ### 401 Unauthorized
+
 ```json
 {
   "success": false,
@@ -277,6 +278,7 @@ All endpoints may return the following error responses:
 ```
 
 ### 403 Forbidden
+
 ```json
 {
   "success": false,
@@ -285,6 +287,7 @@ All endpoints may return the following error responses:
 ```
 
 ### 404 Not Found
+
 ```json
 {
   "success": false,
@@ -293,6 +296,7 @@ All endpoints may return the following error responses:
 ```
 
 ### 400 Bad Request
+
 ```json
 {
   "success": false,
@@ -301,6 +305,7 @@ All endpoints may return the following error responses:
 ```
 
 ### 500 Internal Server Error
+
 ```json
 {
   "success": false,
@@ -312,7 +317,8 @@ All endpoints may return the following error responses:
 
 ### Creating a complete conversation
 
-1. **Create a new chat:**
+1.  **Create a new chat:**
+
 ```bash
 curl -X POST http://localhost:8081/api/chats \
   -H "Content-Type: application/json" \
@@ -320,23 +326,26 @@ curl -X POST http://localhost:8081/api/chats \
   -d '{"title": "Weather Discussion"}'
 ```
 
-2. **Add user message:**
+2.  **Add user message:**
+
 ```bash
 curl -X POST http://localhost:8081/api/chats/chat_456/messages \
   -H "Content-Type: application/json" \
   -H "X-User-ID: user_123" \
-  -d '{"role": "user", "content": "What'\''s the weather like?"}'
+  -d '{"prompt": "What'\''s the weather like?", "response": ""}'
 ```
 
-3. **Add assistant response:**
+3.  **Add assistant response:**
+
 ```bash
 curl -X POST http://localhost:8081/api/chats/chat_456/messages \
   -H "Content-Type: application/json" \
   -H "X-User-ID: user_123" \
-  -d '{"role": "assistant", "content": "I'\''d be happy to help with weather information! However, I don'\''t have access to real-time weather data.", "model": "gpt-3.5-turbo"}'
+  -d '{"prompt": "", "response": "I'\''d be happy to help with weather information! However, I don'\''t have access to real-time weather data.", "model": "gpt-3.5-turbo"}'
 ```
 
-4. **Get the complete chat:**
+4.  **Get the complete chat:**
+
 ```bash
 curl -X GET http://localhost:8081/api/chats/chat_456 \
   -H "X-User-ID: user_123"

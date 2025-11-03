@@ -251,7 +251,7 @@ const clearSearch = () => {
                                                     <Clock class="w-4 h-4" />
                                                     {{
                                                         new Date(
-                                                            chat.updatedAt,
+                                                            chat.last_message_at,
                                                         ).toLocaleDateString(
                                                             undefined,
                                                             {

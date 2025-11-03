@@ -241,7 +241,7 @@ func runServer() {
 
 	// Message routes
 	r.HandleFunc("/api/chats/{id}/messages", v1.CreateMessageHandler).Methods(http.MethodPost)
-	r.HandleFunc("/api/chats/{id}/messages", v1.GetMessagesHandler).Methods(http.MethodGet)
+	r.HandleFunc("/api/chats/{id}/messages", v1.UpdateMessageHandler).Methods(http.MethodPut)
 	r.HandleFunc("/api/messages/{id}", v1.DeleteMessageHandler).Methods(http.MethodDelete)
 
 	// Errors Handler - stores user errors for later support and fix

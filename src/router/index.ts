@@ -1,5 +1,4 @@
 import { createRouter, createWebHistory } from "vue-router";
-// import HomeView from "../views/HomeView.vue";
 import DeleteAccView from "../views/DeleteAccView.vue";
 import UpgradeView from "@/views/UpgradeView.vue";
 import SettingsView from "@/views/SettingsView.vue";
@@ -13,12 +12,6 @@ import ChatView from "@/views/ChatView.vue";
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
-    // {
-    //   path: "/",
-    //   name: "home",
-    //   component: HomeView,
-    //   meta: { requiresAuth: false },
-    // },
     {
       path: "/chat/:id?",
       name: "chat",
