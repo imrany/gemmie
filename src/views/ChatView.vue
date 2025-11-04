@@ -1543,55 +1543,6 @@ watch(
     { deep: true },
 );
 
-watch(
-    () => route.params.id,
-    async (newId, oldId) => {
-        const chatId = Array.isArray(newId) ? newId[0] : newId;
-        const oldChatId = Array.isArray(oldId) ? oldId[0] : oldId;
-
-        // Skip if no change or if it's the same as current
-        if (!chatId || chatId === oldChatId || chatId === currentChatId.value) {
-            return;
-        }
-
-        console.log(`🔄 Route changed: ${oldChatId} → ${chatId}`);
-
-        // Check if chat exists in current loaded chats
-        const chatExists = chats.value.find((chat) => chat.id === chatId);
-
-        if (chatExists) {
-            currentChatId.value = chatId;
-            updateExpandedArray();
-            nextTick(() => {
-                loadChatDrafts();
-            });
-            console.log(`✅ Synced to chat: ${chatId}`);
-        } else {
-            // If chat not found, try loading chats again before giving up
-            console.log("📥 Chat not found, reloading chats...");
-            loadChats();
-
-            const recheckChat = chats.value.find((chat) => chat.id === chatId);
-            if (recheckChat) {
-                currentChatId.value = chatId;
-                updateExpandedArray();
-                nextTick(() => {
-                    loadChatDrafts();
-                });
-                console.log(`✅ Found chat after reload: ${chatId}`);
-            } else {
-                console.warn(`⚠️ Chat ${chatId} truly not found`);
-                toast.warning("Chat not found", {
-                    duration: 3000,
-                    description: "Creating a new chat",
-                });
-                createNewChat();
-            }
-        }
-    },
-    { immediate: false },
-);
-
 onBeforeUnmount(() => {
     if (transcriptionTimer) clearInterval(transcriptionTimer);
     if (updateTimeout) clearTimeout(updateTimeout);
