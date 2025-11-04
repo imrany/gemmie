@@ -370,9 +370,6 @@ async function logout() {
                     }
                 }
 
-                const userBackup = { ...parsedUserDetails.value };
-                const hasChats = chats.value.length > 0;
-
                 try {
                     chats.value = [];
                     currentChatId.value = "";
@@ -419,38 +416,16 @@ async function logout() {
                         "Error clearing application state:",
                         stateError,
                     );
-                    try {
-                        parsedUserDetails.value = userBackup;
-                        if (!syncEnabledValue) {
-                            loadLocalData();
-                        }
-                    } catch (restoreError) {
-                        console.error(
-                            "Failed to restore state after logout error:",
-                            restoreError,
-                        );
-                    }
 
                     throw new Error(
                         "Failed to clear application state during logout",
                     );
                 }
 
-                if (syncEnabledValue) {
-                    toast.success("Logged out successfully", {
-                        duration: 3000,
-                        description: hasUnsyncedChanges
-                            ? "Your data has been synced to the cloud"
-                            : "Ready to log back in anytime",
-                    });
-                } else {
-                    toast.success("Logged out successfully", {
-                        duration: 3000,
-                        description: hasChats
-                            ? "Your chats are saved locally on this device"
-                            : "Ready to start fresh when you return",
-                    });
-                }
+                toast.success("Logged out successfully", {
+                    duration: 3000,
+                    description: "Ready to log back in anytime",
+                });
             } catch (error: any) {
                 reportError({
                     action: "logout",
@@ -1514,91 +1489,10 @@ async function handleAuth(data: {
             `Authentication successful for user: ${userData.username} (sync: ${userData.syncEnabled})`,
         );
 
-        if (userData.syncEnabled) {
-            try {
-                await performSmartSync();
-                console.log("Initial smart sync completed");
-                localStorage.setItem("userdetails", JSON.stringify(userData));
-                console.log("User details saved locally after successful sync");
-            } catch (syncError) {
-                console.error("Initial sync failed:", syncError);
-                syncStatus.value.hasUnsyncedChanges = false;
-                loadLocalData();
-                localStorage.setItem("userdetails", JSON.stringify(userData));
-
-                toast.warning("Synced with server but failed to merge data", {
-                    duration: 4000,
-                    description: "Your local data is preserved",
-                });
-            }
-        } else {
-            localStorage.setItem("userdetails", JSON.stringify(userData));
-            loadLocalData();
-            console.log("Sync disabled, loaded local data only");
-        }
-
         return response;
     } catch (error: any) {
         console.error("Authentication error:", error);
         throw error;
-    }
-}
-
-function loadLocalData() {
-    try {
-        console.log("Loading data from localStorage...");
-
-        const storedChats = localStorage.getItem("chats");
-        if (storedChats) {
-            try {
-                const parsedChats = JSON.parse(storedChats);
-                if (Array.isArray(parsedChats)) {
-                    const validChats = parsedChats.filter(
-                        (chat) =>
-                            chat &&
-                            typeof chat === "object" &&
-                            chat.id &&
-                            typeof chat.id === "string" &&
-                            Array.isArray(chat.messages),
-                    );
-                    chats.value = validChats;
-                    console.log(
-                        `Loaded ${validChats.length} valid chats from localStorage`,
-                    );
-                } else {
-                    console.warn(
-                        "Stored chats is not an array, resetting to empty",
-                    );
-                    chats.value = [];
-                }
-            } catch (parseError: any) {
-                reportError({
-                    action: "loadLocalData",
-                    message:
-                        "Error parsing local stored chats: " +
-                        parseError.message,
-                    status: getErrorStatus(parseError),
-                    userId: parsedUserDetails.value?.userId || "unknown",
-                    severity: "low",
-                } as PlatformError);
-                chats.value = [];
-                localStorage.removeItem("chats");
-            }
-        }
-
-        console.log("Successfully loaded local data");
-
-        loadLinkPreviewCache();
-        updateExpandedArray();
-    } catch (error: any) {
-        reportError({
-            action: "loadLocalData",
-            message: "Failed to load local data: " + error.message,
-            description: "Some data may not be available",
-            status: getErrorStatus(error),
-            userId: parsedUserDetails.value?.userId || "unknown",
-            severity: "critical",
-        } as PlatformError);
     }
 }
 
@@ -2345,7 +2239,7 @@ onMounted(async () => {
                 if (parsedUserDetails.value?.syncEnabled !== false) {
                     await syncFromServer();
                 } else {
-                    loadLocalData();
+                    loadChats();
                 }
             } catch (syncError: any) {
                 reportError({
@@ -2356,10 +2250,7 @@ onMounted(async () => {
                     userId: parsedUserDetails.value?.userId || "unknown",
                     severity: "low",
                 } as PlatformError);
-                loadLocalData();
             }
-        } else {
-            loadLocalData();
         }
 
         // Connection setup
@@ -2536,7 +2427,6 @@ const globalState = {
 
     // Data persistence functions
     saveChats,
-    loadLocalData,
     isLocalDataEmpty,
     toggleSync,
 
