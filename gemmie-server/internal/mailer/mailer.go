@@ -83,13 +83,10 @@ func SendEmail(emailData EmailData, config SMTPConfig) error {
 	// Create authentication
 	auth := smtp.PlainAuth("", config.Username, config.Password, config.Host)
 
-	// Build message
 	message := buildMessage(emailData, config)
 
-	// SMTP server address
 	addr := fmt.Sprintf("%s:%d", config.Host, config.Port)
 
-	// Send email with TLS
 	return sendWithTLS(addr, auth, config.Email, emailData.To, []byte(message), config)
 }
 
@@ -99,7 +96,6 @@ func SendOTP(email string, purpose OtpPurpose, otp string, config SMTPConfig) (s
 		return "", fmt.Errorf("email address is required")
 	}
 
-	// Create email content
 	subject := getOTPSubject(purpose)
 	body := getOTPBody(otp, purpose)
 
@@ -110,7 +106,6 @@ func SendOTP(email string, purpose OtpPurpose, otp string, config SMTPConfig) (s
 		IsHTML:  true,
 	}
 
-	// Send email
 	err := SendEmail(emailData, config)
 	if err != nil {
 		return "", fmt.Errorf("%w", err)
@@ -161,7 +156,6 @@ func SendOTPWithExistingCode(email string, purpose OtpPurpose, otp string, confi
 		return fmt.Errorf("OTP is required")
 	}
 
-	// Create email content
 	subject := getOTPSubject(purpose)
 	body := getOTPBody(otp, purpose)
 
@@ -172,7 +166,6 @@ func SendOTPWithExistingCode(email string, purpose OtpPurpose, otp string, confi
 		IsHTML:  true,
 	}
 
-	// Send email
 	err := SendEmail(emailData, config)
 	if err != nil {
 		return fmt.Errorf("failed to resend OTP email: %w", err)

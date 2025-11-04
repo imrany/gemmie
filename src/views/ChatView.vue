@@ -122,7 +122,6 @@ const {
     checkInternetConnection,
     activeRequests,
     requestChatMap,
-    performSmartSync,
     resetRequestCount,
     incrementRequestCount,
     loadRequestCount,
@@ -230,7 +229,6 @@ const {
     showSyncIndicator: (message: string, progress?: number) => void;
     hideSyncIndicator: () => void;
     updateSyncProgress: (message: string, progress: number) => void;
-    performSmartSync: () => Promise<void>;
     activeRequests: Ref<Map<string, AbortController>>;
     requestChatMap: Ref<Map<string, string>>;
     pendingResponses: Ref<Map<string, { prompt: string; chatId: string }>>;
@@ -1558,6 +1556,12 @@ watch(
 
         console.log(`🔄 Route changed: ${oldChatId} → ${chatId}`);
 
+        // Ensure chats are loaded before checking
+        if (chats.value.length === 0) {
+            console.log("📥 Loading chats in route watcher...");
+            loadChats();
+        }
+
         // Verify chat exists before syncing
         const chatExists = chats.value.find((chat) => chat.id === chatId);
 
@@ -1570,7 +1574,11 @@ watch(
             console.log(`Synced to chat: ${chatId}`);
         } else {
             console.warn(`⚠️ Chat ${chatId} not found in route watch`);
-            // Don't create new chat here - let navigation handle it
+            toast.warning("Chat not found", {
+                duration: 3000,
+                description: "Redirecting to new chat",
+            });
+            router.push("/new");
         }
     },
     { immediate: true },
@@ -1609,7 +1617,6 @@ onBeforeUnmount(() => {
     }
 });
 
-// Consolidated onMounted hook for better organization
 onMounted(async () => {
     const path = router.currentRoute.value.path;
     const routeChatId = route.params.id;
@@ -1623,22 +1630,21 @@ onMounted(async () => {
         return;
     }
 
+    // Load chats FIRST before checking if chat exists
+    if (chats.value.length === 0) {
+        console.log("📥 Loading chats before route handling...");
+        loadChats();
+    }
+
     // Handle different route scenarios
     if (path === "/new") {
-        // Create new chat and let it handle routing
         createNewChat();
         return;
     }
 
     if (chatId) {
-        // Check if chat exists
-        let chatExists = chats.value.find((chat) => chat.id === chatId);
-
-        if (!chatExists && !isLoading.value) {
-            // If chat doesn't exist and chats are not loading, try loading chats again
-            loadChats();
-            chatExists = chats.value.find((chat) => chat.id === chatId);
-        }
+        // checks if chat exists AFTER chats are loaded
+        const chatExists = chats.value.find((chat) => chat.id === chatId);
 
         if (chatExists) {
             // Sync with existing chat
@@ -1647,19 +1653,23 @@ onMounted(async () => {
             nextTick(() => {
                 loadChatDrafts();
             });
-            console.log(`🔄 Synced to existing chat: ${chatId}`);
+            console.log(`✅ Synced to existing chat: ${chatId}`);
         } else {
-            // Chat doesn't exist, redirect to new chat
-            console.warn(`⚠️ Chat ${chatId} not found, creating new`);
-            createNewChat();
+            console.warn(`⚠️ Chat ${chatId} not found after loading chats`);
+            toast.warning("Chat not found", {
+                duration: 3000,
+                description: "Redirecting to new chat",
+            });
+            router.push("/new");
+            return;
         }
     }
 
-    // 2. Load cached data and setup handlers
+    // Load cached data and setup handlers
     loadLinkPreviewCache();
     setupPastePreviewHandlers();
 
-    // 3. Setup global functions with unified approach
+    // Setup global functions
     if (typeof window !== "undefined") {
         const setupGlobalFunction = (name: string, fn: Function) => {
             (window as any)[name] = (...args: any[]) => {
@@ -1693,7 +1703,7 @@ onMounted(async () => {
         setupGlobalFunction("goToPage", goToPage);
     }
 
-    // 4. Setup event listeners once
+    // Setup event listeners
     document.addEventListener("click", handleClickOutside);
 
     const copyListener = (e: any) => {
@@ -1705,20 +1715,19 @@ onMounted(async () => {
     document.addEventListener("click", copyListener);
     document.addEventListener("keydown", handleModalKeydown);
 
-    // 5. Initialize core features
+    // Initialize core features
     initializeSpeechRecognition();
     initializeVideoLazyLoading();
 
-    // 6. Setup periodic tasks
+    // Setup periodic tasks
     const interval = setInterval(() => {
         now.value = Date.now();
     }, 1000);
 
     const resetCheckInterval = setInterval(loadRequestCount, 5 * 60 * 1000);
 
-    // 7. Initialize authentication-dependent features
+    // Initialize authentication-dependent features
     if (isAuthenticated.value) {
-        // Load request count for limited users
         const shouldHaveLimit =
             isFreeUser.value ||
             planStatus.value.isExpired ||
@@ -1729,14 +1738,7 @@ onMounted(async () => {
             loadRequestCount();
         }
 
-        loadChats();
-
-        // Initial sync from server
-        setTimeout(() => {
-            performSmartSync();
-        }, 1000);
-
-        // Pre-process links in existing messages - optimized to avoid duplicates
+        // Pre-process links in existing messages
         const processedUrls = new Set();
         currentMessages.value.forEach((item) => {
             [item.prompt, item.response].forEach((text) => {
@@ -1759,11 +1761,8 @@ onMounted(async () => {
                 }
             });
         });
-    } else {
-        loadChats();
     }
 
-    // 8. DOM-dependent functionality - consolidated timing
     nextTick(() => {
         // Clear any initial content in textarea
         const textarea = document.getElementById(
@@ -1775,9 +1774,8 @@ onMounted(async () => {
             transcribedText.value = "";
         }
 
-        // Setup scroll handling once
+        // Setup scroll handling
         if (scrollableElem.value) {
-            // Remove duplicate scroll listener setup
             scrollableElem.value.addEventListener(
                 "scroll",
                 debouncedHandleScroll,
@@ -1790,7 +1788,7 @@ onMounted(async () => {
             textarea?.focus();
         }
 
-        // Process link previews in responses - avoid duplicate processing
+        // Process link previews in responses
         currentMessages.value.forEach((msg: Message, index) => {
             if (
                 msg.response &&
@@ -1801,17 +1799,14 @@ onMounted(async () => {
             }
         });
 
-        // Single delayed setup for scroll and video observation
+        // Setup for scroll and video observation
         setTimeout(() => {
             scrollToLastMessage();
             observeNewVideoContainers();
-
-            // Initial scroll state calculation
             handleScroll();
-        }, 300); // Single delay instead of multiple
+        }, 300);
     });
 
-    // 9. Store cleanup references
     onBeforeUnmount(() => {
         // Clean up event listeners
         document.removeEventListener("click", copyListener);
@@ -1879,9 +1874,7 @@ onUnmounted(() => {
     if (updateTimeout) {
         clearTimeout(updateTimeout);
     }
-});
 
-onUnmounted(() => {
     if (currentChatId.value) {
         currentChatId.value = "";
     }
