@@ -1545,7 +1545,7 @@ watch(
 
 watch(
     () => route.params.id,
-    (newId, oldId) => {
+    async (newId, oldId) => {
         const chatId = Array.isArray(newId) ? newId[0] : newId;
         const oldChatId = Array.isArray(oldId) ? oldId[0] : oldId;
 
@@ -1556,13 +1556,7 @@ watch(
 
         console.log(`🔄 Route changed: ${oldChatId} → ${chatId}`);
 
-        // Ensure chats are loaded before checking
-        if (chats.value.length === 0) {
-            console.log("📥 Loading chats in route watcher...");
-            loadChats();
-        }
-
-        // Verify chat exists before syncing
+        // Check if chat exists in current loaded chats
         const chatExists = chats.value.find((chat) => chat.id === chatId);
 
         if (chatExists) {
@@ -1571,17 +1565,31 @@ watch(
             nextTick(() => {
                 loadChatDrafts();
             });
-            console.log(`Synced to chat: ${chatId}`);
+            console.log(`✅ Synced to chat: ${chatId}`);
         } else {
-            console.warn(`⚠️ Chat ${chatId} not found in route watch`);
-            toast.warning("Chat not found", {
-                duration: 3000,
-                description: "Redirecting to new chat",
-            });
-            router.push("/new");
+            // If chat not found, try loading chats again before giving up
+            console.log("📥 Chat not found, reloading chats...");
+            loadChats();
+
+            const recheckChat = chats.value.find((chat) => chat.id === chatId);
+            if (recheckChat) {
+                currentChatId.value = chatId;
+                updateExpandedArray();
+                nextTick(() => {
+                    loadChatDrafts();
+                });
+                console.log(`✅ Found chat after reload: ${chatId}`);
+            } else {
+                console.warn(`⚠️ Chat ${chatId} truly not found`);
+                toast.warning("Chat not found", {
+                    duration: 3000,
+                    description: "Creating a new chat",
+                });
+                createNewChat();
+            }
         }
     },
-    { immediate: true },
+    { immediate: false },
 );
 
 onBeforeUnmount(() => {
@@ -1630,38 +1638,60 @@ onMounted(async () => {
         return;
     }
 
-    // Load chats FIRST before checking if chat exists
-    if (chats.value.length === 0) {
-        console.log("📥 Loading chats before route handling...");
-        loadChats();
-    }
-
-    // Handle different route scenarios
+    // Handle /new route - create new chat immediately
     if (path === "/new") {
         createNewChat();
         return;
     }
 
+    // For specific chat routes, set currentChatId immediately
+    // This prevents the app from thinking there's no active chat
     if (chatId) {
-        // checks if chat exists AFTER chats are loaded
+        currentChatId.value = chatId;
+        console.log(`🔄 Set current chat to: ${chatId}`);
+    }
+
+    // Load chats FIRST (this will merge with any server data)
+    console.log("📥 Loading chats...");
+    if (chats.value.length === 0) {
+        loadChats();
+    }
+
+    // After loading, verify the chat exists
+    if (chatId) {
         const chatExists = chats.value.find((chat) => chat.id === chatId);
 
         if (chatExists) {
-            // Sync with existing chat
-            currentChatId.value = chatId;
+            // Chat exists - sync state
             updateExpandedArray();
             nextTick(() => {
                 loadChatDrafts();
             });
             console.log(`✅ Synced to existing chat: ${chatId}`);
         } else {
+            // Chat doesn't exist even after loading
+            // Only redirect if we're certain it's not there
             console.warn(`⚠️ Chat ${chatId} not found after loading chats`);
-            toast.warning("Chat not found", {
-                duration: 3000,
-                description: "Redirecting to new chat",
-            });
-            router.push("/new");
-            return;
+
+            // Give a small delay to allow for any async loading
+            setTimeout(() => {
+                const recheckChat = chats.value.find(
+                    (chat) => chat.id === chatId,
+                );
+                if (!recheckChat) {
+                    toast.warning("Chat not found", {
+                        duration: 3000,
+                        description: "Creating a new chat",
+                    });
+                    createNewChat();
+                } else {
+                    console.log(`✅ Chat found on recheck: ${chatId}`);
+                    updateExpandedArray();
+                    nextTick(() => {
+                        loadChatDrafts();
+                    });
+                }
+            }, 500);
         }
     }
 
@@ -1763,6 +1793,7 @@ onMounted(async () => {
         });
     }
 
+    // DOM-dependent functionality
     nextTick(() => {
         // Clear any initial content in textarea
         const textarea = document.getElementById(
@@ -1807,6 +1838,7 @@ onMounted(async () => {
         }, 300);
     });
 
+    // Store cleanup references
     onBeforeUnmount(() => {
         // Clean up event listeners
         document.removeEventListener("click", copyListener);
