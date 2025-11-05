@@ -104,7 +104,7 @@ export function useMessage({
         targetChat.title = "New Chat";
       }
 
-      targetChat.updatedAt = new Date().toISOString();
+      targetChat.last_message_at = new Date().toISOString();
       updateExpandedArray();
       saveChats();
     }

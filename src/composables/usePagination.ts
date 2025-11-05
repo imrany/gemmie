@@ -1,4 +1,4 @@
-import type { Res } from "@/types";
+import type { Message } from "@/types";
 import { nextTick, type Ref } from "vue";
 
 export function usePagination({
@@ -9,7 +9,7 @@ export function usePagination({
   scrollToLastMessage,
 }: {
   currentChatId: Ref<string | undefined>;
-  currentMessages: Ref<Res[]>;
+  currentMessages: Ref<Message[]>;
   isDeepSearchResult: (response: string) => boolean;
   deepSearchPagination: Ref<
     Map<string, Map<number, { currentPage: number; totalPages: number }>>
