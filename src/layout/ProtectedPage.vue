@@ -6,7 +6,6 @@ import { inject } from "vue";
 const {
     chats,
     parsedUserDetails,
-    isCollapsed,
     clearAllChats,
     toggleSidebar,
     logout,
@@ -19,7 +18,6 @@ const {
 } = inject("globalState") as {
     chats: Ref<Chat[]>;
     parsedUserDetails: Ref<UserDetails>;
-    isCollapsed: Ref<boolean>;
     isAuthenticated: Ref<boolean>;
 
     clearAllChats: () => void;
@@ -42,7 +40,6 @@ const {
             :data="{
                 chats,
                 parsedUserDetails,
-                isCollapsed,
             }"
             :functions="{
                 clearAllChats,

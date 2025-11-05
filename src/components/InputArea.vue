@@ -682,7 +682,7 @@ watch(isContextLimitReached, (limitReached) => {
 
                 <!-- Input Area -->
                 <div
-                    class="flex flex-col w-full bg-white dark:bg-gray-900 rounded-2xl px-2 sm:px-3 py-2 gap-1 sm:gap-2 relative"
+                    class="flex flex-col w-full bg-inherit rounded-2xl px-2 sm:px-3 py-2 gap-1 sm:gap-2 relative"
                     :class="
                         inputDisabled
                             ? 'opacity-50 border border-t dark:border-gray-700 pointer-events-none'
@@ -696,7 +696,7 @@ watch(isContextLimitReached, (limitReached) => {
                         v-if="
                             showContextDropdown && filteredMessages.length > 0
                         "
-                        class="context-dropdown absolute bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-2xl max-h-60 overflow-y-auto custom-scrollbar z-[9999] w-[20rem]"
+                        class="context-dropdown absolute bg-inherit border border-gray-300 dark:border-gray-600 rounded-lg shadow-2xl max-h-60 overflow-y-auto custom-scrollbar z-[9999] w-[20rem]"
                         :style="{
                             bottom: `${dropdownPosition.top}px`,
                             left: `${dropdownPosition.left}px`,
@@ -822,7 +822,7 @@ watch(isContextLimitReached, (limitReached) => {
                             :disabled="inputDisabled"
                             rows="1"
                             :class="[
-                                'flex-grow py-3 px-3 placeholder:text-gray-500 dark:placeholder:text-gray-400 rounded-xl bg-white dark:bg-gray-900 dark:text-gray-100 text-sm outline-none resize-none max-h-[120px] sm:max-h-[150px] md:max-h-[200px] overflow-auto leading-relaxed min-w-0',
+                                'flex-grow py-3 px-3 placeholder:text-gray-500 dark:placeholder:text-gray-400 rounded-xl bg-inherit dark:text-gray-100 text-sm outline-none resize-none max-h-[120px] sm:max-h-[150px] md:max-h-[200px] overflow-auto leading-relaxed min-w-0',
                                 'disabled:opacity-50 disabled:cursor-not-allowed',
                                 isRecording
                                     ? 'bg-red-50 border-red-200 dark:border-red-800'

@@ -42,7 +42,11 @@ const {
     isSidebarHidden,
     screenWidth,
     currentChatId,
+    isCollapsed,
+    chats,
 } = inject("globalState") as {
+    isCollapsed: Ref<boolean>;
+    chats: Ref<Chat[]>;
     currentChatId: Ref<string>;
     activeChatMenu: Ref<string | null>;
     toggleChatMenu: (chatId: string, evenet: Event) => void;
@@ -62,7 +66,6 @@ const {
 const props = defineProps<{
     data: {
         chats: Chat[];
-        isCollapsed?: boolean;
         parsedUserDetails: {
             username: string;
             email: string;
@@ -101,7 +104,7 @@ onUnmounted(() => {
 
 // Computed
 const showFullSidebar = computed(
-    () => !props.data.isCollapsed || screenWidth.value < 720,
+    () => !isCollapsed.value || screenWidth.value < 720,
 );
 const planColor = computed(() => {
     if (planStatus.value.isExpired)
@@ -114,7 +117,7 @@ const sidebarIconClass = computed(() => {
     let icon: FunctionalComponent<any>;
 
     if (screenWidth.value > 720) {
-        if (props.data.isCollapsed) {
+        if (isCollapsed.value) {
             icon = AlignJustify;
         } else {
             icon = AlignLeft;
@@ -238,14 +241,14 @@ const navLinks: {
 
             // Desktop styles
             screenWidth > 720
-                ? props.data.isCollapsed
+                ? isCollapsed
                     ? 'w-[60px]'
-                    : 'w-[270px]'
+                    : 'w-[270px] bg-gray-100 dark:bg-gray-800'
                 : '',
 
             // Base styles
             'border-r z-40 fixed top-0 left-0 bottom-0 flex flex-col',
-            'bg-gray-100 dark:bg-gray-800 dark:border-gray-700',
+            'dark:border-gray-700',
 
             // Animation classes
             'transition-all duration-300 ease-in-out transform select-none',
@@ -357,7 +360,8 @@ const navLinks: {
             <!-- Recent Chats -->
             <div
                 v-if="
-                    props.data.chats.length &&
+                    chats &&
+                    chats.length &&
                     props.data.parsedUserDetails.username &&
                     showFullSidebar
                 "
@@ -370,7 +374,7 @@ const navLinks: {
                 </p>
                 <div class="flex flex-col gap-1">
                     <div
-                        v-for="chat in props.data.chats"
+                        v-for="chat in chats"
                         :key="chat.id"
                         @mouseenter="hoveredChatId = chat.id"
                         @mouseleave="hoveredChatId = null"
@@ -472,7 +476,8 @@ const navLinks: {
                     : isSidebarHidden
                       ? 'none'
                       : '',
-                'border-gray-200 dark:border-gray-700 p-3 sticky bottom-0 bg-gray-100 dark:bg-gray-800',
+                'border-gray-200 dark:border-gray-700 p-3 sticky bottom-0',
+                isCollapsed ? '' : 'bg-gray-100 dark:bg-gray-800',
             ]"
         >
             <!-- Plan Status -->
@@ -496,7 +501,7 @@ const navLinks: {
                 class="flex items-center justify-between cursor-pointer mr-1"
                 @click.stop="
                     () => {
-                        if (props.data.isCollapsed && screenWidth > 720) {
+                        if (isCollapsed && screenWidth > 720) {
                             handleSidebarToggle();
                         }
                         showProfileMenu = !showProfileMenu;
