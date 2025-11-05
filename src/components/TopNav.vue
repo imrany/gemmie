@@ -3,10 +3,18 @@ import type { Chat } from "@/types";
 import { AlignJustify } from "lucide-vue-next";
 import type { Ref } from "vue";
 import { inject } from "vue";
+import { Button } from "./ui/button";
 
-const { hideSidebar, screenWidth, isCollapsed, currentChat } = inject(
-    "globalState",
-) as {
+const {
+    hideSidebar,
+    screenWidth,
+    isCollapsed,
+    currentChat,
+    isLoading,
+    shareChat,
+} = inject("globalState") as {
+    shareChat: (chatId: string) => Promise<void>;
+    isLoading: Ref<boolean>;
     isCollapsed: Ref<boolean>;
     currentChat: Ref<Chat | undefined>;
 
@@ -49,6 +57,15 @@ const { hideSidebar, screenWidth, isCollapsed, currentChat } = inject(
             </p>
 
             <div class="flex gap-3 items-center ml-auto">
+                <!-- :disabled="isLoading || !currentChat" -->
+                <Button
+                    @click="shareChat(currentChat?.id || '')"
+                    variant="outline"
+                    class="hover:border-white text-xs hover:dark:border-gray-900 bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700"
+                    :loading="isLoading"
+                >
+                    Share
+                </Button>
                 <!-- Mobile Sidebar Toggle -->
                 <div
                     v-if="screenWidth < 720"

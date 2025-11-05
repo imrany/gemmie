@@ -137,8 +137,3 @@ export interface ApiResponse<T = any> {
 export interface CreateChatRequest {
   title: string;
 }
-
-export interface UpdateChatRequest {
-  title: string;
-  is_archived?: boolean;
-}

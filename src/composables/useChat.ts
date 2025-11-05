@@ -6,7 +6,6 @@ import type {
   UserDetails,
   ApiResponse,
   CreateChatRequest,
-  UpdateChatRequest,
 } from "@/types";
 import {
   API_BASE_URL,
@@ -171,15 +170,15 @@ export function useChat({
       });
   }
 
-  function shareResponse(text: string, prompt?: string) {
+  function shareResponse(title: string, text?: string) {
     if (navigator.share) {
       navigator
         .share({
           title:
-            prompt && prompt.length > 200
-              ? `${prompt.slice(0, 200)}...\n\n`
-              : `${prompt || "Gemmie Chat"}\n\n`,
-          text,
+            title && title.length > 200
+              ? `${title.slice(0, 200)}...\n\n`
+              : `${title}\n\n`,
+          text: text || "",
         })
         .then(() => {
           console.log("Share successful");
@@ -188,7 +187,7 @@ export function useChat({
           console.log("Share canceled", err);
         });
     } else {
-      copyCode(text);
+      copyCode(text || "");
       toast.info("Copied Instead", {
         duration: 3000,
       });
@@ -823,58 +822,79 @@ export function useChat({
     }
   }
 
-  async function renameChat(chatId: string, newTitle: string) {
+  async function updateChat(
+    chatId: string,
+    update: Record<string, any>,
+  ): Promise<Chat | undefined> {
     try {
-      if (!chatId || !newTitle || typeof newTitle !== "string") {
-        toast.error("Invalid chat title");
-        return;
-      }
-
       const chat = chats.value.find((c) => c.id === chatId);
       if (!chat) {
         toast.error("Chat not found");
         return;
       }
 
-      const trimmedTitle = newTitle.trim();
-      if (!trimmedTitle) {
-        toast.error("Chat title cannot be empty");
-        return;
-      }
-
       if (isAuthenticated.value) {
-        try {
-          const response = await apiCall(`/chats/${chatId}`, {
-            method: "PUT",
-            body: JSON.stringify({ title: trimmedTitle } as UpdateChatRequest),
-          });
-          if (response.success) {
-            chat.title = trimmedTitle;
-            chat.updated_at = new Date().toISOString();
-            saveChats();
-          } else {
-            console.error("Failed to rename chat on server:", response);
-          }
-        } catch (apiError) {
-          console.error("Failed to rename chat on server:", apiError);
-          toast.warning("Chat rename failed");
+        const response = await apiCall<Chat>(`/chats/${chatId}`, {
+          method: "PUT",
+          body: JSON.stringify(update),
+        });
+
+        if (response.success && response.data) {
+          chat.title = response.data.title.trim();
+          chat.updated_at = response.data.updated_at;
+          chat.last_message_at = response.data.last_message_at;
+          chat.is_archived = response.data.is_archived;
+          chat.is_private = response.data.is_private;
+          saveChats();
+          return response.data;
+        } else {
+          console.error("Failed to update chat on server:", response);
         }
-      } else {
-        chat.title = trimmedTitle;
-        chat.updated_at = new Date().toISOString();
-        saveChats();
       }
     } catch (error: any) {
       reportError({
-        action: "renameChat",
-        message: "Error renaming chat: " + error.message,
-        description: "Failed to rename this chat. Please try again.",
+        action: "updateChat",
+        message: "Error updating chat: " + error.message,
+        description: "Failed to update this chat. Please try again.",
         status: getErrorStatus(error),
         userId: parsedUserDetails.value?.userId || "unknown",
         severity: "critical",
         id: generateErrorId(),
         createdAt: new Date().toISOString(),
+        context: createErrorContext({ chatId }),
       } as PlatformError);
+    }
+  }
+
+  async function renameChat(chatId: string, newTitle: string) {
+    if (!chatId || !newTitle || typeof newTitle !== "string") {
+      toast.error("Invalid chat title");
+      return;
+    }
+
+    const trimmedTitle = newTitle.trim();
+    if (!trimmedTitle) {
+      toast.error("Chat title cannot be empty");
+      return;
+    }
+    await updateChat(chatId, { title: trimmedTitle });
+  }
+
+  async function shareChat(chatId: string) {
+    if (!chatId) {
+      toast.error("Invalid chat ID");
+      return;
+    }
+
+    try {
+      const chat = await updateChat(chatId, { is_private: false });
+
+      if (!chat?.is_private) {
+        const shareUrl = `${window.location.origin}/chat/${chat?.id || ""}`;
+        shareResponse(chat?.title || "", shareUrl);
+      }
+    } catch (error) {
+      toast.error("Failed to share chat");
     }
   }
 
@@ -901,22 +921,13 @@ export function useChat({
         confirmText: "Delete All",
         onConfirm: async () => {
           try {
-            let allDeletesSuccessful = true;
             if (isAuthenticated.value) {
-              const deletePromises = chats.value.map((chat) =>
-                apiCall(`/chats/${chat.id}`, { method: "DELETE" }).catch(
-                  (err) => {
-                    console.error("Failed to delete chat:", err);
-                    allDeletesSuccessful = false;
-                  },
-                ),
-              );
-              await Promise.allSettled(deletePromises);
+              const response = await apiCall(`/chats`, {
+                method: "DELETE",
+              });
 
-              if (!allDeletesSuccessful) {
-                toast.warning(
-                  "Some chats were not deleted from the server. Please try again.",
-                );
+              if (!response.success) {
+                console.error("Failed to delete chats:", response.message);
                 return;
               }
             }
@@ -982,6 +993,8 @@ export function useChat({
   }
 
   return {
+    shareChat,
+    updateChat,
     expanded,
     activeChatMenu,
     draftSaveTimeout,
