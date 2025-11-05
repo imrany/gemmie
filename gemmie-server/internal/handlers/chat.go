@@ -16,12 +16,6 @@ type CreateChatRequest struct {
 	Title string `json:"title"`
 }
 
-// UpdateChatRequest represents request payload for updating a chat
-type UpdateChatRequest struct {
-	Title      string `json:"title,omitempty"`
-	IsArchived bool   `json:"is_archived,omitempty"`
-}
-
 // CreateChatHandler handles POST /api/chats
 func CreateChatHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
@@ -253,7 +247,7 @@ func UpdateChatHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req UpdateChatRequest
+	var req store.Chat
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(store.Response{
@@ -298,7 +292,13 @@ func UpdateChatHandler(w http.ResponseWriter, r *http.Request) {
 	if req.Title != "" {
 		chat.Title = req.Title
 	}
+	if !req.LastMessageAt.IsZero() {
+		chat.LastMessageAt = req.LastMessageAt
+	}
 	chat.IsArchived = req.IsArchived
+	if req.IsPrivate != chat.IsPrivate {
+		chat.IsPrivate = req.IsPrivate
+	}
 	chat.UpdatedAt = time.Now()
 
 	if err := store.UpdateChat(*chat); err != nil {
@@ -393,6 +393,38 @@ func DeleteChatHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(store.Response{
 		Success: true,
 		Message: "Chat deleted successfully",
+	})
+}
+
+// DeleteAllChats handles DELETE /api/chats
+func DeleteAllChatsHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	userID := r.Header.Get("X-User-ID")
+	if userID == "" {
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(store.Response{
+			Success: false,
+			Message: "User ID header required",
+		})
+		return
+	}
+
+	if err := store.DeleteAllChatsByUserID(userID); err != nil {
+		slog.Error("Failed to delete all chats", "user_id", userID, "error", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(store.Response{
+			Success: false,
+			Message: "Failed to delete all chats",
+		})
+		return
+	}
+
+	slog.Info("All chats deleted successfully", "user_id", userID)
+
+	json.NewEncoder(w).Encode(store.Response{
+		Success: true,
+		Message: "All chats deleted successfully",
 	})
 }
 

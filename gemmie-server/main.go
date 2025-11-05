@@ -235,6 +235,7 @@ func runServer() {
 	// Chat routes
 	r.HandleFunc("/api/chats", v1.CreateChatHandler).Methods(http.MethodPost)
 	r.HandleFunc("/api/chats", v1.GetChatsHandler).Methods(http.MethodGet)
+	r.HandleFunc("/api/chats", v1.DeleteAllChatsHandler).Methods(http.MethodDelete)
 	r.HandleFunc("/api/chats/{id}", v1.GetChatHandler).Methods(http.MethodGet)
 	r.HandleFunc("/api/chats/{id}", v1.UpdateChatHandler).Methods(http.MethodPut)
 	r.HandleFunc("/api/chats/{id}", v1.DeleteChatHandler).Methods(http.MethodDelete)
