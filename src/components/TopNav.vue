@@ -4,6 +4,7 @@ import { AlignJustify, Check, Copy, Globe, Lock } from "lucide-vue-next";
 import type { Ref } from "vue";
 import { inject, watch } from "vue";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import DialogBox from "./Dialog/DialogBox.vue";
 import { ref } from "vue";
 import { toast } from "vue-sonner/src/packages/state.js";
@@ -200,9 +201,10 @@ watch(
                 v-if="!currentChat?.is_private"
                 class="flex gap-2 my-3 items-center"
             >
-                <input
+                <Input
                     type="text"
-                    :defaultValue="shareLink"
+                    readonly
+                    :defaultValue="shareLink || ''"
                     class="border border-gray-300 bg-inherit dark:border-gray-700 rounded-md px-3 py-2 w-full"
                 />
                 <Button type="button" @click="copyLink" size="sm" class="px-3">
