@@ -286,7 +286,6 @@ const { apiCall, checkInternetConnection } = useApiCall({
 });
 
 const {
-    shareChat,
     updateChat,
     loadChats,
     createNewChat,
@@ -2247,7 +2246,6 @@ const globalState = {
     shouldHaveLimit,
 
     // Core functions
-    shareChat,
     updateChat,
     onChatUpdated,
     onMessageAdded,

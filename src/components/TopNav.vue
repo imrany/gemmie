@@ -1,9 +1,12 @@
 <script lang="ts" setup>
 import type { Chat } from "@/types";
-import { AlignJustify } from "lucide-vue-next";
+import { AlignJustify, Check, Copy, Globe, Lock } from "lucide-vue-next";
 import type { Ref } from "vue";
-import { inject } from "vue";
-import { Button } from "./ui/button";
+import { inject, watch } from "vue";
+import { Button } from "@/components/ui/button";
+import DialogBox from "./Dialog/DialogBox.vue";
+import { ref } from "vue";
+import { toast } from "vue-sonner/src/packages/state.js";
 
 const {
     hideSidebar,
@@ -11,16 +14,63 @@ const {
     isCollapsed,
     currentChat,
     isLoading,
-    shareChat,
+    updateChat,
+    shareResponse,
+    copyResponse,
 } = inject("globalState") as {
-    shareChat: (chatId: string) => Promise<void>;
     isLoading: Ref<boolean>;
+    copyResponse: (text: string, copiedIndex?: number) => void;
+    shareResponse: (title: string, body: string) => void;
     isCollapsed: Ref<boolean>;
     currentChat: Ref<Chat | undefined>;
+    updateChat: (
+        chatId: string,
+        update: Record<string, any>,
+    ) => Promise<Chat | undefined>;
 
     screenWidth: Ref<number>;
     hideSidebar: () => void;
 };
+
+const isShowShareChat = ref(false);
+const shareLink = ref<string | null>(null);
+const isCopied = ref(false);
+
+async function shareChat(is_private: boolean) {
+    if (!currentChat.value) {
+        toast.error("Invalid chat ID");
+        return;
+    }
+
+    try {
+        const chat = await updateChat(currentChat.value.id, { is_private });
+
+        if (!chat?.is_private) {
+            shareLink.value = `${window.location.origin}/chat/${chat?.id || ""}`;
+            shareResponse(chat?.title || "", shareLink.value);
+        }
+    } catch (error) {
+        toast.error("Failed to share chat");
+    }
+}
+
+function copyLink() {
+    copyResponse(shareLink?.value?.toString() || "");
+    isCopied.value = true;
+    window.setTimeout(() => {
+        isCopied.value = false;
+    }, 2000);
+}
+
+watch(
+    () => currentChat.value?.is_private,
+    (newValue) => {
+        if (!newValue) {
+            shareLink.value = `${window.location.origin}/chat/${currentChat.value?.id || ""}`;
+        }
+    },
+    { immediate: true, deep: true },
+);
 </script>
 
 <template>
@@ -57,15 +107,21 @@ const {
             </p>
 
             <div class="flex gap-3 items-center ml-auto">
-                <!-- :disabled="isLoading || !currentChat" -->
                 <Button
-                    @click="shareChat(currentChat?.id || '')"
+                    v-if="
+                        currentChat &&
+                        currentChat.messages &&
+                        currentChat.messages.length > 0
+                    "
+                    @click="isShowShareChat = true"
                     variant="outline"
+                    :disabled="isLoading || !currentChat"
                     class="hover:border-white text-xs hover:dark:border-gray-900 bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700"
                     :loading="isLoading"
                 >
                     Share
                 </Button>
+
                 <!-- Mobile Sidebar Toggle -->
                 <div
                     v-if="screenWidth < 720"
@@ -84,4 +140,91 @@ const {
             </div>
         </div>
     </div>
+    <DialogBox
+        name="Share Chat"
+        :show="isShowShareChat"
+        :closeModal="() => (isShowShareChat = false)"
+    >
+        <div class="flex flex-col gap-5">
+            <div>
+                <p class="text-2xl font-bold">
+                    {{ currentChat?.is_private ? "Share chat" : "Chat shared" }}
+                </p>
+                <p class="text-gray-700 dark:text-gray-300">
+                    {{
+                        currentChat?.is_private
+                            ? "Share this chat with your friends!"
+                            : "Anyone who has this link will be able to view this."
+                    }}
+                </p>
+            </div>
+            <div class="rounded-lg border border-gray-300 dark:border-gray-700">
+                <button
+                    @click="shareChat(true)"
+                    class="flex w-full gap-4 py-3 px-6 items-center border-b border-gray-300 dark:border-gray-700"
+                >
+                    <Lock class="w-5 h-5" />
+                    <div class="flex items-start flex-col gap-1">
+                        <p
+                            class="font-semibold text-gray-700 dark:text-gray-300"
+                        >
+                            Private
+                        </p>
+                        <p>Only you can see this chat.</p>
+                    </div>
+                    <Check
+                        class="ml-auto w-5 h-5 text-green-500"
+                        v-if="currentChat?.is_private"
+                    />
+                </button>
+                <button
+                    @click="shareChat(false)"
+                    class="flex w-full gap-4 py-3 px-6 items-center"
+                >
+                    <Globe class="w-5 h-5" />
+                    <div class="flex items-start flex-col gap-1">
+                        <p
+                            class="font-semibold text-gray-700 dark:text-gray-300"
+                        >
+                            Public
+                        </p>
+                        <p>Anyone can see this chat.</p>
+                    </div>
+                    <Check
+                        class="ml-auto w-5 h-5 text-green-500"
+                        v-if="!currentChat?.is_private"
+                    />
+                </button>
+            </div>
+            <div
+                v-if="!currentChat?.is_private"
+                class="flex gap-2 my-3 items-center"
+            >
+                <input
+                    type="text"
+                    :defaultValue="shareLink"
+                    class="border border-gray-300 bg-inherit dark:border-gray-700 rounded-md px-3 py-2 w-full"
+                />
+                <Button type="button" @click="copyLink" size="sm" class="px-3">
+                    <span class="sr-only">Copy</span>
+                    <Copy class="w-4 h-4" v-if="!isCopied" />
+                    <Check class="w-4 h-4" v-else />
+                </Button>
+            </div>
+            <div class="flex flex-col gap-4 w-full items-center" v-else>
+                <p class="text-gray-600 dark:text-gray-400 text-xs">
+                    Don’t share personal information or third-party content
+                    without permission.
+                </p>
+                <Button
+                    type="button"
+                    @click="shareChat(false)"
+                    size="sm"
+                    class="px-3 ml-auto"
+                >
+                    <span class="">Create share link</span>
+                </Button>
+            </div>
+        </div>
+    </DialogBox>
 </template>

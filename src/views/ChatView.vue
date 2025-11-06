@@ -274,7 +274,6 @@ const {
 });
 
 const showSuggestionsDropup = ref(false);
-
 const showPasteModal = ref(false);
 const pastePreview = computed(() => {
     return pastePreviews.value.get(currentChatId.value) || null;
@@ -549,21 +548,21 @@ async function handleSubmit(
         console.log(
             `Added ${effectiveContextReferences.length} explicit context reference(s) for ${responseMode} mode`,
         );
-    // } else if (
-    //     !hasPastePreview &&
-    //     isPromptTooShort(promptValue) &&
-    //     currentMessages.value.length > 0
-    // ) {
-    //     const lastMessage =
-    //         currentMessages.value[currentMessages.value.length - 1];
+        // } else if (
+        //     !hasPastePreview &&
+        //     isPromptTooShort(promptValue) &&
+        //     currentMessages.value.length > 0
+        // ) {
+        //     const lastMessage =
+        //         currentMessages.value[currentMessages.value.length - 1];
 
-    //     if (isSearchMode) {
-    //         fabricatedPrompt = `${promptValue} ${lastMessage.prompt || ""}`;
-    //     } else {
-    //         fabricatedPrompt = `Previous: ${lastMessage.prompt || ""} ${lastMessage.response || ""}\n\nCurrent: ${promptValue}`;
-    //     }
+        //     if (isSearchMode) {
+        //         fabricatedPrompt = `${promptValue} ${lastMessage.prompt || ""}`;
+        //     } else {
+        //         fabricatedPrompt = `Previous: ${lastMessage.prompt || ""} ${lastMessage.response || ""}\n\nCurrent: ${promptValue}`;
+        //     }
 
-    //     console.log("Added implicit context from last message");
+        //     console.log("Added implicit context from last message");
     }
 
     isLoading.value = true;

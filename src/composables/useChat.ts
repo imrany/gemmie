@@ -880,24 +880,6 @@ export function useChat({
     await updateChat(chatId, { title: trimmedTitle });
   }
 
-  async function shareChat(chatId: string) {
-    if (!chatId) {
-      toast.error("Invalid chat ID");
-      return;
-    }
-
-    try {
-      const chat = await updateChat(chatId, { is_private: false });
-
-      if (!chat?.is_private) {
-        const shareUrl = `${window.location.origin}/chat/${chat?.id || ""}`;
-        shareResponse(chat?.title || "", shareUrl);
-      }
-    } catch (error) {
-      toast.error("Failed to share chat");
-    }
-  }
-
   function clearAllChats() {
     if (isLoading.value) return;
 
@@ -993,7 +975,6 @@ export function useChat({
   }
 
   return {
-    shareChat,
     updateChat,
     expanded,
     activeChatMenu,
