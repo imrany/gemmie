@@ -1,6 +1,8 @@
 import { ref, type Ref } from "vue";
 import { toast } from "vue-sonner";
 import { useRouter } from "vue-router";
+import { API_BASE_URL, validateCredentials } from "@/utils/globals";
+import type { ApiResponse, UserDetails } from "@/types";
 
 export interface AuthData {
   username: string;
@@ -16,7 +18,10 @@ export interface AuthConfig {
   maxPasswordLength?: number;
 }
 
-export function useAuth(config: AuthConfig = {}) {
+export function useAuth(
+  config: AuthConfig = {},
+  parsedUserDetails: Ref<UserDetails>,
+) {
   const router = useRouter();
 
   const {
@@ -39,6 +44,71 @@ export function useAuth(config: AuthConfig = {}) {
   const USERNAME_PATTERN = /^[a-zA-Z0-9_]+$/;
   const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   // const PASSWORD_PATTERN = /^(?=.*[A-Za-z])(?=.*\d).+$/; // At least one letter and one number
+
+  async function unsecureApiCall<T>(
+    endpoint: string,
+    options: RequestInit = {},
+    retryCount = 0,
+  ): Promise<ApiResponse<T>> {
+    const maxRetries = 2;
+    const retryDelay = Math.pow(2, retryCount) * 1000;
+
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+        ...options,
+        headers: {
+          "Content-Type": "application/json",
+          ...options.headers,
+        },
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => "Unknown error");
+        throw new Error(
+          `HTTP ${response.status}: ${response.statusText} - ${errorText}`,
+        );
+      }
+
+      const data: ApiResponse<T> = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || "API request failed");
+      }
+
+      return data;
+    } catch (error: any) {
+      console.error(
+        `Unsecure API Error on ${endpoint} (attempt ${retryCount + 1}):`,
+        error,
+      );
+
+      if (error.name === "AbortError") {
+        throw new Error("Request timeout - please try again");
+      }
+
+      if (
+        (error.name === "NetworkError" ||
+          error.name === "TypeError" ||
+          error.message?.includes("Failed to fetch")) &&
+        retryCount < maxRetries
+      ) {
+        console.log(
+          `Retrying ${endpoint} in ${retryDelay}ms (attempt ${retryCount + 1}/${maxRetries})`,
+        );
+
+        await new Promise((resolve) => setTimeout(resolve, retryDelay));
+        return unsecureApiCall(endpoint, options, retryCount + 1);
+      }
+
+      throw error;
+    }
+  }
 
   function nextAuthStep() {
     if (authStep.value < 4) {
@@ -131,10 +201,7 @@ export function useAuth(config: AuthConfig = {}) {
     }
   }
 
-  async function handleStepSubmit(
-    e: Event,
-    handleAuth: (data: AuthData) => Promise<any>,
-  ) {
+  async function handleStepSubmit(e: Event) {
     e.preventDefault();
 
     if (!validateCurrentStep()) {
@@ -147,12 +214,10 @@ export function useAuth(config: AuthConfig = {}) {
       return;
     }
 
-    await handleFinalAuthStep(handleAuth);
+    await handleFinalAuthStep();
   }
 
-  async function handleFinalAuthStep(
-    handleAuth: (data: AuthData) => Promise<any>,
-  ) {
+  async function handleFinalAuthStep() {
     try {
       isLoading.value = true;
 
@@ -168,21 +233,20 @@ export function useAuth(config: AuthConfig = {}) {
         agreeToTerms: authData.value.agreeToTerms,
       };
 
-      const response = await handleAuth(sanitizedData);
+      const response = (await handleAuth(sanitizedData)) as ApiResponse;
 
       if (!response) {
         throw new Error("No response received from authentication service");
       }
 
-      if (response.error) {
-        throw new Error(response.error);
-      }
-
       if (!response.data || !response.success) {
-        throw new Error("Authentication failed - invalid response structure");
+        throw new Error(
+          response.message ||
+            "Authentication failed - invalid response structure",
+        );
       }
 
-      await handleAuthSuccess();
+      await handlePostAuthRedirect();
     } catch (err: any) {
       await handleAuthError(err);
     } finally {
@@ -190,23 +254,129 @@ export function useAuth(config: AuthConfig = {}) {
     }
   }
 
-  async function handleAuthSuccess() {
-    await handlePostAuthRedirect();
+  async function handleAuth(data: {
+    username: string;
+    email: string;
+    password: string;
+    agreeToTerms: boolean;
+  }) {
+    const { username, email, password, agreeToTerms } = data;
 
-    // Reset form state
-    authStep.value = 1;
-    authData.value = {
-      username: "",
-      email: "",
-      password: "",
-      agreeToTerms: false,
-    };
+    try {
+      const validationError = validateCredentials(
+        username,
+        email,
+        password,
+        agreeToTerms,
+      );
+      if (validationError) {
+        throw new Error(validationError);
+      }
+
+      let response: ApiResponse;
+      let isLogin = false;
+
+      try {
+        console.log("Attempting login...");
+        response = await unsecureApiCall("/login", {
+          method: "POST",
+          body: JSON.stringify({
+            username,
+            email,
+            password,
+            agree_to_terms: agreeToTerms,
+            user_agent: navigator.userAgent,
+          }),
+        });
+        isLogin = true;
+      } catch (loginError: any) {
+        console.log("Login failed, attempting registration...");
+
+        try {
+          response = await unsecureApiCall("/register", {
+            method: "POST",
+            body: JSON.stringify({
+              username,
+              email,
+              password,
+              agree_to_terms: agreeToTerms,
+              user_agent: navigator.userAgent,
+            }),
+          });
+
+          toast.success("Account created successfully!", {
+            duration: 3000,
+            description: `Welcome ${response.data?.username}!`,
+          });
+        } catch (registerError: any) {
+          if (
+            loginError.message?.includes("Connection") ||
+            loginError.message?.includes("Network")
+          ) {
+            throw loginError;
+          } else {
+            throw registerError;
+          }
+        }
+      }
+
+      if (!response || !response.data) {
+        throw new Error("Invalid response from server");
+      }
+
+      if (isLogin) {
+        toast.success("Welcome back!", {
+          duration: 3000,
+          description: `Logged in as ${response.data.username}`,
+        });
+      }
+
+      const userData: UserDetails = {
+        userId: response.data.user_id,
+        username: response.data.username,
+        email: response.data.email,
+        createdAt: response.data.created_at,
+        sessionId: btoa(email + ":" + password + ":" + username),
+        workFunction: response.data.work_function || "",
+        preferences: response.data.preferences || "",
+        theme: response.data.theme || "system",
+        syncEnabled: response.data.sync_enabled,
+        phoneNumber: response.data.phone_number || "",
+        plan: response.data.plan || "free",
+        planName: response.data.plan_name || "",
+        amount: response.data.amount || 0,
+        duration: response.data.duration || "",
+        price: response.data.price || 0,
+        responseMode: response.data.response_mode || "light-response",
+        expiryTimestamp: response.data.expiry_timestamp || null,
+        expireDuration: response.data.expire_duration || "",
+        emailVerified: response.data.email_verified || false,
+        emailSubscribed: response.data.email_subscribed || true,
+        requestCount: response.data.request_count || {
+          count: 0,
+          timestamp: Date.now(),
+        },
+      };
+
+      parsedUserDetails.value = userData;
+      localStorage.setItem("userdetails", JSON.stringify(userData));
+
+      console.log(
+        `Authentication successful for user: ${userData.username} (sync: ${userData.syncEnabled})`,
+      );
+
+      return response;
+    } catch (error: any) {
+      console.error("Authentication error:", error);
+      throw error;
+    }
   }
 
   async function handlePostAuthRedirect() {
     // Check URL parameters for redirect intent
     const urlParams = new URLSearchParams(window.location.search);
     const redirectParam = urlParams.get("redirect") || urlParams.get("from");
+    const currentRoute = router.currentRoute.value;
 
     // Whitelist of allowed redirects to prevent open redirect vulnerabilities
     const allowedRedirects = ["upgrade", "dashboard", "profile"];
@@ -223,8 +393,24 @@ export function useAuth(config: AuthConfig = {}) {
       router.push(`/${redirectParam}`);
     } else {
       console.log("Redirecting to home page after authentication");
-      router.push("/");
+
+      // User just logged in
+      console.log("✅ User authenticated");
+
+      // Don't navigate if already on a valid chat route
+      if (currentRoute.path.startsWith("/chat/")) {
+        console.log("Already on chat route, staying here");
+        return;
+      }
+
+      // Navigate to new chat only if on login/home page
+      if (currentRoute.path === "/") {
+        console.log("Navigating to new chat");
+        router.push("/new");
+      }
     }
+
+    resetAuth();
   }
 
   async function handleAuthError(err: any) {
@@ -338,7 +524,6 @@ export function useAuth(config: AuthConfig = {}) {
     validateCurrentStep,
     handleValidationError,
     handleStepSubmit,
-    handleAuthSuccess,
     handleAuthError,
     handleFinalAuthStep,
     updateAuthData,

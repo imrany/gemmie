@@ -12,7 +12,6 @@ import type {
 import {
     generateChatTitle,
     extractUrls,
-    validateCredentials,
     getTransaction,
     createErrorContext,
     getErrorStatus,
@@ -279,7 +278,7 @@ const { linkPreviewCache, loadLinkPreviewCache, saveLinkPreviewCache } =
 const { syncStatus, showSyncIndicator, hideSyncIndicator, updateSyncProgress } =
     useSync();
 
-const { apiCall, unsecureApiCall, checkInternetConnection } = useApiCall({
+const { apiCall, checkInternetConnection } = useApiCall({
     isUserOnline,
     connectionStatus,
     parsedUserDetails,
@@ -1380,124 +1379,6 @@ async function performSmartSync() {
     }
 }
 
-async function handleAuth(data: {
-    username: string;
-    email: string;
-    password: string;
-    agreeToTerms: boolean;
-}) {
-    const { username, email, password, agreeToTerms } = data;
-
-    try {
-        const validationError = validateCredentials(
-            username,
-            email,
-            password,
-            agreeToTerms,
-        );
-        if (validationError) {
-            throw new Error(validationError);
-        }
-
-        let response;
-        let isLogin = false;
-
-        try {
-            console.log("Attempting login...");
-            response = await unsecureApiCall("/login", {
-                method: "POST",
-                body: JSON.stringify({
-                    username,
-                    email,
-                    password,
-                    agree_to_terms: agreeToTerms,
-                    user_agent: navigator.userAgent,
-                }),
-            });
-            isLogin = true;
-        } catch (loginError: any) {
-            console.log("Login failed, attempting registration...");
-
-            try {
-                response = await unsecureApiCall("/register", {
-                    method: "POST",
-                    body: JSON.stringify({
-                        username,
-                        email,
-                        password,
-                        agree_to_terms: agreeToTerms,
-                        user_agent: navigator.userAgent,
-                    }),
-                });
-
-                toast.success("Account created successfully!", {
-                    duration: 3000,
-                    description: `Welcome ${response.data.username}!`,
-                });
-            } catch (registerError: any) {
-                if (
-                    loginError.message?.includes("Connection") ||
-                    loginError.message?.includes("Network")
-                ) {
-                    throw loginError;
-                } else {
-                    throw registerError;
-                }
-            }
-        }
-
-        if (!response || !response.data) {
-            throw new Error("Invalid response from server");
-        }
-
-        if (isLogin) {
-            toast.success("Welcome back!", {
-                duration: 3000,
-                description: `Logged in as ${response.data.username}`,
-            });
-        }
-
-        const userData: UserDetails = {
-            userId: response.data.user_id,
-            username: response.data.username,
-            email: response.data.email,
-            createdAt: response.data.created_at,
-            sessionId: btoa(email + ":" + password + ":" + username),
-            workFunction: response.data.work_function || "",
-            preferences: response.data.preferences || "",
-            theme: response.data.theme || "system",
-            syncEnabled: response.data.sync_enabled,
-            phoneNumber: response.data.phone_number || "",
-            plan: response.data.plan || "free",
-            planName: response.data.plan_name || "",
-            amount: response.data.amount || 0,
-            duration: response.data.duration || "",
-            price: response.data.price || 0,
-            responseMode: response.data.response_mode || "light-response",
-            expiryTimestamp: response.data.expiry_timestamp || null,
-            expireDuration: response.data.expire_duration || "",
-            emailVerified: response.data.email_verified || false,
-            emailSubscribed: response.data.email_subscribed || true,
-            requestCount: response.data.request_count || {
-                count: 0,
-                timestamp: Date.now(),
-            },
-        };
-
-        parsedUserDetails.value = userData;
-        previousUserDetails = JSON.parse(JSON.stringify(userData));
-
-        console.log(
-            `Authentication successful for user: ${userData.username} (sync: ${userData.syncEnabled})`,
-        );
-
-        return response;
-    } catch (error: any) {
-        console.error("Authentication error:", error);
-        throw error;
-    }
-}
-
 async function toggleSync() {
     const targetSyncValue = !parsedUserDetails.value.syncEnabled;
 
@@ -2116,34 +1997,19 @@ watch(
 
 watch(
     () => isAuthenticated.value,
-    async (isAuth, wasAuth) => {
+    (isAuth, wasAuth) => {
         // Only act on actual auth state changes
         if (isAuth === wasAuth) return;
 
         const currentRoute = router.currentRoute.value;
 
-        if (isAuth) {
-            // User just logged in
-            console.log("✅ User authenticated");
-
-            // Don't navigate if already on a valid chat route
-            if (currentRoute.path.startsWith("/chat/")) {
-                console.log("Already on chat route, staying here");
-                return;
-            }
-
-            // Navigate to new chat only if on login/home page
-            if (currentRoute.path === "/") {
-                console.log("Navigating to new chat");
-                await router.push("/new");
-            }
-        } else {
+        if (!isAuth) {
             // User just logged out
             console.log("❌ User logged out");
 
             // Only navigate to home if not already there
             if (currentRoute.path !== "/") {
-                await router.push("/");
+                router.push("/");
             }
         }
     },
@@ -2442,9 +2308,6 @@ const globalState = {
     // Sync functions
     syncFromServer,
     syncToServer,
-
-    // Authentication
-    handleAuth,
 };
 
 // Provide global state to child components

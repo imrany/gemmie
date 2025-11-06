@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import { computed, inject, ref, onMounted, onUnmounted } from "vue";
-import { useAuth, type AuthData } from "@/composables/useAuth";
+import { useAuth } from "@/composables/useAuth";
 import DemoAccountModal from "@/components/Modals/DemoAccountModal.vue";
 import {
     ArrowLeft,
@@ -25,17 +25,18 @@ import {
     Sun,
     LoaderCircle,
 } from "lucide-vue-next";
+import type { Ref } from "vue";
+import type { UserDetails } from "@/types";
 
 // Global state
-const globalState = inject<any>("globalState");
-const handleAuth = globalState.handleAuth as (
-    authData: AuthData,
-) => Promise<any>;
-const isDarkMode = computed(() => globalState?.isDarkMode?.value || false);
-const screenWidth = computed(() => globalState?.screenWidth?.value || 1024);
-const isAuthenticated = computed(
-    () => globalState?.isAuthenticated?.value || false,
-);
+const { isDarkMode, isAuthenticated, screenWidth, parsedUserDetails } = inject(
+    "globalState",
+) as {
+    isDarkMode: Ref<boolean>;
+    isAuthenticated: Ref<boolean>;
+    screenWidth: Ref<number>;
+    parsedUserDetails: Ref<UserDetails>;
+};
 
 // Composables
 const {
@@ -47,7 +48,7 @@ const {
     handleStepSubmit,
     updateAuthData,
     handleFinalAuthStep,
-} = useAuth();
+} = useAuth({}, parsedUserDetails);
 
 // Component state
 const showDemoModal = ref(false);
@@ -294,7 +295,7 @@ const startDemoMode = async () => {
         closeDemoModal();
 
         // creates sessions directly
-        await handleFinalAuthStep(handleAuth);
+        await handleFinalAuthStep();
 
         // Success - would normally call handleAuthSuccess if available
         console.log("Demo mode started successfully");
@@ -315,7 +316,7 @@ const handleFormSubmit = async (e: Event) => {
     }
 
     // Final step - handle auth
-    await handleStepSubmit(e, handleAuth);
+    await handleStepSubmit(e);
 };
 
 const createRealAccount = () => {

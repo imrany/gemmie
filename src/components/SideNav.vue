@@ -23,6 +23,10 @@ import {
     AlignLeft,
     AlignJustify,
     X,
+    Settings,
+    HelpCircle,
+    BookText,
+    User2Icon,
 } from "lucide-vue-next";
 import {
     Tooltip,
@@ -134,11 +138,13 @@ const profileOptions = [
     {
         id: "settings",
         label: "Settings",
+        icon: Settings,
         action: () => router.push("/settings/general"),
     },
     {
         id: "help",
         label: "Get help",
+        icon: HelpCircle,
         action: () => window.open("mailto:imranmat254@gmail.com", "_blank"),
     },
     {
@@ -146,9 +152,10 @@ const profileOptions = [
         label: props.data.parsedUserDetails?.planName
             ? "Manage Plan"
             : "Upgrade Plan",
+        icon: User2Icon,
         action: () => router.push("/upgrade"),
     },
-    { id: "learn", label: "Learn more", action: () => {} },
+    { id: "learn", icon: BookText, label: "Learn more", action: () => {} },
 ];
 
 // Methods
@@ -236,7 +243,7 @@ const navLinks: {
             screenWidth <= 720
                 ? isSidebarHidden
                     ? 'w-0 opacity-0 -translate-x-full'
-                    : 'w-full opacity-100 translate-x-0'
+                    : 'w-full opacity-100 translate-x-0 bg-gray-100 dark:bg-gray-800'
                 : '',
 
             // Desktop styles

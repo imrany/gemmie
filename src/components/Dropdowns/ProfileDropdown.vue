@@ -1,5 +1,7 @@
 <script lang="ts" setup>
 import type { UserDetails } from "@/types";
+import { LogOut } from "lucide-vue-next";
+import type { FunctionalComponent } from "vue";
 import type { Ref } from "vue";
 import { inject } from "vue";
 
@@ -15,6 +17,7 @@ const props = defineProps<{
         profileOptions: {
             id: string;
             label: string;
+            icon: FunctionalComponent<any>;
             action: () => void;
         }[];
     };
@@ -38,7 +41,7 @@ const props = defineProps<{
                             ? parsedUserDetails.email
                                   .trim()
                                   .split("@")[0]
-                                  .slice(0, 5) +
+                                  .slice(0, 10) +
                               "..." +
                               parsedUserDetails.email.trim().split("@")[1]
                             : parsedUserDetails.email || "No email"
@@ -60,14 +63,16 @@ const props = defineProps<{
                 v-for="option in props.data.profileOptions"
                 :key="option.id"
                 @click="props.functions.handleNavAction(option.action)"
-                class="w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-200 transition-colors"
+                class="w-full flex gap-2 text-gray-600 dark:text-gray-400 items-center text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700/20 transition-colors"
             >
+                <component :is="option.icon" class="w-4 h-4" />
                 {{ option.label }}
             </button>
             <button
                 @click="props.functions.handleNavAction(props.functions.logout)"
-                class="w-full text-left px-4 py-2 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/20 rounded-b-lg transition-colors"
+                class="w-full text-left flex gap-2 items-center px-4 py-2 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/20 rounded-b-lg transition-colors"
             >
+                <LogOut class="w-4 h-4" />
                 Log Out
             </button>
         </div>
