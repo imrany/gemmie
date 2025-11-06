@@ -52,7 +52,6 @@ import {
     ClipboardList,
     Trash,
     RotateCw,
-    Share,
     Code,
     Pencil,
     BookText,
@@ -133,13 +132,11 @@ const {
     onMessageAdded,
 
     copyResponse,
-    shareResponse,
     loadChats,
     processLinksInUserPrompt,
     processLinksInResponse,
 } = inject("globalState") as {
     copyResponse: (text: string, index?: number) => void;
-    shareResponse: (text: string, prompt?: string) => void;
     loadChats: () => void;
     processLinksInUserPrompt: (index: number) => Promise<void>;
     processLinksInResponse: (index: number) => Promise<void>;
@@ -2253,19 +2250,6 @@ onUnmounted(() => {
                                                         ? "Copied!"
                                                         : "Copy"
                                                 }}</span>
-                                            </button>
-
-                                            <button
-                                                @click="
-                                                    shareResponse(
-                                                        item.response,
-                                                        item.prompt,
-                                                    )
-                                                "
-                                                class="flex items-center gap-1 hover:text-green-600 dark:hover:text-green-400 transition-colors min-h-[32px]"
-                                            >
-                                                <Share class="w-4 h-4" />
-                                                <span>Share</span>
                                             </button>
 
                                             <button
