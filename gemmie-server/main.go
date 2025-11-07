@@ -9,7 +9,7 @@ import (
 	"time"
 
 	v1 "github.com/imrany/gemmie/gemmie-server/internal/handlers"
-	"github.com/imrany/gemmie/gemmie-server/internal/mailer"
+	"github.com/imrany/gemmie/gemmie-server/pkg/mailer"
 	"github.com/imrany/gemmie/gemmie-server/store"
 
 	"log/slog"
