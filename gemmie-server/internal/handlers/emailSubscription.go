@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/imrany/gemmie/gemmie-server/internal/encrypt"
-	"github.com/imrany/gemmie/gemmie-server/internal/mailer"
+	"github.com/imrany/gemmie/gemmie-server/pkg/mailer"
 	"github.com/imrany/gemmie/gemmie-server/store"
 )
 
@@ -745,7 +745,7 @@ func UpdateEmailSubscriptionHandler(w http.ResponseWriter, r *http.Request) {
 	user.EmailSubscribed = req.EmailSubscribed
 	user.EmailVerified = true
 	user.UpdatedAt = time.Now()
-	if err := store.UpdateUser(*user); err != nil{
+	if err := store.UpdateUser(*user); err != nil {
 		slog.Error("Failed to save storage after subscription update",
 			"user_id", userID,
 			"error", err,
@@ -832,7 +832,7 @@ func SendVerificationEmailHandler(w http.ResponseWriter, r *http.Request, smtpCo
 	u.ID = user.ID
 	u.VerificationToken = token
 	u.VerificationTokenExpiry = expiry
-	if err := store.UpdateUser(u); err != nil{
+	if err := store.UpdateUser(u); err != nil {
 		slog.Error("Failed to save verification token",
 			"user_id", userID,
 			"error", err,
@@ -844,7 +844,6 @@ func SendVerificationEmailHandler(w http.ResponseWriter, r *http.Request, smtpCo
 		})
 		return
 	}
-
 
 	// Send verification email
 	verifyURL := fmt.Sprintf("https://gemmie-ai.web.app/verify-email?token=%s", token)
@@ -890,70 +889,70 @@ func buildVerificationEmailBody(username, verifyURL string) string {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Verify Your Email - Gemmie</title>
     <style>
-        body { 
-            font-family: Arial, sans-serif; 
-            line-height: 1.6; 
-            color: #333; 
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
             margin: 0;
             padding: 0;
             background-color: #f4f4f4;
         }
-        .container { 
-            max-width: 600px; 
-            margin: 0 auto; 
-            padding: 20px; 
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
             background-color: #ffffff;
         }
-        .header { 
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
-            color: white; 
-            padding: 30px; 
-            text-align: center; 
-            border-radius: 10px 10px 0 0; 
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+            border-radius: 10px 10px 0 0;
         }
         .header h1 {
             margin: 0;
             font-size: 24px;
         }
-        .content { 
-            background: #ffffff; 
-            padding: 30px; 
-            border: 1px solid #e0e0e0; 
+        .content {
+            background: #ffffff;
+            padding: 30px;
+            border: 1px solid #e0e0e0;
             border-top: none;
         }
-        .verify-button { 
-            display: inline-block; 
-            background: #667eea; 
-            color: white !important; 
-            padding: 15px 30px; 
-            text-decoration: none; 
-            border-radius: 5px; 
-            margin: 20px 0; 
+        .verify-button {
+            display: inline-block;
+            background: #667eea;
+            color: white !important;
+            padding: 15px 30px;
+            text-decoration: none;
+            border-radius: 5px;
+            margin: 20px 0;
             font-weight: bold;
             text-align: center;
         }
         .verify-button:hover {
             background: #5568d3;
         }
-        .footer { 
-            text-align: center; 
-            padding: 20px; 
-            color: #666; 
-            font-size: 12px; 
+        .footer {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+            font-size: 12px;
             background-color: #f8f9fa;
             border-radius: 0 0 10px 10px;
         }
-        .link-text { 
-            word-break: break-all; 
-            color: #666; 
-            font-size: 12px; 
+        .link-text {
+            word-break: break-all;
+            color: #666;
+            font-size: 12px;
             margin-top: 20px;
             padding: 15px;
             background-color: #f8f9fa;
             border-radius: 5px;
         }
         .warning {
-            color: #999; 
+            color: #999;
             font-size: 14px;
             margin-top: 30px;
             padding: 15px;
@@ -969,31 +968,31 @@ func buildVerificationEmailBody(username, verifyURL string) string {
             <h1>🎉 Welcome to Gemmie, ` + username + `!</h1>
             <p style="margin: 10px 0 0 0;">Just one more step to get started</p>
         </div>
-        
+
         <div class="content">
             <h2 style="color: #333; margin-top: 0;">Verify Your Email Address</h2>
             <p>Thanks for signing up! Please verify your email address to activate your account and access all features.</p>
-            
+
             <center>
                 <a href="` + verifyURL + `" class="verify-button">Verify Email Address →</a>
             </center>
-            
+
             <p style="margin-top: 30px; text-align: center;">
                 <strong>⏱️ This verification link will expire in 24 hours.</strong>
             </p>
-            
+
             <div class="link-text">
                 <strong>Button not working?</strong><br>
                 Copy and paste this link into your browser:<br>
                 <span style="color: #667eea;">` + verifyURL + `</span>
             </div>
-            
+
             <div class="warning">
                 <strong>⚠️ Didn't create a Gemmie account?</strong><br>
                 If you didn't sign up for Gemmie, you can safely ignore this email.
             </div>
         </div>
-        
+
         <div class="footer">
             <p style="margin: 5px 0;"><strong>Thanks for joining Gemmie!</strong></p>
             <p style="margin: 5px 0;">Questions? Reply to this email or visit our support center.</p>

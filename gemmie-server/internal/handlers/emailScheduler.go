@@ -4,7 +4,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/imrany/gemmie/gemmie-server/internal/mailer"
+	"github.com/imrany/gemmie/gemmie-server/pkg/mailer"
 	"github.com/imrany/gemmie/gemmie-server/store"
 )
 
@@ -166,45 +166,45 @@ func buildFreeUserEmailBody(user store.User) string {
             <h1>✨ Hey ` + user.Username + `!</h1>
             <p>Ready to supercharge your Gemmie experience?</p>
         </div>
-        
+
         <div class="content">
             <h2>Upgrade your Gemmie plan Today!</h2>
             <p>You've been enjoying Gemmie's free features, but there's so much more waiting for you:</p>
-            
+
             <div class="feature">
                 <span class="feature-icon">⚡</span>
                 <strong>Unlimited Conversations</strong> - No limits on your AI interactions
             </div>
-            
+
             <div class="feature">
                 <span class="feature-icon">🔄</span>
                 <strong>Advanced Sync</strong> - Seamless sync across all your devices
             </div>
-            
+
             <div class="feature">
                 <span class="feature-icon">🎨</span>
                 <strong>Premium Themes</strong> - Customize your experience
             </div>
-            
+
             <div class="feature">
                 <span class="feature-icon">🚀</span>
                 <strong>Priority Support</strong> - Get help when you need it
             </div>
-            
+
             <div class="feature">
                 <span class="feature-icon">💾</span>
                 <strong>Increased Storage</strong> - Store more conversations and data
             </div>
-            
+
             <center>
                 <a href="https://gemmie-ai.web.app/upgrade" class="cta-button">Upgrade Now →</a>
             </center>
-            
+
             <p style="margin-top: 30px;">
                 <strong>Special Offer:</strong> Upgrade this week and get 20% off your first month!
             </p>
         </div>
-        
+
         <div class="footer">
             <p>Thanks for being part of the Gemmie community!</p>
             <p>Questions? Reply to this email or visit our support center.</p>
@@ -247,12 +247,12 @@ func buildExpiredUserEmailBody(user store.User) string {
             <h1>⏰ Don't Miss Out, ` + user.Username + `!</h1>
             <p>` + statusMessage + `</p>
         </div>
-        
+
         <div class="content">
             <div class="alert-box">
                 <strong>⚠️ Action Required:</strong> Renew your subscription to keep enjoying premium features!
             </div>
-            
+
             <h2>What You'll Lose:</h2>
             <ul>
                 <li>Unlimited AI conversations</li>
@@ -261,18 +261,18 @@ func buildExpiredUserEmailBody(user store.User) string {
                 <li>Priority customer support</li>
                 <li>Extended storage capacity</li>
             </ul>
-            
+
             <p>Renew now and pick up right where you left off!</p>
-            
+
             <center>
                 <a href="https://gemmie-ai.web.app/upgrade/` + user.Plan + `" class="cta-button">Renew Subscription →</a>
             </center>
-            
+
             <p style="margin-top: 30px;">
                 <strong>Loyal Customer Bonus:</strong> Renew within 7 days and get 15% off!
             </p>
         </div>
-        
+
         <div class="footer">
             <p>We'd love to have you back!</p>
             <p>Questions? Reply to this email or contact support.</p>
