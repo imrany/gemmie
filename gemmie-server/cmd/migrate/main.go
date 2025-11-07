@@ -21,7 +21,7 @@ func main() {
 	steps := pflag.Int("steps", 1, "Number of steps for migration (used with 'steps' command)")
 	target := pflag.Uint("target", 0, "Target version (used with 'goto' command)")
 	forceVersion := pflag.Int("version", 0, "Version to force (used with 'force' command)")
-	
+
 	pflag.String("db-host", "localhost", "Database host")
 	pflag.String("db-port", "5432", "Database port")
 	pflag.String("db-user", "", "Database user")
@@ -43,6 +43,7 @@ func main() {
 	viper.BindPFlag("DB_SSLMODE", pflag.Lookup("db-sslmode"))
 
 	// Get final values
+	dbDSN := viper.GetString("DB_DSN")
 	finalDBHost := viper.GetString("DB_HOST")
 	finalDBPort := viper.GetString("DB_PORT")
 	finalDBUser := viper.GetString("DB_USER")
@@ -50,19 +51,29 @@ func main() {
 	finalDBName := viper.GetString("DB_NAME")
 	finalDBSSLMode := viper.GetString("DB_SSLMODE")
 
-	// Validate required parameters
-	if finalDBUser == "" || finalDBPassword == "" {
-		log.Fatal("Database user and password are required")
+	var connString string
+
+	// Use DB_DSN if available, otherwise construct from individual parameters
+	if dbDSN != "" {
+		connString = dbDSN
+	} else {
+		// Validate required parameters
+		if finalDBUser == "" || finalDBPassword == "" {
+			log.Fatal("Database user and password are required")
+		}
+
+		connString = fmt.Sprintf(
+			"host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
+			finalDBHost, finalDBPort, finalDBUser, finalDBPassword, finalDBName, finalDBSSLMode,
+		)
 	}
 
-	// Connect to database
-	connString := fmt.Sprintf(
-		"host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
-		finalDBHost, finalDBPort, finalDBUser, finalDBPassword, finalDBName, finalDBSSLMode,
-	)
-
 	fmt.Println("=== Database Migration Tool ===")
-	fmt.Printf("Database: %s@%s:%s/%s\n", finalDBUser, finalDBHost, finalDBPort, finalDBName)
+	if dbDSN == "" {
+		fmt.Printf("Database: %s@%s:%s/%s\n", finalDBUser, finalDBHost, finalDBPort, finalDBName)
+	} else {
+		fmt.Printf("Database: Using DSN\n")
+	}
 	fmt.Printf("Command: %s\n\n", *command)
 
 	// Initialize connection (but don't auto-migrate)
