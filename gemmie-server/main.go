@@ -267,6 +267,11 @@ func runServer() {
 
 	r.HandleFunc("/api/verify-email", v1.VerifyEmailHandler).Methods(http.MethodGet, http.MethodPost)
 
+	// Email sending route (for Supabase Edge Function)
+	r.HandleFunc("/api/send-email", func(w http.ResponseWriter, r *http.Request) {
+		v1.SendEmailHandler(w, r, smtpConfig)
+	}).Methods(http.MethodPost)
+
 	// Handle CORS preflight
 	r.Methods(http.MethodOptions).HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
