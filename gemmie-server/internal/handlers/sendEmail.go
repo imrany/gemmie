@@ -13,6 +13,7 @@ type SendEmailRequest struct {
 	To      string `json:"to"`
 	Subject string `json:"subject"`
 	HTML    string `json:"html"`
+	IsHTML  bool   `json:"is_html"`
 }
 
 // SendEmailResponse represents the response for email sending
@@ -90,6 +91,7 @@ func SendEmailHandler(w http.ResponseWriter, r *http.Request, smtpConfig mailer.
 		To:      []string{req.To},
 		Subject: req.Subject,
 		Body:    req.HTML,
+		IsHTML:  req.IsHTML,
 	}
 	// Send email using mailer package
 	err := mailer.SendEmail(
