@@ -216,7 +216,7 @@ func runServer() {
 	r.HandleFunc("/api/verify-email", v1.VerifyEmailHandler).Methods(http.MethodGet, http.MethodPost)
 
 	// Email sending route (for Supabase Edge Function)
-	r.HandleFunc("/api/email/send-email", func(w http.ResponseWriter, r *http.Request) {
+	r.HandleFunc("/api/email/send", func(w http.ResponseWriter, r *http.Request) {
 		public.SendEmailHandler(w, r, smtpConfig)
 	}).Methods(http.MethodPost)
 	// Whatsapp message sending (for Supabase Edge Function)
