@@ -9,8 +9,10 @@ import (
 	"time"
 
 	v1 "github.com/imrany/gemmie/gemmie-server/internal/handlers"
-	"github.com/imrany/gemmie/gemmie-server/pkg/mailer"
+	"github.com/imrany/gemmie/gemmie-server/internal/handlers/public"
 	"github.com/imrany/gemmie/gemmie-server/store"
+	"github.com/imrany/whats-email/pkg/mailer"
+	"github.com/imrany/whats-email/pkg/whatsapp"
 
 	"log/slog"
 
@@ -87,73 +89,6 @@ func loggingMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-func main() {
-	// Setup logging first so we can log everything
-	setupLogging()
-
-	// Load .env if present
-	if err := godotenv.Load(); err != nil {
-		slog.Warn("No .env file found, using defaults")
-	} else {
-		slog.Info(".env file loaded successfully")
-	}
-
-	// Root command with Cobra
-	var rootCmd = &cobra.Command{
-		Use:   "gemmie-server",
-		Short: "Auth Server with sync functionality",
-		Run: func(cmd *cobra.Command, args []string) {
-			runServer()
-		},
-	}
-
-	// Flags - UPDATED: Replace data file with database connection
-	rootCmd.PersistentFlags().String("port", "8081", "Port to run the server on")
-	rootCmd.PersistentFlags().String("db-host", "localhost", "Database host (env: DB_HOST)")
-	rootCmd.PersistentFlags().String("db-port", "5432", "Database port (env: DB_PORT)")
-	rootCmd.PersistentFlags().String("db-user", "", "Database user (env: DB_USER)")
-	rootCmd.PersistentFlags().String("db-password", "", "Database password (env: DB_PASSWORD)")
-	rootCmd.PersistentFlags().String("db-name", "gemmie", "Database name (env: DB_NAME)")
-	rootCmd.PersistentFlags().String("db-sslmode", "disable", "Database SSL mode (env: DB_SSLMODE)")
-	rootCmd.PersistentFlags().String("PAYHERO_USERNAME", "", "PayHero username (env: PAYHERO_USERNAME)")
-	rootCmd.PersistentFlags().String("PAYHERO_PASSWORD", "", "PayHero password (env: PAYHERO_PASSWORD)")
-	rootCmd.PersistentFlags().String("PAYHERO_CHANNEL_ID", "", "PayHero channel ID (env: PAYHERO_CHANNEL_ID)")
-	rootCmd.PersistentFlags().String("CALLBACK_URL", "", "Callback URL for PayHero (env: CALLBACK_URL)")
-	rootCmd.PersistentFlags().String("SMTP_HOST", "", "SMTP HOST (env: SMTP_HOST)")
-	rootCmd.PersistentFlags().Int("SMTP_PORT", 587, "SMTP PORT (env: SMTP_PORT)")
-	rootCmd.PersistentFlags().String("SMTP_USERNAME", "", "SMTP Username (env: SMTP_USERNAME)")
-	rootCmd.PersistentFlags().String("SMTP_PASSWORD", "", "SMTP Password (env: SMTP_PASSWORD)")
-	rootCmd.PersistentFlags().String("SMTP_EMAIL", "", "SMTP Email (env: SMTP_EMAIL)")
-	rootCmd.PersistentFlags().String("log-level", "info", "Log level (debug, info, warn, error) (env: LOG_LEVEL)")
-
-	// Bind flags to viper - UPDATED: Database flags instead of data file
-	viper.BindPFlag("PORT", rootCmd.PersistentFlags().Lookup("port"))
-	viper.BindPFlag("DB_HOST", rootCmd.PersistentFlags().Lookup("db-host"))
-	viper.BindPFlag("DB_PORT", rootCmd.PersistentFlags().Lookup("db-port"))
-	viper.BindPFlag("DB_USER", rootCmd.PersistentFlags().Lookup("db-user"))
-	viper.BindPFlag("DB_PASSWORD", rootCmd.PersistentFlags().Lookup("db-password"))
-	viper.BindPFlag("DB_NAME", rootCmd.PersistentFlags().Lookup("db-name"))
-	viper.BindPFlag("DB_SSLMODE", rootCmd.PersistentFlags().Lookup("db-sslmode"))
-	viper.BindPFlag("PAYHERO_USERNAME", rootCmd.PersistentFlags().Lookup("PAYHERO_USERNAME"))
-	viper.BindPFlag("PAYHERO_PASSWORD", rootCmd.PersistentFlags().Lookup("PAYHERO_PASSWORD"))
-	viper.BindPFlag("PAYHERO_CHANNEL_ID", rootCmd.PersistentFlags().Lookup("PAYHERO_CHANNEL_ID"))
-	viper.BindPFlag("CALLBACK_URL", rootCmd.PersistentFlags().Lookup("CALLBACK_URL"))
-	viper.BindPFlag("SMTP_HOST", rootCmd.PersistentFlags().Lookup("SMTP_HOST"))
-	viper.BindPFlag("SMTP_PORT", rootCmd.PersistentFlags().Lookup("SMTP_PORT"))
-	viper.BindPFlag("SMTP_USERNAME", rootCmd.PersistentFlags().Lookup("SMTP_USERNAME"))
-	viper.BindPFlag("SMTP_PASSWORD", rootCmd.PersistentFlags().Lookup("SMTP_PASSWORD"))
-	viper.BindPFlag("SMTP_EMAIL", rootCmd.PersistentFlags().Lookup("SMTP_EMAIL"))
-	viper.BindPFlag("LOG_LEVEL", rootCmd.PersistentFlags().Lookup("log-level"))
-
-	// Bind env variables
-	viper.AutomaticEnv()
-
-	if err := rootCmd.Execute(); err != nil {
-		slog.Error("Failed to execute command", "error", err)
-		os.Exit(1)
-	}
-}
-
 func runServer() {
 	port := viper.GetString("PORT")
 
@@ -192,6 +127,19 @@ func runServer() {
 		)
 	} else {
 		slog.Info("SMTP configured successfully", "host", smtpConfig.Host, "email", smtpConfig.Email)
+	}
+
+	// Initialize WhatsApp client
+	slog.Info("Initializing WhatsApp client...")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	if err := whatsapp.Init(ctx, nil); err != nil {
+		slog.Error("Error initializing WhatsApp client", "error", err.Error())
+		slog.Warn("Server will start without WhatsApp integration")
+		// Continue running server even if WhatsApp fails to initialize
+	} else {
+		slog.Info("WhatsApp client initialized successfully")
 	}
 
 	// Configure email scheduler
@@ -268,9 +216,11 @@ func runServer() {
 	r.HandleFunc("/api/verify-email", v1.VerifyEmailHandler).Methods(http.MethodGet, http.MethodPost)
 
 	// Email sending route (for Supabase Edge Function)
-	r.HandleFunc("/api/send-email", func(w http.ResponseWriter, r *http.Request) {
-		v1.SendEmailHandler(w, r, smtpConfig)
+	r.HandleFunc("/api/email/send-email", func(w http.ResponseWriter, r *http.Request) {
+		public.SendEmailHandler(w, r, smtpConfig)
 	}).Methods(http.MethodPost)
+	// Whatsapp message sending (for Supabase Edge Function)
+	r.HandleFunc("/api/whatsapp/send", public.WhatsAppHandler).Methods(http.MethodPost)
 
 	// Handle CORS preflight
 	r.Methods(http.MethodOptions).HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -311,12 +261,79 @@ func runServer() {
 	sig := <-quit
 	slog.Info("Shutdown signal received", "signal", sig, "shutting down gracefully...", "")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	if err := srv.Shutdown(ctx); err != nil {
 		slog.Error("Server shutdown failed", "error", err)
 	} else {
 		slog.Info("Server exited cleanly")
+	}
+}
+
+func main() {
+	// Setup logging first so we can log everything
+	setupLogging()
+
+	// Load .env if present
+	if err := godotenv.Load(); err != nil {
+		slog.Warn("No .env file found, using defaults")
+	} else {
+		slog.Info(".env file loaded successfully")
+	}
+
+	// Root command with Cobra
+	var rootCmd = &cobra.Command{
+		Use:   "gemmie-server",
+		Short: "Auth Server with sync functionality",
+		Run: func(cmd *cobra.Command, args []string) {
+			runServer()
+		},
+	}
+
+	// Flags - UPDATED: Replace data file with database connection
+	rootCmd.PersistentFlags().String("port", "8081", "Port to run the server on")
+	rootCmd.PersistentFlags().String("db-host", "localhost", "Database host (env: DB_HOST)")
+	rootCmd.PersistentFlags().String("db-port", "5432", "Database port (env: DB_PORT)")
+	rootCmd.PersistentFlags().String("db-user", "", "Database user (env: DB_USER)")
+	rootCmd.PersistentFlags().String("db-password", "", "Database password (env: DB_PASSWORD)")
+	rootCmd.PersistentFlags().String("db-name", "gemmie", "Database name (env: DB_NAME)")
+	rootCmd.PersistentFlags().String("db-sslmode", "disable", "Database SSL mode (env: DB_SSLMODE)")
+	rootCmd.PersistentFlags().String("PAYHERO_USERNAME", "", "PayHero username (env: PAYHERO_USERNAME)")
+	rootCmd.PersistentFlags().String("PAYHERO_PASSWORD", "", "PayHero password (env: PAYHERO_PASSWORD)")
+	rootCmd.PersistentFlags().String("PAYHERO_CHANNEL_ID", "", "PayHero channel ID (env: PAYHERO_CHANNEL_ID)")
+	rootCmd.PersistentFlags().String("CALLBACK_URL", "", "Callback URL for PayHero (env: CALLBACK_URL)")
+	rootCmd.PersistentFlags().String("SMTP_HOST", "", "SMTP HOST (env: SMTP_HOST)")
+	rootCmd.PersistentFlags().Int("SMTP_PORT", 587, "SMTP PORT (env: SMTP_PORT)")
+	rootCmd.PersistentFlags().String("SMTP_USERNAME", "", "SMTP Username (env: SMTP_USERNAME)")
+	rootCmd.PersistentFlags().String("SMTP_PASSWORD", "", "SMTP Password (env: SMTP_PASSWORD)")
+	rootCmd.PersistentFlags().String("SMTP_EMAIL", "", "SMTP Email (env: SMTP_EMAIL)")
+	rootCmd.PersistentFlags().String("log-level", "info", "Log level (debug, info, warn, error) (env: LOG_LEVEL)")
+
+	// Bind flags to viper - UPDATED: Database flags instead of data file
+	viper.BindPFlag("PORT", rootCmd.PersistentFlags().Lookup("port"))
+	viper.BindPFlag("DB_HOST", rootCmd.PersistentFlags().Lookup("db-host"))
+	viper.BindPFlag("DB_PORT", rootCmd.PersistentFlags().Lookup("db-port"))
+	viper.BindPFlag("DB_USER", rootCmd.PersistentFlags().Lookup("db-user"))
+	viper.BindPFlag("DB_PASSWORD", rootCmd.PersistentFlags().Lookup("db-password"))
+	viper.BindPFlag("DB_NAME", rootCmd.PersistentFlags().Lookup("db-name"))
+	viper.BindPFlag("DB_SSLMODE", rootCmd.PersistentFlags().Lookup("db-sslmode"))
+	viper.BindPFlag("PAYHERO_USERNAME", rootCmd.PersistentFlags().Lookup("PAYHERO_USERNAME"))
+	viper.BindPFlag("PAYHERO_PASSWORD", rootCmd.PersistentFlags().Lookup("PAYHERO_PASSWORD"))
+	viper.BindPFlag("PAYHERO_CHANNEL_ID", rootCmd.PersistentFlags().Lookup("PAYHERO_CHANNEL_ID"))
+	viper.BindPFlag("CALLBACK_URL", rootCmd.PersistentFlags().Lookup("CALLBACK_URL"))
+	viper.BindPFlag("SMTP_HOST", rootCmd.PersistentFlags().Lookup("SMTP_HOST"))
+	viper.BindPFlag("SMTP_PORT", rootCmd.PersistentFlags().Lookup("SMTP_PORT"))
+	viper.BindPFlag("SMTP_USERNAME", rootCmd.PersistentFlags().Lookup("SMTP_USERNAME"))
+	viper.BindPFlag("SMTP_PASSWORD", rootCmd.PersistentFlags().Lookup("SMTP_PASSWORD"))
+	viper.BindPFlag("SMTP_EMAIL", rootCmd.PersistentFlags().Lookup("SMTP_EMAIL"))
+	viper.BindPFlag("LOG_LEVEL", rootCmd.PersistentFlags().Lookup("log-level"))
+
+	// Bind env variables
+	viper.AutomaticEnv()
+
+	if err := rootCmd.Execute(); err != nil {
+		slog.Error("Failed to execute command", "error", err)
+		os.Exit(1)
 	}
 }

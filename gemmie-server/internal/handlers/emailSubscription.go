@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/imrany/gemmie/gemmie-server/internal/encrypt"
-	"github.com/imrany/gemmie/gemmie-server/pkg/mailer"
 	"github.com/imrany/gemmie/gemmie-server/store"
+	"github.com/imrany/whats-email/pkg/mailer"
 )
 
 // UnsubscribeRequest represents unsubscribe request payload

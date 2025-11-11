@@ -4,8 +4,8 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/imrany/gemmie/gemmie-server/pkg/mailer"
 	"github.com/imrany/gemmie/gemmie-server/store"
+	"github.com/imrany/whats-email/pkg/mailer"
 )
 
 // EmailSchedulerConfig holds the configuration for email scheduling

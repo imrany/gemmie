@@ -1,11 +1,11 @@
-package handlers
+package public
 
 import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
 
-	"github.com/imrany/gemmie/gemmie-server/pkg/mailer"
+	"github.com/imrany/whats-email/pkg/mailer"
 )
 
 // SendEmailRequest represents the request body for sending emails
