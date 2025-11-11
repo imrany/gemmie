@@ -98,6 +98,7 @@ func runServer() {
 	dbPassword := viper.GetString("DB_PASSWORD")
 	dbName := viper.GetString("DB_NAME")
 	dbSSLMode := viper.GetString("DB_SSLMODE")
+	whatsappDBPath := viper.GetString("WHATSAPP_DB_PATH")
 
 	// Build connection string
 	connString := "host=" + dbHost +
@@ -134,7 +135,7 @@ func runServer() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
-	if err := whatsapp.Init(ctx, nil); err != nil {
+	if err := whatsapp.Init(ctx, &whatsappDBPath); err != nil {
 		slog.Error("Error initializing WhatsApp client", "error", err.Error())
 		slog.Warn("Server will start without WhatsApp integration")
 		// Continue running server even if WhatsApp fails to initialize
@@ -299,15 +300,16 @@ func main() {
 	rootCmd.PersistentFlags().String("db-password", "", "Database password (env: DB_PASSWORD)")
 	rootCmd.PersistentFlags().String("db-name", "gemmie", "Database name (env: DB_NAME)")
 	rootCmd.PersistentFlags().String("db-sslmode", "disable", "Database SSL mode (env: DB_SSLMODE)")
-	rootCmd.PersistentFlags().String("PAYHERO_USERNAME", "", "PayHero username (env: PAYHERO_USERNAME)")
-	rootCmd.PersistentFlags().String("PAYHERO_PASSWORD", "", "PayHero password (env: PAYHERO_PASSWORD)")
-	rootCmd.PersistentFlags().String("PAYHERO_CHANNEL_ID", "", "PayHero channel ID (env: PAYHERO_CHANNEL_ID)")
-	rootCmd.PersistentFlags().String("CALLBACK_URL", "", "Callback URL for PayHero (env: CALLBACK_URL)")
-	rootCmd.PersistentFlags().String("SMTP_HOST", "", "SMTP HOST (env: SMTP_HOST)")
-	rootCmd.PersistentFlags().Int("SMTP_PORT", 587, "SMTP PORT (env: SMTP_PORT)")
-	rootCmd.PersistentFlags().String("SMTP_USERNAME", "", "SMTP Username (env: SMTP_USERNAME)")
-	rootCmd.PersistentFlags().String("SMTP_PASSWORD", "", "SMTP Password (env: SMTP_PASSWORD)")
-	rootCmd.PersistentFlags().String("SMTP_EMAIL", "", "SMTP Email (env: SMTP_EMAIL)")
+	rootCmd.PersistentFlags().String("payhero-username", "", "PayHero username (env: PAYHERO_USERNAME)")
+	rootCmd.PersistentFlags().String("payhero-password", "", "PayHero password (env: PAYHERO_PASSWORD)")
+	rootCmd.PersistentFlags().String("payhero-channel-id", "", "PayHero channel ID (env: PAYHERO_CHANNEL_ID)")
+	rootCmd.PersistentFlags().String("callback-url", "", "Callback URL for PayHero (env: CALLBACK_URL)")
+	rootCmd.PersistentFlags().String("smtp-host", "", "SMTP HOST (env: SMTP_HOST)")
+	rootCmd.PersistentFlags().Int("smtp-port", 587, "SMTP PORT (env: SMTP_PORT)")
+	rootCmd.PersistentFlags().String("smtp-username", "", "SMTP Username (env: SMTP_USERNAME)")
+	rootCmd.PersistentFlags().String("smtp-password", "", "SMTP Password (env: SMTP_PASSWORD)")
+	rootCmd.PersistentFlags().String("smtp-email", "", "SMTP Email (env: SMTP_EMAIL)")
+	rootCmd.PersistentFlags().String("whatsapp-db-path", "", "WhatsApp Database Path (env: WHATSAPP_DB_PATH)")
 	rootCmd.PersistentFlags().String("log-level", "info", "Log level (debug, info, warn, error) (env: LOG_LEVEL)")
 
 	// Bind flags to viper - UPDATED: Database flags instead of data file
@@ -327,6 +329,7 @@ func main() {
 	viper.BindPFlag("SMTP_USERNAME", rootCmd.PersistentFlags().Lookup("SMTP_USERNAME"))
 	viper.BindPFlag("SMTP_PASSWORD", rootCmd.PersistentFlags().Lookup("SMTP_PASSWORD"))
 	viper.BindPFlag("SMTP_EMAIL", rootCmd.PersistentFlags().Lookup("SMTP_EMAIL"))
+	viper.BindPFlag("WHATSAPP_DB_PATH", rootCmd.PersistentFlags().Lookup("WHATSAPP_DB_PATH"))
 	viper.BindPFlag("LOG_LEVEL", rootCmd.PersistentFlags().Lookup("log-level"))
 
 	// Bind env variables

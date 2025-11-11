@@ -50,11 +50,12 @@ USER gemmie
 EXPOSE 8081
 
 # Default envs (override in docker-compose or runtime)
+ENV WHATSAPP_DB_PATH=/var/opt/gemmie-server/whatsapp.db
 ENV PORT=8081
 
 LABEL org.opencontainers.image.title="gemmie-server" \
-      org.opencontainers.image.description="gemmie's server side program." \
-      org.opencontainers.image.source="https://github.com/imrany/gemmie/gemmie-server"
+    org.opencontainers.image.description="gemmie's server side program." \
+    org.opencontainers.image.source="https://github.com/imrany/gemmie/gemmie-server"
 
 # Start the app
 ENTRYPOINT ["./gemmie-server"]
