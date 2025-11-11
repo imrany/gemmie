@@ -54,6 +54,6 @@ func WhatsAppHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(store.Response{
 		Success: true,
-		Message: fmt.Sprintf("Message sent to: s%", request.To),
+		Message: fmt.Sprintf("Message sent to: %v", request.To),
 	})
 }
