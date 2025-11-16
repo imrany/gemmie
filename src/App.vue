@@ -830,12 +830,14 @@ async function syncFromServer(serverData?: any) {
     const shouldSync = syncEnabled.value || serverData;
     if (!shouldSync) {
         console.log("❌ syncFromServer: Sync disabled");
+        await loadChats(); // ✅ Load local chats if sync disabled
         return;
     }
 
     try {
         syncStatus.value.syncing = true;
         syncStatus.value.lastError = null;
+        isLoading.value = true;
         showSyncIndicator("Syncing data from server...", 30);
 
         let data = serverData;
@@ -846,10 +848,12 @@ async function syncFromServer(serverData?: any) {
                 method: "GET",
             });
             data = response.data;
+            isLoading.value = data.chats && data.chats !== "[]" ? true : false;
         }
 
         if (!data) {
             console.warn("⚠️ No data received from server");
+            isLoading.value = false;
             return;
         }
 
@@ -858,7 +862,6 @@ async function syncFromServer(serverData?: any) {
         updateSyncProgress("Processing chats...", 70);
 
         if (data.chats && data.chats !== "[]") {
-            isLoading.value = true;
             const serverChatsData =
                 typeof data.chats === "string"
                     ? JSON.parse(data.chats)
@@ -1434,10 +1437,7 @@ async function toggleSync() {
                 await apiCall("/sync", {
                     method: "POST",
                     body: JSON.stringify({
-                        username: parsedUserDetails.value.username,
                         sync_enabled: false,
-                        chats: "[]",
-                        link_previews: "{}",
                     }),
                 });
 
