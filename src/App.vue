@@ -874,6 +874,7 @@ async function syncFromServer(serverData?: any) {
                     `✅ Synced ${mergedChats.length} chats from server`,
                 );
             }
+            isLoading.value = false;
         } else {
             console.log("📭 No chats data from server");
             isLoading.value = false;

@@ -27,9 +27,9 @@ const { suggestionPrompts, selectSuggestion } = defineProps<{
             v-if="isLoading"
             class="flex h-screen justify-center md:max-w-3xl max-w-[100vw] max-md:px-4 flex-col md:flex-grow items-center gap-3 text-gray-600 dark:text-gray-400"
         >
-            <div class="flex gap-2 items-center">
+            <div class="flex gap-2 items-center justify-center">
                 <LoaderCircle
-                    class="w-5 h-5 bg-gray-200 dark:bg-gray-700 animate-spin"
+                    class="w-5 h-5 text-gray-200 dark:text-gray-700 animate-spin"
                 />
                 <p
                     class="text-gray-700 dark:text-gray-300 sm:text-sm text-xs font-semibold mt-4"
