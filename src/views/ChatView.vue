@@ -138,7 +138,7 @@ const {
     processLinksInResponse,
 } = inject("globalState") as {
     copyResponse: (text: string, index?: number) => void;
-    loadChats: () => void;
+    loadChats: () => Promise<void>;
     processLinksInUserPrompt: (index: number) => Promise<void>;
     processLinksInResponse: (index: number) => Promise<void>;
     onMessageAdded: (message: Message) => void;
@@ -1413,6 +1413,7 @@ watch(currentChatId, (newChatId, oldChatId) => {
     loadChatDrafts();
 
     if (oldChatId && newChatId !== oldChatId) {
+        showErrorSection.value = false;
         // Clear paste preview when switching chats
         // pastePreviews.value.delete(oldChatId)
 
@@ -1583,6 +1584,7 @@ onMounted(async () => {
     // Handle /new route - create new chat immediately
     if (path === "/new") {
         createNewChat();
+        showErrorSection.value = false;
         return;
     }
 
@@ -1596,7 +1598,7 @@ onMounted(async () => {
     // Load chats FIRST (this will merge with any server data)
     console.log("📥 Loading chats...");
     if (chats.value.length === 0) {
-        loadChats();
+        await loadChats();
     }
 
     // After loading, verify the chat exists
