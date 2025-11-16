@@ -827,8 +827,7 @@ async function syncFromServer(serverData?: any) {
         return;
     }
 
-    const shouldSync =
-        parsedUserDetails.value?.syncEnabled !== false || serverData;
+    const shouldSync = syncEnabled.value || serverData;
     if (!shouldSync) {
         console.log("❌ syncFromServer: Sync disabled");
         return;
@@ -2103,10 +2102,8 @@ onMounted(async () => {
                     }
                 }
 
-                if (parsedUserDetails.value?.syncEnabled !== false) {
+                if (syncEnabled.value) {
                     await syncFromServer();
-                } else {
-                    loadChats();
                 }
             } catch (syncError: any) {
                 reportError({
