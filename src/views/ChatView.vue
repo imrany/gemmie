@@ -245,6 +245,7 @@ const route = useRoute();
 const now = ref(Date.now());
 const showInputModeDropdown = ref(false);
 const showErrorSection = ref(false);
+const fallbackChatId = ref("");
 
 const isRecording = ref(false);
 const selectedContexts = ref<ContextReference[]>([]);
@@ -273,7 +274,6 @@ const {
 });
 
 const showSuggestionsDropup = ref(false);
-var window: Window & typeof globalThis;
 const showPasteModal = ref(false);
 const pastePreview = computed(() => {
     return pastePreviews.value.get(currentChatId.value) || null;
@@ -1618,7 +1618,6 @@ onMounted(async () => {
             showErrorSection.value = true;
 
             // ✅ Find the most recent chat as fallback
-            let fallbackChatId = null;
             if (chats.value.length > 0) {
                 const sortedChats = [...chats.value].sort((a, b) => {
                     const dateA = new Date(
@@ -1629,11 +1628,8 @@ onMounted(async () => {
                     ).getTime();
                     return dateB - dateA;
                 });
-                fallbackChatId = sortedChats[0].id;
+                fallbackChatId.value = sortedChats[0].id;
             }
-
-            // Store fallback chat ID for the button action
-            (window as any).__fallbackChatId = fallbackChatId;
         }
     }
 
@@ -1891,8 +1887,7 @@ onUnmounted(() => {
                             <Button
                                 @click="
                                     () => {
-                                        const fallbackId = (window as any)
-                                            .__fallbackChatId;
+                                        const fallbackId = fallbackChatId;
                                         if (fallbackId) {
                                             showErrorSection = false;
                                             currentChatId = fallbackId;
@@ -1905,7 +1900,7 @@ onUnmounted(() => {
                                 class="px-5 py-2 bg-gray-900 dark:bg-white text-white dark:text-black text-sm rounded-lg transition-colors inline-flex items-center gap-2 shadow-lg hover:bg-gray-800 dark:hover:bg-gray-100"
                             >
                                 {{
-                                    (window as any).__fallbackChatId
+                                    fallbackChatId
                                         ? "Go to Recent Chat"
                                         : "Start a New Chat"
                                 }}
