@@ -273,6 +273,7 @@ const {
 });
 
 const showSuggestionsDropup = ref(false);
+var window: Window & typeof globalThis;
 const showPasteModal = ref(false);
 const pastePreview = computed(() => {
     return pastePreviews.value.get(currentChatId.value) || null;
@@ -1322,14 +1323,6 @@ const scrollContainerPadding = computed(() => {
     }
 });
 
-let resizeTimeout: any;
-window.onresize = () => {
-    clearTimeout(resizeTimeout);
-    resizeTimeout = setTimeout(() => {
-        screenWidth.value = screen.width;
-    }, 100);
-};
-
 function onEnter(e: KeyboardEvent) {
     if (e.key !== "Enter" || e.shiftKey || isLoading.value) {
         return;
@@ -1611,6 +1604,7 @@ onMounted(async () => {
         const chatExists = chats.value.find((chat) => chat.id === chatId);
 
         if (chatExists) {
+            showErrorSection.value = false; // ✅ Ensure error section is hidden
             updateExpandedArray();
             nextTick(() => {
                 loadChatDrafts();
@@ -1619,8 +1613,27 @@ onMounted(async () => {
         } else {
             // Chat genuinely doesn't exist after loading everything
             console.warn(`⚠️ Chat ${chatId} not found`);
-            // shows error section
+
+            // ✅ Show error section
             showErrorSection.value = true;
+
+            // ✅ Find the most recent chat as fallback
+            let fallbackChatId = null;
+            if (chats.value.length > 0) {
+                const sortedChats = [...chats.value].sort((a, b) => {
+                    const dateA = new Date(
+                        a.last_message_at || a.updated_at || a.created_at,
+                    ).getTime();
+                    const dateB = new Date(
+                        b.last_message_at || b.updated_at || b.created_at,
+                    ).getTime();
+                    return dateB - dateA;
+                });
+                fallbackChatId = sortedChats[0].id;
+            }
+
+            // Store fallback chat ID for the button action
+            (window as any).__fallbackChatId = fallbackChatId;
         }
     }
 
@@ -1792,12 +1805,7 @@ onMounted(async () => {
         clearInterval(resetCheckInterval);
 
         // Clear timeouts
-        const timers = [
-            scrollTimeout,
-            resizeTimeout,
-            transcriptionTimer,
-            updateTimeout,
-        ];
+        const timers = [scrollTimeout, transcriptionTimer, updateTimeout];
         timers.forEach((timer) => {
             if (timer) {
                 clearTimeout(timer);
@@ -1862,22 +1870,48 @@ onUnmounted(() => {
                 "
             >
                 <div
-                    class="flex items-center justify-center"
                     v-if="showErrorSection"
+                    class="flex flex-col items-center justify-center min-h-[calc(100vh-100px)] gap-4 px-4"
                 >
-                    <p class="text-2xl sm:text-3xl font-bold">
-                        Can't open this chat
-                    </p>
-                    <p class="sm:text-sm text-xs text-center font-normal">
-                        It may have been deleted or you might not have
-                        permission to view it. Use the share button to share
-                        chats on Claude.
-                    </p>
-                    <Button
-                        @click="$router.push('/new')"
-                        class="mt-4 px-5 py-2 bg-gray-900 dark:bg-white text-white dark:text-black text-sm rounded-lg transition-colors inline-flex items-center gap-2 shadow-lg"
-                        >Start a New Chat</Button
+                    <div
+                        class="flex flex-col items-center gap-3 max-w-md text-center"
                     >
+                        <p
+                            class="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-gray-100"
+                        >
+                            Can't open this chat
+                        </p>
+                        <p
+                            class="sm:text-sm text-xs text-gray-600 dark:text-gray-400"
+                        >
+                            It may have been deleted or you might not have
+                            permission to view it.
+                        </p>
+                        <div class="flex gap-3 mt-4">
+                            <Button
+                                @click="
+                                    () => {
+                                        const fallbackId = (window as any)
+                                            .__fallbackChatId;
+                                        if (fallbackId) {
+                                            showErrorSection = false;
+                                            currentChatId = fallbackId;
+                                            $router.push(`/chat/${fallbackId}`);
+                                        } else {
+                                            $router.push('/new');
+                                        }
+                                    }
+                                "
+                                class="px-5 py-2 bg-gray-900 dark:bg-white text-white dark:text-black text-sm rounded-lg transition-colors inline-flex items-center gap-2 shadow-lg hover:bg-gray-800 dark:hover:bg-gray-100"
+                            >
+                                {{
+                                    (window as any).__fallbackChatId
+                                        ? "Go to Recent Chat"
+                                        : "Start a New Chat"
+                                }}
+                            </Button>
+                        </div>
+                    </div>
                 </div>
                 <div v-else>
                     <TopNav />
