@@ -1861,9 +1861,14 @@ onUnmounted(() => {
                         : 'bg-inherit h-screen w-full flex flex-col items-center justify-center'
                 "
             >
-                <div v-if="showErrorSection">
-                    <p class="text-2xl font-bold">Can't open this chat</p>
-                    <p class="text-sm font-normal">
+                <div
+                    class="flex items-center justify-center"
+                    v-if="showErrorSection"
+                >
+                    <p class="text-2xl sm:text-3xl font-bold">
+                        Can't open this chat
+                    </p>
+                    <p class="sm:text-sm text-xs text-center font-normal">
                         It may have been deleted or you might not have
                         permission to view it. Use the share button to share
                         chats on Claude.
