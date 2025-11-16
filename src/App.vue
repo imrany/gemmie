@@ -858,39 +858,25 @@ async function syncFromServer(serverData?: any) {
         updateSyncProgress("Processing chats...", 70);
 
         if (data.chats && data.chats !== "[]") {
-            try {
-                const serverChatsData =
-                    typeof data.chats === "string"
-                        ? JSON.parse(data.chats)
-                        : data.chats;
+            isLoading.value = true;
+            const serverChatsData =
+                typeof data.chats === "string"
+                    ? JSON.parse(data.chats)
+                    : data.chats;
 
-                if (Array.isArray(serverChatsData)) {
-                    const localChats = chats.value;
-                    const mergedChats = mergeChats(serverChatsData, localChats);
+            if (Array.isArray(serverChatsData)) {
+                const localChats = chats.value;
+                const mergedChats = mergeChats(serverChatsData, localChats);
 
-                    chats.value = mergedChats;
-                    localStorage.setItem("chats", JSON.stringify(mergedChats));
-                    console.log(
-                        `✅ Synced ${mergedChats.length} chats from server`,
-                    );
-                }
-            } catch (parseError: any) {
-                reportError({
-                    action: "syncFromServer",
-                    message:
-                        "Error parsing server chats: " + parseError.message,
-                    status: getErrorStatus(parseError),
-                    userId: parsedUserDetails.value?.userId || "unknown",
-                    context: createErrorContext({
-                        dataType: "chats",
-                        rawDataLength: data.chats?.length,
-                        errorName: parseError.name,
-                    }),
-                    severity: "low",
-                } as PlatformError);
+                chats.value = mergedChats;
+                localStorage.setItem("chats", JSON.stringify(mergedChats));
+                console.log(
+                    `✅ Synced ${mergedChats.length} chats from server`,
+                );
             }
         } else {
             console.log("📭 No chats data from server");
+            isLoading.value = false;
         }
 
         updateSyncProgress("Processing link previews...", 85);
@@ -1003,6 +989,7 @@ async function syncFromServer(serverData?: any) {
 
         console.log("✅ Successfully synced data from server");
     } catch (error: any) {
+        isLoading.value = false;
         reportError({
             action: "syncFromServer",
             message: "Sync from server failed: " + error.message,
