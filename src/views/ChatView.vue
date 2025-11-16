@@ -1862,8 +1862,10 @@ onUnmounted(() => {
                 "
             >
                 <div v-if="showErrorSection">
-                    <p class="text-xl font-bold">Can't open this chat</p>
-                    <p class="text-base font-normal">
+                    <p class="text-2xl text-center font-bold">
+                        Can't open this chat
+                    </p>
+                    <p class="text-sm text-center font-normal">
                         It may have been deleted or you might not have
                         permission to view it. Use the share button to share
                         chats on Claude.
