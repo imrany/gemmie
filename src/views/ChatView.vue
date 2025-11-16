@@ -1875,7 +1875,7 @@ onUnmounted(() => {
                     </p>
                     <Button
                         @click="$router.push('/new')"
-                        class="mt-3 px-5 py-2 bg-gray-900 dark:bg-white text-white dark:text-black text-sm rounded-lg transition-colors inline-flex items-center gap-2 shadow-lg"
+                        class="mt-4 px-5 py-2 bg-gray-900 dark:bg-white text-white dark:text-black text-sm rounded-lg transition-colors inline-flex items-center gap-2 shadow-lg"
                         >Start a New Chat</Button
                     >
                 </div>
