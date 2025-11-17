@@ -293,7 +293,6 @@ const {
     deleteChat,
     renameChat,
     saveChats,
-    switchToChat,
     clearAllChats,
     expanded,
     activeChatMenu,
@@ -822,13 +821,13 @@ function handleClickOutside() {
     }
 }
 
-async function syncFromServer(serverData?: any) {
+async function syncFromServer() {
     if (!parsedUserDetails.value?.userId) {
         console.log("❌ syncFromServer: No user ID");
         return;
     }
 
-    const shouldSync = syncEnabled.value || serverData;
+    const shouldSync = syncEnabled.value;
     if (!shouldSync) {
         console.log("❌ syncFromServer: Sync disabled");
         // await loadChats(); // ✅ Load local chats if sync disabled
@@ -842,7 +841,7 @@ async function syncFromServer(serverData?: any) {
         isLoading.value = true;
         showSyncIndicator("Syncing data from server...", 30);
 
-        let data = serverData;
+        let data: any;
         if (!data) {
             console.log("📡 Fetching data from server...");
             updateSyncProgress("Fetching data from server...", 50);
@@ -1003,7 +1002,6 @@ async function syncFromServer(serverData?: any) {
             status: getErrorStatus(error),
             userId: parsedUserDetails.value?.userId || "unknown",
             context: createErrorContext({
-                hasServerData: !!serverData,
                 syncEnabled: parsedUserDetails.value?.syncEnabled,
                 errorName: error.name,
                 errorStack: error.stack,
@@ -1897,7 +1895,7 @@ function hasUserDetailsChangedMeaningfully(
 
 watch(
     () => currentChatId.value,
-    (newChatId, oldChatId) => {
+    async (newChatId, oldChatId) => {
         if (!isAuthenticated.value) {
             return;
         }
@@ -1910,12 +1908,8 @@ watch(
             // Prevent redundant navigation
             if (currentPath !== targetPath) {
                 console.log(`🔄 Navigating to chat: ${newChatId}`);
-                router.push(targetPath).catch((err) => {
-                    // Ignore navigation duplicated errors
-                    if (err.name !== "NavigationDuplicated") {
-                        console.error("Navigation error:", err);
-                    }
-                });
+                await loadChat();
+                router.push(targetPath);
             }
         }
     },
@@ -1983,9 +1977,10 @@ watch(
     { immediate: false }, // Set to false to avoid unnecessary initial save, onMounted
 );
 
+// auth state watcher
 watch(
     () => isAuthenticated.value,
-    (isAuth, wasAuth) => {
+    async (isAuth, wasAuth) => {
         // Only act on actual auth state changes
         if (isAuth === wasAuth) return;
 
@@ -1997,7 +1992,13 @@ watch(
 
             // Only navigate to home if not already there
             if (currentRoute.path !== "/") {
-                router.push("/");
+                router.push(`/?from=${currentRoute.path}`);
+            }
+        } else {
+            try {
+                await syncFromServer();
+            } catch (error: unknown) {
+                console.error(error);
             }
         }
     },
@@ -2249,7 +2250,6 @@ const globalState = {
     logout,
     updateExpandedArray,
     createNewChat,
-    switchToChat,
     deleteChat,
     renameChat,
     deleteMessage,

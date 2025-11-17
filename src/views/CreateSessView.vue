@@ -294,6 +294,9 @@ const startDemoMode = async () => {
 
         closeDemoModal();
 
+        // skip to the last auto step
+        authStep.value = 4;
+
         // creates sessions directly
         await handleFinalAuthStep();
 
@@ -333,12 +336,9 @@ const createRealAccount = () => {
 // Lifecycle
 onMounted(() => {
     startAutoSlide();
-
-    const previousRoute = document.referrer;
-    const isFromUpgrade =
-        previousRoute.includes("/upgrade") ||
-        window.location.search.includes("from=upgrade");
-    if (isFromUpgrade) {
+    const urlParams = new URLSearchParams(window.location.search);
+    const redirectParam = urlParams.get("redirect") || urlParams.get("from");
+    if (redirectParam) {
         showCreateSession.value = true;
     } else {
         if (!isAuthenticated.value) {

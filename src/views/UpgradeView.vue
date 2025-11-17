@@ -321,9 +321,9 @@ async function handlePayment() {
 
                     isProcessing.value = false;
 
-                    // Navigate back to home after a short delay
+                    // Navigate back for a short delay
                     setTimeout(() => {
-                        router.push("/chats");
+                        handleBack();
                     }, 2000);
                     return;
                 }

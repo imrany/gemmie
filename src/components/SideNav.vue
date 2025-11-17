@@ -83,7 +83,6 @@ const props = defineProps<{
         toggleSidebar: () => void;
         logout: () => void;
         createNewChat: () => void;
-        switchToChat: (chatId: string) => boolean;
         deleteChat: (chatId: string) => void;
         renameChat: (chatId: string, newTitle: string) => void;
         manualSync: () => void;
@@ -195,7 +194,7 @@ function handleChatClick(chatId: string) {
     // Don't process if already on this chat
     if (chatId === currentChatId.value && screenWidth.value > 720) return;
 
-    props.functions.switchToChat(chatId);
+    currentChatId.value = chatId;
     if (screenWidth.value < 720) {
         hideSidebar();
     }

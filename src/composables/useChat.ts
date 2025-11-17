@@ -618,80 +618,6 @@ export function useChat({
     }, 1000);
   }
 
-  async function switchToChat(chatId: string): Promise<boolean> {
-    try {
-      if (!chatId || typeof chatId !== "string") {
-        console.error("Invalid chat ID provided");
-        return false;
-      }
-
-      const targetChat = chats.value.find((chat) => chat.id === chatId);
-      if (!targetChat) {
-        console.warn(`Chat with ID ${chatId} not found`);
-        toast.error("Chat not found");
-        return false;
-      }
-
-      if (currentChatId.value === chatId) {
-        return true;
-      }
-
-      // Save the draft for the current chat before switching
-      if (currentChatId.value) {
-        const textarea = document.getElementById(
-          "prompt",
-        ) as HTMLTextAreaElement;
-        let currentDraft = textarea?.value || "";
-
-        const currentPastePreview = pastePreviews.value.get(
-          currentChatId.value,
-        );
-        if (currentPastePreview?.show && currentPastePreview.content) {
-          currentDraft += currentPastePreview.content;
-        }
-
-        if (currentDraft.trim().length === 0) {
-          chatDrafts.value.delete(currentChatId.value);
-          pastePreviews.value.delete(currentChatId.value);
-        } else {
-          chatDrafts.value.set(currentChatId.value, currentDraft);
-        }
-        saveChatDrafts();
-      }
-
-      const previousChatId = currentChatId.value;
-      currentChatId.value = chatId;
-      await loadChat();
-      saveChats();
-      updateExpandedArray();
-
-      nextTick(() => {
-        loadChatDrafts();
-      });
-
-      console.log(`✅ Switched from chat ${previousChatId} to ${chatId}`);
-      return true;
-    } catch (error: any) {
-      console.error("Error in switchToChat:", error);
-      reportError({
-        action: "switchToChat",
-        message: "Error switching to chat: " + error.message,
-        description: `Failed to switch to chat : ${chatId.slice(0, 10)}...`,
-        status: getErrorStatus(error),
-        userId: parsedUserDetails.value?.userId || "unknown",
-        severity: "critical",
-        context: createErrorContext({
-          targetChatId: chatId,
-          currentChatId: currentChatId.value,
-          errorName: error.name,
-        }),
-        id: generateErrorId(),
-        createdAt: new Date().toISOString(),
-      } as PlatformError);
-      return false;
-    }
-  }
-
   function saveChats() {
     try {
       if (!Array.isArray(chats.value)) {
@@ -1032,7 +958,6 @@ export function useChat({
     loadChatDrafts,
     clearCurrentDraft,
     autoSaveDraft,
-    switchToChat,
     createNewChat,
     copyResponse,
     shareResponse,

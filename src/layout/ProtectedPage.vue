@@ -10,7 +10,6 @@ const {
     toggleSidebar,
     logout,
     createNewChat,
-    switchToChat,
     deleteChat,
     renameChat,
     manualSync,
@@ -24,7 +23,6 @@ const {
     toggleSidebar: () => void;
     logout: () => void;
     createNewChat: () => void;
-    switchToChat: (id: string) => boolean;
     deleteChat: (id: string) => void;
     renameChat: (id: string, name: string) => void;
     manualSync: () => void;
@@ -46,7 +44,6 @@ const {
                 toggleSidebar,
                 logout,
                 createNewChat,
-                switchToChat,
                 deleteChat,
                 renameChat,
                 manualSync,

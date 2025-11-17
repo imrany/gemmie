@@ -507,9 +507,7 @@ watch(isContextLimitReached, (limitReached) => {
                     class="w-4 h-4"
                     :class="{ 'animate-bounce': !isRecording }"
                 />
-                <span class="text-sm font-medium"
-                    >Scroll Down {{ showInput }}</span
-                >
+                <span class="text-sm font-medium">Scroll Down</span>
             </button>
 
             <form

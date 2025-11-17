@@ -21,7 +21,6 @@ const {
     parsedUserDetails,
     screenWidth,
     isCollapsed,
-    switchToChat,
     createNewChat,
 } = inject("globalState") as {
     chats: Ref<Chat[]>;
@@ -29,7 +28,6 @@ const {
     parsedUserDetails: Ref<UserDetails>;
     screenWidth: Ref<number>;
     isCollapsed: Ref<boolean>;
-    switchToChat: (chatId: string) => boolean;
     createNewChat: (initialMessage?: string) => string;
 };
 
@@ -64,6 +62,10 @@ const handleBack = () => {
 
 const clearSearch = () => {
     searchQuery.value = "";
+};
+
+const handleGoToChat = (id: string) => {
+    currentChatId.value = id;
 };
 </script>
 
@@ -199,7 +201,7 @@ const clearSearch = () => {
                             <div
                                 v-for="chat in filteredChats"
                                 :key="chat.id"
-                                @click="switchToChat(chat.id)"
+                                @click="() => handleGoToChat(chat.id)"
                                 :class="[
                                     'rounded-xl border-[1px] cursor-pointer transition-all hover:shadow-lg group',
                                     currentChatId === chat.id
