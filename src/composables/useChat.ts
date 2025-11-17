@@ -410,6 +410,45 @@ export function useChat({
     }
   }
 
+  async function loadChat() {
+    try {
+      if (isAuthenticated.value) {
+        try {
+          isLoading.value = true;
+          const response = await apiCall<Chat>(`/chats/${currentChatId.value}`);
+          if (response.data) {
+            const existingChatIndex = chats.value.findIndex(
+              (chat) => chat.id === response.data!.id,
+            );
+            if (existingChatIndex !== -1) {
+              chats.value[existingChatIndex] = response.data;
+            } else {
+              chats.value.push(response.data);
+            }
+            saveChats();
+            isLoading.value = false;
+          }
+        } catch (apiError) {
+          isLoading.value = false;
+          console.error("Failed to load chats from server:", apiError);
+        }
+      } else {
+        const stored = localStorage.getItem("chats");
+        if (stored) {
+          const parsedChats = JSON.parse(stored);
+          if (Array.isArray(parsedChats)) {
+            chats.value = parsedChats;
+          }
+        }
+      }
+
+      updateExpandedArray();
+    } catch (error) {
+      console.error("Failed to load chats:", error);
+      chats.value = [];
+    }
+  }
+
   function autoGrow(e: Event) {
     const el = e.target as HTMLTextAreaElement;
     const maxHeight = 200;
@@ -579,7 +618,7 @@ export function useChat({
     }, 1000);
   }
 
-  function switchToChat(chatId: string): boolean {
+  async function switchToChat(chatId: string): Promise<boolean> {
     try {
       if (!chatId || typeof chatId !== "string") {
         console.error("Invalid chat ID provided");
@@ -597,6 +636,7 @@ export function useChat({
         return true;
       }
 
+      // Save the draft for the current chat before switching
       if (currentChatId.value) {
         const textarea = document.getElementById(
           "prompt",
@@ -621,6 +661,8 @@ export function useChat({
 
       const previousChatId = currentChatId.value;
       currentChatId.value = chatId;
+      await loadChat();
+      saveChats();
       updateExpandedArray();
 
       nextTick(() => {
@@ -697,7 +739,7 @@ export function useChat({
         is_archived: false,
         message_count: 0,
         last_message_at: now,
-        is_private: false,
+        is_private: true,
       };
 
       if (isAuthenticated.value) {
@@ -711,6 +753,7 @@ export function useChat({
             newChat.id = response.data.id;
             newChat.created_at = response.data.created_at;
             newChat.updated_at = response.data.updated_at;
+            newChat.is_private = response.data.is_private;
 
             chats.value.unshift(newChat);
             currentChatId.value = newChat.id;
@@ -994,6 +1037,7 @@ export function useChat({
     copyResponse,
     shareResponse,
     loadChats,
+    loadChat,
     processLinksInUserPrompt,
     processLinksInResponse,
     toggleChatMenu,

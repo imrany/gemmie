@@ -31,9 +31,7 @@ const { suggestionPrompts, selectSuggestion } = defineProps<{
                 <LoaderCircle
                     class="w-5 h-5 text-gray-200 dark:text-gray-700 animate-spin"
                 />
-                <p
-                    class="text-gray-700 dark:text-gray-300 sm:text-sm text-xs font-semibold mt-4"
-                >
+                <p class="text-gray-200 dark:text-gray-700 sm:text-sm text-xs">
                     Loading...
                 </p>
             </div>

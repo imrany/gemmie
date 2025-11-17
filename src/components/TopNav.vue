@@ -112,7 +112,8 @@ watch(
                     v-if="
                         currentChat &&
                         currentChat.messages &&
-                        currentChat.messages.length > 0
+                        currentChat.messages.length > 0 &&
+                        !currentChat.is_read_only
                     "
                     @click="isShowShareChat = true"
                     variant="outline"
@@ -122,6 +123,12 @@ watch(
                 >
                     Share
                 </Button>
+                <div
+                    v-if="currentChat && currentChat.is_read_only"
+                    class="text-xs text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 rounded-md px-2 py-1"
+                >
+                    Read Only
+                </div>
 
                 <!-- Mobile Sidebar Toggle -->
                 <div

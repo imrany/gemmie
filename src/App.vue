@@ -288,6 +288,7 @@ const { apiCall, checkInternetConnection } = useApiCall({
 const {
     updateChat,
     loadChats,
+    loadChat,
     createNewChat,
     deleteChat,
     renameChat,
@@ -830,7 +831,8 @@ async function syncFromServer(serverData?: any) {
     const shouldSync = syncEnabled.value || serverData;
     if (!shouldSync) {
         console.log("❌ syncFromServer: Sync disabled");
-        await loadChats(); // ✅ Load local chats if sync disabled
+        // await loadChats(); // ✅ Load local chats if sync disabled
+        await loadChat(); // ✅ Load local chat if sync disabled
         return;
     }
 
@@ -2237,6 +2239,7 @@ const globalState = {
     copyResponse,
     shareResponse,
     loadChats,
+    loadChat,
     processLinksInUserPrompt,
     processLinksInResponse,
     cancelAllRequests,

@@ -399,7 +399,9 @@ const navLinks: {
                             class="flex items-center h-full flex-grow px-3 py-[3px] cursor-pointer overflow-hidden"
                         >
                             <div
-                                v-if="isRenaming === chat.id"
+                                v-if="
+                                    isRenaming === chat.id && !chat.is_read_only
+                                "
                                 class="flex-grow"
                                 @click.stop
                             >
@@ -445,8 +447,9 @@ const navLinks: {
                         <!-- Menu button with smooth transition -->
                         <div
                             v-show="
-                                hoveredChatId === chat.id ||
-                                activeChatMenu === chat.id
+                                (hoveredChatId === chat.id ||
+                                    activeChatMenu === chat.id) &&
+                                !chat.is_read_only
                             "
                             @click.stop="toggleChatMenu(chat.id, $event)"
                             class="flex-shrink-0 flex items-center justify-center h-full px-2 cursor-pointer"

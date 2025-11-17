@@ -94,13 +94,7 @@ func GetChatsByUserId(userId string) ([]Chat, error) {
 		if err != nil {
 			return nil, err
 		}
-
-		if messages == nil {
-			chat.Messages = []Message{}
-		} else {
-			chat.Messages = messages
-		}
-		chat.MessageCount = len(chat.Messages)
+		chat.MessageCount = len(messages)
 
 		chats = append(chats, chat)
 	}

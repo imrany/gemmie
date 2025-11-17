@@ -57,6 +57,7 @@ const props = defineProps<{
     scrollButtonPosition: Ref<string>;
     selectedContexts: Ref<ContextReference[]>;
     isRecording: boolean;
+    showInput: boolean;
     isTranscribing: boolean;
     transcribedText: string;
     microphonePermission: "granted" | "denied" | "prompt";
@@ -473,6 +474,7 @@ watch(isContextLimitReached, (limitReached) => {
 
 <template>
     <div
+        v-show="showInput"
         :style="
             screenWidth > 720
                 ? isCollapsed
@@ -505,7 +507,9 @@ watch(isContextLimitReached, (limitReached) => {
                     class="w-4 h-4"
                     :class="{ 'animate-bounce': !isRecording }"
                 />
-                <span class="text-sm font-medium">Scroll Down</span>
+                <span class="text-sm font-medium"
+                    >Scroll Down {{ showInput }}</span
+                >
             </button>
 
             <form
