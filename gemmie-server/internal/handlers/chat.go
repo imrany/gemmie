@@ -77,6 +77,7 @@ func CreateChatHandler(w http.ResponseWriter, r *http.Request) {
 		MessageCount:  0,
 		Messages:      []store.Message{},
 		LastMessageAt: time.Now(),
+		IsPrivate:     true,
 	}
 
 	if err := store.CreateChat(chat); err != nil {
