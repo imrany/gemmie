@@ -1,6 +1,7 @@
 <script setup lang="ts">
+import { Skeleton } from "@/components/ui/skeleton";
 import type { UserDetails } from "@/types";
-import { Database, LoaderCircle, RefreshCw, Shield } from "lucide-vue-next";
+import { Database, RefreshCw, Shield } from "lucide-vue-next";
 import type { FunctionalComponent } from "vue";
 import type { Ref } from "vue";
 import { inject } from "vue";
@@ -25,17 +26,40 @@ const { suggestionPrompts, selectSuggestion } = defineProps<{
     <div>
         <div
             v-if="isLoading"
-            class="flex h-screen justify-center md:max-w-3xl max-w-[100vw] max-md:px-4 flex-col md:flex-grow items-center gap-3 text-gray-600 dark:text-gray-400"
+            class="md:max-w-3xl min-h-[calc(100vh-200px)] w-[100vw] flex-grow px-2 space-y-3 sm:space-y-4"
         >
-            <div class="flex gap-2 items-center justify-center">
-                <LoaderCircle
-                    class="w-5 h-5 text-gray-200 dark:text-gray-700 animate-spin"
+            <div
+                class="flex animate-pulse items-start gap-2 font-medium bg-gray-100 dark:bg-gray-800 text-black dark:text-gray-100 px-4 rounded-2xl prose prose-sm dark:prose-invert chat-bubble w-fit max-w-full"
+            >
+                <!-- Avatar container -->
+                <div class="flex-shrink-0 py-3">
+                    <div
+                        class="flex items-center justify-center w-7 h-7 text-gray-100 dark:text-gray-800 bg-gray-700 dark:bg-gray-200 rounded-full text-sm font-semibold"
+                    >
+                        {{
+                            parsedUserDetails.username.toUpperCase().slice(0, 2)
+                        }}
+                    </div>
+                </div>
+                <div class="flex-1 md:w-[700px] w-[95vw]"></div>
+            </div>
+
+            <div
+                class="flex flex-col gap-2 w-full md:max-w-3xl max-w-full relative"
+            >
+                <Skeleton
+                    v-for="index in [1, 2, 3, 4, 5, 6].reverse()"
+                    :key="index"
+                    :class="[
+                        'chat-message bg-gray-100 dark:bg-gray-800',
+                        `max-w-full w-full`,
+                        index === 3 ? 'mt-4' : '',
+                        `h-${index + 2}`,
+                    ]"
                 />
-                <p class="text-gray-200 dark:text-gray-700 sm:text-sm text-xs">
-                    Loading...
-                </p>
             </div>
         </div>
+
         <div
             class="flex h-screen justify-center md:max-w-3xl max-w-[100vw] max-md:px-4 flex-col md:flex-grow items-center gap-3 text-gray-600 dark:text-gray-400"
             v-else

@@ -1863,12 +1863,12 @@ onUnmounted(() => {
             />
 
             <div
+                v-else
                 :class="
                     screenWidth > 720
                         ? 'h-screen bg-inherit flex flex-col items-center justify-center w-[85%]'
                         : 'bg-inherit h-screen w-full flex flex-col items-center justify-center'
                 "
-                v-else
             >
                 <TopNav />
                 <!-- Empty State -->
