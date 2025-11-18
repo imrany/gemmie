@@ -1,12 +1,10 @@
 <script lang="ts" setup>
 import type { Chat } from "@/types";
-import { AlignJustify, Check, Copy, Globe, Lock } from "lucide-vue-next";
+import { AlignJustify } from "lucide-vue-next";
 import type { Ref } from "vue";
-import { inject, watch } from "vue";
+import { inject, ref } from "vue";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import DialogBox from "./Dialog/DialogBox.vue";
-import { ref } from "vue";
+import ShareChatDialog from "./ShareChatDialog.vue";
 import { toast } from "vue-sonner/src/packages/state.js";
 
 const {
@@ -28,50 +26,49 @@ const {
         chatId: string,
         update: Record<string, any>,
     ) => Promise<Chat | undefined>;
-
     screenWidth: Ref<number>;
     hideSidebar: () => void;
 };
 
 const isShowShareChat = ref(false);
-const shareLink = ref<string | null>(null);
-const isCopied = ref(false);
+const isShareLoading = ref(false);
 
-async function shareChat(is_private: boolean) {
+async function handleShareChat(isPrivate: boolean) {
+    isShareLoading.value = true;
     if (!currentChat.value) {
         toast.error("Invalid chat ID");
+        isShareLoading.value = false;
         return;
     }
 
     try {
-        const chat = await updateChat(currentChat.value.id, { is_private });
+        const chat = await updateChat(currentChat.value.id, {
+            is_private: isPrivate,
+        });
 
         if (!chat?.is_private) {
-            shareLink.value = `${window.location.origin}/chat/${chat?.id || ""}`;
-            shareResponse(chat?.title || "", shareLink.value);
+            const shareLink = `${window.location.origin}/chat/${chat?.id || ""}`;
+            shareResponse(chat?.title || "", shareLink);
         }
     } catch (error) {
         toast.error("Failed to share chat");
+    } finally {
+        isShareLoading.value = false;
     }
 }
 
-function copyLink() {
-    copyResponse(shareLink?.value?.toString() || "");
-    isCopied.value = true;
-    window.setTimeout(() => {
-        isCopied.value = false;
-    }, 2000);
+function handleCopyLink(link: string) {
+    copyResponse(link);
 }
 
-watch(
-    () => currentChat.value?.is_private,
-    (newValue) => {
-        if (!newValue) {
-            shareLink.value = `${window.location.origin}/chat/${currentChat.value?.id || ""}`;
-        }
-    },
-    { immediate: true, deep: true },
-);
+function formatTitle(title: string, maxLength: number = 30): string {
+    if (title.length <= maxLength) return title;
+
+    if (title.includes("#pastedText#")) {
+        return title.split("#pastedText#")[1].slice(0, maxLength) + "...";
+    }
+    return title.slice(0, maxLength) + "...";
+}
 </script>
 
 <template>
@@ -85,29 +82,29 @@ watch(
                   : 'left:0'
         "
     >
-        <div class="flex h-full px-4 items-center justify-between w-full">
-            <!-- Brand -->
-            <p
-                v-if="currentChat && screenWidth > 720"
-                class="text-gray-600 dark:text-gray-400 font-medium truncate text-sm select-none"
-            >
-                <span v-if="currentChat.title.length > 30">{{
-                    currentChat.title.includes("#pastedText#")
-                        ? currentChat.title
-                              .split("#pastedText#")[1]
-                              .slice(0, 30) + "..."
-                        : currentChat.title.slice(0, 30) + "..."
-                }}</span>
-                <span v-else>{{ currentChat.title }}</span>
-            </p>
-            <p
-                v-else-if="screenWidth <= 720"
-                class="text-gray-700 dark:text-gray-300 text-xl max-md:text-2xl font-semibold tracking-wide select-none"
-            >
-                Gemmie
-            </p>
+        <div
+            class="flex h-full px-3 sm:px-4 items-center justify-between w-full"
+        >
+            <!-- Title/Brand -->
+            <div class="flex-1 min-w-0 mr-3">
+                <p
+                    v-if="currentChat && screenWidth > 720"
+                    class="text-gray-600 dark:text-gray-400 font-medium truncate text-sm select-none"
+                    :title="currentChat.title"
+                >
+                    {{ formatTitle(currentChat.title, 40) }}
+                </p>
+                <p
+                    v-else-if="screenWidth <= 720"
+                    class="text-gray-700 dark:text-gray-300 text-xl font-semibold tracking-wide select-none"
+                >
+                    Gemmie
+                </p>
+            </div>
 
-            <div class="flex gap-3 items-center ml-auto">
+            <!-- Actions -->
+            <div class="flex gap-2 sm:gap-3 items-center flex-shrink-0">
+                <!-- Share Button -->
                 <Button
                     v-if="
                         currentChat &&
@@ -118,122 +115,42 @@ watch(
                     @click="isShowShareChat = true"
                     variant="outline"
                     :disabled="isLoading || !currentChat"
-                    class="hover:border-white text-xs hover:dark:border-gray-900 bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700"
-                    :loading="isLoading"
+                    size="sm"
+                    class="text-xs hover:border-gray-300 dark:hover:border-gray-600 bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700"
                 >
                     Share
                 </Button>
+
+                <!-- Read Only Badge -->
                 <div
                     v-if="currentChat && currentChat.is_read_only"
-                    class="text-xs text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 rounded-md px-2 py-1"
+                    class="text-xs text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 rounded-md px-2 sm:px-3 py-1 whitespace-nowrap"
                 >
                     Read Only
                 </div>
 
                 <!-- Mobile Sidebar Toggle -->
-                <div
+                <button
                     v-if="screenWidth < 720"
-                    class="flex gap-2 items-center ml-auto"
+                    @click="hideSidebar"
+                    title="Toggle Sidebar"
+                    class="w-9 h-9 flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg cursor-pointer transition-colors"
                 >
-                    <button
-                        @click="hideSidebar"
-                        title="Toggle Sidebar"
-                        class="w-9 h-9 flex items-center justify-center text-lg hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full cursor-pointer transition-colors"
-                    >
-                        <AlignJustify
-                            class="w-5 h-5 text-gray-700 dark:text-gray-300"
-                        />
-                    </button>
-                </div>
+                    <AlignJustify
+                        class="w-5 h-5 text-gray-700 dark:text-gray-300"
+                    />
+                </button>
             </div>
         </div>
     </div>
-    <DialogBox
-        name="Share Chat"
+
+    <!-- Share Dialog -->
+    <ShareChatDialog
         :show="isShowShareChat"
-        :closeModal="() => (isShowShareChat = false)"
-    >
-        <div class="flex flex-col gap-5">
-            <div>
-                <p class="text-2xl font-bold">
-                    {{ currentChat?.is_private ? "Share chat" : "Chat shared" }}
-                </p>
-                <p class="text-gray-700 dark:text-gray-300">
-                    {{
-                        currentChat?.is_private
-                            ? "Share this chat with your friends!"
-                            : "Anyone who has this link will be able to view this."
-                    }}
-                </p>
-            </div>
-            <div class="rounded-lg border border-gray-300 dark:border-gray-700">
-                <button
-                    @click="shareChat(true)"
-                    class="flex w-full gap-4 py-3 px-6 items-center border-b border-gray-300 dark:border-gray-700"
-                >
-                    <Lock class="w-5 h-5" />
-                    <div class="flex items-start flex-col gap-1">
-                        <p
-                            class="font-semibold text-gray-700 dark:text-gray-300"
-                        >
-                            Private
-                        </p>
-                        <p>Only you can see this chat.</p>
-                    </div>
-                    <Check
-                        class="ml-auto w-5 h-5 text-green-500"
-                        v-if="currentChat?.is_private"
-                    />
-                </button>
-                <button
-                    @click="shareChat(false)"
-                    class="flex w-full gap-4 py-3 px-6 items-center"
-                >
-                    <Globe class="w-5 h-5" />
-                    <div class="flex items-start flex-col gap-1">
-                        <p
-                            class="font-semibold text-gray-700 dark:text-gray-300"
-                        >
-                            Public
-                        </p>
-                        <p>Anyone can see this chat.</p>
-                    </div>
-                    <Check
-                        class="ml-auto w-5 h-5 text-green-500"
-                        v-if="!currentChat?.is_private"
-                    />
-                </button>
-            </div>
-            <div
-                v-if="!currentChat?.is_private"
-                class="flex gap-2 my-3 items-center"
-            >
-                <Input
-                    type="text"
-                    readonly
-                    :defaultValue="shareLink || ''"
-                    class="border border-gray-300 bg-inherit dark:border-gray-700 rounded-md px-3 py-2 w-full"
-                />
-                <Button type="button" @click="copyLink" size="sm" class="px-3">
-                    <span class="sr-only">Copy</span>
-                    <Copy class="w-4 h-4" v-if="!isCopied" />
-                    <Check class="w-4 h-4" v-else />
-                </Button>
-            </div>
-            <div class="flex flex-col gap-4 w-full items-center" v-else>
-                <p class="text-gray-600 dark:text-gray-400 text-xs">
-                    Don’t share personal information or third-party content
-                    without permission.
-                </p>
-                <Button
-                    type="button"
-                    @click="shareChat(false)"
-                    size="sm"
-                    class="px-3 ml-auto"
-                >
-                    <span class="">Create share link</span>
-                </Button>
-            </div>
-        </div>
-    </DialogBox>
+        :current-chat="currentChat"
+        :is-loading="isShareLoading"
+        @close="isShowShareChat = false"
+        @share="handleShareChat"
+        @copy="handleCopyLink"
+    />
 </template>

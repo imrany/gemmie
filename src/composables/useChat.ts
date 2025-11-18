@@ -835,18 +835,19 @@ export function useChat({
     }
   }
 
-  async function renameChat(chatId: string, newTitle: string) {
+  async function renameChat(chatId: string, newTitle: string): Promise<string> {
     if (!chatId || !newTitle || typeof newTitle !== "string") {
       toast.error("Invalid chat title");
-      return;
+      return "";
     }
 
     const trimmedTitle = newTitle.trim();
     if (!trimmedTitle) {
       toast.error("Chat title cannot be empty");
-      return;
+      return "";
     }
-    await updateChat(chatId, { title: trimmedTitle });
+    const res = await updateChat(chatId, { title: trimmedTitle });
+    return res?.title || "";
   }
 
   function clearAllChats() {

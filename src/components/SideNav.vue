@@ -13,7 +13,6 @@ import { useRouter } from "vue-router";
 import ChatDropdown from "./Dropdowns/ChatDropdown.vue";
 import ProfileDropdown from "./Dropdowns/ProfileDropdown.vue";
 import {
-    CirclePlus,
     MessageCircle,
     FilePenLine,
     Ellipsis,
@@ -25,8 +24,10 @@ import {
     X,
     Settings,
     HelpCircle,
-    BookText,
-    User2Icon,
+    ArrowUpRight,
+    Plus,
+    CircleArrowUp,
+    Info,
 } from "lucide-vue-next";
 import {
     Tooltip,
@@ -35,6 +36,8 @@ import {
     TooltipTrigger,
 } from "@/components/ui/tooltip";
 import type { FunctionalComponent } from "vue";
+import { Button } from "./ui/button";
+import { toast } from "vue-sonner";
 
 const {
     activeChatMenu,
@@ -53,7 +56,7 @@ const {
     chats: Ref<Chat[]>;
     currentChatId: Ref<string>;
     activeChatMenu: Ref<string | null>;
-    toggleChatMenu: (chatId: string, evenet: Event) => void;
+    toggleChatMenu: (chatId: string, event: Event) => void;
     showProfileMenu: Ref<boolean>;
     handleClickOutside: () => void;
     planStatus: Ref<{
@@ -84,7 +87,7 @@ const props = defineProps<{
         logout: () => void;
         createNewChat: () => void;
         deleteChat: (chatId: string) => void;
-        renameChat: (chatId: string, newTitle: string) => void;
+        renameChat: (chatId: string, newTitle: string) => Promise<string>;
         manualSync: () => void;
     };
 }>();
@@ -94,6 +97,7 @@ const isRenaming = ref<string | null>(null);
 const renameValue = ref("");
 const now = ref(Date.now());
 const hoveredChatId = ref<string | null>(null);
+const isLoading = ref(false);
 
 let timer: number | null = null;
 
@@ -149,12 +153,12 @@ const profileOptions = [
     {
         id: "upgrade",
         label: props.data.parsedUserDetails?.planName
-            ? "Manage Plan"
-            : "Upgrade Plan",
-        icon: User2Icon,
+            ? "Manage plan"
+            : "Upgrade plan",
+        icon: CircleArrowUp,
         action: () => router.push("/upgrade"),
     },
-    { id: "learn", icon: BookText, label: "Learn more", action: () => {} },
+    { id: "learn", icon: Info, label: "Learn more", action: () => {} },
 ];
 
 // Methods
@@ -177,12 +181,21 @@ function openWorkplace() {
     if (screenWidth.value < 720) hideSidebar();
 }
 
-function submitRename(chatId: string) {
-    if (renameValue.value.trim()) {
-        props.functions.renameChat(chatId, renameValue.value.trim());
-    }
-    isRenaming.value = null;
-    renameValue.value = "";
+async function submitRename(chatId: string) {
+    isLoading.value = true;
+    await props.functions
+        .renameChat(chatId, renameValue.value.trim())
+        .then((newTitle) => {
+            isRenaming.value = null;
+            renameValue.value = "";
+            console.log("New title:", newTitle);
+            isLoading.value = false;
+        })
+        .catch((error: unknown) => {
+            console.log(error);
+            toast.error(`Failed to rename this chat`);
+            isLoading.value = false;
+        });
 }
 
 function cancelRename() {
@@ -195,6 +208,7 @@ function handleChatClick(chatId: string) {
     if (chatId === currentChatId.value && screenWidth.value > 720) return;
 
     currentChatId.value = chatId;
+    router.push(`/chat/${chatId}`);
     if (screenWidth.value < 720) {
         hideSidebar();
     }
@@ -216,19 +230,22 @@ const handleSidebarToggle = () => {
 const navLinks: {
     label: string;
     description: string;
+    path: string;
     icon: FunctionalComponent<any>;
     action: () => void;
 }[] = [
     {
         label: "New Chat",
         description: "New Chat",
-        icon: CirclePlus,
+        icon: Plus,
+        path: "/new",
         action: () => handleNavAction(() => props.functions.createNewChat()),
     },
     {
         label: "Chats",
         description: "Recent Chats",
         icon: MessageCircle,
+        path: "/chats",
         action: () => handleNavAction(() => router.push("/chats")),
     },
 ];
@@ -301,26 +318,42 @@ const navLinks: {
             <!-- Navigation Menu -->
             <div
                 v-if="props.data.parsedUserDetails.username"
-                class="mb-4 mt-2 max-md:text-lg flex flex-col gap-1 font-light text-sm"
+                class="mb-4 mt-2 max-md:text-lg flex flex-col gap-1 text-sm"
             >
                 <div v-for="navlink in navLinks" :key="navlink.label">
                     <TooltipProvider>
                         <Tooltip>
                             <TooltipTrigger as-child>
-                                <button
+                                <Button
+                                    variant="ghost"
                                     @click="navlink.action"
-                                    class="w-full font-normal flex items-center gap-2 h-[40px] hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg px-2 transition-colors"
+                                    :class="[
+                                        'w-full justify-start flex items-center gap-2 h-[40px] hover:bg-gray-200 dark:hover:bg-gray-700/50 rounded-lg px-2 transition-colors',
+                                        router.currentRoute.value.path ===
+                                        navlink.path
+                                            ? 'bg-gray-200 dark:bg-gray-700/50'
+                                            : '',
+                                    ]"
                                 >
-                                    <component
-                                        :is="navlink.icon"
-                                        class="text-gray-500 dark:text-gray-400 w-5 h-5"
-                                    />
+                                    <div
+                                        :class="[
+                                            navlink.path === '/new'
+                                                ? 'text-white dark:text-gray-800 bg-gray-700 dark:bg-gray-200 rounded-full p-[5px]'
+                                                : '',
+                                            'text-gray-500 dark:text-gray-400',
+                                        ]"
+                                    >
+                                        <component
+                                            :is="navlink.icon"
+                                            class="w-5 h-5"
+                                        />
+                                    </div>
                                     <span
                                         v-if="showFullSidebar"
                                         class="dark:text-gray-200"
                                         >{{ navlink.label }}</span
                                     >
-                                </button>
+                                </Button>
                             </TooltipTrigger>
                             <TooltipContent
                                 v-if="!showFullSidebar"
@@ -337,20 +370,27 @@ const navLinks: {
                 <TooltipProvider>
                     <Tooltip>
                         <TooltipTrigger as-child>
-                            <button
-                                v-if="screenWidth > 720"
+                            <Button
+                                variant="ghost"
+                                class="w-full justify-start flex items-center h-[40px] hover:bg-gray-200 dark:hover:bg-gray-700/50 rounded-lg px-2 transition-colors"
+                                :disabled="screenWidth < 720"
                                 @click="openWorkplace"
-                                class="w-full font-normal flex items-center gap-2 h-[40px] hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg px-2 transition-colors"
                             >
-                                <FilePenLine
-                                    class="text-gray-500 dark:text-gray-400 w-5 h-5"
-                                />
-                                <span
+                                <div class="flex items-center gap-2 flex-grow">
+                                    <FilePenLine
+                                        class="text-gray-500 dark:text-gray-400 w-5 h-5"
+                                    />
+                                    <span
+                                        v-if="showFullSidebar"
+                                        class="dark:text-gray-200"
+                                        >Workplace</span
+                                    >
+                                </div>
+                                <ArrowUpRight
                                     v-if="showFullSidebar"
-                                    class="dark:text-gray-200"
-                                    >Workplace</span
-                                >
-                            </button>
+                                    class="text-gray-500 dark:text-gray-400 w-4 h-4"
+                                />
+                            </Button>
                         </TooltipTrigger>
                         <TooltipContent
                             v-if="!showFullSidebar"
@@ -374,32 +414,36 @@ const navLinks: {
                 class="flex flex-col"
             >
                 <p
-                    class="text-xs text-gray-500 dark:text-gray-400 mb-3 uppercase tracking-wider"
+                    class="text-sm text-gray-800 dark:text-gray-200 mb-3 tracking-wider"
                 >
-                    Chats
+                    Recents
                 </p>
                 <div class="flex flex-col gap-1">
-                    <div
+                    <Button
+                        variant="ghost"
                         v-for="chat in chats"
                         :key="chat.id"
                         @mouseenter="hoveredChatId = chat.id"
                         @mouseleave="hoveredChatId = null"
                         :class="[
-                            'group w-full flex items-center rounded-lg relative transition-all duration-150',
+                            'group hover:bg-gray-200 px-0 py-0 dark:hover:bg-gray-700/50 text-sm justify-start w-full flex items-center rounded-md relative transition-all duration-150',
                             'h-[35px]',
                             chat.id === currentChatId
-                                ? 'bg-gray-200 dark:bg-gray-700/80'
-                                : 'hover:bg-gray-200 dark:hover:bg-gray-700/50',
+                                ? 'bg-gray-200 dark:bg-gray-700/80 font-medium'
+                                : 'hover:bg-gray-200 dark:hover:bg-gray-700/50 font-normal',
                         ]"
                     >
                         <!-- Chat content area -->
                         <div
+                            :disabled="isLoading"
                             @click="() => handleChatClick(chat.id)"
-                            class="flex items-center h-full flex-grow px-3 py-[3px] cursor-pointer overflow-hidden"
+                            class="flex items-center h-full flex-grow px-2 py-[3px] cursor-pointer overflow-hidden"
                         >
                             <div
                                 v-if="
-                                    isRenaming === chat.id && !chat.is_read_only
+                                    isRenaming === chat.id &&
+                                    !chat.is_read_only &&
+                                    !isLoading
                                 "
                                 class="flex-grow"
                                 @click.stop
@@ -410,7 +454,7 @@ const navLinks: {
                                     @keyup.enter="submitRename(chat.id)"
                                     @keyup.escape="cancelRename"
                                     @blur="submitRename(chat.id)"
-                                    class="w-full px-2 py-[3px] text-base bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 border-[1px] border-blue-500 dark:border-blue-400 rounded-md focus:outline-none focus:ring-[1px] focus:ring-blue-500 dark:focus:ring-blue-400"
+                                    class="w-full px-2 py-[3px] text-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 border-[1px] border-blue-500 dark:border-blue-400 rounded-md focus:outline-none focus:ring-[1px] focus:ring-blue-500 dark:focus:ring-blue-400"
                                 />
                             </div>
                             <div
@@ -419,25 +463,33 @@ const navLinks: {
                             >
                                 <span
                                     :class="[
-                                        'truncate text-base',
+                                        'truncate',
                                         chat.id === currentChatId
-                                            ? 'text-gray-900 dark:text-gray-100'
-                                            : 'text-gray-700 dark:text-gray-300',
+                                            ? 'text-gray-800 dark:text-gray-200'
+                                            : 'text-gray-500 dark:text-gray-500',
                                     ]"
                                     :title="
-                                        chat.title.includes('#pastedText#')
-                                            ? chat.title.split(
-                                                  '#pastedText#',
-                                              )[1]
-                                            : chat.title || 'Untitled Chat'
+                                        isLoading && isRenaming === chat.id
+                                            ? 'Renaming...'
+                                            : chat.title.includes(
+                                                    '#pastedText#',
+                                                )
+                                              ? chat.title.split(
+                                                    '#pastedText#',
+                                                )[1]
+                                              : chat.title || 'Untitled Chat'
                                     "
                                 >
                                     {{
-                                        chat.title.includes("#pastedText#")
-                                            ? chat.title.split(
-                                                  "#pastedText#",
-                                              )[1]
-                                            : chat.title || "Untitled Chat"
+                                        isLoading && isRenaming === chat.id
+                                            ? "Renaming..."
+                                            : chat.title.includes(
+                                                    "#pastedText#",
+                                                )
+                                              ? chat.title.split(
+                                                    "#pastedText#",
+                                                )[1]
+                                              : chat.title || "Untitled Chat"
                                     }}
                                 </span>
                             </div>
@@ -448,7 +500,8 @@ const navLinks: {
                             v-show="
                                 (hoveredChatId === chat.id ||
                                     activeChatMenu === chat.id) &&
-                                !chat.is_read_only
+                                !chat.is_read_only &&
+                                !isLoading
                             "
                             @click.stop="toggleChatMenu(chat.id, $event)"
                             class="flex-shrink-0 flex items-center justify-center h-full px-2 cursor-pointer"
@@ -470,7 +523,7 @@ const navLinks: {
                                 hideSidebar,
                             }"
                         />
-                    </div>
+                    </Button>
                 </div>
             </div>
         </div>
@@ -483,7 +536,7 @@ const navLinks: {
                         ? 'border-t'
                         : ''
                     : isSidebarHidden
-                      ? 'none'
+                      ? 'hidden'
                       : '',
                 'border-gray-200 dark:border-gray-700 p-3 sticky bottom-0',
                 isCollapsed ? '' : 'bg-gray-100 dark:bg-gray-800',

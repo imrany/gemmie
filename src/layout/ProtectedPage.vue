@@ -24,7 +24,7 @@ const {
     logout: () => void;
     createNewChat: () => void;
     deleteChat: (id: string) => void;
-    renameChat: (id: string, name: string) => void;
+    renameChat: (id: string, name: string) => Promise<string>;
     manualSync: () => void;
 };
 </script>
