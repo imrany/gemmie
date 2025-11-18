@@ -6,10 +6,13 @@ import type { FunctionalComponent } from "vue";
 import type { Ref } from "vue";
 import { inject } from "vue";
 
-const { parsedUserDetails, isDarkMode, isLoading } = inject("globalState") as {
+const { parsedUserDetails, isDarkMode, isLoading, screenWidth } = inject(
+    "globalState",
+) as {
     parsedUserDetails: UserDetails;
     isDarkMode: Ref<boolean>;
     isLoading: Ref<boolean>;
+    screenWidth: Ref<number>;
 };
 
 const { suggestionPrompts, selectSuggestion } = defineProps<{
@@ -23,40 +26,55 @@ const { suggestionPrompts, selectSuggestion } = defineProps<{
 </script>
 
 <template>
-    <div>
+    <div
+        :class="
+            screenWidth > 720
+                ? 'h-screen bg-inherit flex flex-col items-center justify-center w-full'
+                : 'bg-inherit h-screen w-full flex flex-col items-center justify-center'
+        "
+    >
         <div
             v-if="isLoading"
-            class="md:max-w-3xl min-h-[calc(100vh-200px)] max-w-[100vw] flex-grow px-2 space-y-3 sm:space-y-4"
+            class="relative md:max-w-3xl min-h-[calc(100vh-200px)] max-w-[100vw] flex-grow no-scrollbar overflow-y-auto px-2 w-full space-y-3 sm:space-y-4 mt-[55px] pt-8 scroll-container"
         >
-            <div
-                class="flex animate-pulse items-start gap-2 font-medium bg-gray-100 dark:bg-gray-800 text-black dark:text-gray-100 px-4 rounded-2xl prose prose-sm dark:prose-invert chat-bubble w-fit max-w-full"
-            >
-                <!-- Avatar container -->
-                <div class="flex-shrink-0 py-3">
-                    <div
-                        class="flex items-center justify-center w-7 h-7 text-gray-100 dark:text-gray-800 bg-gray-700 dark:bg-gray-200 rounded-full text-sm font-semibold"
-                    >
-                        {{
-                            parsedUserDetails.username.toUpperCase().slice(0, 2)
-                        }}
+            <div class="flex flex-col gap-4">
+                <!-- User message skeleton -->
+                <div
+                    class="flex animate-pulse items-start gap-3 font-medium bg-gray-100 dark:bg-gray-800 text-black dark:text-gray-100 px-4 py-3 rounded-2xl w-full ml-auto"
+                >
+                    <!-- Avatar container -->
+                    <div class="flex-shrink-0">
+                        <div
+                            class="flex items-center justify-center w-7 h-7 text-gray-100 dark:text-gray-800 bg-gray-700 dark:bg-gray-200 rounded-full text-sm font-semibold"
+                        >
+                            {{
+                                parsedUserDetails.username
+                                    .toUpperCase()
+                                    .slice(0, 2)
+                            }}
+                        </div>
+                    </div>
+                    <!-- Message content skeleton -->
+                    <div class="flex-1 min-w-[200px] max-w-[500px]">
+                        <div
+                            class="h-4 bg-gray-300 dark:bg-gray-600 rounded w-3/4"
+                        ></div>
                     </div>
                 </div>
-                <div class="flex-1 md:w-[700px] w-[95vw]"></div>
-            </div>
 
-            <div
-                class="flex flex-col gap-2 w-full md:max-w-3xl max-w-full relative"
-            >
-                <Skeleton
-                    v-for="index in [1, 2, 3, 4, 5, 6].reverse()"
-                    :key="index"
-                    :class="[
-                        'chat-message bg-gray-100 dark:bg-gray-800',
-                        `max-w-full w-full`,
-                        index === 3 ? 'mt-4' : '',
-                        `h-${index + 2}`,
-                    ]"
-                />
+                <!-- Assistant response skeleton -->
+                <div class="flex flex-col gap-2 w-full max-w-full">
+                    <Skeleton
+                        v-for="(height, index) in [4, 3, 5, 4, 3, 2]"
+                        :key="index"
+                        :class="[
+                            'chat-message bg-gray-100 dark:bg-gray-800 rounded-lg',
+                            `h-${height}`,
+                            'w-full',
+                            index === 2 ? 'mt-2' : '',
+                        ]"
+                    />
+                </div>
             </div>
         </div>
 
