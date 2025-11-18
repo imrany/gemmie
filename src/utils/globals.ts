@@ -3,7 +3,8 @@ import { toast } from "vue-sonner";
 
 function getBaseURL() {
   if (import.meta.env.DEV) {
-    return "http://localhost:8081";
+    // return "http://localhost:8081";
+    return "https://gemmie.villebiz.com";
   } else {
     // return window.location.origin
     return "https://gemmie.villebiz.com";
@@ -37,7 +38,7 @@ export function isPromptTooShort(prompt: string): boolean {
 
 // Generate unique chat ID
 export function generateChatId(): string {
-  return Date.now() + "_" + Math.random().toString(36).substr(2, 9);
+  return Date.now() + "_" + Math.random().toString(36).substring(2, 9);
 }
 
 // Generate chat title from first message

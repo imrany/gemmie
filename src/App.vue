@@ -325,7 +325,114 @@ const {
     confirmDialog,
 });
 
-async function logout() {
+async function logout(options = { skipConfirm: false }) {
+    const executeLogout = async () => {
+        try {
+            isLoading.value = true;
+
+            const syncEnabledValue = parsedUserDetails.value?.syncEnabled;
+            const hasUnsyncedChanges = syncStatus.value.hasUnsyncedChanges;
+
+            if (
+                hasUnsyncedChanges &&
+                syncEnabledValue &&
+                !syncStatus.value.syncing
+            ) {
+                try {
+                    showSyncIndicator("Syncing your data before logout...", 50);
+                    await syncToServer();
+                    hideSyncIndicator();
+                } catch (syncError: any) {
+                    reportError({
+                        action: "sync error in logout",
+                        message:
+                            "Sync failed during logout: " + syncError.message,
+                        status: getErrorStatus(syncError),
+                        userId: parsedUserDetails.value?.userId || "unknown",
+                    } as PlatformError);
+                    hideSyncIndicator();
+                }
+            }
+
+            try {
+                chats.value = [];
+                currentChatId.value = "";
+                expanded.value = [];
+                isCollapsed.value = true;
+
+                syncStatus.value = {
+                    lastSync: null,
+                    syncing: false,
+                    hasUnsyncedChanges: false,
+                    lastError: null,
+                    retryCount: 0,
+                    maxRetries: 3,
+                    showSyncIndicator: false,
+                    syncMessage: "",
+                    syncProgress: 0,
+                };
+
+                parsedUserDetails.value = parsedUserDetailsNullValues;
+
+                let keysToRemove = [
+                    "userdetails",
+                    "chatDrafts",
+                    "pastePreviews",
+                    "linkPreviews",
+                    "chats",
+                    "isCollapsed",
+                ];
+
+                linkPreviewCache.value.clear();
+
+                keysToRemove.forEach((key) => {
+                    try {
+                        localStorage.removeItem(key);
+                    } catch (error) {
+                        console.error(
+                            `Failed to remove ${key} from localStorage:`,
+                            error,
+                        );
+                    }
+                });
+            } catch (stateError) {
+                console.error("Error clearing application state:", stateError);
+
+                throw new Error(
+                    "Failed to clear application state during logout",
+                );
+            }
+
+            toast.success("Logged out successfully", {
+                duration: 3000,
+                description: "Ready to log back in anytime",
+            });
+        } catch (error: any) {
+            reportError({
+                action: "logout",
+                message:
+                    "Critical error during logout process: " + error.message,
+                description:
+                    "Some cleanup operations may not have completed. Please refresh the page.",
+                status: getErrorStatus(error),
+                userId: parsedUserDetails.value?.userId || "unknown",
+                severity: "critical",
+            } as PlatformError);
+        } finally {
+            isLoading.value = false;
+            if (confirmDialog.value.visible) {
+                confirmDialog.value.visible = false;
+            }
+        }
+    };
+
+    // If skipConfirm is true, execute immediately
+    if (options.skipConfirm) {
+        await executeLogout();
+        return;
+    }
+
+    // Otherwise, show confirmation dialog
     confirmDialog.value = {
         visible: true,
         title: "Logout Confirmation",
@@ -337,112 +444,7 @@ async function logout() {
         type: "warning",
         confirmText: "Logout",
         cancelText: "Cancel",
-        onConfirm: async () => {
-            try {
-                isLoading.value = true;
-
-                const syncEnabledValue = parsedUserDetails.value?.syncEnabled;
-                const hasUnsyncedChanges = syncStatus.value.hasUnsyncedChanges;
-
-                if (
-                    hasUnsyncedChanges &&
-                    syncEnabledValue &&
-                    !syncStatus.value.syncing
-                ) {
-                    try {
-                        showSyncIndicator(
-                            "Syncing your data before logout...",
-                            50,
-                        );
-                        await syncToServer();
-                        hideSyncIndicator();
-                    } catch (syncError: any) {
-                        reportError({
-                            action: "sync error in logout",
-                            message:
-                                "Sync failed during logout: " +
-                                syncError.message,
-                            status: getErrorStatus(syncError),
-                            userId:
-                                parsedUserDetails.value?.userId || "unknown",
-                        } as PlatformError);
-                        hideSyncIndicator();
-                    }
-                }
-
-                try {
-                    chats.value = [];
-                    currentChatId.value = "";
-                    expanded.value = [];
-                    isCollapsed.value = true;
-
-                    syncStatus.value = {
-                        lastSync: null,
-                        syncing: false,
-                        hasUnsyncedChanges: false,
-                        lastError: null,
-                        retryCount: 0,
-                        maxRetries: 3,
-                        showSyncIndicator: false,
-                        syncMessage: "",
-                        syncProgress: 0,
-                    };
-
-                    parsedUserDetails.value = parsedUserDetailsNullValues;
-
-                    let keysToRemove = [
-                        "userdetails",
-                        "chatDrafts",
-                        "pastePreviews",
-                        "linkPreviews",
-                        "chats",
-                        "isCollapsed",
-                    ];
-
-                    linkPreviewCache.value.clear();
-
-                    keysToRemove.forEach((key) => {
-                        try {
-                            localStorage.removeItem(key);
-                        } catch (error) {
-                            console.error(
-                                `Failed to remove ${key} from localStorage:`,
-                                error,
-                            );
-                        }
-                    });
-                } catch (stateError) {
-                    console.error(
-                        "Error clearing application state:",
-                        stateError,
-                    );
-
-                    throw new Error(
-                        "Failed to clear application state during logout",
-                    );
-                }
-
-                toast.success("Logged out successfully", {
-                    duration: 3000,
-                    description: "Ready to log back in anytime",
-                });
-            } catch (error: any) {
-                reportError({
-                    action: "logout",
-                    message:
-                        "Critical error during logout process: " +
-                        error.message,
-                    description:
-                        "Some cleanup operations may not have completed. Please refresh the page.",
-                    status: getErrorStatus(error),
-                    userId: parsedUserDetails.value?.userId || "unknown",
-                    severity: "critical",
-                } as PlatformError);
-            } finally {
-                isLoading.value = false;
-                confirmDialog.value.visible = false;
-            }
-        },
+        onConfirm: executeLogout,
         onCancel: () => {
             confirmDialog.value.visible = false;
         },
@@ -1010,6 +1012,16 @@ async function syncFromServer() {
         } as PlatformError);
         syncStatus.value.lastError = error.message;
         hideSyncIndicator();
+
+        if (
+            error.message.includes("HTTP 404") ||
+            error.message.includes("HTTP 401") ||
+            error.message.includes("HTTP 403") ||
+            error.message.includes("HTTP 409")
+        ) {
+            // Skip confirmation dialog and logout immediately
+            await logout({ skipConfirm: true });
+        }
 
         if (
             !error.message.includes("NetworkError") &&

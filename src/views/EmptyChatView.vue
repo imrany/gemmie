@@ -26,7 +26,7 @@ const { suggestionPrompts, selectSuggestion } = defineProps<{
     <div>
         <div
             v-if="isLoading"
-            class="md:max-w-3xl min-h-[calc(100vh-200px)] w-[100vw] flex-grow px-2 space-y-3 sm:space-y-4"
+            class="md:max-w-3xl min-h-[calc(100vh-200px)] max-w-[100vw] flex-grow px-2 space-y-3 sm:space-y-4"
         >
             <div
                 class="flex animate-pulse items-start gap-2 font-medium bg-gray-100 dark:bg-gray-800 text-black dark:text-gray-100 px-4 rounded-2xl prose prose-sm dark:prose-invert chat-bubble w-fit max-w-full"
