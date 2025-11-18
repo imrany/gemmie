@@ -379,10 +379,14 @@ export function useAuth(
     const currentRoute = router.currentRoute.value;
 
     // Whitelist of allowed redirects to prevent open redirect vulnerabilities
-    const allowedRedirects = ["upgrade", "chat", "chats"];
-
+    const allowedWholeRedirects = ["upgrade", "chats"];
+    const allowedPartialRedirects = ["chat/"];
     const isValidRedirect =
-      redirectParam && allowedRedirects.includes(redirectParam);
+      redirectParam &&
+      (allowedWholeRedirects.includes(redirectParam) ||
+        allowedPartialRedirects.some((prefix) =>
+          redirectParam.startsWith(prefix),
+        ));
 
     if (redirectDelay > 0) {
       await new Promise((resolve) => setTimeout(resolve, redirectDelay));

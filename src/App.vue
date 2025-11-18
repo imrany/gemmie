@@ -1992,7 +1992,7 @@ watch(
 
             // Only navigate to home if not already there
             if (currentRoute.path !== "/") {
-                router.push(`/?from=${currentRoute.path}`);
+                router.push(`/?from=${currentRoute.path.replace(/^\//, "")}`);
             }
         } else {
             try {
