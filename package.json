@@ -31,7 +31,7 @@
   },
   "devDependencies": {
     "@rushstack/eslint-patch": "^1.15.0",
-    "@tsconfig/node20": "^20.1.7",
+    "@tsconfig/node20": "^20.1.8",
     "@types/node": "^20.19.25",
     "@vitejs/plugin-vue": "^5.2.4",
     "@vue/eslint-config-typescript": "^12.0.0",
