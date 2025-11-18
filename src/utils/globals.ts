@@ -3,8 +3,7 @@ import { toast } from "vue-sonner";
 
 function getBaseURL() {
   if (import.meta.env.DEV) {
-    // return "http://localhost:8081";
-    return "https://gemmie.villebiz.com";
+    return "http://localhost:8081";
   } else {
     // return window.location.origin
     return "https://gemmie.villebiz.com";
