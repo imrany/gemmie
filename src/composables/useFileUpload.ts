@@ -1,24 +1,24 @@
-import { ref } from 'vue'
-import type { UploadedFile } from '@/types/document'
-import { generatePdfThumbnail } from '@/utils/pdfHelpers'
-import type { Ref } from 'vue'
+import { ref } from "vue";
+import type { UploadedFile } from "@/types/document";
+import { generatePdfThumbnail } from "@/lib/pdfHelpers";
+import type { Ref } from "vue";
 
 export function useFileUpload(
   uploadedFiles: Ref<UploadedFile[]>,
   addFile: (file: UploadedFile) => void,
-  openEditor: (file: UploadedFile) => void
+  openEditor: (file: UploadedFile) => void,
 ) {
-  const isDragOver = ref(false)
+  const isDragOver = ref(false);
 
   async function handleFileUpload(event: Event) {
-    const target = event.target as HTMLInputElement
-    const files = target.files ? Array.from(target.files) : []
-    
+    const target = event.target as HTMLInputElement;
+    const files = target.files ? Array.from(target.files) : [];
+
     for (const file of files) {
       if (file.type === "application/pdf") {
-        const url = URL.createObjectURL(file)
-        const { previewUrl, pages } = await generatePdfThumbnail(file)
-        
+        const url = URL.createObjectURL(file);
+        const { previewUrl, pages } = await generatePdfThumbnail(file);
+
         const newFile: UploadedFile = {
           id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
           name: file.name,
@@ -28,33 +28,33 @@ export function useFileUpload(
           previewUrl,
           pages,
           uploadedAt: new Date(),
-        }
-        
-        addFile(newFile)
-        openEditor(newFile)
+        };
+
+        addFile(newFile);
+        openEditor(newFile);
       }
     }
-    
-    target.value = ""
+
+    target.value = "";
   }
 
   function handleDragOver(e: DragEvent) {
-    e.preventDefault()
-    isDragOver.value = true
+    e.preventDefault();
+    isDragOver.value = true;
   }
 
   function handleDragLeave(e: DragEvent) {
-    e.preventDefault()
-    isDragOver.value = false
+    e.preventDefault();
+    isDragOver.value = false;
   }
 
   function handleDrop(e: DragEvent) {
-    e.preventDefault()
-    isDragOver.value = false
-    const files = e.dataTransfer?.files
+    e.preventDefault();
+    isDragOver.value = false;
+    const files = e.dataTransfer?.files;
     if (files) {
-      const fakeEvent = { target: { files } } as any
-      handleFileUpload(fakeEvent)
+      const fakeEvent = { target: { files } } as any;
+      handleFileUpload(fakeEvent);
     }
   }
 
@@ -63,6 +63,6 @@ export function useFileUpload(
     handleFileUpload,
     handleDragOver,
     handleDragLeave,
-    handleDrop
-  }
+    handleDrop,
+  };
 }

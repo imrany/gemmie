@@ -328,17 +328,21 @@ const navLinks: {
                                     variant="ghost"
                                     @click="navlink.action"
                                     :class="[
-                                        'w-full justify-start flex items-center gap-2 h-[40px] hover:bg-gray-200 dark:hover:bg-gray-700/50 rounded-lg px-2 transition-colors',
+                                        'w-full group justify-start flex items-center gap-2 h-[40px] rounded-lg transition-colors',
                                         router.currentRoute.value.path ===
                                         navlink.path
-                                            ? 'bg-gray-200 dark:bg-gray-700/50'
-                                            : '',
+                                            ? 'bg-gray-200 dark:bg-gray-700/50 px-2'
+                                            : 'px-2',
+                                        !showFullSidebar &&
+                                        navlink.path === '/new'
+                                            ? 'hover:bg-inherit dark:hover:bg-inherit'
+                                            : ' hover:bg-gray-200 dark:hover:bg-gray-700/50 px-2',
                                     ]"
                                 >
                                     <div
                                         :class="[
                                             navlink.path === '/new'
-                                                ? 'text-white dark:text-gray-800 bg-gray-700 dark:bg-gray-200 rounded-full p-[5px]'
+                                                ? 'text-white dark:text-gray-800 bg-gray-700 dark:bg-gray-200 rounded-full p-[4px] group-hover:scale-110 transition-transform duration-300'
                                                 : '',
                                             'text-gray-500 dark:text-gray-400',
                                         ]"
@@ -411,7 +415,7 @@ const navLinks: {
                     props.data.parsedUserDetails.username &&
                     showFullSidebar
                 "
-                class="flex flex-col"
+                class="flex flex-col pb-4"
             >
                 <p
                     class="text-sm text-gray-800 dark:text-gray-200 mb-3 tracking-wider"

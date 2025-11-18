@@ -16,7 +16,7 @@ import {
   generateChatId,
   generateChatTitle,
   getErrorStatus,
-} from "@/utils/globals";
+} from "@/lib/globals";
 import { nextTick, ref, type Ref } from "vue";
 import { toast } from "vue-sonner/src/packages/state.js";
 import { generateErrorId } from "./usePlatformError";
@@ -33,7 +33,6 @@ export function useChat({
   parsedUserDetails,
   isAuthenticated,
   saveLinkPreviewCache,
-  isLoading,
   confirmDialog,
 }: {
   confirmDialog: Ref<ConfirmDialogOptions>;
@@ -47,7 +46,6 @@ export function useChat({
   fetchLinkPreview: (url: string) => Promise<LinkPreview | null>;
   chatDrafts: Ref<Map<string, string>>;
   saveLinkPreviewCache: () => void;
-  isLoading: Ref<boolean>;
   pastePreviews: Ref<
     Map<
       string,
@@ -62,6 +60,7 @@ export function useChat({
 }) {
   const activeChatMenu = ref<string | null>(null);
   const expanded = ref<boolean[]>([]);
+  const isChatLoading = ref(false);
 
   function reportError(error: PlatformError) {
     console.error("Platform Error:", error);
@@ -254,7 +253,7 @@ export function useChat({
   }
 
   async function deleteChat(chatId: string) {
-    if (isLoading.value || !chatId) return;
+    if (isChatLoading.value || !chatId) return;
 
     try {
       const chatIndex = chats.value.findIndex((chat) => chat.id === chatId);
@@ -381,40 +380,11 @@ export function useChat({
     }
   }
 
-  async function loadChats() {
+  async function loadChat(): Promise<[boolean, string]> {
     try {
       if (isAuthenticated.value) {
         try {
-          const response = await apiCall<Chat[]>("/chats");
-          if (response.data) {
-            chats.value = response.data;
-            saveChats();
-          }
-        } catch (apiError) {
-          console.error("Failed to load chats from server:", apiError);
-        }
-      } else {
-        const stored = localStorage.getItem("chats");
-        if (stored) {
-          const parsedChats = JSON.parse(stored);
-          if (Array.isArray(parsedChats)) {
-            chats.value = parsedChats;
-          }
-        }
-      }
-
-      updateExpandedArray();
-    } catch (error) {
-      console.error("Failed to load chats:", error);
-      chats.value = [];
-    }
-  }
-
-  async function loadChat() {
-    try {
-      if (isAuthenticated.value) {
-        try {
-          isLoading.value = true;
+          isChatLoading.value = true;
           const response = await apiCall<Chat>(`/chats/${currentChatId.value}`);
           if (response.data) {
             const existingChatIndex = chats.value.findIndex(
@@ -426,11 +396,21 @@ export function useChat({
               chats.value.push(response.data);
             }
             saveChats();
-            isLoading.value = false;
+            isChatLoading.value = false;
+            return [
+              true,
+              "Chat loaded successfully chat: " + response.data!.id + " loaded",
+            ];
           }
-        } catch (apiError) {
-          isLoading.value = false;
-          console.error("Failed to load chats from server:", apiError);
+        } catch (apiError: any) {
+          isChatLoading.value = false;
+          return [
+            false,
+            "Failed to load chat: " +
+              currentChatId.value +
+              " from server. Error: " +
+              apiError.message,
+          ];
         }
       } else {
         const stored = localStorage.getItem("chats");
@@ -443,9 +423,19 @@ export function useChat({
       }
 
       updateExpandedArray();
-    } catch (error) {
-      console.error("Failed to load chats:", error);
+      return [
+        true,
+        `Successfully loaded existing chat: ${currentChatId.value}`,
+      ];
+    } catch (error: any) {
       chats.value = [];
+      return [
+        false,
+        "Failed to load chat: " +
+          currentChatId.value +
+          " from server. Error: " +
+          error.message,
+      ];
     }
   }
 
@@ -851,7 +841,7 @@ export function useChat({
   }
 
   function clearAllChats() {
-    if (isLoading.value) return;
+    if (isChatLoading.value) return;
 
     try {
       const totalChats = chats.value.length;
@@ -945,6 +935,7 @@ export function useChat({
   }
 
   return {
+    isChatLoading,
     updateChat,
     expanded,
     activeChatMenu,
@@ -962,7 +953,6 @@ export function useChat({
     createNewChat,
     copyResponse,
     shareResponse,
-    loadChats,
     loadChat,
     processLinksInUserPrompt,
     processLinksInResponse,

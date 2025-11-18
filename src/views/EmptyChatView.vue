@@ -6,13 +6,13 @@ import type { FunctionalComponent } from "vue";
 import type { Ref } from "vue";
 import { inject } from "vue";
 
-const { parsedUserDetails, isDarkMode, isLoading, screenWidth } = inject(
+const { parsedUserDetails, isDarkMode, screenWidth, isChatLoading } = inject(
     "globalState",
 ) as {
     parsedUserDetails: UserDetails;
     isDarkMode: Ref<boolean>;
-    isLoading: Ref<boolean>;
     screenWidth: Ref<number>;
+    isChatLoading: Ref<boolean>;
 };
 
 const { suggestionPrompts, selectSuggestion } = defineProps<{
@@ -34,7 +34,7 @@ const { suggestionPrompts, selectSuggestion } = defineProps<{
         "
     >
         <div
-            v-if="isLoading"
+            v-if="isChatLoading"
             class="relative md:max-w-3xl min-h-[calc(100vh-200px)] max-w-[100vw] flex-grow no-scrollbar overflow-y-auto px-2 w-full space-y-3 sm:space-y-4 mt-[55px] pt-8 scroll-container"
         >
             <div class="flex flex-col gap-4">

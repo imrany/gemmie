@@ -237,12 +237,10 @@ const handleGoToChat = (id: string) => {
                                                         class="w-4 h-4"
                                                     />
                                                     {{
-                                                        chat.messages?.length ||
-                                                        0
+                                                        chat.message_count || 0
                                                     }}
                                                     {{
-                                                        chat.messages
-                                                            ?.length === 1
+                                                        chat.message_count === 1
                                                             ? "message"
                                                             : "messages"
                                                     }}

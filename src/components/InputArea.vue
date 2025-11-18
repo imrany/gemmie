@@ -29,7 +29,6 @@ import ReferenceBadge from "./ReferenceBadge.vue";
 import { toast } from "vue-sonner";
 
 const {
-    isLoading,
     parsedUserDetails,
     requestsRemaining,
     screenWidth,
@@ -39,7 +38,6 @@ const {
     currentChat,
 } = inject("globalState") as {
     currentChat: Ref<Chat>;
-    isLoading: Ref<boolean>;
     parsedUserDetails: Ref<UserDetails>;
     requestsRemaining: Ref<boolean>;
     screenWidth: Ref<number>;
@@ -53,6 +51,7 @@ const MAX_CONTEXT_REFERENCES = 3;
 
 // Props
 const props = defineProps<{
+    isLoading: boolean;
     showScrollDownButton: Ref<boolean>;
     scrollButtonPosition: Ref<string>;
     selectedContexts: Ref<ContextReference[]>;

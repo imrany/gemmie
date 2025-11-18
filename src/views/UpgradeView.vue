@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import type { UserDetails } from "@/types";
-import { API_BASE_URL, getTransaction, plans } from "@/utils/globals";
+import { API_BASE_URL, getTransaction, plans } from "@/lib/globals";
 import {
     CardSim,
     Check,

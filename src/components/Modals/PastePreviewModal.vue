@@ -2,7 +2,7 @@
 import {
     copyPasteContent,
     getHighlightLanguage,
-} from "@/utils/previewPasteContent";
+} from "@/lib/previewPasteContent";
 import hljs from "highlight.js";
 import { ChevronLeft, Clipboard, Copy, X } from "lucide-vue-next";
 

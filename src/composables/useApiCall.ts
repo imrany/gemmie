@@ -1,5 +1,5 @@
 import type { UserDetails } from "@/types";
-import { API_BASE_URL } from "@/utils/globals";
+import { API_BASE_URL } from "@/lib/globals";
 import { ref, type Ref } from "vue";
 
 export function useApiCall(globalStateRefs?: {

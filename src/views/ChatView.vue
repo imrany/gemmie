@@ -33,7 +33,7 @@ import {
     stopVideo,
     toggleDirectVideo,
     updateVideoControls,
-} from "@/utils/videoProcessing";
+} from "@/lib/videoProcessing";
 import { onUpdated } from "vue";
 import {
     extractUrls,
@@ -42,9 +42,9 @@ import {
     isPromptTooShort,
     WRAPPER_URL,
     SPINDLE_URL,
-} from "@/utils/globals";
+} from "@/lib/globals";
 import router from "@/router";
-import { copyPasteContent } from "@/utils/previewPasteContent";
+import { copyPasteContent } from "@/lib/previewPasteContent";
 import PastePreviewModal from "@/components/Modals/PastePreviewModal.vue";
 import { useRoute } from "vue-router";
 import TextHightlightPopover from "@/components/TextHightlightPopover.vue";
@@ -82,6 +82,7 @@ import NoChatFound from "@/components/NoChatFound.vue";
 
 // Inject global state
 const {
+    isChatLoading,
     copiedIndex,
     shouldHaveLimit,
     chatDrafts,
@@ -96,7 +97,6 @@ const {
     planStatus,
     userDetailsDebounceTimer,
     chatsDebounceTimer,
-    isLoading,
     cancelAllRequests,
     checkRequestLimitBeforeSubmit,
     createNewChat,
@@ -134,12 +134,15 @@ const {
     onMessageAdded,
 
     copyResponse,
-    loadChat,
+    fallbackChatId,
+    showErrorSection,
     processLinksInUserPrompt,
     processLinksInResponse,
 } = inject("globalState") as {
+    isChatLoading: Ref<boolean>;
+    fallbackChatId: Ref<string>;
+    showErrorSection: Ref<boolean>;
     copyResponse: (text: string, index?: number) => void;
-    loadChat: () => Promise<void>;
     processLinksInUserPrompt: (index: number) => Promise<void>;
     processLinksInResponse: (index: number) => Promise<void>;
     onMessageAdded: (message: Message) => void;
@@ -184,7 +187,6 @@ const {
     >;
     chats: Ref<Chat[]>;
     logout: () => void;
-    isLoading: Ref<boolean>;
     expanded: Ref<boolean[]>;
     scrollToLastMessage: () => void;
     showConfirmDialog: (options: ConfirmDialogOptions) => void;
@@ -245,8 +247,7 @@ const route = useRoute();
 // ---------- State ----------
 const now = ref(Date.now());
 const showInputModeDropdown = ref(false);
-const showErrorSection = ref(false);
-const fallbackChatId = ref("");
+const isLoading = ref(false);
 
 const isRecording = ref(false);
 const selectedContexts = ref<ContextReference[]>([]);
@@ -1264,7 +1265,9 @@ const inputPlaceholderText = computed(() => {
 });
 
 const inputDisabled = computed(() => {
-    return isLoading.value || isRequestLimitExceeded.value;
+    return (
+        isLoading.value || isRequestLimitExceeded.value || isChatLoading.value
+    );
 });
 
 const showLimitExceededBanner = computed(() => {
@@ -1593,42 +1596,6 @@ onMounted(async () => {
     // This prevents the app from thinking there's no active chat
     if (chatId) {
         currentChatId.value = chatId;
-        console.log(`🔄 Set current chat to: ${chatId}`);
-        await loadChat();
-    }
-
-    // After loading, verify the chat exists
-    if (chatId) {
-        const chatExists = chats.value.find((chat) => chat.id === chatId);
-
-        if (chatExists) {
-            showErrorSection.value = false; // ✅ Ensure error section is hidden
-            updateExpandedArray();
-            nextTick(() => {
-                loadChatDrafts();
-            });
-            console.log(`✅ Loaded existing chat: ${chatId}`);
-        } else {
-            // Chat genuinely doesn't exist after loading everything
-            console.warn(`⚠️ Chat ${chatId} not found`);
-
-            // ✅ Show error section
-            showErrorSection.value = true;
-
-            // ✅ Find the most recent chat as fallback
-            if (chats.value.length > 0) {
-                const sortedChats = [...chats.value].sort((a, b) => {
-                    const dateA = new Date(
-                        a.last_message_at || a.updated_at || a.created_at,
-                    ).getTime();
-                    const dateB = new Date(
-                        b.last_message_at || b.updated_at || b.created_at,
-                    ).getTime();
-                    return dateB - dateA;
-                });
-                fallbackChatId.value = sortedChats[0].id;
-            }
-        }
     }
 
     // Load cached data and setup handlers
@@ -2275,6 +2242,7 @@ onUnmounted(() => {
 
                 <!-- Input Area -->
                 <InputArea
+                    :is-loading="isLoading"
                     :show-input="!(currentChat && currentChat?.is_read_only)"
                     :is-recording="isRecording"
                     :is-transcribing="isTranscribing"

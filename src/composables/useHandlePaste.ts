@@ -1,5 +1,5 @@
-import { detectLargePaste } from "@/utils/globals";
-import { detectContentType } from "@/utils/previewPasteContent";
+import { detectLargePaste } from "@/lib/globals";
+import { detectContentType } from "@/lib/previewPasteContent";
 import type { Ref } from "vue";
 import { toast } from "vue-sonner/src/packages/state.js";
 

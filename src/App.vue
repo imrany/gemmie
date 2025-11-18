@@ -16,9 +16,9 @@ import {
     createErrorContext,
     getErrorStatus,
     SPINDLE_URL,
-} from "./utils/globals";
+} from "./lib/globals";
 import { nextTick } from "vue";
-import { detectAndProcessVideo } from "./utils/videoProcessing";
+import { detectAndProcessVideo } from "./lib/videoProcessing";
 import ConfirmDialog from "./components/ConfirmDialog.vue";
 import type { Theme } from "vue-sonner/src/packages/types.js";
 import UpdateModal from "./components/Modals/UpdateModal.vue";
@@ -255,6 +255,8 @@ const shouldHaveLimit =
     planStatus.value.status === "expired";
 const requestCount = computed(() => requestLimitInfo.value.currentCount);
 const copiedIndex = ref<number | null>(null);
+const showErrorSection = ref(false);
+const fallbackChatId = ref("");
 
 const currentChat = computed(() => {
     if (!currentChatId.value || !chats.value.length) {
@@ -286,8 +288,8 @@ const { apiCall, checkInternetConnection } = useApiCall({
 });
 
 const {
+    isChatLoading,
     updateChat,
-    loadChats,
     loadChat,
     createNewChat,
     deleteChat,
@@ -321,7 +323,6 @@ const {
     parsedUserDetails,
     isAuthenticated,
     saveLinkPreviewCache,
-    isLoading,
     confirmDialog,
 });
 
@@ -832,7 +833,6 @@ async function syncFromServer() {
     const shouldSync = syncEnabled.value;
     if (!shouldSync) {
         console.log("❌ syncFromServer: Sync disabled");
-        // await loadChats(); // ✅ Load local chats if sync disabled
         await loadChat(); // ✅ Load local chat if sync disabled
         return;
     }
@@ -1917,10 +1917,62 @@ watch(
             const currentPath = router.currentRoute.value.path;
             const targetPath = `/chat/${newChatId}`;
 
+            try {
+                // First, await the loadChat promise to resolve.
+                const [success, message] = await loadChat();
+
+                if (success) {
+                    showErrorSection.value = false; // ✅ Ensure error section is hidden
+                    updateExpandedArray();
+                    nextTick(() => {
+                        loadChatDrafts();
+                    });
+                    console.log(message);
+                } else {
+                    // Chat genuinely doesn't exist after loading everything
+                    console.warn(message);
+
+                    // ✅ Show error section
+                    showErrorSection.value = true;
+
+                    // ✅ Find the most recent chat as fallback
+                    if (chats.value.length > 0) {
+                        const sortedChats = [...chats.value].sort((a, b) => {
+                            const dateA = new Date(
+                                a.last_message_at ||
+                                    a.updated_at ||
+                                    a.created_at,
+                            ).getTime();
+                            const dateB = new Date(
+                                b.last_message_at ||
+                                    b.updated_at ||
+                                    b.created_at,
+                            ).getTime();
+                            return dateB - dateA;
+                        });
+                        fallbackChatId.value = sortedChats[0].id;
+                        console.log(
+                            `⚠️ Fallback chat ID set to: ${fallbackChatId.value}`,
+                        );
+                    } else {
+                        console.warn(`⚠️ No chats available to fallback to`);
+                    }
+                }
+            } catch (error) {
+                console.error(
+                    `🚨 Error during or after loading chat ${currentChatId.value}:`,
+                    error,
+                );
+                toast.error(`Failed to load chat ${currentChatId.value}`, {
+                    duration: 3000,
+                });
+                // ✅ Show error section
+                showErrorSection.value = true;
+            }
+
             // Prevent redundant navigation
             if (currentPath !== targetPath) {
                 console.log(`🔄 Navigating to chat: ${newChatId}`);
-                await loadChat();
                 router.push(targetPath);
             }
         }
@@ -2202,6 +2254,7 @@ onUnmounted(() => {
 const globalState = {
     // Reactive references
     copiedIndex,
+    isChatLoading,
     isOpenTextHighlightPopover,
     syncEnabled,
     isDemoMode,
@@ -2244,6 +2297,8 @@ const globalState = {
     connectionStatus,
     hasActiveRequestsForCurrentChat,
     shouldHaveLimit,
+    showErrorSection,
+    fallbackChatId,
 
     // Core functions
     updateChat,
@@ -2251,7 +2306,6 @@ const globalState = {
     onMessageAdded,
     copyResponse,
     shareResponse,
-    loadChats,
     loadChat,
     processLinksInUserPrompt,
     processLinksInResponse,

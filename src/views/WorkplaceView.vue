@@ -9,8 +9,8 @@ import pdfjsWorker from 'pdfjs-dist/build/pdf.worker?url'
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker
 
 // Utils and Types
-import { renderMarkdown } from '@/utils/markdownSupport'
-import { formatFileSize } from '@/utils/formatters'
+import { renderMarkdown } from '@/lib/markdownSupport'
+import { formatFileSize } from '@/lib/formatters'
 import type { EditableContent, UploadedFile } from '@/types/document'
 
 // Composables
@@ -23,7 +23,7 @@ import { useSearch } from '@/composables/useSearch'
 import { useFileUpload } from '@/composables/useFileUpload'
 import { useDocumentTemplates } from '@/composables/useDocumentTemplates'
 import { useExport } from '@/composables/useExport'
-import { extractPdfContent } from '@/utils/pdfHelpers'
+import { extractPdfContent } from '@/lib/pdfHelpers'
 import type { UserDetails } from '@/types'
 
 // Global state
@@ -203,7 +203,7 @@ const allAnnotations = computed(() =>
 const renderedMarkdown = computed(() => {
   const currentPageData = getCurrentPageContent()
   if (!currentPageData) return ''
-  
+
   const rawHtml = renderMarkdown(currentPageData.content)
   return rawHtml
 })
@@ -1868,7 +1868,7 @@ onUnmounted(() => {
                     fontSize: fontSize + 'px',
                     lineHeight: lineHeight.toString(),
                     fontFamily: 'system-ui, -apple-system, sans-serif'
-                  }" placeholder="Start writing your markdown content here... 
+                  }" placeholder="Start writing your markdown content here...
 
 Right-click for AI assistance
 Use Ctrl+B for bold, Ctrl+I for italic

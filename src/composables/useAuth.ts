@@ -1,7 +1,7 @@
 import { ref, type Ref } from "vue";
 import { toast } from "vue-sonner";
 import { useRouter } from "vue-router";
-import { API_BASE_URL, validateCredentials } from "@/utils/globals";
+import { API_BASE_URL, validateCredentials } from "@/lib/globals";
 import type { ApiResponse, UserDetails } from "@/types";
 
 export interface AuthData {
