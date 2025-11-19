@@ -157,6 +157,9 @@ watch(
                 >
                     <Copy class="w-4 h-4" v-if="!isCopied" />
                     <Check class="w-4 h-4" v-else />
+                    <span class="ml-2 sm:hidden">{{
+                        isCopied ? "Copied" : "Copy"
+                    }}</span>
                 </Button>
             </div>
 
