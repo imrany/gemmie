@@ -51,8 +51,12 @@ const {
     currentChatId,
     isCollapsed,
     chats,
+    closePreview,
+    showPreviewSidebar,
 } = inject("globalState") as {
+    showPreviewSidebar: Ref<boolean>;
     isCollapsed: Ref<boolean>;
+    closePreview: () => void;
     chats: Ref<Chat[]>;
     currentChatId: Ref<string>;
     activeChatMenu: Ref<string | null>;
@@ -212,10 +216,12 @@ function handleChatClick(chatId: string) {
     if (screenWidth.value < 720) {
         hideSidebar();
     }
+    if (showPreviewSidebar.value) closePreview();
 }
 
 function handleNavAction(action: () => void) {
     if (screenWidth.value < 720) hideSidebar();
+    if (showPreviewSidebar.value) closePreview();
     action();
 }
 

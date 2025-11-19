@@ -3,6 +3,8 @@
 import { ref } from "vue";
 import { Eye, Copy, Check } from "lucide-vue-next";
 import { Button } from "../button";
+import { inject } from "vue";
+import type { Ref } from "vue";
 
 interface Props {
     data: {
@@ -13,6 +15,12 @@ interface Props {
     };
     isPreviewable?: boolean;
 }
+
+const { isCollapsed, screenWidth, toggleSidebar } = inject("globalState") as {
+    isCollapsed: Ref<boolean>;
+    screenWidth: Ref<number>;
+    toggleSidebar: () => void;
+};
 
 const props = defineProps<Props>();
 const emit = defineEmits<{
@@ -34,6 +42,9 @@ const copyToClipboard = async () => {
 };
 
 const handlePreview = () => {
+    if (screenWidth.value > 720 && !isCollapsed.value) {
+        toggleSidebar();
+    }
     emit("preview");
 };
 </script>
@@ -41,7 +52,7 @@ const handlePreview = () => {
 <template>
     <div class="relative my-4">
         <!-- Code Block -->
-        <pre class="dark:border-gray-700 border">
+        <pre class="dark:border-gray-700 border bg-gray-900">
             <code
                 :class="`hljs language-${data.language} text-sm leading-relaxed`"
                 v-html="data.highlighted"
@@ -59,7 +70,7 @@ const handlePreview = () => {
                     <Button
                         v-if="isPreviewable"
                         @click="handlePreview"
-                        class="px-3 py-1.5 h-[29px] bg-gray-900 dark:bg-white text-white dark:text-black text-xs rounded transition-colors inline-flex items-center gap-1.5 hover:bg-gray-800 dark:hover:bg-gray-100"
+                        class="px-3 py-1.5 h-[29px] bg-white text-black text-xs rounded transition-colors inline-flex items-center gap-1.5 hover:bg-gray-100"
                         title="Preview HTML"
                     >
                         <Eye :size="14" />

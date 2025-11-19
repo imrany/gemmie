@@ -8,17 +8,21 @@ import MarkdownImage from "./MarkdownImage.vue";
 import MarkdownTable from "./MarkdownTable.vue";
 import MarkdownCallout from "./MarkdownCallout.vue";
 import MarkdownLink from "./MarkdownLink.vue";
+import { inject } from "vue";
+import type { Ref } from "vue";
 
 interface Props {
     content: string;
 }
 
 const props = defineProps<Props>();
-
-// Preview modal state
-const showPreviewModal = ref(false);
-const previewCode = ref("");
-const previewLanguage = ref("");
+const { openPreview, showPreviewSidebar, closePreview } = inject(
+    "globalState",
+) as {
+    openPreview: (code: string, language: string) => void;
+    showPreviewSidebar: Ref<boolean>;
+    closePreview: () => void;
+};
 
 interface CodeBlockData {
     id: string;
@@ -84,22 +88,6 @@ const isPreviewableCode = (language: string, code: string): boolean => {
         code.includes("<html") ||
         code.includes("<body")
     );
-};
-
-// Open preview modal
-const openPreview = (code: string, language: string) => {
-    previewCode.value = code;
-    previewLanguage.value = language;
-    showPreviewModal.value = true;
-    document.body.style.overflow = "hidden";
-};
-
-// Close preview modal
-const closePreview = () => {
-    showPreviewModal.value = false;
-    previewCode.value = "";
-    previewLanguage.value = "";
-    document.body.style.overflow = "auto";
 };
 
 const processCodeBlocks = (text: string): string => {
@@ -444,7 +432,7 @@ const contentParts = computed(() => {
 
 // Handle escape key to close modal
 const handleKeydown = (e: KeyboardEvent) => {
-    if (e.key === "Escape" && showPreviewModal.value) {
+    if (e.key === "Escape" && showPreviewSidebar.value) {
         closePreview();
     }
 };
@@ -492,93 +480,5 @@ if (typeof window !== "undefined") {
             />
             <div v-else v-html="part"></div>
         </template>
-
-        <!-- Preview Modal -->
-        <Teleport to="body">
-            <div
-                v-if="showPreviewModal"
-                class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/90"
-                @click.self="closePreview"
-            >
-                <div
-                    class="w-11/12 h-5/6 bg-white dark:bg-gray-900 rounded-lg shadow-2xl flex flex-col overflow-hidden"
-                >
-                    <!-- Header -->
-                    <div
-                        class="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800"
-                    >
-                        <div class="flex items-center gap-3">
-                            <h3
-                                class="text-lg font-semibold text-gray-900 dark:text-white"
-                            >
-                                Live Preview
-                            </h3>
-                            <span
-                                class="px-2 py-1 text-xs font-medium bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded"
-                            >
-                                {{ previewLanguage.toUpperCase() }}
-                            </span>
-                        </div>
-                        <button
-                            @click="closePreview"
-                            class="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg"
-                            title="Close (ESC)"
-                        >
-                            <svg
-                                class="w-6 h-6"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                            >
-                                <path
-                                    stroke-linecap="round"
-                                    stroke-linejoin="round"
-                                    stroke-width="2"
-                                    d="M6 18L18 6M6 6l12 12"
-                                />
-                            </svg>
-                        </button>
-                    </div>
-
-                    <!-- Preview Content -->
-                    <div class="flex-1 overflow-hidden bg-white">
-                        <iframe
-                            :srcdoc="previewCode"
-                            class="w-full h-full border-0"
-                            sandbox="allow-scripts allow-forms allow-modals allow-popups"
-                            title="HTML Preview"
-                        />
-                    </div>
-
-                    <!-- Footer -->
-                    <div
-                        class="p-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800"
-                    >
-                        <div class="flex items-center justify-between">
-                            <div
-                                class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400"
-                            >
-                                <div
-                                    class="w-2 h-2 bg-green-500 rounded-full animate-pulse"
-                                ></div>
-                                <span>Interactive Preview</span>
-                            </div>
-                            <span
-                                class="text-xs text-gray-500 dark:text-gray-500"
-                            >
-                                Press ESC to close
-                            </span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </Teleport>
     </div>
 </template>
-
-<style scoped>
-/* Ensure modal overlay is above everything */
-:deep(.fixed) {
-    z-index: 9999 !important;
-}
-</style>

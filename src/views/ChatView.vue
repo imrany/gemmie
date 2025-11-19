@@ -82,6 +82,7 @@ import NoChatFound from "@/components/NoChatFound.vue";
 
 // Inject global state
 const {
+    openPreview,
     isChatLoading,
     copiedIndex,
     shouldHaveLimit,
@@ -140,6 +141,7 @@ const {
     processLinksInResponse,
 } = inject("globalState") as {
     isChatLoading: Ref<boolean>;
+    openPreview: (code: string, language: string) => void;
     fallbackChatId: Ref<string>;
     showErrorSection: Ref<boolean>;
     copyResponse: (text: string, index?: number) => void;

@@ -130,6 +130,23 @@ const isLoading = ref(false);
 const showProfileMenu = ref(false);
 const now = ref(Date.now());
 
+// State for preview sidebar
+const showPreviewSidebar = ref(false);
+const previewCode = ref("");
+const previewLanguage = ref("html");
+
+// Function to open preview with code
+const openPreview = (code: string, language: string = "html") => {
+    previewCode.value = code;
+    previewLanguage.value = language;
+    showPreviewSidebar.value = true;
+};
+
+// Function to close preview
+const closePreview = () => {
+    showPreviewSidebar.value = false;
+};
+
 const planStatus = computed(() => {
     if (!parsedUserDetails.value || !parsedUserDetails.value.expiryTimestamp) {
         return {
@@ -2299,6 +2316,17 @@ const globalState = {
     shouldHaveLimit,
     showErrorSection,
     fallbackChatId,
+
+    // State for preview sidebar
+    showPreviewSidebar,
+    previewCode,
+    previewLanguage,
+
+    // Function to open preview with code
+    openPreview,
+
+    // Function to close preview
+    closePreview,
 
     // Core functions
     updateChat,

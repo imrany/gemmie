@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import PreviewSideBar from "@/components/PreviewSideBar.vue";
 import type { Chat, UserDetails } from "@/types";
 import type { Ref } from "vue";
 import { inject } from "vue";
@@ -54,10 +55,6 @@ const {
         <slot></slot>
 
         <!-- preview  -->
-        <!-- <div
-            class="flex-1 min-h-screen bg-gray-100 dark:bg-gray-800 border-l dark:border-gray-700"
-        >
-            <p>Preview</p>
-        </div> -->
+        <PreviewSideBar />
     </div>
 </template>
