@@ -477,15 +477,41 @@ async function handleSubmit(
 
     // Ensure we have a valid chat
     let submissionChatId = currentChatId.value;
-    const submissionChat = chats.value.find(
+    let submissionChat = chats.value.find(
         (chat) => chat.id === submissionChatId,
     );
 
+    // Create new chat if needed
     if (!submissionChatId || !submissionChat) {
         const newChatId = createNewChat(promptValue);
-        if (!newChatId) return;
+        if (!newChatId) {
+            toast.error("Failed to create chat", {
+                duration: 3000,
+                description: "Please try again",
+            });
+            return;
+        }
+
         currentChatId.value = newChatId;
         submissionChatId = newChatId;
+
+        // Wait for Vue to update the reactive array
+        await nextTick();
+
+        // Find the newly created chat
+        submissionChat = chats.value.find(
+            (chat) => chat.id === submissionChatId,
+        );
+
+        // Verify chat exists
+        if (!submissionChat) {
+            console.error("Chat creation failed: chat not found in array");
+            toast.error("Failed to initialize chat", {
+                duration: 3000,
+                description: "Please refresh and try again",
+            });
+            return;
+        }
     }
 
     // Generate unique request ID and setup abort controller
@@ -532,9 +558,6 @@ async function handleSubmit(
                 contextInfo += `${ctx.fullText} `;
             });
             fabricatedPrompt = `${promptValue} ${contextInfo}`;
-            console.log(
-                `Added ${effectiveContextReferences.length} explicit context reference(s) for ${responseMode} mode`,
-            );
         } else {
             // For light-response, put context before the question
             contextInfo += "\n\n--- Context from previous messages ---\n";
@@ -550,56 +573,41 @@ async function handleSubmit(
         console.log(
             `Added ${effectiveContextReferences.length} explicit context reference(s) for ${responseMode} mode`,
         );
-        // } else if (
-        //     !hasPastePreview &&
-        //     isPromptTooShort(promptValue) &&
-        //     currentMessages.value.length > 0
-        // ) {
-        //     const lastMessage =
-        //         currentMessages.value[currentMessages.value.length - 1];
-
-        //     if (isSearchMode) {
-        //         fabricatedPrompt = `${promptValue} ${lastMessage.prompt || ""}`;
-        //     } else {
-        //         fabricatedPrompt = `Previous: ${lastMessage.prompt || ""} ${lastMessage.response || ""}\n\nCurrent: ${promptValue}`;
-        //     }
-
-        //     console.log("Added implicit context from last message");
     }
 
     isLoading.value = true;
     scrollToLastMessage();
 
-    // Store temporary message reference
-    let tempMessageIndex = -1;
+    // Create temporary message
     const tempResp: Message = {
         id: `temp_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
         chat_id: submissionChatId,
         created_at: new Date().toISOString(),
         prompt: promptValue,
         response: responseMode ? `${responseMode}...` : "...",
-        references: effectiveContextReferences?.map((ref) => ref.preview) || [], // Store preview texts
+        references: effectiveContextReferences?.map((ref) => ref.preview) || [],
         model: "gemini-pro",
     };
 
     // Store original selectedContexts for rollback on error
     const originalSelectedContexts = [...selectedContexts.value];
+    let tempMessageIndex = -1;
 
     try {
+        // Verify submissionChat still exists (defensive check)
+        if (!submissionChat || !submissionChat.messages) {
+            submissionChat.messages = [];
+            // throw new Error("Invalid chat state");
+        }
+
         // Add temporary message to chat
-        const targetChat = chats.value.find(
-            (chat) => chat.id === submissionChatId,
-        );
+        submissionChat.messages.push(tempResp);
+        tempMessageIndex = submissionChat.messages.length - 1;
+        submissionChat.last_message_at = new Date().toISOString();
 
-        if (targetChat) {
-            targetChat.messages.push(tempResp);
-            tempMessageIndex = targetChat.messages.length - 1;
-            targetChat.last_message_at = new Date().toISOString();
-
-            // Update chat title if first message
-            if (targetChat.messages.length === 1) {
-                targetChat.title = generateChatTitle(promptValue);
-            }
+        // Update chat title if first message
+        if (submissionChat.messages.length === 1) {
+            submissionChat.title = generateChatTitle(promptValue);
         }
 
         updateExpandedArray();
@@ -608,6 +616,7 @@ async function handleSubmit(
         let response: Response;
         let parseRes: any;
 
+        // Make API request based on mode
         if (isSearchMode) {
             const searchParams = new URLSearchParams({
                 query: encodeURIComponent(fabricatedPrompt),
@@ -645,11 +654,11 @@ async function handleSubmit(
         if (abortController.signal.aborted) {
             console.log(`Request ${requestId} was aborted`);
             removeTemporaryMessage(submissionChatId, tempMessageIndex);
-            // Restore original context selection
             selectedContexts.value = originalSelectedContexts;
             return;
         }
 
+        // Handle API errors
         if (!response.ok) {
             const errorText = await response.text();
             throw new Error(
@@ -679,6 +688,7 @@ async function handleSubmit(
         const updatedTargetChat = chats.value.find(
             (chat) => chat.id === submissionChatId,
         );
+
         if (updatedTargetChat && tempMessageIndex >= 0) {
             const updatedMessage: Message = {
                 id: `msg_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
@@ -687,9 +697,10 @@ async function handleSubmit(
                 prompt: promptValue,
                 response: finalResponse,
                 references:
-                    effectiveContextReferences?.map((ref) => ref.preview) || [], // Preserve references
+                    effectiveContextReferences?.map((ref) => ref.preview) || [],
                 model: "gemini-pro",
             };
+
             updatedTargetChat.messages[tempMessageIndex] = updatedMessage;
             updatedTargetChat.last_message_at = new Date().toISOString();
 
@@ -737,14 +748,14 @@ async function handleSubmit(
                 });
             }
 
-            // If success and chat stored locally, trigger onMessageAdded
+            // Trigger onMessageAdded callback
             onMessageAdded(updatedMessage);
         }
     } catch (err: any) {
+        // Handle abort
         if (err.name === "AbortError") {
             console.log(`Request ${requestId} was aborted`);
             removeTemporaryMessage(submissionChatId, tempMessageIndex);
-            // Restore original context selection
             selectedContexts.value = originalSelectedContexts;
             return;
         }
@@ -767,6 +778,9 @@ async function handleSubmit(
         } else if (err.message.includes("timeout")) {
             errorMessage = "Request Timeout";
             description = "The request took too long. Please try again";
+        } else if (err.message.includes("Invalid chat state")) {
+            errorMessage = "Chat Error";
+            description = "Please refresh the page and try again";
         }
 
         toast.error(`Failed to get AI response: ${errorMessage}`, {
