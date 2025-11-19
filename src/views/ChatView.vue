@@ -521,8 +521,15 @@ async function handleSubmit(
     activeRequests.value.set(requestId, abortController);
     requestChatMap.value.set(requestId, submissionChatId);
 
+    // Determine response mode
+    let responseMode =
+        forceMode || parsedUserDetails?.value.responseMode || "light-response";
+
+    const isSearchMode =
+        responseMode === "web-search" || responseMode === "deep-search";
+
     // Handle link-only prompts specially
-    if (isJustLinks(promptValue)) {
+    if (isJustLinks(promptValue) && !isSearchMode) {
         return handleLinkOnlyRequest(
             promptValue,
             submissionChatId,
@@ -532,18 +539,11 @@ async function handleSubmit(
         );
     }
 
-    // Determine response mode
-    let responseMode =
-        forceMode || parsedUserDetails?.value.responseMode || "light-response";
-
     // Override to light-response if pasted content detected
     if (hasPastePreview) {
         responseMode = "light-response";
         console.log("Pasted content detected - using light-response mode");
     }
-
-    const isSearchMode =
-        responseMode === "web-search" || responseMode === "deep-search";
 
     // Build fabricated prompt with context
     let fabricatedPrompt = promptValue;
@@ -596,8 +596,31 @@ async function handleSubmit(
     try {
         // Verify submissionChat still exists (defensive check)
         if (!submissionChat || !submissionChat.messages) {
+            console.error("Invalid chat state - attempting recovery");
+
+            // Try to recover by finding the chat again
+            submissionChat = chats.value.find(
+                (chat) => chat.id === submissionChatId,
+            );
+
+            // If still invalid, abort
+            if (!submissionChat) {
+                isLoading.value = false;
+                toast.error("Chat initialization error", {
+                    duration: 3000,
+                    description: "Please refresh and try again",
+                    action: {
+                        text: "Refresh",
+                        onClick: () => location.reload(),
+                    },
+                });
+                return;
+            }
+        }
+
+        // Initialize messages array if missing
+        if (submissionChat && !submissionChat.messages) {
             submissionChat.messages = [];
-            // throw new Error("Invalid chat state");
         }
 
         // Add temporary message to chat
