@@ -1,4 +1,3 @@
-<!-- CodeBlock.vue -->
 <script setup lang="ts">
 import { ref } from "vue";
 import { Eye, Copy, Check } from "lucide-vue-next";
@@ -50,49 +49,68 @@ const handlePreview = () => {
 </script>
 
 <template>
-    <div class="relative my-4">
+    <div
+        class="relative my-4 rounded-lg overflow-hidden bg-gray-800 dark:bg-gray-900 border border-gray-200 dark:border-gray-700"
+    >
+        <!-- Header Bar -->
+        <div class="flex items-center justify-between px-4 pt-2 bg-none">
+            <span
+                class="text-xs font-mono text-gray-300 dark:text-gray-400 capitalize"
+            >
+                {{ data.language }}
+            </span>
+            <div class="flex items-center gap-2">
+                <!-- Preview Button (only for HTML) -->
+                <Button
+                    v-if="isPreviewable"
+                    @click="handlePreview"
+                    title="Preview HTML"
+                    class="h-7 px-3 bg-white hover:bg-gray-100 text-gray-900 text-xs rounded inline-flex items-center gap-1.5 transition-colors"
+                >
+                    <Eye :size="14" />
+                    <span>Preview</span>
+                </Button>
+
+                <!-- Copy Button -->
+                <Button
+                    @click="copyToClipboard"
+                    :title="copied ? 'Copied!' : 'Copy code'"
+                    class="h-7 px-3 bg-gray-700 dark:bg-gray-700 text-gray-100 dark:text-gray-100 border border-gray-600 dark:border-gray-600 hover:bg-gray-600 dark:hover:bg-gray-600 text-xs rounded inline-flex items-center gap-1.5 transition-colors"
+                >
+                    <Check v-if="copied" :size="14" class="text-green-400" />
+                    <Copy v-else :size="14" />
+                    <span>{{ copied ? "Copied!" : "Copy" }}</span>
+                </Button>
+            </div>
+        </div>
+
         <!-- Code Block -->
-        <pre class="dark:border-gray-700 border bg-gray-900">
+        <pre
+            class="!m-0 !rounded-none bg-gray-800 dark:bg-gray-900 overflow-x-auto custom-scrollbar"
+        >
             <code
                 :class="`hljs language-${data.language} text-sm leading-relaxed`"
                 v-html="data.highlighted"
             ></code>
         </pre>
-        <div class="absolute top-2 right-2 left-2">
-            <div class="flex w-full items-center justify-between">
-                <span
-                    class="text-xs font-mono text-gray-300 dark:text-gray-400 capitalize"
-                >
-                    {{ data.language }}
-                </span>
-                <div class="flex items-center gap-2">
-                    <!-- Preview Button (only for HTML) -->
-                    <Button
-                        v-if="isPreviewable"
-                        @click="handlePreview"
-                        class="px-3 py-1.5 h-[29px] bg-white text-black text-xs rounded transition-colors inline-flex items-center gap-1.5 hover:bg-gray-100"
-                        title="Preview HTML"
-                    >
-                        <Eye :size="14" />
-                        <span>Preview</span>
-                    </Button>
-
-                    <!-- Copy Button -->
-                    <Button
-                        @click="copyToClipboard"
-                        class="h-[29px] items-center gap-1.5 bg-gray-700 dark:bg-gray-700 hover:bg-gray-600 dark:hover:bg-gray-600 text-white dark:text-white px-3 py-1.5 rounded text-xs font-medium transition-colors"
-                        :title="copied ? 'Copied!' : 'Copy code'"
-                    >
-                        <Check
-                            v-if="copied"
-                            :size="14"
-                            class="text-green-400"
-                        />
-                        <Copy v-else :size="14" />
-                        <span>{{ copied ? "Copied!" : "Copy" }}</span>
-                    </Button>
-                </div>
-            </div>
-        </div>
     </div>
 </template>
+
+<style scoped>
+/* Ensure code block styling */
+pre {
+    padding: 0 1rem;
+    margin: 0;
+}
+
+pre code {
+    display: block;
+    overflow-x: auto;
+}
+
+/* Override any conflicting hljs styles */
+:deep(.hljs) {
+    background: transparent !important;
+    padding: 0 !important;
+}
+</style>

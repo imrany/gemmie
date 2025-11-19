@@ -6,13 +6,19 @@ import type { Ref } from "vue";
 import { inject } from "vue";
 import hljs from "highlight.js/lib/common";
 
-const { showPreviewSidebar, previewCode, previewLanguage, closePreview } =
-    inject("globalState") as {
-        showPreviewSidebar: Ref<boolean>;
-        previewCode: Ref<string>;
-        previewLanguage: Ref<string>;
-        closePreview: () => void;
-    };
+const {
+    screenWidth,
+    showPreviewSidebar,
+    previewCode,
+    previewLanguage,
+    closePreview,
+} = inject("globalState") as {
+    screenWidth: Ref<number>;
+    showPreviewSidebar: Ref<boolean>;
+    previewCode: Ref<string>;
+    previewLanguage: Ref<string>;
+    closePreview: () => void;
+};
 
 const activeTab = ref<"preview" | "code">("preview");
 const copied = ref(false);
@@ -92,7 +98,9 @@ onMounted(() => {
         <div
             v-if="showPreviewSidebar"
             class="fixed top-0 right-0 bottom-0 md:relative md:z-20 w-full max-w-full z-50 flex-shrink-0 md:flex md:items-stretch md:justify-stretch"
-            :style="{ width: sidebarWidth + 'px' }"
+            :style="{
+                width: screenWidth > 720 ? sidebarWidth + 'px' : '100vw',
+            }"
         >
             <!-- Sidebar Content -->
             <div
