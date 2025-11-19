@@ -10,7 +10,6 @@ import { toast } from "vue-sonner/src/packages/state.js";
 const {
     hideSidebar,
     screenWidth,
-    isCollapsed,
     currentChat,
     isLoading,
     updateChat,
@@ -20,7 +19,6 @@ const {
     isLoading: Ref<boolean>;
     copyResponse: (text: string, copiedIndex?: number) => void;
     shareResponse: (title: string, body: string) => void;
-    isCollapsed: Ref<boolean>;
     currentChat: Ref<Chat | undefined>;
     updateChat: (
         chatId: string,
@@ -73,14 +71,7 @@ function formatTitle(title: string, maxLength: number = 30): string {
 
 <template>
     <div
-        class="bg-white dark:bg-gray-900 h-[52px] z-30 fixed top-0 right-0 transition-all duration-300 ease-in-out"
-        :style="
-            screenWidth > 720 && !isCollapsed
-                ? 'left:270px'
-                : screenWidth > 720 && isCollapsed
-                  ? 'left:60px'
-                  : 'left:0'
-        "
+        class="bg-white dark:bg-gray-900 h-[52px] w-full z-30 absolute top-0 right-0 transition-all duration-300 ease-in-out"
     >
         <div
             class="flex h-full px-3 sm:px-4 items-center justify-between w-full"

@@ -52,5 +52,12 @@ const {
 
         <!-- Main Chat Window -->
         <slot></slot>
+
+        <!-- preview  -->
+        <!-- <div
+            class="flex-1 min-h-screen bg-gray-100 dark:bg-gray-800 border-l dark:border-gray-700"
+        >
+            <p>Preview</p>
+        </div> -->
     </div>
 </template>

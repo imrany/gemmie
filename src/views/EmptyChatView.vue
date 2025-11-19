@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { Skeleton } from "@/components/ui/skeleton";
 import type { UserDetails } from "@/types";
-import { Database, RefreshCw, Shield } from "lucide-vue-next";
 import type { FunctionalComponent } from "vue";
 import type { Ref } from "vue";
 import { inject } from "vue";
@@ -35,7 +34,7 @@ const { suggestionPrompts, selectSuggestion } = defineProps<{
     >
         <div
             v-if="isChatLoading"
-            class="relative md:max-w-3xl min-h-[calc(100vh-200px)] max-w-[100vw] flex-grow no-scrollbar overflow-y-auto px-2 w-full space-y-3 sm:space-y-4 mt-[55px] pt-8 scroll-container"
+            class="relative md:max-w-3xl min-h-[calc(100vh-200px)] max-w-[100vw] flex-grow no-scrollbar overflow-y-auto px-2 w-full space-y-3 sm:space-y-4 mt-[65px] scroll-container"
         >
             <div class="flex flex-col gap-4">
                 <!-- User message skeleton -->
@@ -79,7 +78,7 @@ const { suggestionPrompts, selectSuggestion } = defineProps<{
         </div>
 
         <div
-            class="flex h-screen justify-center md:max-w-3xl max-w-[100vw] max-md:px-4 flex-col md:flex-grow items-center gap-3 text-gray-600 dark:text-gray-400"
+            class="relative h-full flex mt-16 md:max-w-3xl max-w-[100vw] max-md:px-4 flex-col md:flex-grow items-center gap-3 text-gray-600 dark:text-gray-400"
             v-else
         >
             <img
@@ -101,34 +100,11 @@ const { suggestionPrompts, selectSuggestion } = defineProps<{
                         : ", " + parsedUserDetails?.username || ", there"
                 }}
             </p>
-            <div class="text-center max-w-md space-y-2">
-                <p class="text-gray-600 dark:text-gray-400 leading-relaxed">
-                    Experience privacy-first conversations with advanced AI.
-                    Your data stays secure, local and synced to your all
-                    devices.
+            <div class="text-center max-w-md space-y-4 gap-4">
+                <p class="text-gray-700 dark:text-gray-300 leading-relaxed">
+                    I'm here to assist you with any questions or tasks you might
+                    have. What can I do for you today?
                 </p>
-                <div
-                    class="flex items-center justify-center gap-6 text-sm text-gray-500 dark:text-gray-400 mt-4"
-                >
-                    <div class="flex items-center gap-1">
-                        <Shield
-                            class="w-4 h-4 text-green-500 dark:text-green-400"
-                        />
-                        <span>Private</span>
-                    </div>
-                    <div class="flex items-center gap-1">
-                        <Database
-                            class="w-4 h-4 text-blue-500 dark:text-blue-400"
-                        />
-                        <span>Local Stored</span>
-                    </div>
-                    <div class="flex items-center gap-1">
-                        <RefreshCw
-                            class="w-4 h-4 text-purple-500 dark:text-purple-400"
-                        />
-                        <span>Synced</span>
-                    </div>
-                </div>
             </div>
 
             <div

@@ -31,19 +31,15 @@ import { toast } from "vue-sonner";
 const {
     parsedUserDetails,
     requestsRemaining,
-    screenWidth,
     FREE_REQUEST_LIMIT,
     currentMessages,
-    isCollapsed,
     currentChat,
 } = inject("globalState") as {
     currentChat: Ref<Chat>;
     parsedUserDetails: Ref<UserDetails>;
     requestsRemaining: Ref<boolean>;
-    screenWidth: Ref<number>;
     FREE_REQUEST_LIMIT: Ref<number>;
     currentMessages: Ref<Message[]>;
-    isCollapsed: Ref<boolean>;
 };
 
 // Constants
@@ -474,19 +470,10 @@ watch(isContextLimitReached, (limitReached) => {
 <template>
     <div
         v-show="showInput"
-        :style="
-            screenWidth > 720
-                ? isCollapsed
-                    ? 'left:60px;'
-                    : 'left:270px;'
-                : 'left:0px;'
-        "
-        class="z-20 bottom-0 right-0 fixed"
+        class="z-20 bottom-0 right-0 absolute w-full"
         :class="pastePreview?.show ? 'pt-2' : ''"
     >
-        <div
-            class="flex flex-col gap-y-4 items-center justify-center px-2 sm:px-5"
-        >
+        <div class="flex flex-col gap-y-4 items-center justify-center">
             <!-- Responsive Scroll to Bottom Button -->
             <button
                 v-if="
