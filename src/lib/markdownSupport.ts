@@ -1,6 +1,6 @@
 import hljs from "highlight.js";
 import "highlight.js/styles/night-owl.css";
-import { marked } from 'marked';
+import { marked } from "marked";
 
 /**
  * Enhanced Markdown Rendering with Full Support including Advanced Image Features
@@ -21,9 +21,9 @@ marked.use({
 
       return `
         <div class="image-container my-4">
-          <img 
-            src="${href}" 
-            alt="${text || 'Image'}" 
+          <img
+            src="${href}"
+            alt="${text || "Image"}"
             ${titleAttr}
             ${loadingAttr}
             class="max-w-[300px] h-auto rounded-lg shadow-md hover:shadow-lg transition-all duration-200 cursor-zoom-in border border-gray-200 dark:border-gray-700"
@@ -32,17 +32,17 @@ marked.use({
           >
           <div style="display:none;" class="text-gray-600 dark:text-gray-400 p-4 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-800">
             <i class="pi pi-image text-2xl mb-2"></i>
-            <p>Failed to load: ${text || 'Image'}</p>
+            <p>Failed to load: ${text || "Image"}</p>
           </div>
-          ${title ? `<p class="text-sm text-gray-500 dark:text-gray-400 mt-2 text-center italic">${title}</p>` : ''}
+          ${title ? `<p class="text-sm text-gray-500 dark:text-gray-400 mt-2 text-center italic">${title}</p>` : ""}
         </div>
       `;
     },
     link({ href, title, text }) {
       const titleAttr = title ? ` title="${title}"` : "";
       return `<a href="${href}" class="text-blue-600 underline hover:text-blue-800 link-with-preview" ${titleAttr} target="_blank" rel="noopener noreferrer">${text}</a>`;
-    }
-  }
+    },
+  },
 });
 
 // Process iframes and embeds (YouTube, Vimeo, etc.)
@@ -105,11 +105,11 @@ const processTaskLists = (content: string): string => {
   return content
     .replace(
       /^- \[ \] (.+)$/gm,
-      '<li class="task-list-item flex items-start gap-2 my-1"><input type="checkbox" disabled class="mt-1 accent-gray-400 dark:accent-gray-500 cursor-not-allowed"><span class="text-gray-700 dark:text-gray-300">$1</span></li>'
+      '<li class="task-list-item flex items-start gap-2 my-1"><input type="checkbox" disabled class="mt-1 accent-gray-400 dark:accent-gray-500 cursor-not-allowed"><span class="text-gray-700 dark:text-gray-300">$1</span></li>',
     )
     .replace(
       /^- \[x\] (.+)$/gm,
-      '<li class="task-list-item flex items-start gap-2 my-1"><input type="checkbox" checked disabled class="mt-1 accent-blue-500 dark:accent-blue-400 cursor-not-allowed"><span class="line-through text-gray-500 dark:text-gray-500">$1</span></li>'
+      '<li class="task-list-item flex items-start gap-2 my-1"><input type="checkbox" checked disabled class="mt-1 accent-blue-500 dark:accent-blue-400 cursor-not-allowed"><span class="line-through text-gray-500 dark:text-gray-500">$1</span></li>',
     );
 };
 
@@ -144,7 +144,7 @@ const processCallouts = (content: string): string => {
     </div>
   </div>
 </div>`;
-    }
+    },
   );
 };
 
@@ -192,7 +192,7 @@ const processAbbreviations = (content: string): string => {
     (match, abbr, title) => {
       abbreviations[abbr] = title;
       return "";
-    }
+    },
   );
 
   // Replace abbreviations with abbr tags
@@ -200,7 +200,7 @@ const processAbbreviations = (content: string): string => {
     const regex = new RegExp(`\\b${abbr}\\b`, "g");
     content = content.replace(
       regex,
-      `<abbr title="${title}" class="border-b border-dotted border-gray-400 dark:border-gray-500 cursor-help">${abbr}</abbr>`
+      `<abbr title="${title}" class="border-b border-dotted border-gray-400 dark:border-gray-500 cursor-help">${abbr}</abbr>`,
     );
   });
 
@@ -221,7 +221,7 @@ const processDefinitionLists = (content: string): string => {
 const processStrikethrough = (content: string): string => {
   return content.replace(
     /~~(.+?)~~/g,
-    '<del class="line-through text-gray-500 dark:text-gray-500">$1</del>'
+    '<del class="line-through text-gray-500 dark:text-gray-500">$1</del>',
   );
 };
 
@@ -229,7 +229,7 @@ const processStrikethrough = (content: string): string => {
 const processHighlights = (content: string): string => {
   return content.replace(
     /==(.+?)==/g,
-    '<mark class="bg-yellow-200 dark:bg-yellow-500/30 px-1 rounded">$1</mark>'
+    '<mark class="bg-yellow-200 dark:bg-yellow-500/30 px-1 rounded">$1</mark>',
   );
 };
 
@@ -244,7 +244,7 @@ const processSubSup = (content: string): string => {
 const processKeyboard = (content: string): string => {
   return content.replace(
     /\[\[(.+?)\]\]/g,
-    '<kbd class="px-2 py-1 text-xs font-mono bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded shadow-sm">$1</kbd>'
+    '<kbd class="px-2 py-1 text-xs font-mono bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded shadow-sm">$1</kbd>',
   );
 };
 
@@ -276,13 +276,13 @@ const processMath = (content: string): string => {
   // Inline math: $...$
   content = content.replace(
     /\$([^\$]+)\$/g,
-    '<span class="math inline-math font-mono text-sm bg-gray-100 dark:bg-gray-800 px-1 rounded">$1</span>'
+    '<span class="math inline-math font-mono text-sm bg-gray-100 dark:bg-gray-800 px-1 rounded">$1</span>',
   );
 
   // Block math: $$...$$
   content = content.replace(
     /\$\$([\s\S]+?)\$\$/g,
-    '<div class="math block-math my-4 p-4 bg-gray-100 dark:bg-gray-800 rounded-lg overflow-x-auto"><code class="font-mono text-sm">$1</code></div>'
+    '<div class="math block-math my-4 p-4 bg-gray-100 dark:bg-gray-800 rounded-lg overflow-x-auto"><code class="font-mono text-sm">$1</code></div>',
   );
 
   return content;
@@ -309,15 +309,15 @@ const processImages = (content: string): string => {
           return `<div class="image-container my-4">
   <a href="${linkUrl}" target="_blank" rel="noopener noreferrer" class="block">
     <img src="${imageUrl}" alt="${
-            alt || "Image"
-          }" loading="lazy" class="max-w-full h-auto rounded-lg shadow-md hover:shadow-lg transition-all duration-200 cursor-pointer border border-gray-200 dark:border-gray-700" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+      alt || "Image"
+    }" loading="lazy" class="max-w-full h-auto rounded-lg shadow-md hover:shadow-lg transition-all duration-200 cursor-pointer border border-gray-200 dark:border-gray-700" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
     <div style="display:none;" class="text-gray-600 dark:text-gray-400 p-4 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-800">
       <i class="pi pi-image text-2xl mb-2"></i>
       <p>Failed to load: ${alt || "Image"}</p>
     </div>
   </a>
 </div>`;
-        }
+        },
       )
 
       // 2. Images with width/height specification: ![alt](src =100x200)
@@ -326,14 +326,14 @@ const processImages = (content: string): string => {
         (match, alt, url, width, height) => {
           return `<div class="image-container my-4">
   <img src="${url}" alt="${
-            alt || "Image"
-          }" width="${width}" height="${height}" loading="lazy" class="rounded-lg shadow-md hover:shadow-lg transition-all duration-200 cursor-zoom-in border border-gray-200 dark:border-gray-700" onclick="window.open('${url}', '_blank')" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+    alt || "Image"
+  }" width="${width}" height="${height}" loading="lazy" class="rounded-lg shadow-md hover:shadow-lg transition-all duration-200 cursor-zoom-in border border-gray-200 dark:border-gray-700" onclick="window.open('${url}', '_blank')" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
   <div style="display:none;" class="text-gray-600 dark:text-gray-400 p-4 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-800">
     <i class="pi pi-image text-2xl mb-2"></i>
     <p>Failed to load: ${alt || "Image"}</p>
   </div>
 </div>`;
-        }
+        },
       )
 
       // 3. Images with width only: ![alt](src =100)
@@ -342,14 +342,14 @@ const processImages = (content: string): string => {
         (match, alt, url, width) => {
           return `<div class="image-container my-4">
   <img src="${url}" alt="${
-            alt || "Image"
-          }" width="${width}" loading="lazy" class="h-auto rounded-lg shadow-md hover:shadow-lg transition-all duration-200 cursor-zoom-in border border-gray-200 dark:border-gray-700" onclick="window.open('${url}', '_blank')" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+    alt || "Image"
+  }" width="${width}" loading="lazy" class="h-auto rounded-lg shadow-md hover:shadow-lg transition-all duration-200 cursor-zoom-in border border-gray-200 dark:border-gray-700" onclick="window.open('${url}', '_blank')" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
   <div style="display:none;" class="text-gray-600 dark:text-gray-400 p-4 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-800">
     <i class="pi pi-image text-2xl mb-2"></i>
     <p>Failed to load: ${alt || "Image"}</p>
   </div>
 </div>`;
-        }
+        },
       )
 
       // 4. Float left images: ![alt](src){.float-left}
@@ -358,14 +358,14 @@ const processImages = (content: string): string => {
         (match, alt, url) => {
           return `<div class="image-container my-2 float-left mr-4 mb-4 max-w-xs">
   <img src="${url}" alt="${
-            alt || "Image"
-          }" loading="lazy" class="w-full h-auto rounded-lg shadow-md hover:shadow-lg transition-all duration-200 cursor-zoom-in border border-gray-200 dark:border-gray-700" onclick="window.open('${url}', '_blank')" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+    alt || "Image"
+  }" loading="lazy" class="w-full h-auto rounded-lg shadow-md hover:shadow-lg transition-all duration-200 cursor-zoom-in border border-gray-200 dark:border-gray-700" onclick="window.open('${url}', '_blank')" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
   <div style="display:none;" class="text-gray-600 dark:text-gray-400 p-4 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-800">
     <i class="pi pi-image text-2xl mb-2"></i>
     <p>Failed to load: ${alt || "Image"}</p>
   </div>
 </div>`;
-        }
+        },
       )
 
       // 5. Float right images: ![alt](src){.float-right}
@@ -374,22 +374,22 @@ const processImages = (content: string): string => {
         (match, alt, url) => {
           return `<div class="image-container my-2 float-right ml-3 mb-4 max-w-xs">
   <img src="${url}" alt="${
-            alt || "Image"
-          }" loading="lazy" class="w-full h-auto rounded-lg shadow-md hover:shadow-lg transition-all duration-200 cursor-zoom-in border border-gray-200 dark:border-gray-700" onclick="window.open('${url}', '_blank')" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+    alt || "Image"
+  }" loading="lazy" class="w-full h-auto rounded-lg shadow-md hover:shadow-lg transition-all duration-200 cursor-zoom-in border border-gray-200 dark:border-gray-700" onclick="window.open('${url}', '_blank')" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
   <div style="display:none;" class="text-gray-600 dark:text-gray-400 p-4 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-800">
     <i class="pi pi-image text-2xl mb-2"></i>
     <p>Failed to load: ${alt || "Image"}</p>
   </div>
 </div>`;
-        }
+        },
       )
 
       // 6. Centered images: ![alt](src){.center}
       .replace(/!\[([^\]]*)\]\(([^)\s]+)\)\{\.center\}/g, (match, alt, url) => {
         return `<div class="image-container my-4 flex justify-center">
   <img src="${url}" alt="${
-          alt || "Image"
-        }" loading="lazy" class="max-w-full h-auto rounded-lg shadow-md hover:shadow-lg transition-all duration-200 cursor-zoom-in border border-gray-200 dark:border-gray-700" onclick="window.open('${url}', '_blank')" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+    alt || "Image"
+  }" loading="lazy" class="max-w-full h-auto rounded-lg shadow-md hover:shadow-lg transition-all duration-200 cursor-zoom-in border border-gray-200 dark:border-gray-700" onclick="window.open('${url}', '_blank')" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
   <div style="display:none;" class="text-gray-600 dark:text-gray-400 p-4 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-800">
     <i class="pi pi-image text-2xl mb-2"></i>
     <p>Failed to load: ${alt || "Image"}</p>
@@ -401,8 +401,8 @@ const processImages = (content: string): string => {
       .replace(/!\[([^\]]*)\]\(([^)\s]+)\)\{\.small\}/g, (match, alt, url) => {
         return `<div class="image-container my-4">
   <img src="${url}" alt="${
-          alt || "Image"
-        }" loading="lazy" class="max-w-48 h-auto rounded-lg shadow-md hover:shadow-lg transition-all duration-200 cursor-zoom-in border border-gray-200 dark:border-gray-700" onclick="window.open('${url}', '_blank')" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+    alt || "Image"
+  }" loading="lazy" class="max-w-48 h-auto rounded-lg shadow-md hover:shadow-lg transition-all duration-200 cursor-zoom-in border border-gray-200 dark:border-gray-700" onclick="window.open('${url}', '_blank')" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
   <div style="display:none;" class="text-gray-600 dark:text-gray-400 p-4 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-800">
     <i class="pi pi-image text-2xl mb-2"></i>
     <p>Failed to load: ${alt || "Image"}</p>
@@ -414,8 +414,8 @@ const processImages = (content: string): string => {
       .replace(/!\[([^\]]*)\]\(([^)\s]+)\)\{\.medium\}/g, (match, alt, url) => {
         return `<div class="image-container my-4">
   <img src="${url}" alt="${
-          alt || "Image"
-        }" loading="lazy" class="max-w-md h-auto rounded-lg shadow-md hover:shadow-lg transition-all duration-200 cursor-zoom-in border border-gray-200 dark:border-gray-700" onclick="window.open('${url}', '_blank')" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+    alt || "Image"
+  }" loading="lazy" class="max-w-md h-auto rounded-lg shadow-md hover:shadow-lg transition-all duration-200 cursor-zoom-in border border-gray-200 dark:border-gray-700" onclick="window.open('${url}', '_blank')" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
   <div style="display:none;" class="text-gray-600 dark:text-gray-400 p-4 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-800">
     <i class="pi pi-image text-2xl mb-2"></i>
     <p>Failed to load: ${alt || "Image"}</p>
@@ -427,8 +427,8 @@ const processImages = (content: string): string => {
       .replace(/!\[([^\]]*)\]\(([^)\s]+)\)\{\.large\}/g, (match, alt, url) => {
         return `<div class="image-container my-4">
   <img src="${url}" alt="${
-          alt || "Image"
-        }" loading="lazy" class="max-w-4xl h-auto rounded-lg shadow-md hover:shadow-lg transition-all duration-200 cursor-zoom-in border border-gray-200 dark:border-gray-700" onclick="window.open('${url}', '_blank')" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+    alt || "Image"
+  }" loading="lazy" class="max-w-4xl h-auto rounded-lg shadow-md hover:shadow-lg transition-all duration-200 cursor-zoom-in border border-gray-200 dark:border-gray-700" onclick="window.open('${url}', '_blank')" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
   <div style="display:none;" class="text-gray-600 dark:text-gray-400 p-4 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-800">
     <i class="pi pi-image text-2xl mb-2"></i>
     <p>Failed to load: ${alt || "Image"}</p>
@@ -440,8 +440,8 @@ const processImages = (content: string): string => {
       .replace(/!\[([^\]]*)\]\(([^)\s]+)\)\{\.full\}/g, (match, alt, url) => {
         return `<div class="image-container my-4 w-full">
   <img src="${url}" alt="${
-          alt || "Image"
-        }" loading="lazy" class="w-full h-auto rounded-lg shadow-md hover:shadow-lg transition-all duration-200 cursor-zoom-in border border-gray-200 dark:border-gray-700" onclick="window.open('${url}', '_blank')" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+    alt || "Image"
+  }" loading="lazy" class="w-full h-auto rounded-lg shadow-md hover:shadow-lg transition-all duration-200 cursor-zoom-in border border-gray-200 dark:border-gray-700" onclick="window.open('${url}', '_blank')" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
   <div style="display:none;" class="text-gray-600 dark:text-gray-400 p-4 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-800">
     <i class="pi pi-image text-2xl mb-2"></i>
     <p>Failed to load: ${alt || "Image"}</p>
@@ -453,8 +453,8 @@ const processImages = (content: string): string => {
       .replace(/!\[([^\]]*)\]\(([^)\s]+)\)\{\.circle\}/g, (match, alt, url) => {
         return `<div class="image-container my-4 flex justify-center">
   <img src="${url}" alt="${
-          alt || "Image"
-        }" loading="lazy" class="w-32 h-32 rounded-full object-cover shadow-md hover:shadow-lg transition-all duration-200 cursor-zoom-in border-2 border-gray-200 dark:border-gray-700" onclick="window.open('${url}', '_blank')" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+    alt || "Image"
+  }" loading="lazy" class="w-32 h-32 rounded-full object-cover shadow-md hover:shadow-lg transition-all duration-200 cursor-zoom-in border-2 border-gray-200 dark:border-gray-700" onclick="window.open('${url}', '_blank')" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
   <div style="display:none;" class="text-gray-600 dark:text-gray-400 p-4 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-800">
     <i class="pi pi-image text-2xl mb-2"></i>
     <p>Failed to load: ${alt || "Image"}</p>
@@ -466,8 +466,8 @@ const processImages = (content: string): string => {
       .replace(/!\[([^\]]*)\]\(([^)\s]+)\)\{\.border\}/g, (match, alt, url) => {
         return `<div class="image-container my-4">
   <img src="${url}" alt="${
-          alt || "Image"
-        }" loading="lazy" class="max-w-full h-auto rounded-lg border-4 border-gray-300 dark:border-gray-600 shadow-md hover:shadow-lg transition-all duration-200 cursor-zoom-in" onclick="window.open('${url}', '_blank')" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+    alt || "Image"
+  }" loading="lazy" class="max-w-full h-auto rounded-lg border-4 border-gray-300 dark:border-gray-600 shadow-md hover:shadow-lg transition-all duration-200 cursor-zoom-in" onclick="window.open('${url}', '_blank')" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
   <div style="display:none;" class="text-gray-600 dark:text-gray-400 p-4 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-800">
     <i class="pi pi-image text-2xl mb-2"></i>
     <p>Failed to load: ${alt || "Image"}</p>
@@ -479,8 +479,8 @@ const processImages = (content: string): string => {
       .replace(/!\[([^\]]*)\]\(([^)\s]+)\)\{\.shadow\}/g, (match, alt, url) => {
         return `<div class="image-container my-4">
   <img src="${url}" alt="${
-          alt || "Image"
-        }" loading="lazy" class="max-w-full h-auto rounded-lg shadow-2xl hover:shadow-3xl transition-all duration-200 cursor-zoom-in" onclick="window.open('${url}', '_blank')" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+    alt || "Image"
+  }" loading="lazy" class="max-w-full h-auto rounded-lg shadow-2xl hover:shadow-3xl transition-all duration-200 cursor-zoom-in" onclick="window.open('${url}', '_blank')" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
   <div style="display:none;" class="text-gray-600 dark:text-gray-400 p-4 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-800">
     <i class="pi pi-image text-2xl mb-2"></i>
     <p>Failed to load: ${alt || "Image"}</p>
@@ -494,14 +494,14 @@ const processImages = (content: string): string => {
         (match, alt, url, className) => {
           return `<div class="image-container my-4">
   <img src="${url}" alt="${
-            alt || "Image"
-          }" loading="lazy" class="${className} max-w-full h-auto rounded-lg shadow-md hover:shadow-lg transition-all duration-200 cursor-zoom-in" onclick="window.open('${url}', '_blank')" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+    alt || "Image"
+  }" loading="lazy" class="${className} max-w-full h-auto rounded-lg shadow-md hover:shadow-lg transition-all duration-200 cursor-zoom-in" onclick="window.open('${url}', '_blank')" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
   <div style="display:none;" class="text-gray-600 dark:text-gray-400 p-4 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-800">
     <i class="pi pi-image text-2xl mb-2"></i>
     <p>Failed to load: ${alt || "Image"}</p>
   </div>
 </div>`;
-        }
+        },
       )
 
       // 15. Standard Markdown images with title: ![alt](src "title") - MUST BE LAST
@@ -514,8 +514,8 @@ const processImages = (content: string): string => {
 
           return `<div class="image-container my-4">
   <img src="${url}" alt="${
-            alt || "Image"
-          }"${titleAttr}${loadingAttr} class="max-w-full max-h-auto max-md:h-[300px] max-md:object-cover rounded-lg shadow-md hover:shadow-lg transition-all duration-200 cursor-zoom-in border border-gray-200 dark:border-gray-700" onclick="window.open('${url}', '_blank')" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+    alt || "Image"
+  }"${titleAttr}${loadingAttr} class="max-w-full max-h-auto max-md:h-[300px] max-md:object-cover rounded-lg shadow-md hover:shadow-lg transition-all duration-200 cursor-zoom-in border border-gray-200 dark:border-gray-700" onclick="window.open('${url}', '_blank')" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
   <div style="display:none;" class="text-gray-600 dark:text-gray-400 p-4 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-800">
     <i class="pi pi-image text-2xl mb-2"></i>
     <p>Failed to load: ${alt || "Image"}</p>
@@ -526,7 +526,7 @@ const processImages = (content: string): string => {
       : ""
   }
 </div>`;
-        }
+        },
       )
   );
 };
@@ -565,7 +565,7 @@ const processTable = (content: string): string => {
       line
         .split("|")
         .filter((cell) => cell.trim())
-        .map((cell) => cell.trim())
+        .map((cell) => cell.trim()),
     );
 
     // Build table HTML
@@ -596,64 +596,69 @@ const processTable = (content: string): string => {
   });
 };
 
-const processHeaders = (content: string): string =>{
-  return content.replace(
+const processHeaders = (content: string): string => {
+  return content
+    .replace(
       /^###### (.*$)/gm,
-      '<h6 class="text-sm text-wrap break-words font-semibold text-gray-900 dark:text-gray-100 mb-1 mt-2">$1</h6>'
+      '<h6 class="text-sm text-wrap break-words font-semibold text-gray-900 dark:text-gray-100 mb-1 mt-2">$1</h6>',
     )
     .replace(
       /^##### (.*$)/gm,
-      '<h5 class="text-base text-wrap break-words font-semibold text-gray-900 dark:text-gray-100 mb-2 mt-3">$1</h5>'
+      '<h5 class="text-base text-wrap break-words font-semibold text-gray-900 dark:text-gray-100 mb-2 mt-3">$1</h5>',
     )
     .replace(
       /^#### (.*$)/gm,
-      '<h4 class="text-base text-wrap break-words font-semibold text-gray-900 dark:text-gray-100 mb-2 mt-3">$1</h4>'
+      '<h4 class="text-base text-wrap break-words font-semibold text-gray-900 dark:text-gray-100 mb-2 mt-3">$1</h4>',
     )
     .replace(
       /^### (.*$)/gm,
-      '<h3 class="text-lg text-wrap break-words font-semibold text-gray-900 dark:text-gray-100 mb-2 mt-4">$1</h3>'
+      '<h3 class="text-lg text-wrap break-words font-semibold text-gray-900 dark:text-gray-100 mb-2 mt-4">$1</h3>',
     )
     .replace(
       /^## (.*$)/gm,
-      '<h2 class="text-xl text-wrap break-words font-bold text-gray-900 dark:text-gray-100 mb-3 mt-6">$1</h2>'
+      '<h2 class="text-xl text-wrap break-words font-bold text-gray-900 dark:text-gray-100 mb-3 mt-6">$1</h2>',
     )
     .replace(
       /^# (.*$)/gm,
-      '<h1 class="text-2xl text-wrap break-words font-bold text-gray-900 dark:text-gray-100 mb-4 mt-8">$1</h1>'
+      '<h1 class="text-2xl text-wrap break-words font-bold text-gray-900 dark:text-gray-100 mb-4 mt-8">$1</h1>',
     );
-}
+};
 
-const horizontalRules=(content: string): string =>{
+const horizontalRules = (content: string): string => {
   return content.replace(
     /^(---|\*\*\*|___)$/gm,
-    '<hr class="border-t border-gray-300 dark:border-gray-600 my-3">'
+    '<hr class="border-t border-gray-300 dark:border-gray-600 my-3">',
   );
-}
+};
 
-// Links with title support 
+// Links with title support
 const processLinks = (content: string): string => {
   return content.replace(
     /\[([^\]]+)\]\(([^)"]+)(?:\s+"([^"]+)")?\)/g,
     (match, text, url, title) => {
       const titleAttr = title ? ` title="${title}"` : "";
       return `<a href="${url}" class="text-blue-600 underline hover:text-blue-800 link-with-preview" ${titleAttr} target="_blank" rel="noopener noreferrer">${
-        text.length>60? text.slice(0,60) + "...":text
+        text.length > 60 ? text.slice(0, 60) + "..." : text
       }</a>`;
-    }
+    },
   );
-}
+};
 
-const inlineCode =(escapeHtml: (unsafe: string)=> string,inlineCodePlaceholders: string[],content: string): string=>{
+const inlineCode = (
+  escapeHtml: (unsafe: string) => string,
+  inlineCodePlaceholders: string[],
+  content: string,
+): string => {
   return content.replace(/`([^`]+)`/g, (match, code) => {
     const placeholder = `___INLINE_CODE_${inlineCodePlaceholders.length}___`;
     inlineCodePlaceholders.push(
       `<code class="inline-code bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded text-sm font-mono text-red-600 dark:text-red-400">${escapeHtml(
-        code
-      )}</code>`
+        code,
+      )}</code>`,
     );
     return placeholder;
-  })
-}
+  });
+};
 
 function renderMarkdown(text: string): string {
   if (!text) return "";
@@ -709,7 +714,10 @@ function renderMarkdown(text: string): string {
         <button class="copy-button absolute top-2 right-2 bg-gray-700 text-white px-3 py-1 rounded text-xs hover:bg-gray-600 transition-colors"
           data-code="${encodeURIComponent(code.trim())}"
         >Copy</button>
-      </div> 
+        <button class="copy-button absolute top-2 right-2 bg-gray-700 text-white px-3 py-1 rounded text-xs hover:bg-gray-600 transition-colors"
+                  data-code="${encodeURIComponent(code.trim())}"
+                >Copy</button>
+      </div>
     `);
 
     return placeholder;
@@ -717,7 +725,7 @@ function renderMarkdown(text: string): string {
 
   // Process inline code (`code`)
   html = inlineCode(escapeHtml, inlineCodePlaceholders, html);
-  
+
   const protectedParts: string[] = [];
 
   // Protect code block placeholders
@@ -764,12 +772,11 @@ function renderMarkdown(text: string): string {
   // Process basic markdown with marked.js (including images)
   // html = marked.parse(html) as string;
 
-
-  // Headers (H1-H6)  
+  // Headers (H1-H6)
   html = processHeaders(html);
 
-  // Horizontal rules  
-  html = horizontalRules(html)
+  // Horizontal rules
+  html = horizontalRules(html);
 
   // Inline formatting
   html = processStrikethrough(html); // Strikethrough
@@ -779,39 +786,39 @@ function renderMarkdown(text: string): string {
   html = processEmojis(html); // Emoji shortcodes
   html = processMath(html); // Math expressions
 
-  // Bold and italic  
+  // Bold and italic
   html = html
     .replace(
       /\*\*\*(.+?)\*\*\*/g,
-      '<strong class="font-bold text-gray-900 dark:text-gray-100"><em class="italic">$1</em></strong>'
+      '<strong class="font-bold text-gray-900 dark:text-gray-100"><em class="italic">$1</em></strong>',
     )
     .replace(
       /\*\*(.+?)\*\*/g,
-      '<strong class="font-bold text-gray-900 dark:text-gray-100">$1</strong>'
+      '<strong class="font-bold text-gray-900 dark:text-gray-100">$1</strong>',
     )
     .replace(
       /\*(.+?)\*/g,
-      '<em class="italic text-gray-800 dark:text-gray-200">$1</em>'
+      '<em class="italic text-gray-800 dark:text-gray-200">$1</em>',
     );
 
-  // Lists  
+  // Lists
   html = html.replace(
     /^[\*\-\+] (.+$)/gm,
-    '<li class="ml-3 leading-relaxed">• $1</li>'
+    '<li class="ml-3 leading-relaxed">• $1</li>',
   );
   html = html.replace(
     /^\d+\. (.+$)/gm,
-    '<li class="ml-3 list-decimal leading-relaxed">$1</li>'
+    '<li class="ml-3 list-decimal leading-relaxed">$1</li>',
   );
 
   // Wrap lists
   html = html.replace(
     /(<li class="ml-3 leading-relaxed">• .*?<\/li>(?:\s*<li class="ml-3 leading-relaxed">• .*?<\/li>)*)/gs,
-    '<ul class="my-3 space-y-1 text-gray-700 dark:text-gray-300">$1</ul>'
+    '<ul class="my-3 space-y-1 text-gray-700 dark:text-gray-300">$1</ul>',
   );
   html = html.replace(
     /(<li class="ml-3 list-decimal leading-relaxed">.*?<\/li>(?:\s*<li class="ml-3 list-decimal leading-relaxed">.*?<\/li>)*)/gs,
-    '<ol class="my-3 ml-4 space-y-1 text-gray-700 dark:text-gray-300">$1</ol>'
+    '<ol class="my-3 ml-4 space-y-1 text-gray-700 dark:text-gray-300">$1</ol>',
   );
 
   // Paragraphs
@@ -830,17 +837,17 @@ function renderMarkdown(text: string): string {
       trimmedLine.startsWith("<") ||
       trimmedLine.includes("___CODE_BLOCK_") ||
       trimmedLine.includes("___INLINE_CODE_") ||
-      line.trim() === '' ||
+      line.trim() === "" ||
       line.match(/^[\*\-\+]\s/) || // List items
-      line.match(/^\d+\.\s/) ||    // Ordered list items
-      line.match(/^#+\s/) ||       // Headers
-      line.match(/^>/) ||          // Blockquotes
+      line.match(/^\d+\.\s/) || // Ordered list items
+      line.match(/^#+\s/) || // Headers
+      line.match(/^>/) || // Blockquotes
       line.match(/^---|^\*\*\*|^___/) // Horizontal rules
     ) {
       processedLines.push(trimmedLine);
     } else {
       processedLines.push(
-        `<p class="my-3 text-wrap break-words max-w-full text-gray-700 dark:text-gray-200 leading-relaxed">${trimmedLine}</p>`
+        `<p class="my-3 text-wrap break-words max-w-full text-gray-700 dark:text-gray-200 leading-relaxed">${trimmedLine}</p>`,
       );
     }
   }
