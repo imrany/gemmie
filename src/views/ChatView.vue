@@ -481,6 +481,15 @@ async function handleSubmit(
         (chat) => chat.id === submissionChatId,
     );
 
+    if (
+        submissionChat &&
+        (submissionChat?.messages === null ||
+            submissionChat?.messages === undefined ||
+            !submissionChat?.messages)
+    ) {
+        submissionChat.messages = [];
+    }
+
     // Create new chat if needed
     if (!submissionChatId || !submissionChat) {
         const newChatId = createNewChat(promptValue);
@@ -616,11 +625,15 @@ async function handleSubmit(
                 });
                 return;
             }
-        }
 
-        // Initialize messages array if missing
-        if (submissionChat && !submissionChat.messages) {
-            submissionChat.messages = [];
+            // Initialize messages array if missing
+            if (
+                submissionChat.messages === null ||
+                submissionChat.messages === undefined ||
+                !submissionChat.messages
+            ) {
+                submissionChat.messages = [];
+            }
         }
 
         // Add temporary message to chat
