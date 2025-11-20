@@ -1,41 +1,93 @@
 <script setup lang="ts">
+import { detectContentType } from "@/lib/previewPasteContent";
 import hljs from "highlight.js/lib/common";
+import { computed } from "vue";
+import { inject } from "vue";
 
-const { content, wordCount, charCount, isClickable } = defineProps<{
+const { openPreview, removePastePreview } = inject("globalState") as {
+    openPreview: (
+        code: string,
+        language: string,
+        metadata?: {
+            wordCount: number;
+            charCount: number;
+        },
+    ) => void;
+    removePastePreview: () => void;
+};
+
+const { content, isClickable } = defineProps<{
     content: string;
-    wordCount: number;
-    charCount: number;
     isClickable?: boolean;
 }>();
 
+const wordCount = computed(() => {
+    return content?.trim().split("#pastedText#")[1]?.split(/\s+/)?.length || 0;
+});
+const text = computed(() => {
+    return content?.trim()?.split("#pastedText#")[1]?.trim() || "";
+});
+const charCount = computed(() => {
+    return content?.trim()?.split("#pastedText#")[1]?.length || 0;
+});
+
 const preview =
-    content.length > 200 ? content.substring(0, 200) + "..." : content;
-// Proper HTML escaping
-const escapedPreview = preview;
-// .replace(/&/g, "&amp;")
-// .replace(/</g, "&lt;")
-// .replace(/>/g, "&gt;")
-// .replace(/"/g, "&quot;")
-// .replace(/'/g, "&#39;")
-// .replace(/\n/g, "<br>")
-// .replace(/\t/g, "&nbsp;&nbsp;&nbsp;&nbsp;");
+    charCount.value > 200 ? text.value.substring(0, 200) + "..." : text.value;
 
 // Generate unique ID for this component
 const componentId = `paste-${Math.random().toString(36).substring(2, 9)}`;
 const clickableClass = isClickable
-    ? "paste-preview-clickable cursor-pointer transition-colors duration-200"
+    ? "cursor-pointer transition-colors duration-200"
     : "";
+
+const language = computed(() => {
+    let contentType:
+        | "plaintext"
+        | "code"
+        | "json"
+        | "markdown"
+        | "xml"
+        | "html" = "plaintext";
+
+    if (typeof detectContentType === "function") {
+        contentType = detectContentType(text.value);
+    } else {
+        // Simple content type detection as fallback
+        if (
+            text.value.trim().startsWith("{") &&
+            text.value.trim().endsWith("}")
+        ) {
+            contentType = "json";
+        } else if (
+            text.value.includes("```") ||
+            text.value.includes("function") ||
+            text.value.includes("class")
+        ) {
+            contentType = "code";
+        } else if (text.value.includes("#") || text.value.includes("**")) {
+            contentType = "markdown";
+        } else if (text.value.includes("<") && text.value.includes(">")) {
+            contentType = "html";
+        }
+    }
+    return contentType;
+});
 </script>
 <template>
     <div
+        v-if="content && (wordCount > 100 || wordCount > 800)"
         :class="[
             'paste-preview border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden my-2 bg-gray-100 dark:bg-gray-900 hover:shadow-md transition-all duration-300 w-[250px]',
             clickableClass,
         ]"
         :id="componentId"
-        :data-paste-content="isClickable ? encodeURIComponent(content) : ''"
-        :data-word-count="isClickable ? wordCount : 0"
-        :data-char-count="isClickable ? charCount : 0"
+        @click="
+            if (isClickable)
+                openPreview(text, language, {
+                    wordCount,
+                    charCount,
+                });
+        "
     >
         <div class="w-full">
             <div
@@ -57,8 +109,8 @@ const clickableClass = isClickable
                         class="text-sm h-20 sm:h-24 overflow-hidden text-gray-800 dark:text-gray-200 transition-colors duration-200"
                     >
                         <code
-                            :class="`language-plaintext leading-relaxed break-words whitespace-pre-wrap `"
-                            v-html="escapedPreview ? hljs.highlight(escapedPreview, { language: 'plaintext' }).value : 'No paste content available'"
+                            :class="`language-${language} leading-relaxed break-words whitespace-pre-wrap `"
+                            v-html="preview ? hljs.highlight(preview, { language }).value : 'No paste content available'"
                         ></code>
                     </pre>
                     <div
@@ -80,7 +132,8 @@ const clickableClass = isClickable
                     }}</span>
                     <button
                         v-if="!isClickable"
-                        class="remove-paste-preview text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 underline font-medium transition-colors duration-200"
+                        @click="removePastePreview"
+                        class="text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 underline font-medium transition-colors duration-200"
                         type="button"
                     >
                         Remove

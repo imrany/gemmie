@@ -45,7 +45,6 @@ import {
 } from "@/lib/globals";
 import router from "@/router";
 import { copyPasteContent } from "@/lib/previewPasteContent";
-import PastePreviewModal from "@/components/Modals/PastePreviewModal.vue";
 import { useRoute } from "vue-router";
 import TextHightlightPopover from "@/components/TextHightlightPopover.vue";
 import {
@@ -71,7 +70,6 @@ import MarkdownRenderer from "@/components/ui/markdown/MarkdownRenderer.vue";
 import LinkPreviewComponent from "@/components/LinkPreview.vue";
 import EmptyChatView from "./EmptyChatView.vue";
 import PastePreview from "@/components/PastePreview.vue";
-import { useHandlePaste } from "@/composables/useHandlePaste";
 import { useVoiceRecord } from "@/composables/useVoiceRecord";
 import { usePagination } from "@/composables/usePagination";
 import { useMessage } from "@/composables/useMessage";
@@ -82,7 +80,8 @@ import NoChatFound from "@/components/NoChatFound.vue";
 
 // Inject global state
 const {
-    openPreview,
+    showPreviewSidebar,
+    handlePaste,
     isChatLoading,
     copiedIndex,
     shouldHaveLimit,
@@ -140,10 +139,11 @@ const {
     processLinksInUserPrompt,
     processLinksInResponse,
 } = inject("globalState") as {
+    showPreviewSidebar: Ref<boolean>;
     isChatLoading: Ref<boolean>;
-    openPreview: (code: string, language: string) => void;
     fallbackChatId: Ref<string>;
     showErrorSection: Ref<boolean>;
+    handlePaste: (event: ClipboardEvent) => void;
     copyResponse: (text: string, index?: number) => void;
     processLinksInUserPrompt: (index: number) => Promise<void>;
     processLinksInResponse: (index: number) => Promise<void>;
@@ -278,33 +278,8 @@ const {
 });
 
 const showSuggestionsDropup = ref(false);
-const showPasteModal = ref(false);
 const pastePreview = computed(() => {
     return pastePreviews.value.get(currentChatId.value) || null;
-});
-const currentPasteContent = ref<{
-    content: string;
-    wordCount: number;
-    charCount: number;
-    type: "text" | "code" | "json" | "markdown" | "xml" | "html";
-} | null>(null);
-const {
-    openPasteModal,
-    handlePastePreviewClick,
-    closePasteModal,
-    cleanupPastePreviewHandlers,
-    setupPastePreviewHandlers,
-    handleRemovePastePreview,
-    removePastePreview,
-    handlePaste,
-} = useHandlePaste({
-    currentChatId,
-    pastePreviews,
-    chatDrafts,
-    saveChatDrafts,
-    autoGrow,
-    currentPasteContent,
-    showPasteModal,
 });
 
 const deepSearchPagination = ref<
@@ -367,6 +342,16 @@ const suggestionPrompts = [
         prompt: "What are the latest global events?",
     },
 ];
+
+const chatContainerWidth = computed(() => {
+    if (screenWidth.value > 720) {
+        return showPreviewSidebar.value
+            ? "w-full ease-in-out transition-width duration-300"
+            : "w-[85%] ease-in-out transition-width duration-300";
+    } else {
+        return "w-full";
+    }
+});
 
 // Handle suggestion selection
 function selectSuggestion(prompt: string) {
@@ -1396,13 +1381,6 @@ function onEnter(e: KeyboardEvent) {
     }
 }
 
-// Keyboard handler for modal
-function handleModalKeydown(e: KeyboardEvent) {
-    if (e.key === "Escape" && showPasteModal.value) {
-        closePasteModal();
-    }
-}
-
 // Select input mode and handle special actions
 async function selectInputMode(
     mode: "web-search" | "deep-search" | "light-response",
@@ -1604,16 +1582,7 @@ onBeforeUnmount(() => {
     }
 
     // Remove keyboard listener
-    document.removeEventListener("keydown", handleModalKeydown);
     document.removeEventListener("click", handleClickOutside);
-
-    // Clean up paste preview handlers (use the enhanced cleanup function)
-    cleanupPastePreviewHandlers();
-
-    // Restore body scroll if modal is open
-    if (showPasteModal.value) {
-        document.body.style.overflow = "auto";
-    }
 
     // Clear debounce timers
     if (chatsDebounceTimer) {
@@ -1652,7 +1621,6 @@ onMounted(async () => {
 
     // Load cached data and setup handlers
     loadLinkPreviewCache();
-    setupPastePreviewHandlers();
 
     // Setup global functions
     if (typeof window !== "undefined") {
@@ -1670,9 +1638,7 @@ onMounted(async () => {
             };
         };
 
-        setupGlobalFunction("openPasteModal", openPasteModal);
         setupGlobalFunction("copyPasteContent", copyPasteContent);
-        setupGlobalFunction("removePastePreview", removePastePreview);
         setupGlobalFunction("playEmbeddedVideo", playEmbeddedVideo);
         setupGlobalFunction("pauseVideo", pauseVideo);
         setupGlobalFunction("resumeVideo", resumeVideo);
@@ -1698,7 +1664,6 @@ onMounted(async () => {
         }
     };
     document.addEventListener("click", copyListener);
-    document.addEventListener("keydown", handleModalKeydown);
 
     // Initialize core features
     initializeSpeechRecognition();
@@ -1797,10 +1762,7 @@ onMounted(async () => {
     onBeforeUnmount(() => {
         // Clean up event listeners
         document.removeEventListener("click", copyListener);
-        document.removeEventListener("keydown", handleModalKeydown);
         document.removeEventListener("click", handleClickOutside);
-        document.removeEventListener("click", handlePastePreviewClick);
-        document.removeEventListener("click", handleRemovePastePreview);
 
         // Clean up scroll listener
         if (scrollableElem.value) {
@@ -1829,11 +1791,6 @@ onMounted(async () => {
         // Clean up speech recognition
         if (isRecording.value) {
             stopVoiceRecording();
-        }
-
-        // Restore body scroll if modal is open
-        if (showPasteModal.value) {
-            document.body.style.overflow = "auto";
         }
 
         // Final sync if needed
@@ -1901,6 +1858,7 @@ onUnmounted(() => {
                     >
                         <!-- Empty State -->
                         <EmptyChatView
+                            :class="[chatContainerWidth]"
                             v-if="currentMessages.length === 0"
                             :suggestionPrompts="suggestionPrompts"
                             :selectSuggestion="selectSuggestion"
@@ -1912,7 +1870,7 @@ onUnmounted(() => {
                             :class="[
                                 'relative md:max-w-3xl min-h-[calc(100vh-200px)] max-w-[100vw] flex-grow no-scrollbar overflow-y-auto space-y-3 sm:space-y-4  scroll-container',
                                 scrollContainerPadding,
-                                screenWidth > 720 ? 'w-[85%]' : 'w-full',
+                                chatContainerWidth,
                             ]"
                         >
                             <div class="flex flex-col gap-1">
@@ -1925,55 +1883,13 @@ onUnmounted(() => {
                                     <!-- User Bubble -->
                                     <div class="flex w-full chat-message">
                                         <div class="flex flex-col w-full">
-                                            <div class="flex flex-col gap-">
-                                                <div
-                                                    v-if="
-                                                        item &&
-                                                        item.prompt &&
-                                                        (item?.prompt
-                                                            ?.trim()
-                                                            .split(/\s+/)
-                                                            .length > 100 ||
-                                                            item?.prompt
-                                                                ?.length > 800)
-                                                    "
-                                                    class="mb-3"
-                                                >
-                                                    <div
-                                                        class="flex justify-start"
-                                                    >
-                                                        <PastePreview
-                                                            :content="
-                                                                item?.prompt
-                                                                    ?.trim()
-                                                                    ?.split(
-                                                                        '#pastedText#',
-                                                                    )[1] || ''
-                                                            "
-                                                            :char-count="
-                                                                item?.prompt
-                                                                    ?.trim()
-                                                                    ?.split(
-                                                                        '#pastedText#',
-                                                                    )[1]
-                                                                    ?.length ||
-                                                                0
-                                                            "
-                                                            :word-count="
-                                                                item?.prompt
-                                                                    ?.trim()
-                                                                    .split(
-                                                                        '#pastedText#',
-                                                                    )[1]
-                                                                    ?.split(
-                                                                        /\s+/,
-                                                                    )?.length ||
-                                                                0
-                                                            "
-                                                            :is-clickable="true"
-                                                        />
-                                                    </div>
-                                                </div>
+                                            <div
+                                                class="flex justify-start mb-3"
+                                            >
+                                                <PastePreview
+                                                    :content="item?.prompt"
+                                                    :is-clickable="true"
+                                                />
                                             </div>
 
                                             <!-- User message bubble -->
@@ -2354,89 +2270,59 @@ onUnmounted(() => {
                         </div>
                     </div>
 
-                    <div
-                        :class="[
-                            'md:max-w-3xl max-w-[100vw]',
-                            screenWidth > 720 ? 'w-[85%]' : 'w-full',
-                        ]"
-                    >
-                        <!-- Input Area -->
-                        <InputArea
-                            :class="['px-2']"
-                            :is-loading="isLoading"
-                            :show-input="
-                                !(currentChat && currentChat?.is_read_only)
-                            "
-                            :is-recording="isRecording"
-                            :is-transcribing="isTranscribing"
-                            :transcribed-text="transcribedText"
-                            :microphone-permission="microphonePermission"
-                            :input-disabled="
-                                (currentChat && currentChat?.is_read_only) ||
-                                inputDisabled
-                            "
-                            :input-placeholder-text="inputPlaceholderText"
-                            :paste-preview="
-                                pastePreview
-                                    ? {
-                                          show: pastePreview.show,
-                                          content:
-                                              pastePreview.content
-                                                  ?.trim()
-                                                  ?.split('#pastedText#')[1] ||
-                                              '',
-                                          charCount:
-                                              pastePreview.content
-                                                  ?.trim()
-                                                  ?.split('#pastedText#')[1]
-                                                  ?.length || 0,
-                                          wordCount:
-                                              pastePreview.content
-                                                  ?.trim()
-                                                  .split('#pastedText#')[1]
-                                                  ?.split(/\s+/)?.length || 0,
-                                      }
-                                    : null
-                            "
-                            :show-input-mode-dropdown="showInputModeDropdown"
-                            :show-limit-exceeded-banner="
-                                showLimitExceededBanner
-                            "
-                            :show-upgrade-banner="showUpgradeBanner"
-                            :plan-status="planStatus"
-                            :FREE_REQUEST_LIMIT="FREE_REQUEST_LIMIT"
-                            :selected-contexts="ref(selectedContexts)"
-                            :show-scroll-down-button="ref(showScrollDownButton)"
-                            :scroll-button-position="ref(scrollButtonPosition)"
-                            @scroll-to-bottom="scrollToBottom"
-                            @submit="handleSubmit"
-                            @auto-grow="autoGrow"
-                            @handle-paste="handlePaste"
-                            @keydown="onEnter"
-                            @toggle-voice-recording="toggleVoiceRecording"
-                            @clear-voice-transcription="clearVoiceTranscription"
-                            @toggle-input-mode-dropdown="
-                                showInputModeDropdown = !showInputModeDropdown
-                            "
-                            @select-input-mode="selectInputMode"
-                            @navigate-to-upgrade="router.push('/upgrade')"
-                            @remove-context="
-                                (index: number) =>
-                                    selectedContexts.splice(index, 1)
-                            "
-                            @clear-all-contexts="clearContextReferences"
-                        />
-                    </div>
+                    <!-- Input Area -->
+                    <InputArea
+                        :class="['px-2']"
+                        :chat-container-width="chatContainerWidth"
+                        :is-loading="isLoading"
+                        :show-input="
+                            !(currentChat && currentChat?.is_read_only)
+                        "
+                        :is-recording="isRecording"
+                        :is-transcribing="isTranscribing"
+                        :transcribed-text="transcribedText"
+                        :microphone-permission="microphonePermission"
+                        :input-disabled="
+                            (currentChat && currentChat?.is_read_only) ||
+                            inputDisabled
+                        "
+                        :input-placeholder-text="inputPlaceholderText"
+                        :paste-preview="
+                            pastePreview
+                                ? {
+                                      show: pastePreview.show,
+                                      content: pastePreview.content,
+                                  }
+                                : null
+                        "
+                        :show-input-mode-dropdown="showInputModeDropdown"
+                        :show-limit-exceeded-banner="showLimitExceededBanner"
+                        :show-upgrade-banner="showUpgradeBanner"
+                        :plan-status="planStatus"
+                        :FREE_REQUEST_LIMIT="FREE_REQUEST_LIMIT"
+                        :selected-contexts="ref(selectedContexts)"
+                        :show-scroll-down-button="ref(showScrollDownButton)"
+                        :scroll-button-position="ref(scrollButtonPosition)"
+                        @scroll-to-bottom="scrollToBottom"
+                        @submit="handleSubmit"
+                        @auto-grow="autoGrow"
+                        @handle-paste="handlePaste"
+                        @keydown="onEnter"
+                        @toggle-voice-recording="toggleVoiceRecording"
+                        @clear-voice-transcription="clearVoiceTranscription"
+                        @toggle-input-mode-dropdown="
+                            showInputModeDropdown = !showInputModeDropdown
+                        "
+                        @select-input-mode="selectInputMode"
+                        @navigate-to-upgrade="router.push('/upgrade')"
+                        @remove-context="
+                            (index: number) => selectedContexts.splice(index, 1)
+                        "
+                        @clear-all-contexts="clearContextReferences"
+                    />
                 </div>
             </div>
         </div>
         <TextHightlightPopover />
-        <PastePreviewModal
-            :data="{
-                showPasteModal,
-                currentPasteContent,
-            }"
-            :closePasteModal="closePasteModal"
-        />
     </ProtectedPage>
 </template>

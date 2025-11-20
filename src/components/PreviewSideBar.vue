@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, onMounted } from "vue";
+import { ref, watch } from "vue";
 import { X, Code, Eye, Check, Copy } from "lucide-vue-next";
 import { Button } from "./ui/button";
 import type { Ref } from "vue";
@@ -12,7 +12,17 @@ const {
     previewCode,
     previewLanguage,
     closePreview,
+    metadata,
+    isCollapsed,
 } = inject("globalState") as {
+    isCollapsed: Ref<boolean>;
+    metadata: Ref<
+        | {
+              wordCount: number;
+              charCount: number;
+          }
+        | undefined
+    >;
     screenWidth: Ref<number>;
     showPreviewSidebar: Ref<boolean>;
     previewCode: Ref<string>;
@@ -20,19 +30,12 @@ const {
     closePreview: () => void;
 };
 
-const activeTab = ref<"preview" | "code">("preview");
+const activeTab = ref<"preview" | "code">(metadata?.value ? "code" : "preview");
 const copied = ref(false);
-const sidebarWidth = ref<number>(window.innerWidth * 0.4); // Initial width, can be adjusted
+const sidebarWidth = ref<number>(window.innerWidth * 0.5); // Initial width, can be adjusted
 const minWidth = 300; // Minimum width
 const maxWidth = window.innerWidth * 0.8; // Maximum width
 const isResizing = ref(false);
-
-// Reset to preview tab when sidebar opens
-watch(showPreviewSidebar, (newVal) => {
-    if (newVal) {
-        activeTab.value = "preview";
-    }
-});
 
 const copyToClipboard = async () => {
     try {
@@ -67,14 +70,49 @@ const stopResize = () => {
     document.removeEventListener("mouseup", stopResize);
 };
 
-onMounted(() => {
-    sidebarWidth.value = window.innerWidth * 0.4;
+watch(
+    isCollapsed,
+    (newValue) => {
+        if (!newValue) {
+            sidebarWidth.value = window.innerWidth * 0.4;
+            return;
+        }
+        sidebarWidth.value = window.innerWidth * 0.5;
+    },
+    {
+        immediate: true,
+    },
+);
+
+// Reset to preview tab when sidebar opens (unless metadata exists)
+watch(showPreviewSidebar, (newVal) => {
+    if (newVal) {
+        activeTab.value = metadata?.value ? "code" : "preview";
+    }
 });
+
+watch(
+    screenWidth,
+    (newVal) => {
+        if (newVal > 1120) {
+            sidebarWidth.value = window.innerWidth * 0.5;
+            return;
+        }
+
+        sidebarWidth.value = window.innerWidth * 0.4;
+    },
+    {
+        immediate: true,
+    },
+);
 </script>
 
 <template>
     <!-- Backdrop for mobile -->
-    <Transition name="backdrop" @after-leave="activeTab = 'preview'">
+    <Transition
+        name="backdrop"
+        @after-leave="activeTab = metadata ? 'code' : 'preview'"
+    >
         <div
             v-if="showPreviewSidebar"
             class="fixed inset-0 bg-black/50 z-40 md:hidden"
@@ -111,8 +149,9 @@ onMounted(() => {
                     class="flex-shrink-0 border-b border-gray-200 dark:border-gray-800"
                 >
                     <div class="flex items-center justify-between px-4 py-3">
-                        <!-- Tabs -->
+                        <!-- Tabs (Only show if no metadata - i.e., for code previews) -->
                         <div
+                            v-if="!metadata"
                             class="flex items-center gap-1.5 bg-gray-200 dark:bg-gray-800 p-1 rounded-lg"
                         >
                             <button
@@ -141,6 +180,18 @@ onMounted(() => {
                             </button>
                         </div>
 
+                        <!-- Title for pasted content -->
+                        <div
+                            v-else
+                            class="flex font-light text-xs items-center gap-2 text-gray-800 dark:text-gray-200"
+                        >
+                            <p>12.34 KB</p>
+                            •
+                            <p>{{ metadata.wordCount }} words</p>
+                            •
+                            <p>{{ metadata.charCount }} characters</p>
+                        </div>
+
                         <!-- Close Button -->
                         <Button
                             size="sm"
@@ -156,70 +207,89 @@ onMounted(() => {
 
                 <!-- Content Area -->
                 <div class="flex-1 overflow-hidden relative">
-                    <!-- Preview Tab -->
-                    <Transition name="fade" mode="out-in">
-                        <div
-                            v-if="activeTab === 'preview'"
-                            class="absolute inset-0"
-                            key="preview"
-                        >
-                            <iframe
-                                v-if="previewCode"
-                                :srcdoc="previewCode"
-                                class="w-full h-full border-0 bg-gray-100"
-                                sandbox="allow-scripts allow-forms allow-modals allow-popups allow-same-origin"
-                                title="HTML Preview"
-                            />
+                    <!-- Pasted Content View (when metadata exists) -->
+                    <div
+                        v-if="metadata"
+                        class="absolute inset-0 overflow-auto w-full bg-gray-800 custom-scrollbar"
+                    >
+                        <div class="relative min-h-full w-full">
+                            <!-- Content Display -->
+                            <pre class="px-4 py-4 text-sm">
+                                <code
+                                    :class="`language-${previewLanguage} leading-relaxed text-gray-300 break-words whitespace-pre-wrap`"
+                                    v-html="previewCode ? hljs.highlight(previewCode, { language: previewLanguage }).value : 'No code available'"
+                                ></code>
+                            </pre>
+                        </div>
+                    </div>
+
+                    <!-- Preview/Code Tabs (when no metadata) -->
+                    <template v-else>
+                        <Transition name="fade" mode="out-in">
+                            <!-- Preview Tab -->
+                            <div
+                                v-if="activeTab === 'preview'"
+                                class="absolute inset-0"
+                                key="preview"
+                            >
+                                <iframe
+                                    v-if="previewCode"
+                                    :srcdoc="previewCode"
+                                    class="w-full h-full border-0 bg-gray-100"
+                                    sandbox="allow-scripts allow-forms allow-modals allow-popups allow-same-origin"
+                                    title="HTML Preview"
+                                />
+                                <div
+                                    v-else
+                                    class="flex items-center bg-gray-100 dark:bg-gray-800 justify-center h-full text-gray-500 dark:text-gray-400"
+                                >
+                                    <div class="text-center">
+                                        <Eye
+                                            class="w-12 h-12 mx-auto mb-4 opacity-30"
+                                        />
+                                        <p class="text-sm font-medium">
+                                            No preview available
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Code Tab -->
                             <div
                                 v-else
-                                class="flex items-center bg-gray-100 dark:bg-gray-800 justify-center h-full text-gray-500 dark:text-gray-400"
+                                class="absolute inset-0 overflow-auto w-full bg-gray-800 custom-scrollbar"
+                                key="code"
                             >
-                                <div class="text-center">
-                                    <Eye
-                                        class="w-12 h-12 mx-auto mb-4 opacity-30"
-                                    />
-                                    <p class="text-sm font-medium">
-                                        No preview available
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Code Tab -->
-                        <div
-                            v-else
-                            class="absolute inset-0 overflow-auto w-full bg-gray-800 custom-scrollbar"
-                            key="code"
-                        >
-                            <div class="relative min-h-full w-full">
-                                <!-- Copy Button -->
-                                <div
-                                    class="sticky top-0 z-10 flex justify-end p-3"
-                                >
-                                    <button
-                                        @click="copyToClipboard"
-                                        class="inline-flex items-center gap-2 bg-gray-900 dark:bg-gray-200 hover:bg-gray-700 text-white dark:text-gray-800 px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200 shadow-lg hover:shadow-xl"
+                                <div class="relative min-h-full w-full">
+                                    <!-- Copy Button -->
+                                    <div
+                                        class="sticky top-0 z-10 flex justify-end p-3"
                                     >
-                                        <Check
-                                            v-if="copied"
-                                            :size="14"
-                                            class="text-green-400 dark:text-green-600"
-                                        />
-                                        <Copy v-else :size="14" />
-                                        <span>{{
-                                            copied ? "Copied!" : "Copy code"
-                                        }}</span>
-                                    </button>
-                                </div>
+                                        <button
+                                            @click="copyToClipboard"
+                                            class="inline-flex items-center gap-2 bg-gray-900 dark:bg-gray-200 hover:bg-gray-700 text-white dark:text-gray-800 px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200 shadow-lg hover:shadow-xl"
+                                        >
+                                            <Check
+                                                v-if="copied"
+                                                :size="14"
+                                                class="text-green-400 dark:text-green-600"
+                                            />
+                                            <Copy v-else :size="14" />
+                                            <span>{{
+                                                copied ? "Copied!" : "Copy code"
+                                            }}</span>
+                                        </button>
+                                    </div>
 
-                                <!-- Code Display -->
-                                <pre class="px-4 pb-4 text-sm"><code
-                                    :class="`language-${previewLanguage} leading-relaxed text-gray-300 `"
-                                    v-html="previewCode ? hljs.highlight(previewCode, { language: previewLanguage }).value : 'No code available'"
-                                ></code></pre>
+                                    <!-- Code Display -->
+                                    <pre class="px-4 pb-4 text-sm"><code
+                                        :class="`language-${previewLanguage} leading-relaxed text-gray-300 break-words whitespace-pre-wrap`"
+                                        v-html="previewCode ? hljs.highlight(previewCode, { language: previewLanguage }).value : 'No code available'"
+                                    ></code></pre>
+                                </div>
                             </div>
-                        </div>
-                    </Transition>
+                        </Transition>
+                    </template>
                 </div>
 
                 <!-- Footer -->
@@ -227,34 +297,46 @@ onMounted(() => {
                     class="flex-shrink-0 border-t border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 px-4 py-2.5"
                 >
                     <div class="flex items-center justify-between text-xs">
-                        <div class="flex items-center gap-2">
-                            <div
-                                class="w-1.5 h-1.5 rounded-full transition-all duration-300"
-                                :class="
-                                    activeTab === 'preview'
-                                        ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]'
-                                        : 'bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.6)]'
-                                "
-                            ></div>
+                        <!-- For pasted content -->
+                        <div
+                            v-if="metadata"
+                            class="flex items-center gap-4 text-gray-600 dark:text-gray-400"
+                        >
+                            <span>{{ metadata.wordCount }} words</span>
+                            <span>{{ metadata.charCount }} characters</span>
+                        </div>
+
+                        <!-- For code preview -->
+                        <template v-else>
+                            <div class="flex items-center gap-2">
+                                <div
+                                    class="w-1.5 h-1.5 rounded-full transition-all duration-300"
+                                    :class="
+                                        activeTab === 'preview'
+                                            ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]'
+                                            : 'bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.6)]'
+                                    "
+                                ></div>
+                                <span
+                                    class="font-medium text-gray-700 dark:text-gray-300"
+                                >
+                                    {{
+                                        activeTab === "preview"
+                                            ? "Live Preview"
+                                            : "Source Code"
+                                    }}
+                                </span>
+                            </div>
                             <span
-                                class="font-medium text-gray-700 dark:text-gray-300"
+                                class="text-gray-500 dark:text-gray-500 hidden sm:inline"
                             >
                                 {{
                                     activeTab === "preview"
-                                        ? "Live Preview"
-                                        : "Source Code"
+                                        ? "Interactive demo"
+                                        : `${previewCode.split("\n").length} lines`
                                 }}
                             </span>
-                        </div>
-                        <span
-                            class="text-gray-500 dark:text-gray-500 hidden sm:inline"
-                        >
-                            {{
-                                activeTab === "preview"
-                                    ? "Interactive demo"
-                                    : `${previewCode.split("\n").length} lines`
-                            }}
-                        </span>
+                        </template>
                     </div>
                 </div>
             </div>

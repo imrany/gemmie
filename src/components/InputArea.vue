@@ -48,6 +48,7 @@ const MAX_CONTEXT_REFERENCES = 3;
 // Props
 const props = defineProps<{
     isLoading: boolean;
+    chatContainerWidth: string;
     showScrollDownButton: Ref<boolean>;
     scrollButtonPosition: Ref<string>;
     selectedContexts: Ref<ContextReference[]>;
@@ -60,8 +61,6 @@ const props = defineProps<{
     inputPlaceholderText: string;
     pastePreview: {
         content: string;
-        wordCount: number;
-        charCount: number;
         show: boolean;
     } | null;
     showInputModeDropdown: boolean;
@@ -473,56 +472,106 @@ watch(isContextLimitReached, (limitReached) => {
         class="z-20 bottom-0 right-0 absolute w-full"
         :class="pastePreview?.show ? 'pt-2' : ''"
     >
-        <div class="flex flex-col gap-y-4 items-center justify-center">
-            <!-- Responsive Scroll to Bottom Button -->
-            <button
-                v-if="
-                    unref(showScrollDownButton) && currentMessages.length !== 0
-                "
-                @click="emit('scrollToBottom')"
+        <div class="w-full flex justify-center items-center">
+            <div
                 :class="[
-                    'bg-gray-50  dark:bg-gray-800 text-gray-500 dark:text-gray-400 border dark:border-gray-700 px-4 h-8 rounded-full shadow-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center justify-center gap-2',
-                    scrollButtonPosition,
+                    'flex flex-col gap-y-4 items-center justify-center',
+                    chatContainerWidth,
                 ]"
-                :disabled="isRecording"
-                :title="
-                    isRecording ? 'Recording in progress' : 'Scroll to bottom'
-                "
             >
-                <ArrowDown
-                    class="w-4 h-4"
-                    :class="{ 'animate-bounce': !isRecording }"
-                />
-                <span class="text-sm font-medium">Scroll Down</span>
-            </button>
-
-            <form
-                @submit.prevent="handleSubmit"
-                class="w-full md:max-w-3xl relative flex bg-gray-50 dark:bg-gray-800 flex-col border-2 dark:border-gray-700 shadow rounded-2xl items-center"
-            >
-                <!-- Paste Preview -->
-                <div
-                    v-if="pastePreview && pastePreview.show"
-                    class="w-full p-3 border-b dark:border-gray-700"
+                <!-- Responsive Scroll to Bottom Button -->
+                <button
+                    v-if="
+                        unref(showScrollDownButton) &&
+                        currentMessages.length !== 0
+                    "
+                    @click="emit('scrollToBottom')"
+                    :class="[
+                        'bg-gray-50  dark:bg-gray-800 text-gray-500 dark:text-gray-400 border dark:border-gray-700 px-4 h-8 rounded-full shadow-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center justify-center gap-2',
+                        scrollButtonPosition,
+                    ]"
+                    :disabled="isRecording"
+                    :title="
+                        isRecording
+                            ? 'Recording in progress'
+                            : 'Scroll to bottom'
+                    "
                 >
-                    <PastePreview
-                        :content="pastePreview.content"
-                        :char-count="pastePreview.charCount"
-                        :word-count="pastePreview.wordCount"
+                    <ArrowDown
+                        class="w-4 h-4"
+                        :class="{ 'animate-bounce': !isRecording }"
                     />
-                </div>
+                    <span class="text-sm font-medium">Scroll Down</span>
+                </button>
 
-                <!-- Request Limit Exceeded Banner -->
-                <div
-                    v-if="showLimitExceededBanner"
-                    class="py-2 sm:py-3 w-full px-2 sm:px-3"
+                <form
+                    @submit.prevent="handleSubmit"
+                    class="w-full md:max-w-3xl relative flex bg-gray-50 dark:bg-gray-800 flex-col border-2 dark:border-gray-700 shadow rounded-2xl items-center"
                 >
-                    <div class="flex items-center justify-center w-full">
-                        <!-- Mobile: Stacked Layout -->
-                        <div class="flex sm:hidden w-full flex-col gap-2">
-                            <div class="flex items-center gap-2">
+                    <!-- Paste Preview -->
+                    <div
+                        v-if="pastePreview && pastePreview.show"
+                        class="w-full p-3 border-b dark:border-gray-700"
+                    >
+                        <PastePreview :content="pastePreview.content" />
+                    </div>
+
+                    <!-- Request Limit Exceeded Banner -->
+                    <div
+                        v-if="showLimitExceededBanner"
+                        class="py-2 sm:py-3 w-full px-2 sm:px-3"
+                    >
+                        <div class="flex items-center justify-center w-full">
+                            <!-- Mobile: Stacked Layout -->
+                            <div class="flex sm:hidden w-full flex-col gap-2">
+                                <div class="flex items-center gap-2">
+                                    <div
+                                        class="w-6 h-6 sm:w-8 sm:h-8 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center flex-shrink-0"
+                                    >
+                                        <X
+                                            class="w-4 h-4 sm:w-5 sm:h-5 text-red-600 dark:text-red-400"
+                                        />
+                                    </div>
+                                    <div class="min-w-0 flex-1">
+                                        <h3
+                                            class="text-xs sm:text-sm font-semibold text-red-800 dark:text-red-400 leading-tight"
+                                        >
+                                            {{
+                                                planStatus.isExpired
+                                                    ? "Plan Expired"
+                                                    : "Free Requests Exhausted"
+                                            }}
+                                        </h3>
+                                        <p
+                                            class="text-xs text-red-600 dark:text-red-400 leading-tight mt-0.5"
+                                        >
+                                            {{
+                                                planStatus.isExpired
+                                                    ? "Renew your plan"
+                                                    : `Used all ${FREE_REQUEST_LIMIT} requests`
+                                            }}
+                                        </p>
+                                    </div>
+                                </div>
+                                <button
+                                    type="button"
+                                    @click="navigateToUpgrade"
+                                    class="w-full bg-red-500 hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700 text-white py-2 rounded-md text-xs font-medium transition-colors"
+                                >
+                                    {{
+                                        planStatus.isExpired
+                                            ? "Renew Plan"
+                                            : "Upgrade Plan"
+                                    }}
+                                </button>
+                            </div>
+
+                            <!-- Desktop: Horizontal Layout -->
+                            <div
+                                class="hidden sm:flex w-full items-center gap-3"
+                            >
                                 <div
-                                    class="w-6 h-6 sm:w-8 sm:h-8 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center flex-shrink-0"
+                                    class="w-8 h-8 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center flex-shrink-0"
                                 >
                                     <X
                                         class="w-4 h-4 sm:w-5 sm:h-5 text-red-600 dark:text-red-400"
@@ -530,7 +579,7 @@ watch(isContextLimitReached, (limitReached) => {
                                 </div>
                                 <div class="min-w-0 flex-1">
                                     <h3
-                                        class="text-xs sm:text-sm font-semibold text-red-800 dark:text-red-400 leading-tight"
+                                        class="text-sm font-semibold text-red-800 dark:text-red-400 mb-1"
                                     >
                                         {{
                                             planStatus.isExpired
@@ -539,440 +588,412 @@ watch(isContextLimitReached, (limitReached) => {
                                         }}
                                     </h3>
                                     <p
-                                        class="text-xs text-red-600 dark:text-red-400 leading-tight mt-0.5"
+                                        class="text-xs text-red-600 dark:text-red-400"
                                     >
                                         {{
                                             planStatus.isExpired
-                                                ? "Renew your plan"
-                                                : `Used all ${FREE_REQUEST_LIMIT} requests`
+                                                ? "Please renew your plan to continue."
+                                                : `You've used all ${FREE_REQUEST_LIMIT} free requests.`
                                         }}
                                     </p>
                                 </div>
-                            </div>
-                            <button
-                                type="button"
-                                @click="navigateToUpgrade"
-                                class="w-full bg-red-500 hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700 text-white py-2 rounded-md text-xs font-medium transition-colors"
-                            >
-                                {{
-                                    planStatus.isExpired
-                                        ? "Renew Plan"
-                                        : "Upgrade Plan"
-                                }}
-                            </button>
-                        </div>
-
-                        <!-- Desktop: Horizontal Layout -->
-                        <div class="hidden sm:flex w-full items-center gap-3">
-                            <div
-                                class="w-8 h-8 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center flex-shrink-0"
-                            >
-                                <X
-                                    class="w-4 h-4 sm:w-5 sm:h-5 text-red-600 dark:text-red-400"
-                                />
-                            </div>
-                            <div class="min-w-0 flex-1">
-                                <h3
-                                    class="text-sm font-semibold text-red-800 dark:text-red-400 mb-1"
+                                <button
+                                    type="button"
+                                    @click="navigateToUpgrade"
+                                    class="bg-red-500 px-3 hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700 text-white py-2 rounded-md text-sm font-medium transition-colors flex-shrink-0 whitespace-nowrap"
                                 >
                                     {{
                                         planStatus.isExpired
-                                            ? "Plan Expired"
-                                            : "Free Requests Exhausted"
+                                            ? "Renew"
+                                            : "Upgrade"
                                     }}
-                                </h3>
-                                <p
-                                    class="text-xs text-red-600 dark:text-red-400"
-                                >
-                                    {{
-                                        planStatus.isExpired
-                                            ? "Please renew your plan to continue."
-                                            : `You've used all ${FREE_REQUEST_LIMIT} free requests.`
-                                    }}
-                                </p>
+                                </button>
                             </div>
-                            <button
-                                type="button"
-                                @click="navigateToUpgrade"
-                                class="bg-red-500 px-3 hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700 text-white py-2 rounded-md text-sm font-medium transition-colors flex-shrink-0 whitespace-nowrap"
-                            >
-                                {{ planStatus.isExpired ? "Renew" : "Upgrade" }}
-                            </button>
                         </div>
                     </div>
-                </div>
 
-                <!-- Upgrade Warning Banner -->
-                <div
-                    v-if="showUpgradeBanner"
-                    class="py-2 sm:py-3 w-full px-2 sm:px-3"
-                >
-                    <div class="flex items-center justify-center w-full">
-                        <!-- Mobile -->
-                        <div class="flex sm:hidden w-full flex-col gap-2">
-                            <div class="flex items-center gap-2">
+                    <!-- Upgrade Warning Banner -->
+                    <div
+                        v-if="showUpgradeBanner"
+                        class="py-2 sm:py-3 w-full px-2 sm:px-3"
+                    >
+                        <div class="flex items-center justify-center w-full">
+                            <!-- Mobile -->
+                            <div class="flex sm:hidden w-full flex-col gap-2">
+                                <div class="flex items-center gap-2">
+                                    <div
+                                        class="w-6 h-6 bg-yellow-100 dark:bg-yellow-900/30 rounded-full flex items-center justify-center flex-shrink-0"
+                                    >
+                                        ⚠️
+                                    </div>
+                                    <div class="min-w-0 flex-1">
+                                        <h3
+                                            class="text-xs font-semibold text-yellow-800 dark:text-yellow-400 leading-tight"
+                                        >
+                                            {{ requestsRemaining }} requests
+                                            left
+                                        </h3>
+                                        <p
+                                            class="text-xs text-yellow-600 dark:text-yellow-400 leading-tight mt-0.5"
+                                        >
+                                            Upgrade for unlimited
+                                        </p>
+                                    </div>
+                                </div>
+                                <button
+                                    type="button"
+                                    @click="navigateToUpgrade"
+                                    class="w-full bg-orange-500 hover:bg-orange-600 text-white py-2 rounded-md text-xs font-medium transition-colors"
+                                >
+                                    Upgrade
+                                </button>
+                            </div>
+
+                            <!-- Desktop -->
+                            <div
+                                class="hidden sm:flex w-full items-center gap-3"
+                            >
                                 <div
-                                    class="w-6 h-6 bg-yellow-100 dark:bg-yellow-900/30 rounded-full flex items-center justify-center flex-shrink-0"
+                                    class="w-8 h-8 bg-yellow-100 dark:bg-yellow-900/30 rounded-full flex items-center justify-center flex-shrink-0"
                                 >
                                     ⚠️
                                 </div>
                                 <div class="min-w-0 flex-1">
                                     <h3
-                                        class="text-xs font-semibold text-yellow-800 dark:text-yellow-400 leading-tight"
+                                        class="text-sm font-semibold text-yellow-800 dark:text-yellow-400 mb-1"
                                     >
-                                        {{ requestsRemaining }} requests left
+                                        {{ requestsRemaining }} requests
+                                        remaining
                                     </h3>
                                     <p
-                                        class="text-xs text-yellow-600 dark:text-yellow-400 leading-tight mt-0.5"
+                                        class="text-xs text-yellow-600 dark:text-yellow-400"
                                     >
-                                        Upgrade for unlimited
+                                        Upgrade to continue without limits
                                     </p>
                                 </div>
-                            </div>
-                            <button
-                                type="button"
-                                @click="navigateToUpgrade"
-                                class="w-full bg-orange-500 hover:bg-orange-600 text-white py-2 rounded-md text-xs font-medium transition-colors"
-                            >
-                                Upgrade
-                            </button>
-                        </div>
-
-                        <!-- Desktop -->
-                        <div class="hidden sm:flex w-full items-center gap-3">
-                            <div
-                                class="w-8 h-8 bg-yellow-100 dark:bg-yellow-900/30 rounded-full flex items-center justify-center flex-shrink-0"
-                            >
-                                ⚠️
-                            </div>
-                            <div class="min-w-0 flex-1">
-                                <h3
-                                    class="text-sm font-semibold text-yellow-800 dark:text-yellow-400 mb-1"
-                                >
-                                    {{ requestsRemaining }} requests remaining
-                                </h3>
-                                <p
-                                    class="text-xs text-yellow-600 dark:text-yellow-400"
-                                >
-                                    Upgrade to continue without limits
-                                </p>
-                            </div>
-                            <button
-                                type="button"
-                                @click="navigateToUpgrade"
-                                class="bg-orange-500 px-3 hover:bg-orange-600 text-white py-2 rounded-md text-sm font-medium transition-colors flex-shrink-0"
-                            >
-                                Upgrade
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Input Area -->
-                <div
-                    class="flex flex-col w-full bg-inherit rounded-2xl px-2 sm:px-3 py-2 gap-1 sm:gap-2 relative"
-                    :class="
-                        inputDisabled
-                            ? 'opacity-50 border border-t dark:border-gray-700 pointer-events-none'
-                            : showUpgradeBanner
-                              ? 'border border-t dark:border-gray-700'
-                              : ''
-                    "
-                >
-                    <!-- Context Dropdown -->
-                    <div
-                        v-if="
-                            showContextDropdown && filteredMessages.length > 0
-                        "
-                        class="context-dropdown absolute bg-inherit border border-gray-300 dark:border-gray-600 rounded-lg shadow-2xl max-h-60 overflow-y-auto custom-scrollbar z-[9999] w-[20rem]"
-                        :style="{
-                            bottom: `${dropdownPosition.top}px`,
-                            left: `${dropdownPosition.left}px`,
-                        }"
-                        @click.stop
-                    >
-                        <div
-                            class="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between sticky top-0 bg-white dark:bg-gray-800 z-10"
-                        >
-                            <div class="flex items-center gap-2">
-                                <MessageSquare class="w-4 h-4" />
-                                Reference Messages ({{
-                                    filteredMessages.length
-                                }})
-                            </div>
-                            <div
-                                class="flex items-center gap-1 text-blue-600 dark:text-blue-400"
-                            >
-                                <span class="font-bold">{{
-                                    selectedContexts.value.length
-                                }}</span>
-                                <span>/</span>
-                                <span>{{ MAX_CONTEXT_REFERENCES }}</span>
-                            </div>
-                        </div>
-
-                        <!-- Context Limit Warning -->
-                        <div
-                            v-if="isContextLimitReached"
-                            class="px-3 py-2 bg-orange-50 dark:bg-orange-900/20 border-b border-orange-200 dark:border-orange-800 flex items-center gap-2"
-                        >
-                            <AlertCircle
-                                class="w-4 h-4 text-orange-600 dark:text-orange-400 flex-shrink-0"
-                            />
-                            <p
-                                class="text-xs text-orange-700 dark:text-orange-300"
-                            >
-                                Maximum {{ MAX_CONTEXT_REFERENCES }} references
-                                reached
-                            </p>
-                        </div>
-
-                        <button
-                            v-for="(message, index) in filteredMessages"
-                            :key="message.preview"
-                            type="button"
-                            @click="selectContext(message)"
-                            :disabled="isContextLimitReached"
-                            :class="[
-                                'w-full px-3 py-2 text-left text-sm transition-colors',
-                                activeContextIndex === index &&
-                                !isContextLimitReached
-                                    ? 'bg-blue-50 dark:bg-blue-900/30'
-                                    : '',
-                                isContextLimitReached
-                                    ? 'opacity-50 cursor-not-allowed'
-                                    : 'hover:bg-gray-100 dark:hover:bg-gray-700',
-                            ]"
-                        >
-                            <div class="flex items-start gap-2">
-                                <MessageSquare
-                                    class="w-4 h-4 mt-0.5 flex-shrink-0 text-gray-400 dark:text-gray-500"
-                                />
-                                <div class="flex-1 min-w-0">
-                                    <p
-                                        class="text-gray-800 dark:text-gray-200 truncate"
-                                    >
-                                        {{ message.preview }}
-                                    </p>
-                                    <p
-                                        class="text-xs text-gray-500 dark:text-gray-400 mt-0.5"
-                                    >
-                                        {{ message.fullText.length }} characters
-                                    </p>
-                                </div>
-                            </div>
-                        </button>
-                    </div>
-
-                    <!-- Selected Context Badges (INSIDE TEXTAREA AREA) -->
-                    <ReferenceBadge :selected-contexts="selectedContexts" />
-
-                    <div class="w-full items-center justify-center flex">
-                        <!-- Voice Recording Indicator -->
-                        <div
-                            v-if="isRecording || isTranscribing"
-                            class="flex items-center gap-1 sm:gap-2 px-2 py-1 bg-red-50 dark:bg-red-900/30 rounded-lg border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 text-xs sm:text-sm flex-shrink-0 h-fit"
-                        >
-                            <div class="flex items-center gap-1">
-                                <div
-                                    class="w-2 h-2 bg-red-500 dark:bg-red-400 rounded-full animate-pulse"
-                                ></div>
-                                <span class="hidden sm:inline">{{
-                                    isTranscribing
-                                        ? "Listening..."
-                                        : "Starting..."
-                                }}</span>
-                                <span class="sm:hidden">{{
-                                    isTranscribing ? "🎤" : "⏳"
-                                }}</span>
-                            </div>
-                        </div>
-
-                        <!-- Clear Voice Button -->
-                        <button
-                            v-if="transcribedText && !isRecording"
-                            type="button"
-                            @click="clearTranscription"
-                            class="rounded-lg w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center transition-colors text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 flex-shrink-0"
-                            title="Clear voice transcription"
-                        >
-                            <X class="w-4 h-4 sm:w-5 sm:h-5" />
-                        </button>
-
-                        <!-- Textarea -->
-                        <textarea
-                            required
-                            id="prompt"
-                            name="prompt"
-                            @keydown="handleKeydown"
-                            @input="handleAutoGrow"
-                            @paste="handlePaste"
-                            :disabled="inputDisabled"
-                            rows="1"
-                            :class="[
-                                'flex-grow py-3 px-3 placeholder:text-gray-500 dark:placeholder:text-gray-400 rounded-xl bg-inherit dark:text-gray-100 text-sm outline-none resize-none max-h-[120px] sm:max-h-[150px] md:max-h-[200px] overflow-auto leading-relaxed min-w-0',
-                                'disabled:opacity-50 disabled:cursor-not-allowed',
-                                isRecording
-                                    ? 'bg-red-50 border-red-200 dark:border-red-800'
-                                    : 'focus:border-blue-500 dark:focus:border-blue-400',
-                            ]"
-                            :placeholder="
-                                currentChat && currentChat.messages?.length > 0
-                                    ? `Use @ to include context • ${inputPlaceholderText.split('...')[1]?.trim() || ''}`
-                                    : inputPlaceholderText
-                            "
-                        />
-                    </div>
-
-                    <!-- Buttons Row -->
-                    <div class="flex items-center justify-between w-full gap-2">
-                        <!-- Left side buttons -->
-                        <div class="flex items-center gap-2">
-                            <!-- Microphone Button -->
-                            <button
-                                type="button"
-                                @click="toggleVoice"
-                                :disabled="inputDisabled"
-                                :class="[
-                                    'rounded-lg w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center transition-all duration-200 flex-shrink-0',
-                                    isRecording
-                                        ? 'bg-red-500 hover:bg-red-600 text-white shadow-lg transform scale-105 animate-pulse'
-                                        : 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300',
-                                    'disabled:opacity-50 disabled:cursor-not-allowed',
-                                ]"
-                                :title="
-                                    microphonePermission === 'denied'
-                                        ? 'Microphone access denied'
-                                        : isRecording
-                                          ? 'Stop voice input'
-                                          : 'Start voice input'
-                                "
-                            >
-                                <Mic
-                                    v-if="microphonePermission === 'prompt'"
-                                    class="w-4 h-4 sm:w-5 sm:h-5"
-                                />
-                                <Mic
-                                    v-else-if="
-                                        !isRecording &&
-                                        microphonePermission === 'granted'
-                                    "
-                                    class="w-4 h-4 sm:w-5 sm:h-5"
-                                />
-                                <Pause
-                                    v-else-if="
-                                        microphonePermission === 'granted' &&
-                                        isRecording
-                                    "
-                                    class="w-4 h-4 sm:w-5 sm:h-5"
-                                />
-                                <MicOff
-                                    v-else-if="
-                                        microphonePermission === 'denied' &&
-                                        !isRecording
-                                    "
-                                    class="w-4 h-4 sm:w-5 sm:h-5 text-red-500 dark:text-red-400"
-                                />
-                            </button>
-
-                            <!-- Mode Dropdown -->
-                            <div class="relative flex-shrink-0">
                                 <button
                                     type="button"
-                                    @click.stop="toggleDropdown"
+                                    @click="navigateToUpgrade"
+                                    class="bg-orange-500 px-3 hover:bg-orange-600 text-white py-2 rounded-md text-sm font-medium transition-colors flex-shrink-0"
+                                >
+                                    Upgrade
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Input Area -->
+                    <div
+                        class="flex flex-col w-full bg-inherit rounded-2xl px-2 sm:px-3 py-2 gap-1 sm:gap-2 relative"
+                        :class="
+                            inputDisabled
+                                ? 'opacity-50 border border-t dark:border-gray-700 pointer-events-none'
+                                : showUpgradeBanner
+                                  ? 'border border-t dark:border-gray-700'
+                                  : ''
+                        "
+                    >
+                        <!-- Context Dropdown -->
+                        <div
+                            v-if="
+                                showContextDropdown &&
+                                filteredMessages.length > 0
+                            "
+                            class="context-dropdown absolute bg-inherit border border-gray-300 dark:border-gray-600 rounded-lg shadow-2xl max-h-60 overflow-y-auto custom-scrollbar z-[9999] w-[20rem]"
+                            :style="{
+                                bottom: `${dropdownPosition.top}px`,
+                                left: `${dropdownPosition.left}px`,
+                            }"
+                            @click.stop
+                        >
+                            <div
+                                class="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between sticky top-0 bg-white dark:bg-gray-800 z-10"
+                            >
+                                <div class="flex items-center gap-2">
+                                    <MessageSquare class="w-4 h-4" />
+                                    Reference Messages ({{
+                                        filteredMessages.length
+                                    }})
+                                </div>
+                                <div
+                                    class="flex items-center gap-1 text-blue-600 dark:text-blue-400"
+                                >
+                                    <span class="font-bold">{{
+                                        selectedContexts.value.length
+                                    }}</span>
+                                    <span>/</span>
+                                    <span>{{ MAX_CONTEXT_REFERENCES }}</span>
+                                </div>
+                            </div>
+
+                            <!-- Context Limit Warning -->
+                            <div
+                                v-if="isContextLimitReached"
+                                class="px-3 py-2 bg-orange-50 dark:bg-orange-900/20 border-b border-orange-200 dark:border-orange-800 flex items-center gap-2"
+                            >
+                                <AlertCircle
+                                    class="w-4 h-4 text-orange-600 dark:text-orange-400 flex-shrink-0"
+                                />
+                                <p
+                                    class="text-xs text-orange-700 dark:text-orange-300"
+                                >
+                                    Maximum
+                                    {{ MAX_CONTEXT_REFERENCES }} references
+                                    reached
+                                </p>
+                            </div>
+
+                            <button
+                                v-for="(message, index) in filteredMessages"
+                                :key="message.preview"
+                                type="button"
+                                @click="selectContext(message)"
+                                :disabled="isContextLimitReached"
+                                :class="[
+                                    'w-full px-3 py-2 text-left text-sm transition-colors',
+                                    activeContextIndex === index &&
+                                    !isContextLimitReached
+                                        ? 'bg-blue-50 dark:bg-blue-900/30'
+                                        : '',
+                                    isContextLimitReached
+                                        ? 'opacity-50 cursor-not-allowed'
+                                        : 'hover:bg-gray-100 dark:hover:bg-gray-700',
+                                ]"
+                            >
+                                <div class="flex items-start gap-2">
+                                    <MessageSquare
+                                        class="w-4 h-4 mt-0.5 flex-shrink-0 text-gray-400 dark:text-gray-500"
+                                    />
+                                    <div class="flex-1 min-w-0">
+                                        <p
+                                            class="text-gray-800 dark:text-gray-200 truncate"
+                                        >
+                                            {{ message.preview }}
+                                        </p>
+                                        <p
+                                            class="text-xs text-gray-500 dark:text-gray-400 mt-0.5"
+                                        >
+                                            {{ message.fullText.length }}
+                                            characters
+                                        </p>
+                                    </div>
+                                </div>
+                            </button>
+                        </div>
+
+                        <!-- Selected Context Badges (INSIDE TEXTAREA AREA) -->
+                        <ReferenceBadge :selected-contexts="selectedContexts" />
+
+                        <div class="w-full items-center justify-center flex">
+                            <!-- Voice Recording Indicator -->
+                            <div
+                                v-if="isRecording || isTranscribing"
+                                class="flex items-center gap-1 sm:gap-2 px-2 py-1 bg-red-50 dark:bg-red-900/30 rounded-lg border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 text-xs sm:text-sm flex-shrink-0 h-fit"
+                            >
+                                <div class="flex items-center gap-1">
+                                    <div
+                                        class="w-2 h-2 bg-red-500 dark:bg-red-400 rounded-full animate-pulse"
+                                    ></div>
+                                    <span class="hidden sm:inline">{{
+                                        isTranscribing
+                                            ? "Listening..."
+                                            : "Starting..."
+                                    }}</span>
+                                    <span class="sm:hidden">{{
+                                        isTranscribing ? "🎤" : "⏳"
+                                    }}</span>
+                                </div>
+                            </div>
+
+                            <!-- Clear Voice Button -->
+                            <button
+                                v-if="transcribedText && !isRecording"
+                                type="button"
+                                @click="clearTranscription"
+                                class="rounded-lg w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center transition-colors text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 flex-shrink-0"
+                                title="Clear voice transcription"
+                            >
+                                <X class="w-4 h-4 sm:w-5 sm:h-5" />
+                            </button>
+
+                            <!-- Textarea -->
+                            <textarea
+                                required
+                                id="prompt"
+                                name="prompt"
+                                @keydown="handleKeydown"
+                                @input="handleAutoGrow"
+                                @paste="handlePaste"
+                                :disabled="inputDisabled"
+                                rows="1"
+                                :class="[
+                                    'flex-grow py-3 px-3 placeholder:text-gray-500 dark:placeholder:text-gray-400 rounded-xl bg-inherit dark:text-gray-100 text-sm outline-none resize-none max-h-[120px] sm:max-h-[150px] md:max-h-[200px] overflow-auto leading-relaxed min-w-0',
+                                    'disabled:opacity-50 disabled:cursor-not-allowed',
+                                    isRecording
+                                        ? 'bg-red-50 border-red-200 dark:border-red-800'
+                                        : 'focus:border-blue-500 dark:focus:border-blue-400',
+                                ]"
+                                :placeholder="
+                                    currentChat &&
+                                    currentChat.messages?.length > 0
+                                        ? `Use @ to include context • ${inputPlaceholderText.split('...')[1]?.trim() || ''}`
+                                        : inputPlaceholderText
+                                "
+                            />
+                        </div>
+
+                        <!-- Buttons Row -->
+                        <div
+                            class="flex items-center justify-between w-full gap-2"
+                        >
+                            <!-- Left side buttons -->
+                            <div class="flex items-center gap-2">
+                                <!-- Microphone Button -->
+                                <button
+                                    type="button"
+                                    @click="toggleVoice"
                                     :disabled="inputDisabled"
                                     :class="[
-                                        'rounded-lg w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm border',
-                                        parsedUserDetails?.responseMode ===
-                                        'web-search'
-                                            ? 'border-green-300 bg-green-50 hover:bg-green-100 dark:border-green-600 dark:bg-green-900/30 text-green-700 dark:text-green-300'
-                                            : parsedUserDetails?.responseMode ===
-                                                'deep-search'
-                                              ? 'border-orange-300 bg-orange-50 hover:bg-orange-100 dark:border-orange-600 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300'
-                                              : 'border-blue-300 bg-blue-50 hover:bg-blue-100 dark:border-blue-600 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300',
+                                        'rounded-lg w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center transition-all duration-200 flex-shrink-0',
+                                        isRecording
+                                            ? 'bg-red-500 hover:bg-red-600 text-white shadow-lg transform scale-105 animate-pulse'
+                                            : 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300',
+                                        'disabled:opacity-50 disabled:cursor-not-allowed',
                                     ]"
-                                    :title="currentMode.title"
+                                    :title="
+                                        microphonePermission === 'denied'
+                                            ? 'Microphone access denied'
+                                            : isRecording
+                                              ? 'Stop voice input'
+                                              : 'Start voice input'
+                                    "
                                 >
-                                    <component
-                                        :is="currentMode.icon"
+                                    <Mic
+                                        v-if="microphonePermission === 'prompt'"
                                         class="w-4 h-4 sm:w-5 sm:h-5"
+                                    />
+                                    <Mic
+                                        v-else-if="
+                                            !isRecording &&
+                                            microphonePermission === 'granted'
+                                        "
+                                        class="w-4 h-4 sm:w-5 sm:h-5"
+                                    />
+                                    <Pause
+                                        v-else-if="
+                                            microphonePermission ===
+                                                'granted' && isRecording
+                                        "
+                                        class="w-4 h-4 sm:w-5 sm:h-5"
+                                    />
+                                    <MicOff
+                                        v-else-if="
+                                            microphonePermission === 'denied' &&
+                                            !isRecording
+                                        "
+                                        class="w-4 h-4 sm:w-5 sm:h-5 text-red-500 dark:text-red-400"
                                     />
                                 </button>
 
-                                <!-- Dropdown Menu -->
-                                <div
-                                    v-show="showInputModeDropdown"
-                                    class="absolute bottom-12 left-0 bg-white dark:bg-gray-800 border-[1px] border-gray-300 dark:border-gray-600 rounded-lg shadow-2xl pt-2 z-[100] w-[220px] sm:w-[240px]"
-                                    @click.stop
-                                >
-                                    <div
-                                        class="px-2 py-1 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide border-b border-gray-200 dark:border-gray-700"
-                                    >
-                                        Response Mode
-                                    </div>
-
+                                <!-- Mode Dropdown -->
+                                <div class="relative flex-shrink-0">
                                     <button
-                                        v-for="(option, key) in modeOptions"
-                                        :key="key"
                                         type="button"
-                                        @click="selectMode(option.mode)"
+                                        @click.stop="toggleDropdown"
+                                        :disabled="inputDisabled"
                                         :class="[
-                                            'w-full px-3 py-2.5 text-left text-sm flex items-center gap-3 transition-colors',
+                                            'rounded-lg w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm border',
                                             parsedUserDetails?.responseMode ===
-                                            option.mode
-                                                ? 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 border-r-2 border-green-500'
-                                                : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200',
+                                            'web-search'
+                                                ? 'border-green-300 bg-green-50 hover:bg-green-100 dark:border-green-600 dark:bg-green-900/30 text-green-700 dark:text-green-300'
+                                                : parsedUserDetails?.responseMode ===
+                                                    'deep-search'
+                                                  ? 'border-orange-300 bg-orange-50 hover:bg-orange-100 dark:border-orange-600 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300'
+                                                  : 'border-blue-300 bg-blue-50 hover:bg-blue-100 dark:border-blue-600 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300',
                                         ]"
+                                        :title="currentMode.title"
                                     >
                                         <component
-                                            :class="[
-                                                'w-5 h-5',
-                                                parsedUserDetails?.responseMode ===
-                                                option.mode
-                                                    ? 'text-green-600 dark:text-green-400'
-                                                    : 'text-gray-600 dark:text-gray-400',
-                                            ]"
-                                            :is="option.icon"
-                                        />
-                                        <div class="flex-1 min-w-0">
-                                            <div class="font-semibold">
-                                                {{ option.label }}
-                                            </div>
-                                            <div class="text-xs opacity-70">
-                                                {{ option.description }}
-                                            </div>
-                                        </div>
-                                        <Check
-                                            v-if="
-                                                parsedUserDetails?.responseMode ===
-                                                option.mode
-                                            "
-                                            class="w-5 h-5 text-green-600 dark:text-green-400"
+                                            :is="currentMode.icon"
+                                            class="w-4 h-4 sm:w-5 sm:h-5"
                                         />
                                     </button>
+
+                                    <!-- Dropdown Menu -->
+                                    <div
+                                        v-show="showInputModeDropdown"
+                                        class="absolute bottom-12 left-0 bg-white dark:bg-gray-800 border-[1px] border-gray-300 dark:border-gray-600 rounded-lg shadow-2xl pt-2 z-[100] w-[220px] sm:w-[240px]"
+                                        @click.stop
+                                    >
+                                        <div
+                                            class="px-2 py-1 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide border-b border-gray-200 dark:border-gray-700"
+                                        >
+                                            Response Mode
+                                        </div>
+
+                                        <button
+                                            v-for="(option, key) in modeOptions"
+                                            :key="key"
+                                            type="button"
+                                            @click="selectMode(option.mode)"
+                                            :class="[
+                                                'w-full px-3 py-2.5 text-left text-sm flex items-center gap-3 transition-colors',
+                                                parsedUserDetails?.responseMode ===
+                                                option.mode
+                                                    ? 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 border-r-2 border-green-500'
+                                                    : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200',
+                                            ]"
+                                        >
+                                            <component
+                                                :class="[
+                                                    'w-5 h-5',
+                                                    parsedUserDetails?.responseMode ===
+                                                    option.mode
+                                                        ? 'text-green-600 dark:text-green-400'
+                                                        : 'text-gray-600 dark:text-gray-400',
+                                                ]"
+                                                :is="option.icon"
+                                            />
+                                            <div class="flex-1 min-w-0">
+                                                <div class="font-semibold">
+                                                    {{ option.label }}
+                                                </div>
+                                                <div class="text-xs opacity-70">
+                                                    {{ option.description }}
+                                                </div>
+                                            </div>
+                                            <Check
+                                                v-if="
+                                                    parsedUserDetails?.responseMode ===
+                                                    option.mode
+                                                "
+                                                class="w-5 h-5 text-green-600 dark:text-green-400"
+                                            />
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
 
-                        <!-- Submit Button -->
-                        <button
-                            type="submit"
-                            :disabled="inputDisabled"
-                            class="rounded-lg w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center transition-colors text-white bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50 disabled:bg-gray-400 flex-shrink-0 shadow-sm"
-                        >
-                            <ArrowUp
-                                v-if="!isLoading"
-                                class="w-4 h-4 sm:w-5 sm:h-5"
-                            />
-                            <LoaderCircle
-                                v-else
-                                class="w-4 h-4 sm:w-5 sm:h-5 animate-spin"
-                            />
-                        </button>
+                            <!-- Submit Button -->
+                            <button
+                                type="submit"
+                                :disabled="inputDisabled"
+                                class="rounded-lg w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center transition-colors text-white bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50 disabled:bg-gray-400 flex-shrink-0 shadow-sm"
+                            >
+                                <ArrowUp
+                                    v-if="!isLoading"
+                                    class="w-4 h-4 sm:w-5 sm:h-5"
+                                />
+                                <LoaderCircle
+                                    v-else
+                                    class="w-4 h-4 sm:w-5 sm:h-5 animate-spin"
+                                />
+                            </button>
+                        </div>
                     </div>
-                </div>
-            </form>
+                </form>
+            </div>
         </div>
-        <div class="bg-white dark:bg-gray-900 h-3 sm:h-5 w-full"></div>
+        <div class="bg-white dark:bg-gray-900 -mt-2 h-3 sm:h-5 w-full"></div>
     </div>
 </template>

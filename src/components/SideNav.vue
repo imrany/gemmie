@@ -38,6 +38,7 @@ import {
 import type { FunctionalComponent } from "vue";
 import { Button } from "./ui/button";
 import { toast } from "vue-sonner";
+import { watch } from "vue";
 
 const {
     activeChatMenu,
@@ -255,6 +256,14 @@ const navLinks: {
         action: () => handleNavAction(() => router.push("/chats")),
     },
 ];
+
+watch(showPreviewSidebar, (newVal) => {
+    if (newVal) {
+        if (!isCollapsed.value) {
+            props.functions.toggleSidebar();
+        }
+    }
+});
 </script>
 
 <template>

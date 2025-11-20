@@ -31,6 +31,7 @@ import { useRouter } from "vue-router";
 import { useChat } from "./composables/useChat";
 import { useCache } from "./composables/useCache";
 import { useSync } from "./composables/useSync";
+import { useHandlePaste } from "./composables/useHandlePaste";
 
 const { reportError } = usePlatformError();
 const router = useRouter();
@@ -134,12 +135,27 @@ const now = ref(Date.now());
 const showPreviewSidebar = ref(false);
 const previewCode = ref("");
 const previewLanguage = ref("html");
+const metadata = ref<
+    | {
+          wordCount: number;
+          charCount: number;
+      }
+    | undefined
+>(undefined);
 
 // Function to open preview with code
-const openPreview = (code: string, language: string = "html") => {
+const openPreview = (
+    code: string,
+    language: string = "html",
+    data?: {
+        wordCount: number;
+        charCount: number;
+    },
+) => {
     previewCode.value = code;
     previewLanguage.value = language;
     showPreviewSidebar.value = true;
+    metadata.value = data;
 };
 
 // Function to close preview
@@ -341,6 +357,14 @@ const {
     isAuthenticated,
     saveLinkPreviewCache,
     confirmDialog,
+});
+
+const { handlePaste, removePastePreview } = useHandlePaste({
+    currentChatId,
+    pastePreviews,
+    chatDrafts,
+    saveChatDrafts,
+    autoGrow,
 });
 
 async function logout(options = { skipConfirm: false }) {
@@ -2321,6 +2345,7 @@ const globalState = {
     showPreviewSidebar,
     previewCode,
     previewLanguage,
+    metadata,
 
     // Function to open preview with code
     openPreview,
@@ -2356,6 +2381,8 @@ const globalState = {
     incrementRequestCount,
     loadRequestCount,
     checkRequestLimitBeforeSubmit,
+    handlePaste,
+    removePastePreview,
 
     // UI functions
     toggleTheme,

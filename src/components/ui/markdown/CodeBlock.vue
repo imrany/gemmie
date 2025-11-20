@@ -2,8 +2,6 @@
 import { ref } from "vue";
 import { Eye, Copy, Check } from "lucide-vue-next";
 import { Button } from "../button";
-import { inject } from "vue";
-import type { Ref } from "vue";
 
 interface Props {
     data: {
@@ -14,12 +12,6 @@ interface Props {
     };
     isPreviewable?: boolean;
 }
-
-const { isCollapsed, screenWidth, toggleSidebar } = inject("globalState") as {
-    isCollapsed: Ref<boolean>;
-    screenWidth: Ref<number>;
-    toggleSidebar: () => void;
-};
 
 const props = defineProps<Props>();
 const emit = defineEmits<{
@@ -41,9 +33,6 @@ const copyToClipboard = async () => {
 };
 
 const handlePreview = () => {
-    if (screenWidth.value > 720 && !isCollapsed.value) {
-        toggleSidebar();
-    }
     emit("preview");
 };
 </script>

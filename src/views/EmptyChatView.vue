@@ -28,8 +28,8 @@ const { suggestionPrompts, selectSuggestion } = defineProps<{
     <div
         :class="
             screenWidth > 720
-                ? 'h-screen bg-inherit flex flex-col items-center justify-center w-full'
-                : 'bg-inherit h-screen w-full flex flex-col items-center justify-center'
+                ? 'h-screen bg-inherit flex flex-col items-center justify-center'
+                : 'bg-inherit h-screen flex flex-col items-center justify-center'
         "
     >
         <div
