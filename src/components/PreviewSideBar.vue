@@ -160,19 +160,19 @@ onMounted(() => {
                     <Transition name="fade" mode="out-in">
                         <div
                             v-if="activeTab === 'preview'"
-                            class="absolute inset-0 bg-gray-100 dark:bg-gray-800"
+                            class="absolute inset-0"
                             key="preview"
                         >
                             <iframe
                                 v-if="previewCode"
                                 :srcdoc="previewCode"
-                                class="w-full h-full border-0"
+                                class="w-full h-full border-0 bg-gray-100"
                                 sandbox="allow-scripts allow-forms allow-modals allow-popups allow-same-origin"
                                 title="HTML Preview"
                             />
                             <div
                                 v-else
-                                class="flex items-center justify-center h-full text-gray-500 dark:text-gray-400"
+                                class="flex items-center bg-gray-100 dark:bg-gray-800 justify-center h-full text-gray-500 dark:text-gray-400"
                             >
                                 <div class="text-center">
                                     <Eye

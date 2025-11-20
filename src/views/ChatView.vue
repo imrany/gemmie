@@ -1893,7 +1893,6 @@ onUnmounted(() => {
                     ]"
                 >
                     <TopNav />
-
                     <!-- Chat Messages Container -->
                     <div
                         :class="[
@@ -1972,7 +1971,6 @@ onUnmounted(() => {
                                                                 0
                                                             "
                                                             :is-clickable="true"
-                                                            class="w-[40%] sm:w-[50%] lg:w-[40%] xl:w-[30%]"
                                                         />
                                                     </div>
                                                 </div>
@@ -2378,7 +2376,28 @@ onUnmounted(() => {
                                 inputDisabled
                             "
                             :input-placeholder-text="inputPlaceholderText"
-                            :paste-preview="pastePreview"
+                            :paste-preview="
+                                pastePreview
+                                    ? {
+                                          show: pastePreview.show,
+                                          content:
+                                              pastePreview.content
+                                                  ?.trim()
+                                                  ?.split('#pastedText#')[1] ||
+                                              '',
+                                          charCount:
+                                              pastePreview.content
+                                                  ?.trim()
+                                                  ?.split('#pastedText#')[1]
+                                                  ?.length || 0,
+                                          wordCount:
+                                              pastePreview.content
+                                                  ?.trim()
+                                                  .split('#pastedText#')[1]
+                                                  ?.split(/\s+/)?.length || 0,
+                                      }
+                                    : null
+                            "
                             :show-input-mode-dropdown="showInputModeDropdown"
                             :show-limit-exceeded-banner="
                                 showLimitExceededBanner

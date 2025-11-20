@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import hljs from "highlight.js/lib/common";
+
 const { content, wordCount, charCount, isClickable } = defineProps<{
     content: string;
     wordCount: number;
@@ -9,25 +11,25 @@ const { content, wordCount, charCount, isClickable } = defineProps<{
 const preview =
     content.length > 200 ? content.substring(0, 200) + "..." : content;
 // Proper HTML escaping
-const escapedPreview = preview
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;")
-    .replace(/\n/g, "<br>")
-    .replace(/\t/g, "&nbsp;&nbsp;&nbsp;&nbsp;");
+const escapedPreview = preview;
+// .replace(/&/g, "&amp;")
+// .replace(/</g, "&lt;")
+// .replace(/>/g, "&gt;")
+// .replace(/"/g, "&quot;")
+// .replace(/'/g, "&#39;")
+// .replace(/\n/g, "<br>")
+// .replace(/\t/g, "&nbsp;&nbsp;&nbsp;&nbsp;");
 
 // Generate unique ID for this component
-const componentId = `paste-${Math.random().toString(36).substr(2, 9)}`;
+const componentId = `paste-${Math.random().toString(36).substring(2, 9)}`;
 const clickableClass = isClickable
-    ? "paste-preview-clickable cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors duration-200"
+    ? "paste-preview-clickable cursor-pointer transition-colors duration-200"
     : "";
 </script>
 <template>
     <div
         :class="[
-            'paste-preview border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden my-2 bg-gray-100 dark:bg-gray-900 hover:shadow-md transition-all duration-300 w-full',
+            'paste-preview border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden my-2 bg-gray-100 dark:bg-gray-900 hover:shadow-md transition-all duration-300 w-[250px]',
             clickableClass,
         ]"
         :id="componentId"
@@ -51,13 +53,16 @@ const clickableClass = isClickable
             </div>
             <div class="pb-3 px-3">
                 <div class="relative">
-                    <div
-                        class="text-sm text-gray-800 dark:text-gray-200 leading-relaxed break-words whitespace-pre-wrap font-mono h-20 sm:h-24 overflow-hidden transition-colors duration-200"
+                    <pre
+                        class="text-sm h-20 sm:h-24 overflow-hidden text-gray-800 dark:text-gray-200 transition-colors duration-200"
                     >
-                        {{ escapedPreview }}
-                    </div>
+                        <code
+                            :class="`language-plaintext leading-relaxed break-words whitespace-pre-wrap `"
+                            v-html="escapedPreview ? hljs.highlight(escapedPreview, { language: 'plaintext' }).value : 'No paste content available'"
+                        ></code>
+                    </pre>
                     <div
-                        class="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-gray-100 dark:from-gray-700 via-gray-100/80 dark:via-gray-700/80 to-transparent pointer-events-none transition-colors duration-200"
+                        class="absolute bottom-0 left-0 right-0 h-14 bg-gradient-to-b from-transparent to-gray-100 dark:to-gray-900 pointer-events-none transition-colors duration-200"
                     ></div>
                 </div>
                 <div
