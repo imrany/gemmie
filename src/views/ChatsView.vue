@@ -15,6 +15,7 @@ import {
 } from "lucide-vue-next";
 import ProtectedPage from "@/layout/ProtectedPage.vue";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 const {
     isOnline,
@@ -108,11 +109,11 @@ const handleGoToChat = (id: string) => {
                             />
                         </button>
 
-                        <p
-                            class="text-gray-700 dark:text-gray-300 text-xl font-semibold truncate min-w-0"
+                        <h1
+                            class="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white"
                         >
                             Chats
-                        </p>
+                        </h1>
 
                         <Button
                             @click="handleNewChat"
@@ -130,22 +131,21 @@ const handleGoToChat = (id: string) => {
 
                     <!-- Search Bar -->
                     <div v-if="chats.length !== 0" class="mb-4 flex-shrink-0">
-                        <div class="relative bg-gray-100 dark:bg-gray-800">
+                        <div class="relative w-full">
                             <Search
-                                class="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+                                class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"
                             />
-                            <input
+                            <Input
                                 v-model="searchQuery"
-                                type="text"
                                 placeholder="Search chats..."
-                                class="w-full text-base font-medium pl-10 pr-10 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-inherit text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent transition-all"
+                                class="pl-9 pr-9 h-10 font-medium text-gray-800 dark:text-gray-200 w-full resize-none border-none ring-[1px] ring-gray-200 dark:ring-gray-800 outline-none focus:border-none focus-visible:ring-gray-300 dark:focus-visible:ring-gray-700"
                             />
                             <button
                                 v-if="searchQuery"
                                 @click="clearSearch"
-                                class="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                                class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
                             >
-                                <X class="w-5 h-5" />
+                                <X class="w-4 h-4" />
                             </button>
                         </div>
                         <p

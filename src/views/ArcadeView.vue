@@ -8,7 +8,7 @@ import { ref, computed } from "vue";
 import { onMounted } from "vue";
 import { inject } from "vue";
 import { useRouter } from "vue-router";
-import { ChevronLeft, Code, Calendar, User, Search, X } from "lucide-vue-next";
+import { ChevronLeft, Code, Search, X } from "lucide-vue-next";
 import { Input } from "@/components/ui/input";
 
 const { screenWidth, parsedUserDetails, isCollapsed, apiCall } = inject(
@@ -97,11 +97,11 @@ const filteredArcades = computed(() => {
     );
 });
 
-const yourArcadesCount = computed(() => {
-    return arcades.value.filter(
-        (arcade) => arcade.user_id === parsedUserDetails.value?.userId,
-    ).length;
-});
+// const yourArcadesCount = computed(() => {
+//     return arcades.value.filter(
+//         (arcade) => arcade.user_id === parsedUserDetails.value?.userId,
+//     ).length;
+// });
 
 function clearSearch() {
     searchQuery.value = "";
@@ -150,7 +150,7 @@ onMounted(async () => {
                 class="flex-1 flex overflow-hidden h-full justify-center p-3 sm:p-4 md:p-6 max-w-full"
             >
                 <div
-                    class="w-full px-2 flex flex-col h-full overflow-hidden max-w-7xl"
+                    class="w-full px-2 flex flex-col h-full overflow-hidden md:max-w-3xl max-w-[100vw]"
                 >
                     <!-- Header Section -->
                     <div class="flex-shrink-0 w-full mb-6 space-y-4">
@@ -176,76 +176,51 @@ onMounted(async () => {
                             <div class="flex-1"></div>
                         </div>
 
-                        <!-- Tabs and Search -->
+                        <!-- Horizontal Tabs -->
                         <div
-                            class="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between"
+                            class="border-b border-gray-200 dark:border-gray-700 mb-2"
                         >
-                            <!-- Tabs -->
-                            <div
-                                class="inline-flex items-center gap-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg"
-                            >
+                            <nav class="flex space-x-8" aria-label="Tabs">
                                 <button
                                     @click="activeTab = 'all'"
-                                    :class="[
-                                        'px-4 py-2 text-sm font-medium rounded-md transition-all duration-200',
+                                    :class="
                                         activeTab === 'all'
-                                            ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
-                                            : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200',
-                                    ]"
+                                            ? 'border-gray-500 text-gray-600 dark:text-gray-200 whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm'
+                                            : 'border-transparent text-gray-500 dark:text-gray-200 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600 whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm transition-colors'
+                                    "
                                 >
-                                    All
-                                    <span
-                                        class="ml-1.5 text-xs"
-                                        :class="
-                                            activeTab === 'all'
-                                                ? 'text-gray-500 dark:text-gray-400'
-                                                : 'text-gray-400 dark:text-gray-500'
-                                        "
-                                    >
-                                        {{ arcades.length }}
-                                    </span>
+                                    Inspiration
                                 </button>
                                 <button
                                     @click="activeTab = 'yours'"
-                                    :class="[
-                                        'px-4 py-2 text-sm font-medium rounded-md transition-all duration-200',
+                                    :class="
                                         activeTab === 'yours'
-                                            ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
-                                            : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200',
-                                    ]"
+                                            ? 'border-gray-500 text-gray-600 dark:text-gray-200 whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm'
+                                            : 'border-transparent text-gray-500 dark:text-gray-200 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600 whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm transition-colors'
+                                    "
                                 >
                                     Your Arcade
-                                    <span
-                                        class="ml-1.5 text-xs"
-                                        :class="
-                                            activeTab === 'yours'
-                                                ? 'text-gray-500 dark:text-gray-400'
-                                                : 'text-gray-400 dark:text-gray-500'
-                                        "
-                                    >
-                                        {{ yourArcadesCount }}
-                                    </span>
                                 </button>
-                            </div>
+                            </nav>
+                        </div>
 
-                            <!-- Search -->
-                            <div class="relative w-full sm:w-64">
-                                <Search
-                                    class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"
-                                />
-                                <Input
-                                    v-model="searchQuery"
-                                    placeholder="Search arcades..."
-                                    class="pl-9 pr-9 h-10"
-                                />
-                                <button
-                                    v-if="searchQuery"
-                                    @click="clearSearch"
-                                    class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-                                >
-                                    <X class="w-4 h-4" />
-                                </button>
-                            </div>
+                        <!-- Search -->
+                        <div class="relative w-full">
+                            <Search
+                                class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"
+                            />
+                            <Input
+                                v-model="searchQuery"
+                                placeholder="Search arcades..."
+                                class="pl-9 pr-9 h-10 font-medium text-gray-800 dark:text-gray-200 w-full resize-none border-none ring-[1px] ring-gray-200 dark:ring-gray-800 outline-none focus:border-none focus-visible:ring-gray-300 dark:focus-visible:ring-gray-700"
+                            />
+                            <button
+                                v-if="searchQuery"
+                                @click="clearSearch"
+                                class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                            >
+                                <X class="w-4 h-4" />
+                            </button>
                         </div>
                     </div>
 
@@ -261,11 +236,11 @@ onMounted(async () => {
                                 v-for="arcade in filteredArcades"
                                 :key="arcade.id"
                                 @click="viewArcade(arcade.id!)"
-                                class="group relative bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden hover:shadow-lg hover:border-gray-300 dark:hover:border-gray-600 transition-all duration-200 cursor-pointer"
+                                class="group relative overflow-hidden transition-all duration-200 cursor-pointer"
                             >
                                 <!-- Preview Container -->
                                 <div
-                                    class="relative w-full aspect-video bg-gray-100 dark:bg-gray-900 overflow-hidden no-scrollbar"
+                                    class="relative w-full rounded-xl aspect-video bg-gray-100 dark:bg-gray-900 overflow-hidden no-scrollbar"
                                 >
                                     <!-- Iframe Preview -->
                                     <iframe
@@ -281,10 +256,10 @@ onMounted(async () => {
 
                                     <!-- Overlay on Hover -->
                                     <div
-                                        class="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center"
+                                        class="absolute inset-0 bg-gray-800/30 dark:bg-gray-200/30 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center"
                                     >
                                         <div
-                                            class="text-white text-sm font-medium"
+                                            class="dark:text-gray-200 text-gray-800 text-sm font-semibold"
                                         >
                                             View Full Preview
                                         </div>
@@ -298,42 +273,12 @@ onMounted(async () => {
                                     </div>
                                 </div>
 
-                                <!-- Content -->
-                                <div class="p-4 space-y-2">
-                                    <!-- Title -->
-                                    <h3
-                                        class="font-semibold text-gray-900 dark:text-white line-clamp-1 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors"
-                                    >
-                                        {{ arcade.label }}
-                                    </h3>
-
-                                    <!-- Description -->
-                                    <p
-                                        class="text-sm text-gray-600 dark:text-gray-400 line-clamp-2"
-                                    >
-                                        {{ arcade.description }}
-                                    </p>
-
-                                    <!-- Footer Info -->
-                                    <div
-                                        class="flex items-center gap-3 pt-2 text-xs text-gray-500 dark:text-gray-500"
-                                    >
-                                        <div class="flex items-center gap-1">
-                                            <Calendar class="w-3.5 h-3.5" />
-                                            {{ arcade.created_at }}
-                                        </div>
-                                        <div
-                                            v-if="
-                                                arcade.user_id ===
-                                                parsedUserDetails?.userId
-                                            "
-                                            class="flex items-center gap-1 text-blue-600 dark:text-blue-400"
-                                        >
-                                            <User class="w-3.5 h-3.5" />
-                                            You
-                                        </div>
-                                    </div>
-                                </div>
+                                <!-- Title -->
+                                <h3
+                                    class="font-medium mt-3 text-sm text-gray-800 dark:text-gray-200 line-clamp-1 transition-colors"
+                                >
+                                    {{ arcade.label }}
+                                </h3>
                             </div>
                         </div>
                     </div>
