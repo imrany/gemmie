@@ -345,7 +345,10 @@ watch(showPreviewSidebar, (newVal) => {
                                     variant="ghost"
                                     @click="navlink.action"
                                     :class="[
-                                        'w-full group justify-start flex items-center gap-2 h-[40px] rounded-lg transition-colors',
+                                        'w-full group flex items-center gap-2 h-[40px] rounded-lg transition-colors',
+                                        showFullSidebar
+                                            ? 'justify-start'
+                                            : 'justify-center',
                                         router.currentRoute.value.path ===
                                         navlink.path
                                             ? 'bg-gray-200 dark:bg-gray-700/50 px-2'
@@ -399,7 +402,12 @@ watch(showPreviewSidebar, (newVal) => {
                         <TooltipTrigger as-child>
                             <Button
                                 variant="ghost"
-                                class="w-full justify-start flex items-center h-[40px] hover:bg-gray-200 dark:hover:bg-gray-700/50 rounded-lg px-2 transition-colors"
+                                :class="[
+                                    'w-full flex items-center h-[40px] hover:bg-gray-200 dark:hover:bg-gray-700/50 rounded-lg px-2 transition-colors',
+                                    showFullSidebar
+                                        ? 'justify-start'
+                                        : 'justify-center',
+                                ]"
                                 :disabled="screenWidth < 720"
                                 @click="openWorkplace"
                             >

@@ -886,18 +886,21 @@ async function syncFromServer() {
         showSyncIndicator("Syncing data from server...", 30);
 
         let data: any;
-        if (isOnline.value){
-        try {
-            console.log("📡 Fetching data from server...");
-            updateSyncProgress("Fetching data from server...", 50);
-            const response = await apiCall("/sync", {
-                method: "GET",
-            });
-            data = response.data;
-            isLoading.value = data.chats && data.chats !== "[]" ? true : false;
-        } catch (error: any) {
-            console.warn("⚠️ No data received from server: " + error.message);
-        }
+        if (isOnline.value) {
+            try {
+                console.log("📡 Fetching data from server...");
+                updateSyncProgress("Fetching data from server...", 50);
+                const response = await apiCall("/sync", {
+                    method: "GET",
+                });
+                data = response.data;
+                isLoading.value =
+                    data.chats && data.chats !== "[]" ? true : false;
+            } catch (error: any) {
+                console.warn(
+                    "⚠️ No data received from server: " + error.message,
+                );
+            }
         }
 
         if (!data || !data.chats) {
@@ -1583,26 +1586,6 @@ function isLocalDataEmpty(): boolean {
         return false;
     }
 }
-
-watch(
-    isOnline,
-    (newIsOnline) => {
-        if (!newIsOnline) {
-            toast.error("You are offline", {
-                duration: 4000,
-                description: "Please check your internet connection",
-            });
-        } else {
-            toast.success("Connection restored", {
-                duration: 3000,
-                description: "You are back online",
-            });
-        }
-    },
-    {
-        immediate: true,
-    },
-);
 
 function cancelChatRequests(chatId: string) {
     const requestsToCancel: string[] = [];

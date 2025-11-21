@@ -2,7 +2,8 @@
 import PreviewSideBar from "@/components/PreviewSideBar.vue";
 import type { Chat, UserDetails } from "@/types";
 import type { Ref } from "vue";
-import { inject } from "vue";
+import { inject, watch } from "vue";
+import { toast } from "vue-sonner";
 
 const {
     chats,
@@ -15,7 +16,9 @@ const {
     renameChat,
     manualSync,
     isAuthenticated,
+    isOnline,
 } = inject("globalState") as {
+    isOnline: Ref<boolean>;
     chats: Ref<Chat[]>;
     parsedUserDetails: Ref<UserDetails>;
     isAuthenticated: Ref<boolean>;
@@ -28,6 +31,26 @@ const {
     renameChat: (id: string, name: string) => Promise<string>;
     manualSync: () => void;
 };
+
+watch(
+    isOnline,
+    (newIsOnline) => {
+        if (!newIsOnline) {
+            toast.error("You are offline", {
+                duration: 5000,
+                description: "Please check your internet connection",
+            });
+        } else {
+            toast.success("Connection restored", {
+                duration: 3000,
+                description: "You are back online",
+            });
+        }
+    },
+    {
+        immediate: true,
+    },
+);
 </script>
 <template>
     <div

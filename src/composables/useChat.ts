@@ -430,13 +430,7 @@ export function useChat({
               }
             }
           }
-          return [
-            false,
-            "Failed to load chat: " +
-              currentChatId.value +
-              ". Error: " +
-              apiError.message,
-          ];
+          return [false, "Failed to load chat: " + currentChatId.value];
         }
       } else {
         const stored = localStorage.getItem("chats");
@@ -463,19 +457,12 @@ export function useChat({
                   ]
                 : [
                     false,
-                    "Local chat: " +
-                      existingChat!.id +
-                      " loaded successfully but there's no messages, get connected and try again.",
+                    "This chat is loaded from local but there are no messages, get connected and try again.",
                   ];
             }
           }
         }
-        return [
-          false,
-          "Failed to load chat: " +
-            currentChatId.value +
-            ", get connected and try again.",
-        ];
+        return [false, "Failed to load chat, get connected and try again."];
       }
 
       updateExpandedArray();
@@ -487,10 +474,7 @@ export function useChat({
       chats.value = [];
       return [
         false,
-        "Failed to load chat: " +
-          currentChatId.value +
-          " from server. Error: " +
-          error.message,
+        "Failed to load chat: " + currentChatId.value + " from server.",
       ];
     }
   }
@@ -522,8 +506,7 @@ export function useChat({
           }
           return [
             false,
-            "Failed to load chats from server. Loading from local. Error: " +
-              apiError.message,
+            "Failed to load chats from server. Loading from local.",
           ];
         }
       } else {

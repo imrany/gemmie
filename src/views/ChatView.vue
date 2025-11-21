@@ -76,7 +76,7 @@ import { useMessage } from "@/composables/useMessage";
 import ProtectedPage from "@/layout/ProtectedPage.vue";
 import InputArea from "@/components/InputArea.vue";
 import ReferenceBadge from "@/components/ReferenceBadge.vue";
-import NoChatFound from "@/components/NoChatFound.vue";
+import ChatErrorSection from "@/components/ChatErrorSection.vue";
 
 // Inject global state
 const {
@@ -1828,7 +1828,7 @@ onUnmounted(() => {
                     : 'text-sm font-light flex-grow items-center justify-center flex flex-col transition-all duration-300 ease-in-out bg-inherit',
             ]"
         >
-            <NoChatFound
+            <ChatErrorSection
                 v-if="showErrorSection"
                 :fallback-chat-id="fallbackChatId"
                 :show-error-section="ref(showErrorSection)"
@@ -2264,7 +2264,6 @@ onUnmounted(() => {
                                                         <span>Delete</span>
                                                     </button>
                                                 </div>
-                                                variant
                                             </div>
                                         </div>
                                     </div>
