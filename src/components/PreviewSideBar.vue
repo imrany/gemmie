@@ -24,7 +24,6 @@ import {
     TooltipContent,
     TooltipTrigger,
 } from "./ui/tooltip";
-import { useRouter } from "vue-router";
 import { WRAPPER_URL } from "@/lib/globals";
 import type { RawArcade } from "@/types";
 
@@ -59,7 +58,6 @@ const {
     apiCall: (endpoint: string, options: RequestInit) => Promise<any>;
 };
 
-const router = useRouter();
 const activeTab = ref<"preview" | "code" | "publish">(
     metadata?.value ? "code" : "preview",
 );
@@ -247,11 +245,18 @@ const publishToArcade = async () => {
             };
             formErrors.value = {};
             closePreview();
+            const dismiss = toast.loading("Opening Arcade...", {
+                cancel: {
+                    label: "Cancel",
+                    onClick: () => {
+                        toast.dismiss(dismiss);
+                    },
+                },
+            });
+
             setTimeout(() => {
-                router.push({
-                    name: "single-arcade",
-                    params: { id: parsedResponse.data },
-                });
+                window.open(`/arcades/${parsedResponse.data}`, "_blank");
+                toast.dismiss(dismiss);
             }, 2000);
         } else {
             throw new Error(parsedResponse.message || "Failed to publish");

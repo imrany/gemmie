@@ -379,8 +379,8 @@ export function useAuth(
     const currentRoute = router.currentRoute.value;
 
     // Whitelist of allowed redirects to prevent open redirect vulnerabilities
-    const allowedWholeRedirects = ["upgrade", "chats"];
-    const allowedPartialRedirects = ["chat/"];
+    const allowedWholeRedirects = ["upgrade", "chats", "arcade"];
+    const allowedPartialRedirects = ["chat/", "arcade/"];
     const isValidRedirect =
       redirectParam &&
       (allowedWholeRedirects.includes(redirectParam) ||

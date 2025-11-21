@@ -108,7 +108,7 @@ function clearSearch() {
 }
 
 function viewArcade(arcadeId: string) {
-    router.push(`/arcade/${arcadeId}`);
+    window.open(`/arcade/${arcadeId}`, "_blank");
 }
 
 onMounted(async () => {
@@ -256,10 +256,10 @@ onMounted(async () => {
 
                                     <!-- Overlay on Hover -->
                                     <div
-                                        class="absolute inset-0 bg-gray-800/30 dark:bg-gray-200/30 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center"
+                                        class="absolute inset-0 bg-gray-800/50 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center"
                                     >
                                         <div
-                                            class="dark:text-gray-200 text-gray-800 text-sm font-semibold"
+                                            class="text-gray-200 text-sm font-semibold"
                                         >
                                             View Full Preview
                                         </div>
