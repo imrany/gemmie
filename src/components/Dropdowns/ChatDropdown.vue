@@ -35,7 +35,7 @@ const props = defineProps<{
                     }
                 "
                 variant="ghost"
-                class="w-full flex font-normal items-center gap-2 text-left px-2 py-1 h-[30px] justify-start hover:bg-gray-100 rounded-t-lg dark:hover:bg-gray-700 dark:text-gray-300"
+                class="w-full flex font-medium group hover:font-semibold items-center gap-2 text-left px-2 py-1 h-[30px] justify-start hover:bg-gray-100 rounded-t-lg dark:hover:bg-gray-700 dark:text-gray-300"
             >
                 <Pencil class="w-4 h-4 max-md:w-5 max-md:h-5" />
                 <span class="max-md:text-base">Rename</span>
@@ -51,7 +51,7 @@ const props = defineProps<{
                     }
                 "
                 variant="ghost"
-                class="w-full flex font-normal items-center gap-2 text-left px-2 py-1 h-[30px] justify-start hover:text-red-600 text-red-600 hover:bg-red-100 rounded-b-lg dark:text-red-200 dark:hover:bg-red-900"
+                class="w-full flex font-medium group hover:font-semibold items-center gap-2 text-left px-2 py-1 h-[30px] justify-start hover:text-red-600 text-red-600 hover:bg-red-100 rounded-b-lg dark:text-red-200 dark:hover:bg-red-900"
             >
                 <Trash class="w-5 h-5 sm:h-4 sm:w-4" />
                 <span class="max-md:text-base">Delete</span>
