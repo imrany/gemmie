@@ -15,6 +15,7 @@
 ### Migration Versions
 
 Migrations are numbered sequentially:
+
 - `000001_initial_schema` - Version 1
 - `000002_add_user_transaction_relationship` - Version 2
 - `000003_your_next_migration` - Version 3
@@ -27,7 +28,8 @@ The system tracks which version your database is currently at.
 
 ### 1. **UP** - Apply Migrations Forward
 
-**What it does:** Runs all pending migrations to bring your database to the latest version.
+**What it does:** Runs all pending migrations to bring your database to
+the latest version.
 
 ```go
 // Automatically runs in InitStorage()
@@ -38,6 +40,7 @@ store.MigrateUp()
 ```
 
 **Example:**
+
 - Current version: 1
 - Available versions: 1, 2, 3
 - Result: Applies versions 2 and 3
@@ -53,6 +56,7 @@ err := store.MigrateDown()
 ```
 
 **Example:**
+
 - Current version: 3
 - After down: version 2
 - The `000003_*.down.sql` file is executed
@@ -69,6 +73,7 @@ err := store.MigrateSteps(-2)
 ```
 
 **Example:**
+
 - Current version: 5
 - After `MigrateSteps(-2)`: version 3
 - Executes `000005_*.down.sql` then `000004_*.down.sql`
@@ -85,6 +90,7 @@ err := store.MigrateTo(2)
 ```
 
 **Examples:**
+
 - Current: 5, Target: 2 → Rolls back versions 5, 4, 3
 - Current: 1, Target: 3 → Applies versions 2, 3
 
@@ -117,6 +123,7 @@ err := store.ForceMigrationVersion(2)
 ## Common Scenarios
 
 ### Scenario 1: Normal Development
+
 ```bash
 # Start app - migrations run automatically
 go run main.go
@@ -125,6 +132,7 @@ go run main.go
 ```
 
 ### Scenario 2: Rollback Last Change
+
 ```bash
 # Use CLI tool to rollback
 go run cmd/migrate/main.go --command=down
@@ -134,6 +142,7 @@ store.MigrateDown()
 ```
 
 ### Scenario 3: Test a Migration
+
 ```bash
 # Apply migration
 go run cmd/migrate/main.go --command=up
@@ -148,6 +157,7 @@ go run cmd/migrate/main.go --command=up
 ```
 
 ### Scenario 4: Production Rollback
+
 ```bash
 # Check current version
 go run cmd/migrate/main.go --command=version
@@ -162,6 +172,7 @@ go run cmd/migrate/main.go --command=version
 ```
 
 ### Scenario 5: Migration Failed (Dirty State)
+
 ```bash
 # Check status
 go run cmd/migrate/main.go --command=version
@@ -178,14 +189,16 @@ go run cmd/migrate/main.go --command=up
 
 ## Best Practices
 
-### ✅ DO:
+### ✅ DO
+
 1. **Always create both UP and DOWN migrations** together
 2. **Test migrations in development** before production
 3. **Backup database** before running migrations in production
 4. **Make migrations reversible** when possible
 5. **Keep migrations small** and focused on one change
 
-### ❌ DON'T:
+### ❌ DON'T
+
 1. **Never edit a migration** that's already been run in production
 2. **Don't delete migration files** after they've been applied
 3. **Don't skip migration versions** - they must be sequential
@@ -196,6 +209,7 @@ go run cmd/migrate/main.go --command=up
 ## Creating New Migrations
 
 ### Step 1: Create migration files
+
 ```bash
 # In store/migrations/ directory
 touch 000003_add_user_settings.up.sql
@@ -203,6 +217,7 @@ touch 000003_add_user_settings.down.sql
 ```
 
 ### Step 2: Write UP migration
+
 ```sql
 -- 000003_add_user_settings.up.sql
 ALTER TABLE users ADD COLUMN settings JSONB DEFAULT '{}';
@@ -210,6 +225,7 @@ CREATE INDEX idx_users_settings ON users USING gin(settings);
 ```
 
 ### Step 3: Write DOWN migration
+
 ```sql
 -- 000003_add_user_settings.down.sql
 DROP INDEX IF EXISTS idx_users_settings;
@@ -217,6 +233,7 @@ ALTER TABLE users DROP COLUMN IF EXISTS settings;
 ```
 
 ### Step 4: Restart app or run manually
+
 ```bash
 # Automatic when app starts
 go run main.go
@@ -229,18 +246,19 @@ go run cmd/migrate/main.go --command=up
 
 ## Migration States
 
-| State | Description | Action |
-|-------|-------------|--------|
-| **Clean** | All migrations applied successfully | Normal operation |
-| **Pending** | New migration files exist but not applied | Run UP |
-| **Dirty** | Migration failed halfway | FORCE then retry |
-| **Down** | Need to rollback | Run DOWN or STEPS |
+| State       | Description                               | Action            |
+| ----------- | ----------------------------------------- | ----------------- |
+| **Clean**   | All migrations applied successfully       | Normal operation  |
+| **Pending** | New migration files exist but not applied | Run UP            |
+| **Dirty**   | Migration failed halfway                  | FORCE then retry  |
+| **Down**    | Need to rollback                          | Run DOWN or STEPS |
 
 ---
 
 ## Troubleshooting
 
 ### Problem: "Migration is dirty"
+
 ```bash
 # Solution: Force to last good version
 go run cmd/migrate/main.go --command=force --version=1
@@ -248,12 +266,14 @@ go run cmd/migrate/main.go --command=up
 ```
 
 ### Problem: "No change" error
+
 ```bash
 # This is normal - means database is already at latest version
 # No action needed
 ```
 
 ### Problem: Migration failed with SQL error
+
 ```bash
 # 1. Check the error message
 # 2. Fix the SQL in the migration file
