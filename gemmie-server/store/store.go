@@ -113,7 +113,7 @@ type Message struct {
 	References []string  `json:"references,omitempty"`
 }
 
-type Archade struct {
+type Arcade struct {
 	ID          string    `json:"id,omitempty"`
 	UserId      string    `json:"user_id"`
 	Code        string    `json:"code"`
@@ -183,5 +183,5 @@ func Close() error {
 }
 
 func GetVersion() string {
-	return "v0.17.1"
+	return "v0.17.2"
 }

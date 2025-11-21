@@ -94,39 +94,39 @@ Update user data (requires X-User-ID header)
 
 Health check endpoint
 
-### POST /api/archades
+### POST /api/arcades
 
-Create a new archade (requires X-User-ID header)
+Create a new arcade (requires X-User-ID header)
 
 ```json
 {
-  "label": "My Archade",
+  "label": "My Arcade",
   "code": "console.log('Hello, world!');",
-  "description": "A simple JavaScript archade",
+  "description": "A simple JavaScript arcade",
   "code_type": "javascript"
 }
 ```
 
-### GET /api/archades/{id}
+### GET /api/arcades/{id}
 
-Get an archade by ID (requires X-User-ID header)
+Get an arcade by ID (requires X-User-ID header)
 
-### PUT /api/archades/{id}
+### PUT /api/arcades/{id}
 
-Update an archade by ID (requires X-User-ID header)
+Update an arcade by ID (requires X-User-ID header)
 
 ```json
 {
-  "label": "Updated Archade",
+  "label": "Updated Arcade",
   "code": "console.log('Updated!');",
-  "description": "An updated JavaScript archade",
+  "description": "An updated JavaScript arcade",
   "code_type": "javascript"
 }
 ```
 
-### DELETE /api/archades/{id}
+### DELETE /api/arcades/{id}
 
-Delete an archade by ID (requires X-User-ID header)
+Delete an arcade by ID (requires X-User-ID header)
 
 ## Data Flow
 
@@ -168,23 +168,23 @@ gemmie-server/
 │   ├── encrypt
 │   │   └── encrypt.go
 │   └── handlers
-│       └── archade.go
+│       └── arcade.go
 ├── LICENSE
 =======
 │   ├── encrypt
 │   │   └── encrypt.go
 │   └── handlers
-│       └── archade.go
+│       └── arcade.go
 ├── LICENSE
 =======
 │   └── handlers
-│       └── archade.go
+│       └── arcade.go
 =======
 ├── internal
 │   ├── encrypt
 │   │   └── encrypt.go
 │   └── handlers
-│       └── archade.go
+│       └── arcade.go
 ├── LICENSE
 ├── main.go
 ├── Makefile
@@ -194,7 +194,7 @@ gemmie-server/
 │   ├── docker-compose.yaml
 │   └── Dockerfile
 └── store
-    ├── archade_ops.go
+    ├── arcade_ops.go
     ├── chat_ops.go
     ├── errors_ops.go
     ├── message_ops.go

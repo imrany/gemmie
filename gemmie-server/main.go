@@ -189,12 +189,12 @@ func runServer() {
 	r.HandleFunc("/api/chats/{id}", v1.UpdateChatHandler).Methods(http.MethodPut)
 	r.HandleFunc("/api/chats/{id}", v1.DeleteChatHandler).Methods(http.MethodDelete)
 
-	// Archade routes
-	r.HandleFunc("/api/archades", v1.CreateArchadeHandler).Methods(http.MethodPost)
-	r.HandleFunc("/api/archades", v1.GetArchadesHandler).Methods(http.MethodGet)
-	r.HandleFunc("/api/archades/{id}", v1.GetArchadeHandler).Methods(http.MethodGet)
-	r.HandleFunc("/api/archades/{id}", v1.UpdateArchadeHandler).Methods(http.MethodPut)
-	r.HandleFunc("/api/archades/{id}", v1.DeleteArchadeHandler).Methods(http.MethodDelete)
+	// Arcade routes
+	r.HandleFunc("/api/arcades", v1.CreateArcadeHandler).Methods(http.MethodPost)
+	r.HandleFunc("/api/arcades", v1.GetArcadesHandler).Methods(http.MethodGet)
+	r.HandleFunc("/api/arcades/{id}", v1.GetArcadeHandler).Methods(http.MethodGet)
+	r.HandleFunc("/api/arcades/{id}", v1.UpdateArcadeHandler).Methods(http.MethodPut)
+	r.HandleFunc("/api/arcades/{id}", v1.DeleteArcadeHandler).Methods(http.MethodDelete)
 
 	// Message routes
 	r.HandleFunc("/api/chats/{id}/messages", v1.CreateMessageHandler).Methods(http.MethodPost)

@@ -11,8 +11,8 @@ import (
 	"github.com/imrany/gemmie/gemmie-server/store"
 )
 
-// CreateArchadeHandler handles POST /api/archades
-func CreateArchadeHandler(w http.ResponseWriter, r *http.Request) {
+// CreateArcadeHandler handles POST /api/arcades
+func CreateArcadeHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	userID := r.Header.Get("X-User-ID")
@@ -46,7 +46,7 @@ func CreateArchadeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req store.Archade
+	var req store.Arcade
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(store.Response{
@@ -56,8 +56,8 @@ func CreateArchadeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create new archade
-	archade := store.Archade{
+	// Create new arcade
+	arcade := store.Arcade{
 		ID:          encrypt.GenerateID(nil),
 		UserId:      userID,
 		Label:       req.Label,
@@ -68,28 +68,28 @@ func CreateArchadeHandler(w http.ResponseWriter, r *http.Request) {
 		CodeType:    req.CodeType,
 	}
 
-	if err := store.CreateArchade(&archade); err != nil {
-		slog.Error("Failed to create archade", "error", err)
+	if err := store.CreateArcade(&arcade); err != nil {
+		slog.Error("Failed to create arcade", "error", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
-			Message: "Failed to create archade",
+			Message: "Failed to create arcade",
 		})
 		return
 	}
 
-	slog.Info("Archade created successfully", "id", archade.ID, "user_id", userID)
+	slog.Info("Arcade created successfully", "id", arcade.ID, "user_id", userID)
 
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(store.Response{
 		Success: true,
-		Message: "Archade created successfully",
-		Data:    archade,
+		Message: "Arcade created successfully",
+		Data:    arcade,
 	})
 }
 
-// GetArchadeHandler handles GET /api/archades/{id}
-func GetArchadeHandler(w http.ResponseWriter, r *http.Request) {
+// GetArcadeHandler handles GET /api/arcades/{id}
+func GetArcadeHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	userID := r.Header.Get("X-User-ID")
@@ -123,34 +123,34 @@ func GetArchadeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	idStr := r.URL.Path[len("/api/archades/"):]
+	idStr := r.URL.Path[len("/api/arcades/"):]
 	var id int64
 	_, err = fmt.Sscan(idStr, &id)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
-			Message: "Invalid archade ID",
+			Message: "Invalid arcade ID",
 		})
 		return
 	}
 
-	archade, err := store.GetArchadeById(id)
+	arcade, err := store.GetArcadeById(id)
 	if err != nil {
-		slog.Error("Failed to get archade", "error", err)
+		slog.Error("Failed to get arcade", "error", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
-			Message: "Failed to get archade",
+			Message: "Failed to get arcade",
 		})
 		return
 	}
 
-	if archade == nil {
+	if arcade == nil {
 		w.WriteHeader(http.StatusNotFound)
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
-			Message: "Archade not found",
+			Message: "Arcade not found",
 		})
 		return
 	}
@@ -158,32 +158,32 @@ func GetArchadeHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(store.Response{
 		Success: true,
-		Message: "Archade retrieved successfully",
-		Data:    archade,
+		Message: "Arcade retrieved successfully",
+		Data:    arcade,
 	})
 }
 
-// GetArchadesHandler handles GET /api/archades or GET /api/archades/?option="html"
-func GetArchadesHandler(w http.ResponseWriter, r *http.Request) {
+// GetArcadesHandler handles GET /api/arcades or GET /api/arcades/?option="html"
+func GetArcadesHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	optionStr := r.URL.Query().Get("option")
 	if optionStr == "" {
-		archades, err := store.GetArchadesByOption(nil)
+		arcades, err := store.GetArcadesByOption(nil)
 		if err != nil {
-			slog.Error("Failed to get archades", "error", err)
+			slog.Error("Failed to get arcades", "error", err)
 			w.WriteHeader(http.StatusInternalServerError)
 			json.NewEncoder(w).Encode(store.Response{
 				Success: false,
-				Message: "Failed to get archades",
+				Message: "Failed to get arcades",
 			})
 			return
 		}
 
-		if len(archades) == 0 {
+		if len(arcades) == 0 {
 			w.WriteHeader(http.StatusNotFound)
 			json.NewEncoder(w).Encode(store.Response{
 				Success: false,
-				Message: "Archades not found",
+				Message: "Arcades not found",
 			})
 			return
 		}
@@ -191,27 +191,27 @@ func GetArchadesHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(store.Response{
 			Success: true,
-			Message: "Archades retrieved successfully",
-			Data:    archades,
+			Message: "Arcades retrieved successfully",
+			Data:    arcades,
 		})
 		return
 	}
-	archades, err := store.GetArchadesByOption(&optionStr)
+	arcades, err := store.GetArcadesByOption(&optionStr)
 	if err != nil {
-		slog.Error("Failed to get archades", "error", err)
+		slog.Error("Failed to get arcades", "error", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
-			Message: "Failed to get archades",
+			Message: "Failed to get arcades",
 		})
 		return
 	}
 
-	if len(archades) == 0 {
+	if len(arcades) == 0 {
 		w.WriteHeader(http.StatusNotFound)
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
-			Message: "Archades not found",
+			Message: "Arcades not found",
 		})
 		return
 	}
@@ -219,13 +219,13 @@ func GetArchadesHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(store.Response{
 		Success: true,
-		Message: "Archades retrieved successfully",
-		Data:    archades,
+		Message: "Arcades retrieved successfully",
+		Data:    arcades,
 	})
 }
 
-// UpdateArchadeHandler handles PUT /api/archades/{id}
-func UpdateArchadeHandler(w http.ResponseWriter, r *http.Request) {
+// UpdateArcadeHandler handles PUT /api/arcades/{id}
+func UpdateArcadeHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	userID := r.Header.Get("X-User-ID")
@@ -259,19 +259,19 @@ func UpdateArchadeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	idStr := r.URL.Path[len("/api/archades/"):]
+	idStr := r.URL.Path[len("/api/arcades/"):]
 	var id int64
 	_, err = fmt.Sscan(idStr, &id)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
-			Message: "Invalid archade ID",
+			Message: "Invalid arcade ID",
 		})
 		return
 	}
 
-	var req store.Archade
+	var req store.Arcade
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(store.Response{
@@ -281,57 +281,57 @@ func UpdateArchadeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get existing archade
-	archade, err := store.GetArchadeById(id)
+	// Get existing arcade
+	arcade, err := store.GetArcadeById(id)
 	if err != nil {
-		slog.Error("Failed to get archade", "error", err)
+		slog.Error("Failed to get arcade", "error", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
-			Message: "Failed to get archade",
+			Message: "Failed to get arcade",
 		})
 		return
 	}
 
-	if archade == nil {
+	if arcade == nil {
 		w.WriteHeader(http.StatusNotFound)
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
-			Message: "Archade not found",
+			Message: "Arcade not found",
 		})
 		return
 	}
 
-	// Update archade fields
-	archade.Label = req.Label
-	archade.Code = req.Code
-	archade.Description = req.Description
-	archade.CodeType = req.CodeType
-	archade.UpdatedAt = time.Now()
+	// Update arcade fields
+	arcade.Label = req.Label
+	arcade.Code = req.Code
+	arcade.Description = req.Description
+	arcade.CodeType = req.CodeType
+	arcade.UpdatedAt = time.Now()
 
-	updatedArchade, err := store.UpdateArchade(archade)
+	updatedArcade, err := store.UpdateArcade(arcade)
 	if err != nil {
-		slog.Error("Failed to update archade", "error", err)
+		slog.Error("Failed to update arcade", "error", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
-			Message: "Failed to update archade",
+			Message: "Failed to update arcade",
 		})
 		return
 	}
 
-	slog.Info("Archade updated successfully", "id", archade.ID, "user_id", userID)
+	slog.Info("Arcade updated successfully", "id", arcade.ID, "user_id", userID)
 
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(store.Response{
 		Success: true,
-		Message: "Archade updated successfully",
-		Data:    updatedArchade,
+		Message: "Arcade updated successfully",
+		Data:    updatedArcade,
 	})
 }
 
-// DeleteArchadeHandler handles DELETE /api/archades/{id}
-func DeleteArchadeHandler(w http.ResponseWriter, r *http.Request) {
+// DeleteArcadeHandler handles DELETE /api/arcades/{id}
+func DeleteArcadeHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	userID := r.Header.Get("X-User-ID")
@@ -365,55 +365,55 @@ func DeleteArchadeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	idStr := r.URL.Path[len("/api/archades/"):]
+	idStr := r.URL.Path[len("/api/arcades/"):]
 	var id int64
 	_, err = fmt.Sscan(idStr, &id)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
-			Message: "Invalid archade ID",
+			Message: "Invalid arcade ID",
 		})
 		return
 	}
 
-	// Get existing archade
-	archade, err := store.GetArchadeById(id)
+	// Get existing arcade
+	arcade, err := store.GetArcadeById(id)
 	if err != nil {
-		slog.Error("Failed to get archade", "error", err)
+		slog.Error("Failed to get arcade", "error", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
-			Message: "Failed to get archade",
+			Message: "Failed to get arcade",
 		})
 		return
 	}
 
-	if archade == nil {
+	if arcade == nil {
 		w.WriteHeader(http.StatusNotFound)
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
-			Message: "Archade not found",
+			Message: "Arcade not found",
 		})
 		return
 	}
 
-	err = store.DeleteArchadeByID(id)
+	err = store.DeleteArcadeByID(id)
 	if err != nil {
-		slog.Error("Failed to delete archade", "error", err)
+		slog.Error("Failed to delete arcade", "error", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
-			Message: "Failed to delete archade",
+			Message: "Failed to delete arcade",
 		})
 		return
 	}
 
-	slog.Info("Archade deleted successfully", "id", archade.ID, "user_id", userID)
+	slog.Info("Arcade deleted successfully", "id", arcade.ID, "user_id", userID)
 
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(store.Response{
 		Success: true,
-		Message: "Archade deleted successfully",
+		Message: "Arcade deleted successfully",
 	})
 }
