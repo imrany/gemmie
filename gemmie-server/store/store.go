@@ -113,6 +113,17 @@ type Message struct {
 	References []string  `json:"references,omitempty"`
 }
 
+type Archade struct {
+	ID          string    `json:"id,omitempty"`
+	UserId      string    `json:"user_id"`
+	Code        string    `json:"code"`
+	Label       string    `json:"label"`
+	Description string    `json:"description"`
+	CodeType    string    `json:"code_type"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
 var (
 	DB *sql.DB
 )
@@ -172,5 +183,5 @@ func Close() error {
 }
 
 func GetVersion() string {
-	return "v0.12.4"
+	return "v0.17.0"
 }
