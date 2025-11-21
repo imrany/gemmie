@@ -8,6 +8,7 @@ import ShareChatDialog from "./ShareChatDialog.vue";
 import { toast } from "vue-sonner/src/packages/state.js";
 
 const {
+    isOnline,
     hideSidebar,
     screenWidth,
     currentChat,
@@ -16,6 +17,7 @@ const {
     shareResponse,
     copyResponse,
 } = inject("globalState") as {
+    isOnline: Ref<boolean>;
     isLoading: Ref<boolean>;
     copyResponse: (text: string, copiedIndex?: number) => void;
     shareResponse: (title: string, body: string) => void;
@@ -105,9 +107,9 @@ function formatTitle(title: string, maxLength: number = 30): string {
                     "
                     @click="isShowShareChat = true"
                     variant="outline"
-                    :disabled="isLoading || !currentChat"
+                    :disabled="isLoading || !currentChat || !isOnline"
                     size="sm"
-                    class="text-xs hover:border-gray-300 dark:hover:border-gray-600 bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700"
+                    class="text-xs disabled:cursor-not-allowed hover:border-gray-300 dark:hover:border-gray-600 bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700"
                 >
                     Share
                 </Button>

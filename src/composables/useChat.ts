@@ -22,6 +22,7 @@ import { toast } from "vue-sonner/src/packages/state.js";
 import { generateErrorId } from "./usePlatformError";
 
 export function useChat({
+  isOnline,
   copiedIndex,
   chats,
   currentChatId,
@@ -35,6 +36,7 @@ export function useChat({
   saveLinkPreviewCache,
   confirmDialog,
 }: {
+  isOnline: boolean;
   confirmDialog: Ref<ConfirmDialogOptions>;
   isAuthenticated: Ref<boolean>;
   parsedUserDetails: Ref<UserDetails>;
@@ -382,7 +384,7 @@ export function useChat({
 
   async function loadChat(): Promise<[boolean, string]> {
     try {
-      if (isAuthenticated.value) {
+      if (isOnline) {
         try {
           isChatLoading.value = true;
           const response = await apiCall<Chat>(`/chats/${currentChatId.value}`);
@@ -399,16 +401,128 @@ export function useChat({
             isChatLoading.value = false;
             return [
               true,
-              "Chat loaded successfully chat: " + response.data!.id + " loaded",
+              "Chat: " + response.data!.id + " loaded successfully.",
             ];
           }
         } catch (apiError: any) {
           isChatLoading.value = false;
+          const stored = localStorage.getItem("chats");
+          if (stored) {
+            const parsedChats: Chat[] = JSON.parse(stored);
+            if (Array.isArray(parsedChats)) {
+              const existingChat = parsedChats.find(
+                (chat) => chat.id === currentChatId.value,
+              );
+
+              if (existingChat) {
+                const existingChatIndex = chats.value.findIndex(
+                  (chat) => chat.id === existingChat!.id,
+                );
+                if (existingChatIndex !== -1) {
+                  chats.value[existingChatIndex] = existingChat;
+                } else {
+                  chats.value.push(existingChat);
+                }
+                return [
+                  true,
+                  "Local chat: " + existingChat!.id + " loaded successfully",
+                ];
+              }
+            }
+          }
           return [
             false,
             "Failed to load chat: " +
               currentChatId.value +
-              " from server. Error: " +
+              ". Error: " +
+              apiError.message,
+          ];
+        }
+      } else {
+        const stored = localStorage.getItem("chats");
+        if (stored) {
+          const parsedChats: Chat[] = JSON.parse(stored);
+          if (Array.isArray(parsedChats)) {
+            const existingChat = parsedChats.find(
+              (chat) => chat.id === currentChatId.value,
+            );
+
+            if (existingChat) {
+              const existingChatIndex = chats.value.findIndex(
+                (chat) => chat.id === existingChat!.id,
+              );
+              if (existingChatIndex !== -1) {
+                chats.value[existingChatIndex] = existingChat;
+              } else {
+                chats.value.push(existingChat);
+              }
+              return existingChat.messages
+                ? [
+                    true,
+                    "Local chat: " + existingChat!.id + " loaded successfully",
+                  ]
+                : [
+                    false,
+                    "Local chat: " +
+                      existingChat!.id +
+                      " loaded successfully but there's no messages, get connected and try again.",
+                  ];
+            }
+          }
+        }
+        return [
+          false,
+          "Failed to load chat: " +
+            currentChatId.value +
+            ", get connected and try again.",
+        ];
+      }
+
+      updateExpandedArray();
+      return [
+        true,
+        `Successfully loaded existing chat: ${currentChatId.value}`,
+      ];
+    } catch (error: any) {
+      chats.value = [];
+      return [
+        false,
+        "Failed to load chat: " +
+          currentChatId.value +
+          " from server. Error: " +
+          error.message,
+      ];
+    }
+  }
+
+  async function loadChats(): Promise<[boolean, string]> {
+    try {
+      if (isOnline) {
+        try {
+          isChatLoading.value = true;
+          const response = await apiCall<Chat[]>(`/chats`);
+          if (response.data) {
+            const serverChatsData = response.data;
+            const localChats = chats.value;
+            const mergedChats = mergeChats(serverChatsData, localChats);
+            chats.value = mergedChats;
+            saveChats();
+            isChatLoading.value = false;
+            return [true, "Chats loaded successfully"];
+          }
+        } catch (apiError: any) {
+          isChatLoading.value = false;
+          const stored = localStorage.getItem("chats");
+          if (stored) {
+            const parsedChats: Chat[] = JSON.parse(stored);
+            if (Array.isArray(parsedChats)) {
+              chats.value = parsedChats;
+              return [true, "Loading local chats until you get connected"];
+            }
+          }
+          return [
+            false,
+            "Failed to load chats from server. Loading from local. Error: " +
               apiError.message,
           ];
         }
@@ -418,8 +532,10 @@ export function useChat({
           const parsedChats = JSON.parse(stored);
           if (Array.isArray(parsedChats)) {
             chats.value = parsedChats;
+            return [true, "Loading local chats until you get connected."];
           }
         }
+        return [false, "Failed to chats, get connected and try again."];
       }
 
       updateExpandedArray();
@@ -532,7 +648,8 @@ export function useChat({
             autoGrow({ target: textarea } as any);
             shouldFocus = true;
           }
-          pastePreviews.value.delete(currentChatId.value);
+          console.log("Current draft:", currentDraft);
+          // pastePreviews.value.delete(currentChatId.value);
         } else {
           const textarea = document.getElementById(
             "prompt",
@@ -960,5 +1077,6 @@ export function useChat({
     renameChat,
     clearAllChats,
     apiCall,
+    loadChats,
   };
 }

@@ -3,15 +3,10 @@ import { API_BASE_URL } from "@/lib/globals";
 import { ref, type Ref } from "vue";
 
 export function useApiCall(globalStateRefs?: {
-  isUserOnline?: Ref<boolean>;
-  connectionStatus?: Ref<string>;
   parsedUserDetails?: Ref<UserDetails>;
   syncStatus?: Ref<any>;
 }) {
   // Use provided refs or create local ones as fallback
-  const isUserOnline = globalStateRefs?.isUserOnline || ref(navigator.onLine);
-  const connectionStatus =
-    globalStateRefs?.connectionStatus || ref<string>("online");
   const parsedUserDetails =
     globalStateRefs?.parsedUserDetails ||
     ref<UserDetails>(
@@ -42,15 +37,6 @@ export function useApiCall(globalStateRefs?: {
     options: RequestInit = {},
     retryCount = 0,
   ): Promise<any> {
-    if (!isUserOnline.value) {
-      const isActuallyOnline = await checkInternetConnection();
-      if (!isActuallyOnline) {
-        throw new Error(
-          "No internet connection. Please check your network and try again.",
-        );
-      }
-    }
-
     const maxRetries = 3;
     const retryDelay = Math.pow(2, retryCount) * 1000;
 
@@ -189,10 +175,10 @@ export function useApiCall(globalStateRefs?: {
     }
   }
 
-  async function checkInternetConnection(): Promise<boolean> {
+  async function checkInternetConnection(): Promise<
+    [boolean, "online" | "offline" | "checking"]
+  > {
     try {
-      connectionStatus.value = "checking";
-
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 5000);
 
@@ -205,15 +191,11 @@ export function useApiCall(globalStateRefs?: {
       clearTimeout(timeoutId);
 
       const isConnected = response.status < 400;
-      isUserOnline.value = isConnected;
-      connectionStatus.value = isConnected ? "online" : "offline";
-
-      return isConnected;
-    } catch (error) {
+      const status = isConnected ? "online" : "offline";
+      return [isConnected, status];
+    } catch (error: any) {
       console.warn("Internet connection check failed:", error);
-      isUserOnline.value = false;
-      connectionStatus.value = "offline";
-      return false;
+      return [false, "offline"];
     }
   }
 

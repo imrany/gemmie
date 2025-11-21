@@ -153,7 +153,6 @@ const availableMessages = computed(() => {
     return messages;
 });
 
-// Handle textarea input to detect @ mentions
 function handleTextareaInput(e: Event) {
     const textarea = e.target as HTMLTextAreaElement;
     const value = textarea.value;

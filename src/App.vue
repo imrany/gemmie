@@ -35,8 +35,6 @@ import { useHandlePaste } from "./composables/useHandlePaste";
 
 const { reportError } = usePlatformError();
 const router = useRouter();
-const isUserOnline = ref(navigator.onLine);
-const connectionStatus = ref<"online" | "offline" | "checking">("online");
 const screenWidth = ref(screen.width);
 const isDarkMode = ref(false);
 const scrollableElem = ref<HTMLElement | null>(null);
@@ -314,11 +312,12 @@ const { syncStatus, showSyncIndicator, hideSyncIndicator, updateSyncProgress } =
     useSync();
 
 const { apiCall, checkInternetConnection } = useApiCall({
-    isUserOnline,
-    connectionStatus,
     parsedUserDetails,
     syncStatus,
 });
+
+const isOnline = ref(false);
+const connectionStatus = ref<"online" | "offline" | "checking">("offline");
 
 const {
     isChatLoading,
@@ -344,7 +343,9 @@ const {
     mergeChats,
     draftSaveTimeout,
     apiCall: apiCallFromChat,
+    loadChats,
 } = useChat({
+    isOnline: isOnline.value,
     copiedIndex,
     chats,
     currentChatId,
@@ -874,7 +875,7 @@ async function syncFromServer() {
     const shouldSync = syncEnabled.value;
     if (!shouldSync) {
         console.log("❌ syncFromServer: Sync disabled");
-        await loadChat(); // ✅ Load local chat if sync disabled
+        await loadChats(); // ✅ Load local chat if sync disabled
         return;
     }
 
@@ -885,7 +886,8 @@ async function syncFromServer() {
         showSyncIndicator("Syncing data from server...", 30);
 
         let data: any;
-        if (!data) {
+        if (isOnline.value){
+        try {
             console.log("📡 Fetching data from server...");
             updateSyncProgress("Fetching data from server...", 50);
             const response = await apiCall("/sync", {
@@ -893,10 +895,14 @@ async function syncFromServer() {
             });
             data = response.data;
             isLoading.value = data.chats && data.chats !== "[]" ? true : false;
+        } catch (error: any) {
+            console.warn("⚠️ No data received from server: " + error.message);
+        }
         }
 
-        if (!data) {
-            console.warn("⚠️ No data received from server");
+        if (!data || !data.chats) {
+            //load local chats
+            await loadChats();
             isLoading.value = false;
             return;
         }
@@ -916,7 +922,7 @@ async function syncFromServer() {
                 const mergedChats = mergeChats(serverChatsData, localChats);
 
                 chats.value = mergedChats;
-                localStorage.setItem("chats", JSON.stringify(mergedChats));
+                saveChats();
                 console.log(
                     `✅ Synced ${mergedChats.length} chats from server`,
                 );
@@ -1578,19 +1584,25 @@ function isLocalDataEmpty(): boolean {
     }
 }
 
-function showConnectionStatus() {
-    if (!isUserOnline.value) {
-        toast.error("You are offline", {
-            duration: 4000,
-            description: "Please check your internet connection",
-        });
-    } else {
-        toast.success("Connection restored", {
-            duration: 3000,
-            description: "You are back online",
-        });
-    }
-}
+watch(
+    isOnline,
+    (newIsOnline) => {
+        if (!newIsOnline) {
+            toast.error("You are offline", {
+                duration: 4000,
+                description: "Please check your internet connection",
+            });
+        } else {
+            toast.success("Connection restored", {
+                duration: 3000,
+                description: "You are back online",
+            });
+        }
+    },
+    {
+        immediate: true,
+    },
+);
 
 function cancelChatRequests(chatId: string) {
     const requestsToCancel: string[] = [];
@@ -1632,10 +1644,10 @@ const hasActiveRequestsForCurrentChat = computed(() => {
 function setupConnectionListeners() {
     window.addEventListener("online", async () => {
         console.log("Browser reports online, verifying...");
-        const isActuallyOnline = await checkInternetConnection();
-        if (isActuallyOnline) {
-            showConnectionStatus();
-
+        const [isUserOnline, message] = await checkInternetConnection();
+        isOnline.value = isUserOnline;
+        connectionStatus.value = message;
+        if (isOnline.value) {
             if (parsedUserDetails.value?.syncEnabled) {
                 console.log("Connection restored - syncing unsaved changes");
                 setTimeout(() => {
@@ -1650,23 +1662,20 @@ function setupConnectionListeners() {
         }
     });
 
-    window.addEventListener("offline", () => {
+    window.addEventListener("offline", async () => {
         console.log("Browser reports offline");
-        isUserOnline.value = false;
-        connectionStatus.value = "offline";
-        showConnectionStatus();
+        const [isUserOnline, message] = await checkInternetConnection();
+        isOnline.value = isUserOnline;
+        connectionStatus.value = message;
     });
 
     let connectionCheckInterval: any;
     const startConnectionMonitoring = () => {
         connectionCheckInterval = setInterval(async () => {
-            if (!isUserOnline.value) {
-                await checkInternetConnection();
-                if (isUserOnline.value) {
-                    showConnectionStatus();
-                }
-            }
-        }, 30000);
+            const [isUserOnline, message] = await checkInternetConnection();
+            isOnline.value = isUserOnline;
+            connectionStatus.value = message;
+        }, 30 * 1000); // every 30sec
     };
 
     const stopConnectionMonitoring = () => {
@@ -1674,10 +1683,6 @@ function setupConnectionListeners() {
             clearInterval(connectionCheckInterval);
         }
     };
-
-    if (!isUserOnline.value) {
-        startConnectionMonitoring();
-    }
 
     window.addEventListener("online", stopConnectionMonitoring);
     window.addEventListener("offline", startConnectionMonitoring);
@@ -2214,11 +2219,19 @@ onMounted(async () => {
         }
 
         // Connection setup
-        checkInternetConnection().then((isOnline) => {
-            console.log(
-                `Initial connection check: ${isOnline ? "Online" : "Offline"}`,
-            );
-        });
+        checkInternetConnection()
+            .then(([isUserOnline, message]) => {
+                isOnline.value = isUserOnline;
+                connectionStatus.value = message;
+                console.log(`Initial connection check: ${message}`);
+            })
+            .catch((error: any) => {
+                isOnline.value = false;
+                connectionStatus.value = "offline";
+                console.log(
+                    "Error checking internet connection: " + error.message,
+                );
+            });
 
         setupConnectionListeners();
 
@@ -2231,7 +2244,7 @@ onMounted(async () => {
 
         // Visibility change listener
         document.addEventListener("visibilitychange", () => {
-            if (!document.hidden && !isUserOnline.value) {
+            if (!document.hidden && !navigator.onLine) {
                 setTimeout(() => {
                     checkInternetConnection();
                 }, 1000);
@@ -2334,7 +2347,7 @@ const globalState = {
     showProfileMenu,
     planStatus,
     isDarkMode,
-    isUserOnline,
+    isOnline,
     connectionStatus,
     hasActiveRequestsForCurrentChat,
     shouldHaveLimit,

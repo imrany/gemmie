@@ -80,6 +80,7 @@ import NoChatFound from "@/components/NoChatFound.vue";
 
 // Inject global state
 const {
+    isOnline,
     showPreviewSidebar,
     handlePaste,
     isChatLoading,
@@ -139,6 +140,7 @@ const {
     processLinksInUserPrompt,
     processLinksInResponse,
 } = inject("globalState") as {
+    isOnline: Ref<boolean>;
     showPreviewSidebar: Ref<boolean>;
     isChatLoading: Ref<boolean>;
     fallbackChatId: Ref<string>;
@@ -459,9 +461,6 @@ async function handleSubmit(
     // Load and check request limits
     loadRequestCount();
 
-    // Clear draft for current chat
-    clearCurrentDraft();
-
     // Ensure we have a valid chat
     let submissionChatId = currentChatId.value;
     let submissionChat = chats.value.find(
@@ -690,6 +689,9 @@ async function handleSubmit(
         }
 
         parseRes = await response.json();
+
+        // Clear draft for current chat
+        clearCurrentDraft();
 
         // Process response based on mode
         let finalResponse = parseRes.error ? parseRes.error : parseRes.response;
@@ -1715,15 +1717,9 @@ onMounted(async () => {
 
     // DOM-dependent functionality
     nextTick(() => {
-        // Clear any initial content in textarea
         const textarea = document.getElementById(
             "prompt",
         ) as HTMLTextAreaElement;
-        if (textarea && textarea.value) {
-            console.log("Initial textarea content found:", textarea.value);
-            textarea.value = "";
-            transcribedText.value = "";
-        }
 
         // Setup scroll handling
         if (scrollableElem.value) {
@@ -2240,7 +2236,10 @@ onUnmounted(() => {
                                                                 item.references,
                                                             )
                                                         "
-                                                        :disabled="isLoading"
+                                                        :disabled="
+                                                            isLoading ||
+                                                            !isOnline
+                                                        "
                                                         class="flex items-center gap-1 hover:text-orange-600 dark:hover:text-orange-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-h-[32px]"
                                                     >
                                                         <RotateCw
@@ -2253,7 +2252,10 @@ onUnmounted(() => {
                                                         @click="
                                                             deleteMessage(i)
                                                         "
-                                                        :disabled="isLoading"
+                                                        :disabled="
+                                                            isLoading ||
+                                                            !isOnline
+                                                        "
                                                         class="flex items-center gap-1 hover:text-red-600 dark:hover:text-red-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-h-[32px]"
                                                     >
                                                         <Trash
@@ -2262,6 +2264,7 @@ onUnmounted(() => {
                                                         <span>Delete</span>
                                                     </button>
                                                 </div>
+                                                variant
                                             </div>
                                         </div>
                                     </div>
@@ -2283,8 +2286,11 @@ onUnmounted(() => {
                         :transcribed-text="transcribedText"
                         :microphone-permission="microphonePermission"
                         :input-disabled="
-                            (currentChat && currentChat?.is_read_only) ||
-                            inputDisabled
+                            (currentChat &&
+                                currentChat?.is_read_only &&
+                                !isOnline) ||
+                            inputDisabled ||
+                            !isOnline
                         "
                         :input-placeholder-text="inputPlaceholderText"
                         :paste-preview="

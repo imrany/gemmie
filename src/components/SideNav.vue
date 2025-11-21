@@ -54,7 +54,9 @@ const {
     chats,
     closePreview,
     showPreviewSidebar,
+    isOnline,
 } = inject("globalState") as {
+    isOnline: Ref<boolean>;
     showPreviewSidebar: Ref<boolean>;
     isCollapsed: Ref<boolean>;
     closePreview: () => void;
@@ -352,7 +354,13 @@ watch(showPreviewSidebar, (newVal) => {
                                         navlink.path === '/new'
                                             ? 'hover:bg-inherit dark:hover:bg-inherit'
                                             : ' hover:bg-gray-200 dark:hover:bg-gray-700/50 px-2',
+                                        navlink.path === '/new' && !isOnline
+                                            ? 'disabled:cursor-not-allowed'
+                                            : '',
                                     ]"
+                                    :disabled="
+                                        navlink.path === '/new' && !isOnline
+                                    "
                                 >
                                     <div
                                         :class="[
@@ -448,15 +456,20 @@ watch(showPreviewSidebar, (newVal) => {
                             'group hover:bg-gray-200 px-0 py-0 dark:hover:bg-gray-700/50 text-sm justify-start w-full flex items-center rounded-md relative transition-all duration-150',
                             'h-[35px]',
                             chat.id === currentChatId
-                                ? 'bg-gray-200 dark:bg-gray-700/80 font-medium'
-                                : 'hover:bg-gray-200 dark:hover:bg-gray-700/50 font-normal',
+                                ? 'bg-gray-200 dark:bg-gray-700/80'
+                                : 'hover:bg-gray-200 dark:hover:bg-gray-700/50',
                         ]"
                     >
                         <!-- Chat content area -->
                         <div
                             :disabled="isLoading"
                             @click="() => handleChatClick(chat.id)"
-                            class="flex items-center h-full flex-grow px-2 py-[3px] cursor-pointer overflow-hidden"
+                            :class="[
+                                'flex items-center h-full flex-grow px-2 py-[3px] cursor-pointer overflow-hidden',
+                                chat.id === currentChatId
+                                    ? 'font-medium'
+                                    : 'font-normal',
+                            ]"
                         >
                             <div
                                 v-if="
@@ -515,24 +528,27 @@ watch(showPreviewSidebar, (newVal) => {
                         </div>
 
                         <!-- Menu button with smooth transition -->
-                        <div
+                        <button
                             v-show="
                                 (hoveredChatId === chat.id ||
                                     activeChatMenu === chat.id) &&
                                 !chat.is_read_only &&
-                                !isLoading
+                                !isLoading &&
+                                !isOnline
                             "
                             @click.stop="toggleChatMenu(chat.id, $event)"
-                            class="flex-shrink-0 flex items-center justify-center h-full px-2 cursor-pointer"
+                            :class="[
+                                'text-inherit group flex-shrink-0 flex items-center justify-center h-full px-2',
+                            ]"
                         >
                             <div
-                                class="rounded-md p-1.5 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                                class="rounded-md p-1.5 group-hover:bg-gray-300 dark:group-hover:bg-gray-600 transition-colors"
                             >
                                 <Ellipsis
                                     class="w-4 h-4 text-gray-600 dark:text-gray-300"
                                 />
                             </div>
-                        </div>
+                        </button>
 
                         <ChatDropdown
                             :data="{ activeChatMenu, chat, screenWidth }"

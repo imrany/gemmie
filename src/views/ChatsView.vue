@@ -14,8 +14,10 @@ import {
     X,
 } from "lucide-vue-next";
 import ProtectedPage from "@/layout/ProtectedPage.vue";
+import { Button } from "@/components/ui/button";
 
 const {
+    isOnline,
     chats,
     currentChatId,
     parsedUserDetails,
@@ -23,6 +25,7 @@ const {
     isCollapsed,
     createNewChat,
 } = inject("globalState") as {
+    isOnline: Ref<boolean>;
     chats: Ref<Chat[]>;
     currentChatId: Ref<string>;
     parsedUserDetails: Ref<UserDetails>;
@@ -111,14 +114,18 @@ const handleGoToChat = (id: string) => {
                             Your chat history
                         </p>
 
-                        <button
+                        <Button
                             @click="handleNewChat"
-                            class="px-3 py-2 dark:bg-white text-white bg-gray-900 text-sm dark:text-gray-800 rounded-lg transition-colors flex items-center gap-1.5 shadow-lg hover:shadow-xl flex-shrink-0 whitespace-nowrap"
+                            :disabled="!isOnline"
+                            :class="[
+                                'px-3 py-2 dark:bg-white text-white bg-gray-900 text-sm dark:text-gray-800 rounded-lg transition-colors flex items-center gap-1.5 shadow-lg hover:shadow-xl flex-shrink-0 whitespace-nowrap',
+                                !isOnline ? 'cursor-not-allowed' : '',
+                            ]"
                         >
                             <Plus class="w-5 h-5" />
                             <span class="hidden sm:inline"> New Chat </span>
                             <span class="sm:hidden">New</span>
-                        </button>
+                        </Button>
                     </div>
 
                     <!-- Search Bar -->
@@ -173,12 +180,15 @@ const handleGoToChat = (id: string) => {
                                         : "Start a new conversation to see your chats here."
                                 }}
                             </p>
-                            <button
+                            <Button
                                 @click="
                                     searchQuery
                                         ? clearSearch()
-                                        : handleNewChat()
+                                        : isOnline
+                                          ? handleNewChat()
+                                          : null
                                 "
+                                :disabled="!searchQuery && !isOnline"
                                 class="px-5 py-2 bg-gray-900 dark:bg-white text-white dark:text-black text-sm rounded-lg transition-colors inline-flex items-center gap-2 shadow-lg"
                             >
                                 <RefreshCw class="w-4 h-4" v-if="searchQuery" />
@@ -188,7 +198,7 @@ const handleGoToChat = (id: string) => {
                                         ? "Clear Search"
                                         : "Start New Chat"
                                 }}</span>
-                            </button>
+                            </Button>
                         </div>
                     </div>
 
