@@ -1,2 +1,2 @@
 -- rename archades to arcades
-RENAME TABLE archades TO arcades;
+ALTER TABLE archades RENAME TO arcades;
