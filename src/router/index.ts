@@ -9,6 +9,7 @@ import LegalPage from "@/views/LegalPage.vue";
 import CreateSessView from "@/views/CreateSessView.vue";
 import ChatView from "@/views/ChatView.vue";
 import ArcadeView from "@/views/ArcadeView.vue";
+import SingleArcade from "@/views/SingleArcade.vue";
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -49,6 +50,12 @@ const router = createRouter({
       name: "arcade",
       component: ArcadeView,
       meta: { requiresAuth: true },
+    },
+    {
+      path: "/arcade/:id",
+      name: "single-arcade",
+      props: true,
+      component: SingleArcade,
     },
     {
       path: "/auth/delete_account",

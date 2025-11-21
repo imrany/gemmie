@@ -1,4 +1,4 @@
-import type { UserDetails } from "@/types";
+import type { ApiResponse, UserDetails } from "@/types";
 import { API_BASE_URL } from "@/lib/globals";
 import { ref, type Ref } from "vue";
 
@@ -32,11 +32,11 @@ export function useApiCall(globalStateRefs?: {
       maxRetries: 3,
     });
 
-  async function apiCall(
+  async function apiCall<T>(
     endpoint: string,
     options: RequestInit = {},
     retryCount = 0,
-  ): Promise<any> {
+  ): Promise<ApiResponse<T>> {
     const maxRetries = 3;
     const retryDelay = Math.pow(2, retryCount) * 1000;
 
@@ -70,7 +70,7 @@ export function useApiCall(globalStateRefs?: {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
-      const data = await response.json();
+      const data: ApiResponse<T> = await response.json();
 
       if (!data.success) {
         throw new Error(data.message || "API request failed");
@@ -110,11 +110,11 @@ export function useApiCall(globalStateRefs?: {
     }
   }
 
-  async function unsecureApiCall(
+  async function unsecureApiCall<T>(
     endpoint: string,
     options: RequestInit = {},
     retryCount = 0,
-  ): Promise<any> {
+  ): Promise<ApiResponse<T>> {
     const maxRetries = 2;
     const retryDelay = Math.pow(2, retryCount) * 1000;
 
@@ -140,7 +140,7 @@ export function useApiCall(globalStateRefs?: {
         );
       }
 
-      const data = await response.json();
+      const data: ApiResponse<T> = await response.json();
 
       if (!data.success) {
         throw new Error(data.message || "API request failed");

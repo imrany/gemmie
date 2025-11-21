@@ -145,7 +145,7 @@ export interface Arcade {
   Label: string;
   Description: string;
   CodeType: string;
-  CreatedAt: Date;
+  CreatedAt: string;
   UpdatedAt?: Date;
 }
 
@@ -156,6 +156,6 @@ export interface RawArcade {
   label: string;
   description: string;
   code_type: string;
-  created_at: Date;
+  created_at: string;
   updated_at?: Date;
 }

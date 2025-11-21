@@ -120,7 +120,6 @@ const {
     updateExpandedArray,
     autoGrow,
     isFreeUser,
-    isUserOnline,
     checkInternetConnection,
     activeRequests,
     requestChatMap,
@@ -227,7 +226,6 @@ const {
     FREE_REQUEST_LIMIT: number;
     isDarkMode: Ref<boolean>;
     hasActiveRequestsForCurrentChat: Ref<boolean>;
-    isUserOnline: Ref<boolean>;
     connectionStatus: Ref<string>;
     checkInternetConnection: () => Promise<boolean>;
     autoGrow: (e: Event) => void;
@@ -423,7 +421,7 @@ async function handleSubmit(
     }
 
     // Check internet connection
-    if (!isUserOnline.value) {
+    if (!isOnline.value) {
         const isActuallyOnline = await checkInternetConnection();
         if (!isActuallyOnline) {
             toast.error("You are offline", {
@@ -981,7 +979,7 @@ async function refreshResponse(
     oldPrompt?: string,
     originalReferences?: string[],
 ) {
-    if (!isUserOnline.value) {
+    if (!isOnline.value) {
         const isActuallyOnline = await checkInternetConnection();
         if (!isActuallyOnline) {
             toast.error("You are offline", {

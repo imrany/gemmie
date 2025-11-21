@@ -61,14 +61,15 @@ func CreateArcadeHandler(w http.ResponseWriter, r *http.Request) {
 		ID:          encrypt.GenerateID(nil),
 		UserId:      userID,
 		Label:       req.Label,
-		CreatedAt:   time.Now(),
+		CreatedAt:   req.CreatedAt,
 		UpdatedAt:   time.Now(),
 		Code:        req.Code,
 		Description: req.Description,
 		CodeType:    req.CodeType,
 	}
 
-	if err := store.CreateArcade(&arcade); err != nil {
+	id, err := store.CreateArcade(&arcade)
+	if err != nil {
 		slog.Error("Failed to create arcade", "error", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(store.Response{
@@ -78,51 +79,19 @@ func CreateArcadeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	slog.Info("Arcade created successfully", "id", arcade.ID, "user_id", userID)
+	slog.Info("Arcade created successfully", "id", id, "user_id", userID)
 
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(store.Response{
 		Success: true,
 		Message: "Arcade created successfully",
-		Data:    arcade,
+		Data:    id,
 	})
 }
 
 // GetArcadeHandler handles GET /api/arcades/{id}
 func GetArcadeHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
-	userID := r.Header.Get("X-User-ID")
-	if userID == "" {
-		w.WriteHeader(http.StatusUnauthorized)
-		json.NewEncoder(w).Encode(store.Response{
-			Success: false,
-			Message: "User ID header required",
-		})
-		return
-	}
-
-	// Verify user exists
-	user, err := store.GetUserByID(userID)
-	if err != nil {
-		slog.Error("Database error", "error", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(store.Response{
-			Success: false,
-			Message: "Database error",
-		})
-		return
-	}
-
-	if user == nil {
-		w.WriteHeader(http.StatusNotFound)
-		json.NewEncoder(w).Encode(store.Response{
-			Success: false,
-			Message: "User not found",
-		})
-		return
-	}
-
+	var err error
 	idStr := r.URL.Path[len("/api/arcades/"):]
 	var id int64
 	_, err = fmt.Sscan(idStr, &id)

@@ -313,7 +313,7 @@ const { linkPreviewCache, loadLinkPreviewCache, saveLinkPreviewCache } =
 const { syncStatus, showSyncIndicator, hideSyncIndicator, updateSyncProgress } =
     useSync();
 
-const { apiCall, checkInternetConnection } = useApiCall({
+const { apiCall, checkInternetConnection, unsecureApiCall } = useApiCall({
     parsedUserDetails,
     syncStatus,
 });
@@ -1288,10 +1288,8 @@ async function onMessageAdded(message: Message) {
             );
 
             console.log(response);
-            if (!response.ok) {
-                throw new Error(
-                    `Failed to sync message: ${response.statusText}`,
-                );
+            if (!response.success) {
+                throw new Error(`Failed to sync message: ${response.message}`);
             }
 
             if (response.success === true) {
@@ -2364,6 +2362,7 @@ const globalState = {
     cancelChatRequests,
     checkInternetConnection,
     apiCall,
+    unsecureApiCall,
     logout,
     updateExpandedArray,
     createNewChat,

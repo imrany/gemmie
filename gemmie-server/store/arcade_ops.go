@@ -6,20 +6,16 @@ import (
 	"time"
 )
 
-// CreateArcade - creates an new arcade
-func CreateArcade(arcade *Arcade) error {
+// CreateArcade - creates an new arcade return id
+func CreateArcade(arcade *Arcade) (*string, error) {
 	ctx := context.Background()
 	now := time.Now()
-	if arcade.CreatedAt.IsZero() {
-		arcade.CreatedAt = now
-	}
-	query := `INSERT INTO arcades (user_id, code, label, code_type, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`
-	_, err := DB.ExecContext(ctx, query, arcade.UserId, arcade.Code, arcade.Label, arcade.CodeType, arcade.Description, arcade.CreatedAt, now)
+	query := `INSERT INTO arcades (user_id, code, label, code_type, description, created_at, updated_at, id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`
+	_, err := DB.ExecContext(ctx, query, arcade.UserId, arcade.Code, arcade.Label, arcade.CodeType, arcade.Description, arcade.CreatedAt, now, arcade.ID)
 	if err != nil {
-		return err
+		return nil, err
 	}
-
-	return nil
+	return &arcade.ID, nil
 }
 
 // UpdateArcade - updates an arcade where user_id and id matches
@@ -29,7 +25,7 @@ func UpdateArcade(arcade *Arcade) (*Arcade, error) {
 	if arcade.UpdatedAt.IsZero() {
 		arcade.UpdatedAt = now
 	}
-	query := `UPDATE arcades SET code = ?, label = ?, code_type = ?, description = ?, updated_at = ? WHERE user_id = ? AND id = ?`
+	query := `UPDATE arcades SET code = $1, label = $2, code_type = $3, description = $4, updated_at = $5 WHERE user_id = $6 AND id = $7`
 	result, err := DB.ExecContext(ctx, query, arcade.Code, arcade.Label, arcade.CodeType, arcade.Description, arcade.UpdatedAt, arcade.UserId)
 	if err != nil {
 		return nil, err
@@ -47,7 +43,7 @@ func UpdateArcade(arcade *Arcade) (*Arcade, error) {
 // DeleteAllArcadesByUserID - Deletes all arcade by their user_id
 func DeleteAllArcadesByUserID(userID string) error {
 	ctx := context.Background()
-	query := `DELETE FROM arcades WHERE user_id = ?`
+	query := `DELETE FROM arcades WHERE user_id = $1`
 	_, err := DB.ExecContext(ctx, query, userID)
 	if err != nil {
 		return err
@@ -59,7 +55,7 @@ func DeleteAllArcadesByUserID(userID string) error {
 // DeleteArcadeByID - Deletes an arcade by its id
 func DeleteArcadeByID(id int64) error {
 	ctx := context.Background()
-	query := `DELETE FROM arcades WHERE id = ?`
+	query := `DELETE FROM arcades WHERE id = $1`
 	_, err := DB.ExecContext(ctx, query, id)
 	if err != nil {
 		return err
@@ -71,7 +67,7 @@ func DeleteArcadeByID(id int64) error {
 // GetArcadeById - Gets an arcade by its id
 func GetArcadeById(id int64) (*Arcade, error) {
 	ctx := context.Background()
-	query := `SELECT id, user_id, code, label, code_type, description, created_at, updated_at FROM arcades WHERE id = ?`
+	query := `SELECT id, user_id, code, label, code_type, description, created_at, updated_at FROM arcades WHERE id = $1`
 	row := DB.QueryRowContext(ctx, query, id)
 	var arcade Arcade
 	err := row.Scan(&arcade.ID, &arcade.UserId, &arcade.Code, &arcade.Label, &arcade.CodeType, &arcade.Description, &arcade.CreatedAt, &arcade.UpdatedAt)
@@ -108,7 +104,7 @@ func GetArcadesByOption(option any) ([]*Arcade, error) {
 		return arcades, nil
 	}
 
-	query := `SELECT id, user_id, code, label, code_type, description, created_at, updated_at FROM arcades WHERE user_id = ? OR code = ? OR code_type`
+	query := `SELECT id, user_id, code, label, code_type, description, created_at, updated_at FROM arcades WHERE user_id = $1 OR code = $2 OR code_type = $3`
 	rows, err := DB.QueryContext(ctx, query, option)
 	if err != nil {
 		return nil, err

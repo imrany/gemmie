@@ -221,7 +221,11 @@ const publishToArcade = async () => {
             label: publishForm.value.label.trim(),
             description: publishForm.value.description.trim(),
             code_type: previewLanguage.value,
-            created_at: new Date(),
+            created_at: new Date().toLocaleDateString("en-US", {
+                month: "short",
+                day: "numeric",
+                year: "numeric",
+            }),
         };
 
         const response = await apiCall("/arcades", {
@@ -229,7 +233,8 @@ const publishToArcade = async () => {
             body: JSON.stringify(arcadeData),
         });
 
-        if (response.success) {
+        const parsedResponse = response.json();
+        if (parsedResponse.success) {
             toast.success("Published to Arcade!", {
                 duration: 5000,
                 description: "Your code is now visible in the Arcade",
@@ -242,9 +247,14 @@ const publishToArcade = async () => {
             };
             formErrors.value = {};
             closePreview();
-            router.push("/arcade");
+            setTimeout(() => {
+                router.push({
+                    name: "single-arcade",
+                    params: { id: parsedResponse.data },
+                });
+            }, 2000);
         } else {
-            throw new Error(response.message || "Failed to publish");
+            throw new Error(parsedResponse.message || "Failed to publish");
         }
     } catch (error: any) {
         console.error("Publish error:", error);
@@ -418,7 +428,10 @@ watch(
             >
                 <!-- Header -->
                 <div
-                    class="flex-shrink-0 border-b border-gray-200 dark:border-gray-800"
+                    :class="[
+                        'flex-shrink-0 border-b border-gray-200 dark:border-gray-800',
+                        activeTab === 'publish' ? 'dark:bg-gray-800' : '',
+                    ]"
                 >
                     <div class="flex items-center justify-between px-4 py-3">
                         <!-- Back Button (only in publish tab) -->
@@ -561,7 +574,7 @@ watch(
                                         placeholder="Give your code a catchy title..."
                                         maxlength="100"
                                         :class="[
-                                            'w-full',
+                                            'w-full resize-none border-none ring-[1px] ring-gray-200 dark:ring-gray-800 outline-none focus:border-none focus-visible:ring-gray-300 dark:focus-visible:ring-gray-700',
                                             formErrors.label
                                                 ? 'border-red-500'
                                                 : '',
@@ -605,7 +618,7 @@ watch(
                                         :disabled="isGeneratingDescription"
                                         maxlength="500"
                                         :class="[
-                                            'w-full resize-none',
+                                            'w-full resize-none border-none ring-[1px] ring-gray-200 dark:ring-gray-800 outline-none focus:border-none focus-visible:ring-gray-300 dark:focus-visible:ring-gray-700',
                                             formErrors.description
                                                 ? 'border-red-500'
                                                 : '',
@@ -676,7 +689,7 @@ watch(
                                     @click="backToPreview"
                                     variant="outline"
                                     :disabled="isPublishing"
-                                    class="h-[35px] px-6"
+                                    class="h-[35px] px-6 dark:bg-gray-200 bg-gray-700 dark:hover:bg-gray-300 hover:bg-gray-600 dark:text-gray-700 dark:hover:text-gray-600 text-gray-200 hover:text-gray-100"
                                 >
                                     Cancel
                                 </Button>
@@ -722,8 +735,9 @@ watch(
                                         v-if="previewCode"
                                         :srcdoc="previewCode"
                                         class="w-full h-full border-0 bg-gray-100"
-                                        sandbox="allow-scripts allow-forms allow-modals allow-popups allow-same-origin"
                                         title="HTML Preview"
+                                        sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"
+                                        referrerpolicy="no-referrer"
                                     />
                                     <div
                                         v-else
