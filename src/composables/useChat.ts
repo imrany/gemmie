@@ -384,9 +384,9 @@ export function useChat({
 
   async function loadChat(): Promise<[boolean, string]> {
     try {
+      isChatLoading.value = true;
       if (isOnline) {
         try {
-          isChatLoading.value = true;
           const response = await apiCall<Chat>(`/chats/${currentChatId.value}`);
           if (response.data) {
             const existingChatIndex = chats.value.findIndex(
@@ -401,81 +401,62 @@ export function useChat({
             isChatLoading.value = false;
             return [
               true,
-              "Chat: " + response.data!.id + " loaded successfully.",
+              "Chat: " + response.data.id + " loaded successfully.",
             ];
+          } else {
+            isChatLoading.value = false;
+            return [false, "Failed to load chat data from server."];
           }
         } catch (apiError: any) {
+          console.error("API Error loading chat:", apiError);
           isChatLoading.value = false;
-          const stored = localStorage.getItem("chats");
-          if (stored) {
-            const parsedChats: Chat[] = JSON.parse(stored);
-            if (Array.isArray(parsedChats)) {
-              const existingChat = parsedChats.find(
-                (chat) => chat.id === currentChatId.value,
-              );
-
-              if (existingChat) {
-                const existingChatIndex = chats.value.findIndex(
-                  (chat) => chat.id === existingChat!.id,
-                );
-                if (existingChatIndex !== -1) {
-                  chats.value[existingChatIndex] = existingChat;
-                } else {
-                  chats.value.push(existingChat);
-                }
-                return [
-                  true,
-                  "Local chat: " + existingChat!.id + " loaded successfully",
-                ];
-              }
-            }
-          }
-          return [false, "Failed to load chat: " + currentChatId.value];
+          toast.error("Failed to load chat from server. Loading local.");
         }
-      } else {
-        const stored = localStorage.getItem("chats");
-        if (stored) {
-          const parsedChats: Chat[] = JSON.parse(stored);
-          if (Array.isArray(parsedChats)) {
-            const existingChat = parsedChats.find(
-              (chat) => chat.id === currentChatId.value,
-            );
-
-            if (existingChat) {
-              const existingChatIndex = chats.value.findIndex(
-                (chat) => chat.id === existingChat!.id,
-              );
-              if (existingChatIndex !== -1) {
-                chats.value[existingChatIndex] = existingChat;
-              } else {
-                chats.value.push(existingChat);
-              }
-              return existingChat.messages
-                ? [
-                    true,
-                    "Local chat: " + existingChat!.id + " loaded successfully",
-                  ]
-                : [
-                    false,
-                    "This chat is loaded from local but there are no messages, get connected and try again.",
-                  ];
-            }
-          }
-        }
-        return [false, "Failed to load chat, get connected and try again."];
       }
 
+      const stored = localStorage.getItem("chats");
+      if (stored) {
+        const parsedChats: Chat[] = JSON.parse(stored);
+        if (Array.isArray(parsedChats)) {
+          const existingChat = parsedChats.find(
+            (chat) => chat.id === currentChatId.value,
+          );
+
+          if (existingChat) {
+            const existingChatIndex = chats.value.findIndex(
+              (chat) => chat.id === existingChat.id,
+            );
+            if (existingChatIndex !== -1) {
+              chats.value[existingChatIndex] = existingChat;
+            } else {
+              chats.value.push(existingChat);
+            }
+            isChatLoading.value = false;
+            return existingChat.messages && existingChat.messages.length > 0
+              ? [
+                  true,
+                  "Local chat: " + existingChat.id + " loaded successfully",
+                ]
+              : [
+                  false,
+                  "This chat is loaded from local but there are no messages, get connected and try again.",
+                ];
+          }
+        }
+      }
+
+      isChatLoading.value = false;
       updateExpandedArray();
-      return [
-        true,
-        `Successfully loaded existing chat: ${currentChatId.value}`,
-      ];
+      return [false, "Failed to load chat."];
     } catch (error: any) {
+      isChatLoading.value = false;
       chats.value = [];
       return [
         false,
         "Failed to load chat: " + currentChatId.value + " from server.",
       ];
+    } finally {
+      isChatLoading.value = false;
     }
   }
 

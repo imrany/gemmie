@@ -316,8 +316,8 @@ const { apiCall, checkInternetConnection } = useApiCall({
     syncStatus,
 });
 
-const isOnline = ref(false);
-const connectionStatus = ref<"online" | "offline" | "checking">("offline");
+const isOnline = ref(true);
+const connectionStatus = ref<"online" | "offline" | "checking">("online");
 
 const {
     isChatLoading,
@@ -886,7 +886,7 @@ async function syncFromServer() {
         showSyncIndicator("Syncing data from server...", 30);
 
         let data: any;
-        if (isOnline.value) {
+        if (isOnline.value && navigator.onLine) {
             try {
                 console.log("📡 Fetching data from server...");
                 updateSyncProgress("Fetching data from server...", 50);

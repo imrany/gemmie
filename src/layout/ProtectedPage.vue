@@ -34,13 +34,13 @@ const {
 
 watch(
     isOnline,
-    (newIsOnline) => {
-        if (!newIsOnline) {
+    (newIsOnline, oldIsOnline) => {
+        if (!newIsOnline && oldIsOnline) {
             toast.error("You are offline", {
                 duration: 5000,
                 description: "Please check your internet connection",
             });
-        } else {
+        } else if (newIsOnline && !oldIsOnline) {
             toast.success("Connection restored", {
                 duration: 3000,
                 description: "You are back online",
@@ -48,7 +48,7 @@ watch(
         }
     },
     {
-        immediate: true,
+        immediate: false,
     },
 );
 </script>

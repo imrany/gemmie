@@ -39,7 +39,7 @@ const handlePreview = () => {
 
 <template>
     <div
-        class="relative my-4 rounded-lg overflow-hidden bg-gray-800 dark:bg-gray-900 border border-gray-200 dark:border-gray-700"
+        class="relative my-4 rounded-lg overflow-hidden bg-gray-800 dark:bg-gray-800 border border-gray-200 dark:border-gray-700"
     >
         <!-- Header Bar -->
         <div class="flex items-center justify-between px-4 pt-2 bg-none">
@@ -75,7 +75,7 @@ const handlePreview = () => {
 
         <!-- Code Block -->
         <pre
-            class="!m-0 !rounded-none bg-gray-800 dark:bg-gray-900 overflow-x-auto custom-scrollbar"
+            class="!m-0 !rounded-none bg-gray-800 dark:bg-gray-800 overflow-x-auto custom-scrollbar"
         >
             <code
                 :class="`hljs language-${data.language} text-sm leading-relaxed`"
