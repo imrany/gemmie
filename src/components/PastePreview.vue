@@ -9,6 +9,7 @@ const { openPreview, removePastePreview } = inject("globalState") as {
         code: string,
         language: string,
         metadata?: {
+            fileSize: string;
             wordCount: number;
             charCount: number;
         },
@@ -72,6 +73,10 @@ const language = computed(() => {
     }
     return contentType;
 });
+
+const fileSize = (text: string): string => {
+    return `${(new Blob([text]).size / 1024).toFixed(2)} KB`;
+};
 </script>
 <template>
     <div
@@ -86,6 +91,7 @@ const language = computed(() => {
                 openPreview(text, language, {
                     wordCount,
                     charCount,
+                    fileSize: fileSize(text),
                 });
         "
     >

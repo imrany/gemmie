@@ -90,12 +90,12 @@ const handleGoToChat = (id: string) => {
                 class="flex-1 flex overflow-hidden h-full justify-center p-3 sm:p-4 md:p-6 max-w-full"
             >
                 <div
-                    class="w-full px-2 flex flex-col h-full overflow-hidden md:max-w-4xl max-w-[100vw]"
+                    class="w-full px-2 flex flex-col h-full overflow-hidden md:max-w-3xl max-w-[100vw]"
                 >
                     <!-- Top Header -->
                     <div
                         v-if="chats.length !== 0"
-                        class="flex-shrink-0 w-full items-center justify-between mb-4 flex gap-2 min-w-0"
+                        class="flex-shrink-0 w-full items-center justify-between mb-6 flex gap-2 min-w-0"
                     >
                         <!-- Back Button (Mobile Only) -->
                         <button
@@ -111,14 +111,14 @@ const handleGoToChat = (id: string) => {
                         <p
                             class="text-gray-700 dark:text-gray-300 text-xl font-semibold truncate min-w-0"
                         >
-                            Your chat history
+                            Chats
                         </p>
 
                         <Button
                             @click="handleNewChat"
                             :disabled="!isOnline"
                             :class="[
-                                'px-3 py-2 dark:bg-white text-white bg-gray-900 text-sm dark:text-gray-800 rounded-lg transition-colors flex items-center gap-1.5 shadow-lg hover:shadow-xl flex-shrink-0 whitespace-nowrap',
+                                'px-3 py-2 dark:bg-gray-200 text-gray-200 bg-gray-700 text-sm dark:text-gray-700 hover:bg-gray-600 dark:hover:bg-gray-600 rounded-lg transition-colors flex items-center gap-1.5 shadow-lg hover:shadow-xl flex-shrink-0 whitespace-nowrap',
                                 !isOnline ? 'cursor-not-allowed' : '',
                             ]"
                         >
@@ -130,15 +130,15 @@ const handleGoToChat = (id: string) => {
 
                     <!-- Search Bar -->
                     <div v-if="chats.length !== 0" class="mb-4 flex-shrink-0">
-                        <div class="relative">
+                        <div class="relative bg-gray-100 dark:bg-gray-800">
                             <Search
                                 class="w-5 h-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
                             />
                             <input
                                 v-model="searchQuery"
                                 type="text"
-                                placeholder="Search chats and messages..."
-                                class="w-full text-base pl-10 pr-10 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-inherit text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent transition-all"
+                                placeholder="Search chats..."
+                                class="w-full text-base font-medium pl-10 pr-10 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-inherit text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent transition-all"
                             />
                             <button
                                 v-if="searchQuery"
@@ -205,21 +205,19 @@ const handleGoToChat = (id: string) => {
                     <!-- Chat List -->
                     <div
                         v-else
-                        class="flex-1 mt-4 md:max-w-4xl max-w-[100vw] overflow-y-auto overflow-x-hidden custom-scrollbar pr-1 sm:pr-2"
+                        class="flex-1 mt-4 w-full overflow-y-auto overflow-x-hidden custom-scrollbar pr-1 sm:pr-2"
                     >
-                        <div class="flex flex-col gap-3 sm:gap-4 pb-4">
+                        <div class="flex flex-col pb-4">
                             <div
                                 v-for="chat in filteredChats"
                                 :key="chat.id"
                                 @click="() => handleGoToChat(chat.id)"
                                 :class="[
-                                    'rounded-xl border-[1px] cursor-pointer transition-all hover:shadow-lg group',
-                                    currentChatId === chat.id
-                                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                                        : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600',
+                                    'border-y-[1px] hover:border-none duration-300 ease-in-out cursor-pointer transition-all hover:shadow-lg group',
+                                    'border-gray-200 dark:border-gray-800 hover:bg-gray-200 dark:hover:bg-gray-800 hover:rounded-lg',
                                 ]"
                             >
-                                <div class="p-4">
+                                <div class="px-4 py-3">
                                     <div
                                         class="flex items-start justify-between"
                                     >
@@ -228,7 +226,7 @@ const handleGoToChat = (id: string) => {
                                                 class="flex items-center gap-2 sm:gap-3 mb-2"
                                             >
                                                 <p
-                                                    class="text-base font-medium text-gray-900 dark:text-gray-100 truncate"
+                                                    class="text-sm font-medium text-gray-800 dark:text-gray-200 truncate"
                                                 >
                                                     {{
                                                         chat.title ||

@@ -148,3 +148,14 @@ export interface Arcade {
   CreatedAt: Date;
   UpdatedAt?: Date;
 }
+
+export interface RawArcade {
+  id?: string;
+  user_id: string;
+  code: string;
+  label: string;
+  description: string;
+  code_type: string;
+  created_at: Date;
+  updated_at?: Date;
+}

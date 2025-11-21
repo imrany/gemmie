@@ -546,10 +546,10 @@ watch(showPreviewSidebar, (newVal) => {
                         <!-- Menu button with smooth transition -->
                         <button
                             v-show="
-                                (hoveredChatId === chat.id ||
+                                ((hoveredChatId === chat.id ||
                                     activeChatMenu === chat.id) &&
-                                !chat.is_read_only &&
-                                !isLoading &&
+                                    !chat.is_read_only &&
+                                    !isLoading) ||
                                 !isOnline
                             "
                             @click.stop="toggleChatMenu(chat.id, $event)"

@@ -4953,7 +4953,7 @@ snapshots:
       ufo: 1.6.1
       unenv: 2.0.0-rc.24
       vite: 7.2.2(@types/node@20.19.25)(jiti@2.6.1)(terser@5.44.0)(yaml@2.8.1)
-      vite-node: 3.2.4(@types/node@20.19.25)(jiti@2.6.1)(terser@5.44.0)(yaml@2.8.1)
+      vite-node: 3.2.4(@types/node@20.19.25)(terser@5.44.0)
       vite-plugin-checker: 0.10.3(eslint@8.57.1)(optionator@0.9.4)(typescript@5.4.5)(vite@7.2.2(@types/node@20.19.25)(jiti@2.6.1)(terser@5.44.0)(yaml@2.8.1))(vue-tsc@2.2.12(typescript@5.4.5))
       vue: 3.5.24(typescript@5.4.5)
       vue-bundle-renderer: 2.2.0
@@ -8648,16 +8648,15 @@ snapshots:
       vite: 5.4.21(@types/node@20.19.25)(terser@5.44.0)
     optional: true
 
-  vite-node@3.2.4(@types/node@20.19.25)(jiti@2.6.1)(terser@5.44.0)(yaml@2.8.1):
+  vite-node@3.2.4(@types/node@20.19.25)(terser@5.44.0):
     dependencies:
       cac: 6.7.14
       debug: 4.4.3
       es-module-lexer: 1.7.0
       pathe: 2.0.3
-      vite: 7.2.2(@types/node@20.19.25)(jiti@2.6.1)(terser@5.44.0)(yaml@2.8.1)
+      vite: 5.4.21(@types/node@20.19.25)(terser@5.44.0)
     transitivePeerDependencies:
       - '@types/node'
-      - jiti
       - less
       - lightningcss
       - sass
@@ -8666,8 +8665,6 @@ snapshots:
       - sugarss
       - supports-color
       - terser
-      - tsx
-      - yaml
     optional: true
 
   vite-plugin-checker@0.10.3(eslint@8.57.1)(optionator@0.9.4)(typescript@5.4.5)(vite@7.2.2(@types/node@20.19.25)(jiti@2.6.1)(terser@5.44.0)(yaml@2.8.1))(vue-tsc@2.2.12(typescript@5.4.5)):

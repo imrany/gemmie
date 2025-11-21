@@ -135,6 +135,7 @@ const previewCode = ref("");
 const previewLanguage = ref("html");
 const metadata = ref<
     | {
+          fileSize: string;
           wordCount: number;
           charCount: number;
       }
@@ -146,6 +147,7 @@ const openPreview = (
     code: string,
     language: string = "html",
     data?: {
+        fileSize: string;
         wordCount: number;
         charCount: number;
     },
