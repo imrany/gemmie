@@ -28,6 +28,7 @@ import {
     Plus,
     CircleArrowUp,
     Info,
+    Gamepad2,
 } from "lucide-vue-next";
 import {
     Tooltip,
@@ -256,6 +257,13 @@ const navLinks: {
         icon: MessageCircle,
         path: "/chats",
         action: () => handleNavAction(() => router.push("/chats")),
+    },
+    {
+        label: "Arcade",
+        description: "Play Games and view other users publications",
+        icon: Gamepad2,
+        path: "/arcade",
+        action: () => handleNavAction(() => router.push("/arcade")),
     },
 ];
 

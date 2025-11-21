@@ -137,3 +137,14 @@ export interface ApiResponse<T = any> {
 export interface CreateChatRequest {
   title: string;
 }
+
+export interface Arcade {
+  ID?: string;
+  UserId: string;
+  Code: string;
+  Label: string;
+  Description: string;
+  CodeType: string;
+  CreatedAt: Date;
+  UpdatedAt?: Date;
+}

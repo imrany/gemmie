@@ -1,12 +1,19 @@
 <script setup lang="ts">
 import { ref, watch } from "vue";
-import { X, Code, Eye, Check, Copy } from "lucide-vue-next";
+import { X, Code, Eye, Check, Copy, Earth } from "lucide-vue-next";
 import { Button } from "./ui/button";
 import type { Ref } from "vue";
 import { inject } from "vue";
 import hljs from "highlight.js/lib/common";
+import {
+    TooltipProvider,
+    Tooltip,
+    TooltipContent,
+    TooltipTrigger,
+} from "./ui/tooltip";
 
 const {
+    isOnline,
     screenWidth,
     showPreviewSidebar,
     previewCode,
@@ -15,6 +22,7 @@ const {
     metadata,
     isCollapsed,
 } = inject("globalState") as {
+    isOnline: Ref<boolean>;
     isCollapsed: Ref<boolean>;
     metadata: Ref<
         | {
@@ -193,15 +201,48 @@ watch(
                         </div>
 
                         <!-- Close Button -->
-                        <Button
-                            size="sm"
-                            variant="ghost"
-                            class="h-8 w-8 p-0 hover:bg-gray-200 dark:hover:bg-gray-800"
-                            @click="closePreview"
-                            title="Close preview"
-                        >
-                            <X class="w-4 h-4" />
-                        </Button>
+                        <div class="flex justify-end gap-2">
+                            <TooltipProvider>
+                                <Tooltip>
+                                    <TooltipTrigger as-child>
+                                        <Button
+                                            v-if="
+                                                !metadata &&
+                                                activeTab === 'preview'
+                                            "
+                                            size="sm"
+                                            :class="[
+                                                'px-3 py-1.5 h-8 text-xs font-medium rounded-md transition-all ease-in-out duration-200 inline-flex items-center gap-1.5',
+                                                'bg-gray-900 dark:bg-gray-100 text-gray-100 dark:text-gray-900 shadow-sm',
+                                            ]"
+                                            :disabled="!isOnline"
+                                        >
+                                            <Earth class="w-4 h-4" />
+                                            Publish
+                                        </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent
+                                        side="left"
+                                        :avoid-collisions="true"
+                                    >
+                                        <p>
+                                            This will make it visible to others
+                                            in Arcade.
+                                        </p>
+                                    </TooltipContent>
+                                </Tooltip>
+                            </TooltipProvider>
+
+                            <Button
+                                size="sm"
+                                variant="ghost"
+                                class="h-8 w-8 p-0 hover:bg-gray-200 dark:hover:bg-gray-800"
+                                @click="closePreview"
+                                title="Close preview"
+                            >
+                                <X class="w-4 h-4" />
+                            </Button>
+                        </div>
                     </div>
                 </div>
 

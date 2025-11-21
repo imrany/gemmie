@@ -8,6 +8,7 @@ import type { UserDetails } from "@/types";
 import LegalPage from "@/views/LegalPage.vue";
 import CreateSessView from "@/views/CreateSessView.vue";
 import ChatView from "@/views/ChatView.vue";
+import ArcadeView from "@/views/ArcadeView.vue";
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -41,6 +42,12 @@ const router = createRouter({
       path: "/workplace",
       name: "workplace",
       component: WorkplaceView,
+      meta: { requiresAuth: true },
+    },
+    {
+      path: "/arcade",
+      name: "arcade",
+      component: ArcadeView,
       meta: { requiresAuth: true },
     },
     {
