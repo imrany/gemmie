@@ -26,7 +26,7 @@ func UpdateArcade(arcade *Arcade) (*Arcade, error) {
 		arcade.UpdatedAt = now
 	}
 	query := `UPDATE arcades SET code = $1, label = $2, code_type = $3, description = $4, updated_at = $5 WHERE user_id = $6 AND id = $7`
-	result, err := DB.ExecContext(ctx, query, arcade.Code, arcade.Label, arcade.CodeType, arcade.Description, arcade.UpdatedAt, arcade.UserId)
+	result, err := DB.ExecContext(ctx, query, arcade.Code, arcade.Label, arcade.CodeType, arcade.Description, arcade.UpdatedAt, arcade.UserId, arcade.ID)
 	if err != nil {
 		return nil, err
 	}

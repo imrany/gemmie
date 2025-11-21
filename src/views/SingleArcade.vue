@@ -7,8 +7,6 @@ import { useRoute, useRouter } from "vue-router";
 import { toast } from "vue-sonner";
 import {
     Loader2,
-    AlertCircle,
-    ArrowLeft,
     MoreVertical,
     Trash2,
     Edit,
@@ -26,18 +24,11 @@ import {
     DropdownMenuTrigger,
     DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import type { Ref } from "vue";
+import DialogBox from "@/components/Dialog/DialogBox.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -103,7 +94,6 @@ async function fetchArcade() {
 
         if (res.data) {
             arcade.value = res.data;
-            console.log(arcade);
         } else {
             throw new Error("No arcade data found");
         }
@@ -130,10 +120,6 @@ function handleIframeLoad() {
 function handleIframeError() {
     error.value = "Failed to load content in preview";
     toast.error("Preview failed to load");
-}
-
-function goBack() {
-    router.push("/arcade");
 }
 
 // Rename functionality
@@ -191,7 +177,6 @@ async function handleRename() {
             }),
         });
 
-        console.log(res);
         if (!res.success) {
             throw new Error(res.message || "Failed to update arcade");
         }
@@ -231,8 +216,6 @@ async function handleDelete() {
         if (!res.success) {
             throw new Error(res.message || "Failed to delete arcade");
         }
-
-        console.log(res);
 
         toast.success("Arcade deleted successfully!");
 
@@ -345,8 +328,8 @@ onMounted(async () => {
                 <DropdownMenu>
                     <DropdownMenuTrigger as-child>
                         <Button
-                            size="lg"
-                            class="h-14 w-14 rounded-full shadow-lg hover:shadow-xl transition-shadow"
+                            size="sm"
+                            class="h-12 w-12 dark:bg-gray-200 bg-gray-800 hover:bg-gray-700 dark:hover:bg-gray-100 rounded-full shadow-lg hover:shadow-xl transition-shadow"
                         >
                             <MoreVertical class="w-5 h-5" />
                         </Button>
@@ -396,8 +379,8 @@ onMounted(async () => {
             <div v-else class="fixed bottom-6 right-6 z-20">
                 <Button
                     @click="handleShare"
-                    size="lg"
-                    class="h-14 px-6 rounded-full shadow-lg hover:shadow-xl transition-shadow"
+                    size="sm"
+                    class="h-12 w-12 dark:bg-gray-200 bg-gray-800 hover:bg-gray-700 dark:hover:bg-gray-100 rounded-full shadow-lg hover:shadow-xl transition-shadow"
                 >
                     <Share2 class="w-5 h-5 mr-2" />
                     Share
@@ -417,135 +400,144 @@ onMounted(async () => {
         </div>
 
         <!-- No Content State -->
-        <div
+        <ErrorState
             v-else
-            class="flex flex-col items-center justify-center h-full gap-4 px-4"
-        >
-            <AlertCircle class="w-16 h-16 text-gray-400 dark:text-gray-600" />
-            <div class="text-center">
-                <h2
-                    class="text-xl font-semibold text-gray-900 dark:text-white mb-2"
-                >
-                    No Content Available
-                </h2>
-                <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
-                    This arcade entry doesn't have any content to display.
-                </p>
-                <Button
-                    @click="goBack"
-                    variant="outline"
-                    class="inline-flex items-center gap-2"
-                >
-                    <ArrowLeft class="w-4 h-4" />
-                    Back to Arcade
-                </Button>
-            </div>
-        </div>
+            @retry="fetchArcade"
+            back-button-text="Back to Arcade"
+            error="This arcade entry doesn't have any content to display."
+        />
 
         <!-- Rename Dialog -->
-        <Dialog v-model:open="showRenameDialog">
-            <DialogContent class="sm:max-w-[500px]">
-                <DialogHeader>
-                    <DialogTitle>Edit Arcade Details</DialogTitle>
-                    <DialogDescription>
-                        Update the label and description for your arcade.
-                    </DialogDescription>
-                </DialogHeader>
-                <div class="space-y-4 py-4">
-                    <!-- Label Field -->
-                    <div class="space-y-2">
-                        <Label for="edit-label" class="text-sm font-medium">
-                            Label <span class="text-red-500">*</span>
-                        </Label>
-                        <Input
-                            id="edit-label"
-                            v-model="renameForm.label"
-                            placeholder="Enter arcade label..."
-                            maxlength="100"
-                            :class="[
-                                renameErrors.label ? 'border-red-500' : '',
-                            ]"
-                        />
-                        <div class="flex justify-between items-center">
-                            <p
-                                v-if="renameErrors.label"
-                                class="text-xs text-red-500"
-                            >
-                                {{ renameErrors.label }}
-                            </p>
-                            <p
-                                class="text-xs text-gray-500 dark:text-gray-400 ml-auto"
-                            >
-                                {{ renameForm.label.length }}/100
-                            </p>
-                        </div>
-                    </div>
-
-                    <!-- Description Field -->
-                    <div class="space-y-2">
-                        <Label
-                            for="edit-description"
-                            class="text-sm font-medium"
-                        >
-                            Description <span class="text-red-500">*</span>
-                        </Label>
-                        <Textarea
-                            id="edit-description"
-                            v-model="renameForm.description"
-                            placeholder="Enter arcade description..."
-                            rows="4"
-                            maxlength="500"
-                            :class="[
-                                'resize-none',
-                                renameErrors.description
-                                    ? 'border-red-500'
-                                    : '',
-                            ]"
-                        />
-                        <div class="flex justify-between items-center">
-                            <p
-                                v-if="renameErrors.description"
-                                class="text-xs text-red-500"
-                            >
-                                {{ renameErrors.description }}
-                            </p>
-                            <p
-                                class="text-xs text-gray-500 dark:text-gray-400 ml-auto"
-                            >
-                                {{ renameForm.description.length }}/500
-                            </p>
-                        </div>
-                    </div>
-                </div>
-                <DialogFooter>
-                    <Button
-                        variant="outline"
-                        @click="showRenameDialog = false"
-                        :disabled="isRenaming"
+        <DialogBox
+            :close-modal="() => (showRenameDialog = false)"
+            name="rename-dialog"
+            :show="showRenameDialog"
+        >
+            <div class="sm:max-w-[500px]">
+                <div>
+                    <p
+                        class="text-xl font-bold dark:text-gray-100 text-gray-900"
                     >
-                        Cancel
-                    </Button>
-                    <Button @click="handleRename" :disabled="isRenaming">
-                        <Loader2
-                            v-if="isRenaming"
-                            class="w-4 h-4 mr-2 animate-spin"
-                        />
-                        {{ isRenaming ? "Saving..." : "Save Changes" }}
-                    </Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
+                        Edit Arcade Details
+                    </p>
+                    <p class="text-sm text-gray-500 dark:text-gray-400">
+                        Update the label and description for your arcade.
+                    </p>
+                </div>
+                <form @submit.prevent="handleRename">
+                    <div
+                        class="space-y-4 py-4 dark:text-gray-100 text-gray-900"
+                    >
+                        <!-- Label Field -->
+                        <div class="space-y-2">
+                            <Label for="edit-label" class="text-sm font-medium">
+                                Label <span class="text-red-500">*</span>
+                            </Label>
+                            <Input
+                                id="edit-label"
+                                v-model="renameForm.label"
+                                placeholder="Enter arcade label..."
+                                maxlength="100"
+                                :class="[
+                                    'w-full resize-none border-none ring-[1px] ring-gray-800 dark:ring-gray-200 outline-none focus:border-none focus-visible:ring-gray-700 dark:focus-visible:ring-gray-300',
+                                    renameErrors.label ? 'border-red-500' : '',
+                                ]"
+                            />
+                            <div class="flex justify-between items-center">
+                                <p
+                                    v-if="renameErrors.label"
+                                    class="text-xs text-red-500"
+                                >
+                                    {{ renameErrors.label }}
+                                </p>
+                                <p
+                                    class="text-xs text-gray-500 dark:text-gray-200 ml-auto"
+                                >
+                                    {{ renameForm.label.length }}/100
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- Description Field -->
+                        <div class="space-y-2">
+                            <Label
+                                for="edit-description"
+                                class="text-sm font-medium"
+                            >
+                                Description <span class="text-red-500">*</span>
+                            </Label>
+                            <Textarea
+                                id="edit-description"
+                                v-model="renameForm.description"
+                                placeholder="Enter arcade description..."
+                                rows="4"
+                                maxlength="500"
+                                :class="[
+                                    'w-full resize-none border-none ring-[1px] ring-gray-800 dark:ring-gray-200 outline-none focus:border-none focus-visible:ring-gray-700 dark:focus-visible:ring-gray-300',
+                                    renameErrors.description
+                                        ? 'border-red-500'
+                                        : '',
+                                ]"
+                            />
+                            <div class="flex justify-between items-center">
+                                <p
+                                    v-if="renameErrors.description"
+                                    class="text-xs text-red-500"
+                                >
+                                    {{ renameErrors.description }}
+                                </p>
+                                <p
+                                    class="text-xs text-gray-500 dark:text-gray-400 ml-auto"
+                                >
+                                    {{ renameForm.description.length }}/500
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex items-center justify-end gap-2">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 hover:bg-gray-200 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-200 h-[40px]"
+                            @click="showRenameDialog = false"
+                            :disabled="isRenaming"
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            class="bg-gray-900 dark:bg-gray-100 text-gray-100 dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-200 hover:text-gray-100 dark:hover:text-gray-900 h-[40px]"
+                            type="submit"
+                            :disabled="isRenaming"
+                        >
+                            <Loader2
+                                v-if="isRenaming"
+                                class="w-4 h-4 mr-2 animate-spin"
+                            />
+                            {{ isRenaming ? "Saving..." : "Save Changes" }}
+                        </Button>
+                    </div>
+                </form>
+            </div>
+        </DialogBox>
 
         <!-- Delete Confirmation Dialog -->
-        <Dialog v-model:open="showDeleteDialog">
-            <DialogContent class="sm:max-w-[425px]">
-                <DialogHeader>
-                    <DialogTitle>Delete Arcade</DialogTitle>
-                    <DialogDescription>
+        <DialogBox
+            name="delete-confirmation"
+            :close-modal="() => (showDeleteDialog = false)"
+            :show="showDeleteDialog"
+        >
+            <div class="sm:max-w-[425px]">
+                <div class="space-y-2">
+                    <div
+                        class="text-xl font-bold dark:text-gray-100 text-gray-900"
+                    >
+                        Delete Arcade
+                    </div>
+                    <div class="text-sm text-gray-500 dark:text-gray-400">
                         Are you sure you want to delete this arcade? This action
                         cannot be undone.
-                    </DialogDescription>
-                </DialogHeader>
+                    </div>
+                </div>
                 <div class="py-4">
                     <div
                         class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4"
@@ -561,10 +553,11 @@ onMounted(async () => {
                         </p>
                     </div>
                 </div>
-                <DialogFooter>
+                <div class="flex items-center justify-end space-x-2">
                     <Button
                         variant="outline"
                         @click="showDeleteDialog = false"
+                        class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 hover:bg-gray-200 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-200 h-[40px]"
                         :disabled="isDeleting"
                     >
                         Cancel
@@ -580,9 +573,9 @@ onMounted(async () => {
                         />
                         {{ isDeleting ? "Deleting..." : "Delete Arcade" }}
                     </Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
+                </div>
+            </div>
+        </DialogBox>
     </div>
 </template>
 

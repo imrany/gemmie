@@ -23,7 +23,7 @@ const { name, show, closeModal } = defineProps<{
                     @click="closeModal"
                     class="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                 >
-                    <X class="w-4 h-4 text-gray-500 dark:text-gray-400" />
+                    <X class="w-4 h-4 text-gray-500 dark:text-gray-200" />
                 </button>
 
                 <div>
