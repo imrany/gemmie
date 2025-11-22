@@ -23,6 +23,7 @@ export interface Message {
   model: string;
   requestId?: string;
   references: string[];
+  is_in_arcade: boolean;
 }
 
 export interface Chat {
@@ -147,6 +148,7 @@ export interface Arcade {
   CodeType: string;
   CreatedAt: string;
   UpdatedAt?: Date;
+  MessageId: string;
 }
 
 export interface RawArcade {
@@ -158,4 +160,5 @@ export interface RawArcade {
   code_type: string;
   created_at: string;
   updated_at?: Date;
+  message_id: string;
 }

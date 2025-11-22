@@ -66,6 +66,7 @@ func CreateArcadeHandler(w http.ResponseWriter, r *http.Request) {
 		Code:        req.Code,
 		Description: req.Description,
 		CodeType:    req.CodeType,
+		MessageId:   req.MessageId,
 	}
 
 	id, err := store.CreateArcade(&arcade)
@@ -273,9 +274,13 @@ func UpdateArcadeHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Update arcade fields
 	arcade.Label = req.Label
-	arcade.Code = req.Code
+	if req.Code != "" {
+		arcade.Code = req.Code
+	}
 	arcade.Description = req.Description
-	arcade.CodeType = req.CodeType
+	if req.CodeType != "" {
+		arcade.CodeType = req.CodeType
+	}
 	arcade.UpdatedAt = time.Now()
 
 	updatedArcade, err := store.UpdateArcade(arcade)

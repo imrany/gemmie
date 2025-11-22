@@ -46,13 +46,13 @@ async function fetchArcades() {
         const res = await apiCall<RawArcade[]>(`/arcades`, {
             method: "GET",
         });
+        console.log(res);
         if (!res.success) {
             throw new Error(res.message || "Failed to load arcades");
         }
 
         if (res.data) {
             arcades.value = res.data;
-            console.log(arcades);
         } else {
             throw new Error("No arcade data found");
         }
@@ -61,6 +61,8 @@ async function fetchArcades() {
         if (err.message?.includes("Failed to fetch")) {
             error.value =
                 "Failed to connect to the server. Please check your internet connection.";
+        } else if (err.message?.includes("HTTP 404")) {
+            error.value = "No arcade data found.";
         } else {
             error.value = err.message || "Failed to load arcades";
         }

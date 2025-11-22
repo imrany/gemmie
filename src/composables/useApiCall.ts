@@ -133,17 +133,9 @@ export function useApiCall(globalStateRefs?: {
 
       clearTimeout(timeoutId);
 
-      if (!response.ok) {
-        const errorText = await response.text().catch(() => "Unknown error");
-        throw new Error(
-          `HTTP ${response.status}: ${response.statusText} - ${errorText}`,
-        );
-      }
-
       const data: ApiResponse<T> = await response.json();
-
-      if (!data.success) {
-        throw new Error(data.message || "API request failed");
+      if (data && !data.success) {
+        throw new Error(data.message || "Request failed");
       }
 
       return data;

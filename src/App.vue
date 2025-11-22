@@ -132,6 +132,7 @@ const now = ref(Date.now());
 // State for preview sidebar
 const showPreviewSidebar = ref(false);
 const previewCode = ref("");
+const previewContent = ref("");
 const previewLanguage = ref("html");
 const metadata = ref<
     | {
@@ -146,6 +147,7 @@ const metadata = ref<
 const openPreview = (
     code: string,
     language: string = "html",
+    content: string,
     data?: {
         fileSize: string;
         wordCount: number;
@@ -154,6 +156,7 @@ const openPreview = (
 ) => {
     previewCode.value = code;
     previewLanguage.value = language;
+    previewContent.value = content;
     showPreviewSidebar.value = true;
     metadata.value = data;
 };
@@ -2341,6 +2344,7 @@ const globalState = {
     showPreviewSidebar,
     previewCode,
     previewLanguage,
+    previewContent,
     metadata,
 
     // Function to open preview with code

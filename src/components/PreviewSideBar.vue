@@ -9,6 +9,7 @@ import {
     Earth,
     ArrowLeft,
     LoaderCircle,
+    ExternalLink,
 } from "lucide-vue-next";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -18,6 +19,7 @@ import type { Ref } from "vue";
 import { inject } from "vue";
 import hljs from "highlight.js/lib/common";
 import { toast } from "vue-sonner";
+import type { ApiResponse, Message } from "@/types";
 import {
     TooltipProvider,
     Tooltip,
@@ -33,12 +35,15 @@ const {
     showPreviewSidebar,
     previewCode,
     previewLanguage,
+    previewContent,
+    currentMessages,
     closePreview,
     metadata,
     isCollapsed,
     parsedUserDetails,
     apiCall,
 } = inject("globalState") as {
+    currentMessages: Ref<Message[]>;
     isOnline: Ref<boolean>;
     isCollapsed: Ref<boolean>;
     metadata: Ref<
@@ -53,9 +58,13 @@ const {
     showPreviewSidebar: Ref<boolean>;
     previewCode: Ref<string>;
     previewLanguage: Ref<string>;
+    previewContent: Ref<string>;
     closePreview: () => void;
     parsedUserDetails: Ref<any>;
-    apiCall: (endpoint: string, options: RequestInit) => Promise<any>;
+    apiCall: <T>(
+        endpoint: string,
+        options: RequestInit,
+    ) => Promise<ApiResponse<T>>;
 };
 
 const activeTab = ref<"preview" | "code" | "publish">(
@@ -89,6 +98,15 @@ const isFormValid = computed(() => {
         publishForm.value.label.trim().length <= 100 &&
         publishForm.value.description.trim().length > 0 &&
         publishForm.value.description.trim().length <= 500
+    );
+});
+
+const currentMessage = computed(() => {
+    return (
+        currentMessages.value &&
+        currentMessages.value.find(
+            (message) => message.response === previewContent.value,
+        )
     );
 });
 
@@ -224,16 +242,16 @@ const publishToArcade = async () => {
                 day: "numeric",
                 year: "numeric",
             }),
+            message_id: currentMessage.value?.id || "",
         };
 
-        const response = await apiCall("/arcades", {
+        const response = await apiCall<string>("/arcades", {
             method: "POST",
             body: JSON.stringify(arcadeData),
         });
 
-        const parsedResponse = response.json();
-        if (parsedResponse.success) {
-            toast.success("Published to Arcade!", {
+        if (response.success) {
+            let alert = toast.success("Published to Arcade!", {
                 duration: 5000,
                 description: "Your code is now visible in the Arcade",
             });
@@ -245,21 +263,25 @@ const publishToArcade = async () => {
             };
             formErrors.value = {};
             closePreview();
-            const dismiss = toast.loading("Opening Arcade...", {
+            toast.dismiss(alert);
+            alert = toast.loading("Opening Arcade...", {
                 cancel: {
                     label: "Cancel",
                     onClick: () => {
-                        toast.dismiss(dismiss);
+                        toast.dismiss(alert);
                     },
                 },
             });
 
             setTimeout(() => {
-                window.open(`/arcades/${parsedResponse.data}`, "_blank");
-                toast.dismiss(dismiss);
-            }, 2000);
+                window.open(`/arcade/${response.data}`, "_blank");
+                if (currentMessage.value) {
+                    currentMessage.value.is_in_arcade = true;
+                }
+                toast.dismiss(alert);
+            }, 4 * 1000);
         } else {
-            throw new Error(parsedResponse.message || "Failed to publish");
+            throw new Error(response.message || "Failed to publish");
         }
     } catch (error: any) {
         console.error("Publish error:", error);
@@ -303,7 +325,7 @@ const generateSmartDescription = async (label: string): Promise<string> => {
             toast.error("Description generation timed out.", {
                 duration: 3000,
             });
-        }, 8 * 1000);
+        }, 20 * 1000);
 
         const response = await fetch(`${WRAPPER_URL}`, {
             method: "POST",
@@ -333,6 +355,12 @@ const generateSmartDescription = async (label: string): Promise<string> => {
         return "";
     } finally {
         clearTimeout(timeoutId);
+    }
+};
+
+const viewLiveArcade = () => {
+    if (currentMessage.value) {
+        window.open(`/arcade/${currentMessage?.value.id}`, "_blank");
     }
 };
 
@@ -502,7 +530,8 @@ watch(
                                         <Button
                                             v-if="
                                                 !metadata &&
-                                                activeTab === 'preview'
+                                                activeTab === 'preview' &&
+                                                !currentMessage?.is_in_arcade
                                             "
                                             size="sm"
                                             @click="openPublishTab"
@@ -510,7 +539,10 @@ watch(
                                                 'px-3 py-1.5 h-8 text-xs font-medium rounded-md transition-all ease-in-out duration-200 inline-flex items-center gap-1.5',
                                                 'bg-gray-700 dark:bg-gray-200 hover:bg-gray-600 dark:hover:bg-gray-300 text-gray-200 dark:text-gray-700 shadow-sm',
                                             ]"
-                                            :disabled="!isOnline"
+                                            :disabled="
+                                                !isOnline ||
+                                                currentMessage?.is_in_arcade
+                                            "
                                         >
                                             <Earth class="w-4 h-4" />
                                             Publish
@@ -527,7 +559,38 @@ watch(
                                     </TooltipContent>
                                 </Tooltip>
                             </TooltipProvider>
-
+                            <TooltipProvider>
+                                <Tooltip>
+                                    <TooltipTrigger as-child>
+                                        <Button
+                                            v-if="
+                                                !metadata &&
+                                                activeTab === 'preview' &&
+                                                currentMessage?.is_in_arcade
+                                            "
+                                            size="sm"
+                                            @click="viewLiveArcade"
+                                            :class="[
+                                                'px-3 py-1.5 h-8 text-xs font-medium rounded-md transition-all ease-in-out duration-200 inline-flex items-center gap-1.5',
+                                                'bg-gray-700 dark:bg-gray-200 hover:bg-gray-600 dark:hover:bg-gray-300 text-gray-200 dark:text-gray-700 shadow-sm',
+                                            ]"
+                                            :disabled="
+                                                !isOnline ||
+                                                !currentMessage?.is_in_arcade
+                                            "
+                                        >
+                                            <ExternalLink class="w-4 h-4" />
+                                            View live
+                                        </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent
+                                        side="left"
+                                        :avoid-collisions="true"
+                                    >
+                                        <p>Opens on an external link .</p>
+                                    </TooltipContent>
+                                </Tooltip>
+                            </TooltipProvider>
                             <Button
                                 v-if="activeTab !== 'publish'"
                                 size="sm"

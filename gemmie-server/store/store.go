@@ -111,6 +111,7 @@ type Message struct {
 	CreatedAt  time.Time `json:"created_at"`
 	Model      string    `json:"model,omitempty"`
 	References []string  `json:"references,omitempty"`
+	IsInArcade bool      `json:"is_in_arcade"`
 }
 
 type Arcade struct {
@@ -122,6 +123,7 @@ type Arcade struct {
 	CodeType    string    `json:"code_type"`
 	CreatedAt   string    `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
+	MessageId   string    `json:"message_id"`
 }
 
 var (
@@ -183,5 +185,5 @@ func Close() error {
 }
 
 func GetVersion() string {
-	return "v0.17.4"
+	return "v0.17.5"
 }

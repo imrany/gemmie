@@ -19,7 +19,7 @@ const props = defineProps<Props>();
 const { openPreview, showPreviewSidebar, closePreview } = inject(
     "globalState",
 ) as {
-    openPreview: (code: string, language: string) => void;
+    openPreview: (code: string, language: string, content: string) => void;
     showPreviewSidebar: Ref<boolean>;
     closePreview: () => void;
 };
@@ -459,6 +459,7 @@ if (typeof window !== "undefined") {
                     openPreview(
                         (getComponentData(part) as CodeBlockData)?.code,
                         (getComponentData(part) as CodeBlockData)?.language,
+                        content,
                     )
                 "
             />

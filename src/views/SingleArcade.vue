@@ -181,12 +181,13 @@ async function handleRename() {
             throw new Error(res.message || "Failed to update arcade");
         }
 
-        toast.success("Arcade updated successfully!");
-
-        // Update local data
-        if (arcade.value) {
-            arcade.value.label = renameForm.value.label.trim();
-            arcade.value.description = renameForm.value.description.trim();
+        if (res.data) {
+            toast.success(res.message);
+            // Update local data
+            if (arcade.value) {
+                arcade.value.label = res.data.label.trim();
+                arcade.value.description = res.data.description.trim();
+            }
         }
 
         showRenameDialog.value = false;
@@ -383,7 +384,6 @@ onMounted(async () => {
                     class="h-12 w-12 dark:bg-gray-200 bg-gray-800 hover:bg-gray-700 dark:hover:bg-gray-100 rounded-full shadow-lg hover:shadow-xl transition-shadow"
                 >
                     <Share2 class="w-5 h-5 mr-2" />
-                    Share
                 </Button>
             </div>
 

@@ -19,11 +19,16 @@ const emit = defineEmits<{
 
 const router = useRouter();
 function handleBack() {
-    if (window.history.state.back) {
-        router.back();
-        return;
+    console.log(window.history, window.history.length > 1);
+    if (window.history.length > 1) {
+        router.push(
+            window.history.state.forward
+                ? window.history.state.forward
+                : window.history.state.back,
+        );
+    } else {
+        router.push("/");
     }
-    router.push("/");
 }
 </script>
 <template>
@@ -42,11 +47,11 @@ function handleBack() {
             <p class="text-sm text-gray-600 dark:text-gray-400 mb-6">
                 {{ error }}
             </p>
-            <div class="flex gap-3 justify-center">
+            <div class="flex gap-3 items-center justify-center">
                 <Button
                     @click="emit('retry')"
                     :disabled="!isOnline"
-                    class="inline-flex items-center gap-2"
+                    class="inline-flex items-center gap-2 h-[38px] bg-gray-100 text-gray-900 dark:bg-gray-100 dark:text-gray-900 hover:bg-gray-100"
                 >
                     <RefreshCw class="w-4 h-4" />
                     Retry
@@ -54,8 +59,7 @@ function handleBack() {
                 <Button
                     v-if="backButtonText"
                     @click="handleBack"
-                    variant="outline"
-                    class="inline-flex items-center gap-2"
+                    class="inline-flex items-center gap-2 h-[38px] bg-gray-800 dark:bg-gray-800 text-gray-200 dark:text-gray-200 hover:bg-gray-800 dark:hover:bg-gray-800"
                 >
                     <ArrowLeft class="w-4 h-4" />
                     {{ backButtonText }}
