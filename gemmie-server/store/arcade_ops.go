@@ -83,7 +83,7 @@ func GetArcadesByOption(option any) ([]*Arcade, error) {
 	ctx := context.Background()
 	if option == nil {
 		// gets all arcades
-		query := `SELECT id, user_id, code, label, code_type, description, created_at, updated_at, message_id FROM arcades ORDER BY created_at DESC`
+		query := `SELECT id, user_id, code, label, code_type, description, created_at, updated_at, message_id FROM arcades ORDER BY updated_at DESC`
 		ctx := context.Background()
 		rows, err := DB.QueryContext(ctx, query)
 		if err != nil {
@@ -104,7 +104,7 @@ func GetArcadesByOption(option any) ([]*Arcade, error) {
 		return arcades, nil
 	}
 
-	query := `SELECT id, user_id, code, label, code_type, description, created_at, updated_at, message_id FROM arcades WHERE user_id = $1 OR code = $2 OR code_type = $3 ORDER BY created_at DESC`
+	query := `SELECT id, user_id, code, label, code_type, description, created_at, updated_at, message_id FROM arcades WHERE user_id = $1 OR code = $2 OR code_type = $3 ORDER BY updated_at DESC`
 	rows, err := DB.QueryContext(ctx, query, option)
 	if err != nil {
 		return nil, err

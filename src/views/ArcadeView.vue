@@ -46,7 +46,6 @@ async function fetchArcades() {
         const res = await apiCall<RawArcade[]>(`/arcades`, {
             method: "GET",
         });
-        console.log(res);
         if (!res.success) {
             throw new Error(res.message || "Failed to load arcades");
         }
@@ -92,10 +91,11 @@ const filteredArcades = computed(() => {
         );
     }
 
-    // Sort by created date (newest first)
+    // Sort by updated_at date (newest first)
     return filtered.sort(
         (a, b) =>
-            new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+            (b.updated_at ? new Date(b.updated_at).getTime() : 0) -
+            (a.updated_at ? new Date(a.updated_at).getTime() : 0),
     );
 });
 

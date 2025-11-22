@@ -383,7 +383,7 @@ onMounted(async () => {
                     size="sm"
                     class="h-12 w-12 dark:bg-gray-200 bg-gray-800 hover:bg-gray-700 dark:hover:bg-gray-100 rounded-full shadow-lg hover:shadow-xl transition-shadow"
                 >
-                    <Share2 class="w-5 h-5 mr-2" />
+                    <Share2 class="w-5 h-5" />
                 </Button>
             </div>
 
