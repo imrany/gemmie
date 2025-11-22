@@ -19,7 +19,16 @@ const props = defineProps<Props>();
 const { openPreview, showPreviewSidebar, closePreview } = inject(
     "globalState",
 ) as {
-    openPreview: (code: string, language: string, content: string) => void;
+    openPreview: (
+        code: string,
+        language: string,
+        content: string,
+        data?: {
+            fileSize: string;
+            wordCount: number;
+            charCount: number;
+        },
+    ) => void;
     showPreviewSidebar: Ref<boolean>;
     closePreview: () => void;
 };
@@ -460,6 +469,7 @@ if (typeof window !== "undefined") {
                         (getComponentData(part) as CodeBlockData)?.code,
                         (getComponentData(part) as CodeBlockData)?.language,
                         content,
+                        undefined,
                     )
                 "
             />
