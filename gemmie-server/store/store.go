@@ -124,6 +124,7 @@ type Arcade struct {
 	CreatedAt   string    `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 	MessageId   string    `json:"message_id"`
+	Message     Message   `json:"message"`
 }
 
 var (
@@ -185,5 +186,5 @@ func Close() error {
 }
 
 func GetVersion() string {
-	return "v0.17.5"
+	return "v0.17.8"
 }

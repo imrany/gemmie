@@ -74,6 +74,11 @@ func GetArcadeById(id int64) (*Arcade, error) {
 	if err != nil {
 		return nil, err
 	}
+	message, err := GetMessageById(arcade.MessageId)
+	if err != nil {
+		return nil, err
+	}
+	arcade.Message = *message
 
 	return &arcade, nil
 }
