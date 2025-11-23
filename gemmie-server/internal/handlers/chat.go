@@ -11,11 +11,6 @@ import (
 	"github.com/imrany/gemmie/gemmie-server/store"
 )
 
-// CreateChatRequest represents request payload for creating a new chat
-type CreateChatRequest struct {
-	Title string `json:"title"`
-}
-
 // CreateChatHandler handles POST /api/chats
 func CreateChatHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
@@ -51,7 +46,7 @@ func CreateChatHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req CreateChatRequest
+	var req store.Chat
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(store.Response{
@@ -61,23 +56,18 @@ func CreateChatHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate title
-	if req.Title == "" {
-		req.Title = "New Chat"
-	}
-
 	// Create new chat
 	chat := store.Chat{
-		ID:            encrypt.GenerateID(nil),
+		ID:            req.ID,
 		UserId:        userID,
 		Title:         req.Title,
 		CreatedAt:     time.Now(),
 		UpdatedAt:     time.Now(),
-		IsArchived:    false,
+		IsArchived:    req.IsArchived,
 		MessageCount:  0,
 		Messages:      []store.Message{},
 		LastMessageAt: time.Now(),
-		IsPrivate:     true,
+		IsPrivate:     req.IsPrivate,
 	}
 
 	if err := store.CreateChat(chat); err != nil {
