@@ -30,6 +30,8 @@ import {
 } from "./ui/tooltip";
 import { WRAPPER_URL } from "@/lib/globals";
 import type { RawArcade } from "@/types";
+import type { FunctionalComponent } from "vue";
+import { useRoute } from "vue-router";
 
 const {
     isOnline,
@@ -103,6 +105,20 @@ const formErrors = ref<{
     label?: string;
     description?: string;
 }>({});
+
+const route = useRoute();
+const tabs: {
+    label: "preview" | "code" | "chat";
+    icon: FunctionalComponent;
+}[] = [
+    ...(route.path.startsWith("/arcade/")
+        ? []
+        : [{ label: "preview" as "preview", icon: Eye }]),
+    { label: "code", icon: Code },
+    ...(route.path.startsWith("/chat/")
+        ? []
+        : [{ label: "chat" as "chat", icon: MessageSquare }]),
+];
 
 const isFormValid = computed(() => {
     return (
@@ -482,8 +498,14 @@ watch(
 // Reset to preview tab when sidebar opens (unless metadata exists)
 watch(showPreviewSidebar, (newVal) => {
     if (newVal) {
-        activeTab.value = metadata?.value ? "code" : "preview";
-        previousTab.value = "preview";
+        if (route.path.startsWith("/arcade/")) {
+            activeTab.value = "chat";
+            previousTab.value = "code";
+        } else {
+            activeTab.value = metadata?.value ? "code" : "preview";
+            previousTab.value = "preview";
+        }
+
         // Reset publish form
         publishForm.value = {
             label: "",
@@ -589,40 +611,18 @@ watch(
                             class="flex items-center gap-1.5 bg-gray-200 dark:bg-gray-800 p-1 rounded-lg"
                         >
                             <button
-                                @click="activeTab = 'preview'"
+                                v-for="tab in tabs"
+                                :key="tab.label"
+                                @click="activeTab = tab.label"
                                 :class="[
                                     'px-3 py-1.5 text-xs rounded-md transition-all duration-200 inline-flex items-center gap-1.5 font-medium',
-                                    activeTab === 'preview'
+                                    activeTab === tab.label
                                         ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
                                         : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200',
                                 ]"
                             >
                                 <Eye :size="14" />
-                                <span>Preview</span>
-                            </button>
-                            <button
-                                @click="activeTab = 'code'"
-                                :class="[
-                                    'px-3 py-1.5 text-xs rounded-md transition-all duration-200 inline-flex items-center gap-1.5 font-medium',
-                                    activeTab === 'code'
-                                        ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
-                                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200',
-                                ]"
-                            >
-                                <Code :size="14" />
-                                <span>Code</span>
-                            </button>
-                            <button
-                                @click="activeTab = 'chat'"
-                                :class="[
-                                    'px-3 py-1.5 text-xs rounded-md transition-all duration-200 inline-flex items-center gap-1.5 font-medium',
-                                    activeTab === 'chat'
-                                        ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
-                                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200',
-                                ]"
-                            >
-                                <MessageSquare :size="14" />
-                                <span>Chat</span>
+                                <span class="capitalize">{{ tab.label }}</span>
                             </button>
                         </div>
 

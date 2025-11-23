@@ -36,10 +36,19 @@ const route = useRoute();
 const router = useRouter();
 const arcadeId = route.params.id as string;
 
-const { unsecureApiCall, apiCall, parsedUserDetails, screenWidth } = inject(
+const { unsecureApiCall, apiCall, parsedUserDetails, openPreview } = inject(
     "globalState",
 ) as {
-    screenWidth: Ref<number>;
+    openPreview: (
+        code: string,
+        language: string,
+        content: string,
+        data?: {
+            fileSize: string;
+            wordCount: number;
+            charCount: number;
+        },
+    ) => void;
     unsecureApiCall: <T>(
         endpoint: string,
         options: RequestInit,
@@ -351,8 +360,18 @@ onMounted(async () => {
                                     <span>Edit Details</span>
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
-                                    v-if="screenWidth > 720"
-                                    @click="openRenameDialog"
+                                    @click="
+                                        () => {
+                                            if (arcade)
+                                                openPreview(
+                                                    arcade?.code,
+                                                    arcade?.code_type || 'html',
+                                                    arcade?.message?.response ||
+                                                        '',
+                                                    undefined,
+                                                );
+                                        }
+                                    "
                                     class="cursor-pointer"
                                 >
                                     <Code2 class="w-4 h-4 mr-2" />

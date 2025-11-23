@@ -149,6 +149,7 @@ export interface Arcade {
   CreatedAt: string;
   UpdatedAt?: Date;
   MessageId: string;
+  Message?: Message;
 }
 
 export interface RawArcade {
@@ -161,4 +162,5 @@ export interface RawArcade {
   created_at: string;
   updated_at?: Date;
   message_id: string;
+  message?: Message;
 }
