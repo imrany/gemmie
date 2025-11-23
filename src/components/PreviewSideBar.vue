@@ -621,7 +621,7 @@ watch(
                                         : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200',
                                 ]"
                             >
-                                <Eye :size="14" />
+                                <component :is="tab.icon" :size="14" />
                                 <span class="capitalize">{{ tab.label }}</span>
                             </button>
                         </div>
