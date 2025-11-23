@@ -103,7 +103,7 @@ func GetMessageById(ID string) (*Message, error) {
 	)
 
 	if err == sql.ErrNoRows {
-		return nil, nil
+		return nil, err
 	}
 
 	return message, err
