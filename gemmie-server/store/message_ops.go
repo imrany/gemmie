@@ -33,12 +33,11 @@ func GetMessagesByChatId(chatId string) ([]Message, error) {
 	ctx := context.Background()
 
 	query := `
-			SELECT
-				m.id, m.chat_id, m.prompt, m.response, m.created_at, m.model, m.references_ids,
-				EXISTS (SELECT 1 FROM arcades a WHERE a.message_id = m.id) as is_in_arcade
-			FROM messages m
-			WHERE m.chat_id = $1
-			ORDER BY m.created_at ASC
+	SELECT
+		m.id, m.chat_id, m.prompt, m.response, m.created_at, m.model, m.references_ids
+	FROM messages m
+	WHERE m.chat_id = $1
+	ORDER BY m.created_at ASC
 		`
 
 	rows, err := DB.QueryContext(ctx, query, chatId)
@@ -55,7 +54,6 @@ func GetMessagesByChatId(chatId string) ([]Message, error) {
 			&msg.ID, &msg.ChatId, &msg.Prompt,
 			&msg.Response, &msg.CreatedAt, &msg.Model,
 			pq.Array(&msg.References),
-			&msg.IsInArcade,
 		)
 		if err != nil {
 			return nil, err
@@ -92,10 +90,9 @@ func GetMessageById(ID string) (*Message, error) {
 	ctx := context.Background()
 
 	query := `
-		SELECT
-			m.id, m.chat_id, m.prompt, m.response, m.created_at, m.model, m.references_ids,
-			EXISTS (SELECT 1 FROM arcades a WHERE a.message_id = m.id) as is_in_arcade
-		FROM messages m WHERE m.id = $1
+	SELECT
+		m.id, m.chat_id, m.prompt, m.response, m.created_at, m.model, m.references_ids
+	FROM messages m WHERE m.id = $1
 	`
 
 	message := &Message{}
@@ -103,7 +100,6 @@ func GetMessageById(ID string) (*Message, error) {
 		&message.ID, &message.ChatId, &message.Prompt,
 		&message.Response, &message.CreatedAt, &message.Model,
 		pq.Array(&message.References),
-		&message.IsInArcade,
 	)
 
 	if err == sql.ErrNoRows {

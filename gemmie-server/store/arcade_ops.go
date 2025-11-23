@@ -10,8 +10,8 @@ import (
 func CreateArcade(arcade *Arcade) (*string, error) {
 	ctx := context.Background()
 	now := time.Now()
-	query := `INSERT INTO arcades (user_id, code, label, code_type, description, created_at, updated_at, id, message_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`
-	_, err := DB.ExecContext(ctx, query, arcade.UserId, arcade.Code, arcade.Label, arcade.CodeType, arcade.Description, arcade.CreatedAt, now, arcade.ID, arcade.MessageId)
+	query := `INSERT INTO arcades (user_id, code, label, code_type, description, created_at, updated_at, id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`
+	_, err := DB.ExecContext(ctx, query, arcade.UserId, arcade.Code, arcade.Label, arcade.CodeType, arcade.Description, arcade.CreatedAt, now, arcade.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -64,22 +64,16 @@ func DeleteArcadeByID(id int64) error {
 	return nil
 }
 
-// GetArcadeById - Gets an arcade by its id or message_id
+// GetArcadeById - Gets an arcade by its id
 func GetArcadeById(id int64) (*Arcade, error) {
 	ctx := context.Background()
-	query := `SELECT id, user_id, code, label, code_type, description, created_at, updated_at, message_id FROM arcades WHERE id = $1 OR message_id = $1`
+	query := `SELECT id, user_id, code, label, code_type, description, created_at, updated_at FROM arcades WHERE id = $1`
 	row := DB.QueryRowContext(ctx, query, id)
 	var arcade Arcade
-	err := row.Scan(&arcade.ID, &arcade.UserId, &arcade.Code, &arcade.Label, &arcade.CodeType, &arcade.Description, &arcade.CreatedAt, &arcade.UpdatedAt, &arcade.MessageId)
+	err := row.Scan(&arcade.ID, &arcade.UserId, &arcade.Code, &arcade.Label, &arcade.CodeType, &arcade.Description, &arcade.CreatedAt, &arcade.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
-	message, err := GetMessageById(arcade.MessageId)
-	if err != nil {
-		return nil, err
-	}
-	arcade.Message = *message
-
 	return &arcade, nil
 }
 
@@ -88,7 +82,7 @@ func GetArcadesByOption(option any) ([]*Arcade, error) {
 	ctx := context.Background()
 	if option == nil {
 		// gets all arcades
-		query := `SELECT id, user_id, code, label, code_type, description, created_at, updated_at, message_id FROM arcades ORDER BY updated_at DESC`
+		query := `SELECT id, user_id, code, label, code_type, description, created_at, updated_at FROM arcades ORDER BY updated_at DESC`
 		ctx := context.Background()
 		rows, err := DB.QueryContext(ctx, query)
 		if err != nil {
@@ -99,7 +93,7 @@ func GetArcadesByOption(option any) ([]*Arcade, error) {
 		var arcades []*Arcade
 		for rows.Next() {
 			var arcade Arcade
-			err := rows.Scan(&arcade.ID, &arcade.UserId, &arcade.Code, &arcade.Label, &arcade.CodeType, &arcade.Description, &arcade.CreatedAt, &arcade.UpdatedAt, &arcade.MessageId)
+			err := rows.Scan(&arcade.ID, &arcade.UserId, &arcade.Code, &arcade.Label, &arcade.CodeType, &arcade.Description, &arcade.CreatedAt, &arcade.UpdatedAt)
 			if err != nil {
 				return nil, err
 			}
@@ -109,7 +103,7 @@ func GetArcadesByOption(option any) ([]*Arcade, error) {
 		return arcades, nil
 	}
 
-	query := `SELECT id, user_id, code, label, code_type, description, created_at, updated_at, message_id FROM arcades WHERE user_id = $1 OR code = $2 OR code_type = $3 ORDER BY updated_at DESC`
+	query := `SELECT id, user_id, code, label, code_type, description, created_at, updated_at FROM arcades WHERE user_id = $1 OR code = $2 OR code_type = $3 ORDER BY updated_at DESC`
 	rows, err := DB.QueryContext(ctx, query, option)
 	if err != nil {
 		return nil, err
@@ -119,7 +113,7 @@ func GetArcadesByOption(option any) ([]*Arcade, error) {
 	var arcades []*Arcade
 	for rows.Next() {
 		var arcade Arcade
-		err := rows.Scan(&arcade.ID, &arcade.UserId, &arcade.Code, &arcade.Label, &arcade.CodeType, &arcade.Description, &arcade.CreatedAt, &arcade.UpdatedAt, &arcade.MessageId)
+		err := rows.Scan(&arcade.ID, &arcade.UserId, &arcade.Code, &arcade.Label, &arcade.CodeType, &arcade.Description, &arcade.CreatedAt, &arcade.UpdatedAt)
 		if err != nil {
 			return nil, err
 		}

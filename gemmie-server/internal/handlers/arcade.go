@@ -66,7 +66,6 @@ func CreateArcadeHandler(w http.ResponseWriter, r *http.Request) {
 		Code:        req.Code,
 		Description: req.Description,
 		CodeType:    req.CodeType,
-		MessageId:   req.MessageId,
 	}
 
 	id, err := store.CreateArcade(&arcade)
