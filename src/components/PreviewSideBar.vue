@@ -1129,13 +1129,13 @@ watch(
                                             v-for="msg in currentMessages"
                                             :key="msg.id"
                                             :class="[
-                                                'flex flex-col gap-2',
+                                                'flex flex-col gap-1',
                                                 'justify-start',
                                             ]"
                                         >
                                             <div :class="['max-w-[85%]']">
                                                 <div
-                                                    class="flex mt-[2px] items-start gap-2 font-medium bg-gray-100 dark:bg-gray-800 text-black dark:text-gray-100 px-4 rounded-2xl prose prose-sm dark:prose-invert chat-bubble w-fit max-w-full"
+                                                    class="flex items-start justify-center gap-2 font-medium bg-gray-100 dark:bg-gray-800 text-black dark:text-gray-100 px-4 rounded-2xl prose prose-sm dark:prose-invert chat-bubble w-fit max-w-full"
                                                 >
                                                     <!-- Avatar container -->
                                                     <div
