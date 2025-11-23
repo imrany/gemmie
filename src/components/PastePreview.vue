@@ -8,7 +8,6 @@ const { openPreview, removePastePreview } = inject("globalState") as {
     openPreview: (
         code: string,
         language: string,
-        content: string,
         metadata?: {
             fileSize: string;
             wordCount: number;
@@ -89,7 +88,7 @@ const fileSize = (text: string): string => {
         :id="componentId"
         @click="
             if (isClickable)
-                openPreview(text, language, content, {
+                openPreview(text, language, {
                     wordCount,
                     charCount,
                     fileSize: fileSize(text),

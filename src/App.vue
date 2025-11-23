@@ -8,6 +8,7 @@ import type {
     LinkPreview,
     Message,
     UserDetails,
+    RawArcade,
 } from "./types";
 import {
     generateChatTitle,
@@ -132,7 +133,6 @@ const now = ref(Date.now());
 // State for preview sidebar
 const showPreviewSidebar = ref(false);
 const previewCode = ref("");
-const previewContent = ref("");
 const previewLanguage = ref("html");
 const metadata = ref<
     | {
@@ -142,12 +142,12 @@ const metadata = ref<
       }
     | undefined
 >(undefined);
+const arcade = ref<RawArcade>();
 
 // Function to open preview with code
 const openPreview = (
     code: string,
     language: string = "html",
-    content: string,
     data?: {
         fileSize: string;
         wordCount: number;
@@ -156,7 +156,6 @@ const openPreview = (
 ) => {
     previewCode.value = code;
     previewLanguage.value = language;
-    previewContent.value = content;
     showPreviewSidebar.value = true;
     metadata.value = data;
 };
@@ -1265,30 +1264,28 @@ async function syncChatToServer(chatId: string) {
 }
 
 // Syncs only the new message, not the entire chat history
-async function onMessageAdded(message: Message) {
-    if (!currentChatId.value) return;
+async function onMessageAdded(message: Message, chatId?: string) {
+    const currentId = chatId || currentChatId.value;
+    if (!currentId) return;
 
     try {
         // Then sync the specific message to server
         if (isAuthenticated.value) {
-            console.log(`🔄 Syncing message to chat: ${currentChatId.value}`);
+            console.log(`🔄 Syncing message to chat: ${currentId}`);
 
             // First ensure chat exists on server
-            await syncChatToServer(currentChatId.value);
+            await syncChatToServer(currentId);
 
             // Then add the message
-            const response = await apiCall(
-                `/chats/${currentChatId.value}/messages`,
-                {
-                    method: "POST",
-                    body: JSON.stringify({
-                        prompt: message.prompt,
-                        response: message.response,
-                        model: message.model || "gemini",
-                        references: message.references || [],
-                    }),
-                },
-            );
+            const response = await apiCall(`/chats/${currentId}/messages`, {
+                method: "POST",
+                body: JSON.stringify({
+                    prompt: message.prompt,
+                    response: message.response,
+                    model: message.model || "gemini",
+                    references: message.references || [],
+                }),
+            });
 
             console.log(response);
             if (!response.success) {
@@ -1298,14 +1295,11 @@ async function onMessageAdded(message: Message) {
             if (response.success === true) {
                 // Save locally only if sync was successful
                 saveChats();
-                console.log(`✅ Message synced to chat ${currentChatId.value}`);
+                console.log(`✅ Message synced to chat ${currentId}`);
             }
         }
     } catch (error: any) {
-        console.error(
-            `Failed to sync message to ${currentChatId.value}:`,
-            error,
-        );
+        console.error(`Failed to sync message to ${currentId}:`, error);
         reportError({
             action: "syncMessageToServer",
             message: `Failed to sync message: ${error.message}`,
@@ -2344,8 +2338,8 @@ const globalState = {
     showPreviewSidebar,
     previewCode,
     previewLanguage,
-    previewContent,
     metadata,
+    arcade,
 
     // Function to open preview with code
     openPreview,

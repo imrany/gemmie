@@ -5,7 +5,6 @@ import type {
   PlatformError,
   UserDetails,
   ApiResponse,
-  CreateChatRequest,
 } from "@/types";
 import {
   API_BASE_URL,
@@ -382,12 +381,19 @@ export function useChat({
     }
   }
 
-  async function loadChat(): Promise<[boolean, string]> {
+  async function loadChat(id?: string): Promise<[boolean, string]> {
+    const chatId = id || currentChatId.value;
     try {
       isChatLoading.value = true;
+
+      if (!chatId) {
+        isChatLoading.value = false;
+        return [false, "No chat ID provided."];
+      }
+
       if (isOnline) {
         try {
-          const response = await apiCall<Chat>(`/chats/${currentChatId.value}`);
+          const response = await apiCall<Chat>(`/chats/${chatId}`);
           if (response.data) {
             const existingChatIndex = chats.value.findIndex(
               (chat) => chat.id === response.data!.id,
@@ -401,7 +407,7 @@ export function useChat({
             isChatLoading.value = false;
             return [
               true,
-              "Chat: " + response.data.id + " loaded successfully.",
+              `Chat: ${response.data.id} loaded successfully from server.`,
             ];
           } else {
             isChatLoading.value = false;
@@ -418,9 +424,7 @@ export function useChat({
       if (stored) {
         const parsedChats: Chat[] = JSON.parse(stored);
         if (Array.isArray(parsedChats)) {
-          const existingChat = parsedChats.find(
-            (chat) => chat.id === currentChatId.value,
-          );
+          const existingChat = parsedChats.find((chat) => chat.id === chatId);
 
           if (existingChat) {
             const existingChatIndex = chats.value.findIndex(
@@ -433,10 +437,7 @@ export function useChat({
             }
             isChatLoading.value = false;
             return existingChat.messages && existingChat.messages.length > 0
-              ? [
-                  true,
-                  "Local chat: " + existingChat.id + " loaded successfully",
-                ]
+              ? [true, `Local chat: ${existingChat.id} loaded successfully.`]
               : [
                   false,
                   "This chat is loaded from local but there are no messages, get connected and try again.",
@@ -449,12 +450,10 @@ export function useChat({
       updateExpandedArray();
       return [false, "Failed to load chat."];
     } catch (error: any) {
-      isChatLoading.value = false;
+      console.error("Error loading chat:", error);
       chats.value = [];
-      return [
-        false,
-        "Failed to load chat: " + currentChatId.value + " from server.",
-      ];
+      isChatLoading.value = false;
+      return [false, `Failed to load chat: ${chatId} - ${error.message}`];
     } finally {
       isChatLoading.value = false;
     }
@@ -720,9 +719,12 @@ export function useChat({
     }
   }
 
-  async function createNewChat(firstMessage?: string): Promise<string> {
+  async function createNewChat(
+    firstMessage?: string,
+    chatId?: string,
+  ): Promise<string> {
     try {
-      const newChatId = generateChatId();
+      const newChatId = chatId || generateChatId();
       const now = new Date().toISOString();
       const title = firstMessage ? generateChatTitle(firstMessage) : "New Chat";
 
@@ -743,7 +745,7 @@ export function useChat({
         try {
           const response = await apiCall<Chat>("/chats", {
             method: "POST",
-            body: JSON.stringify({ title } as CreateChatRequest),
+            body: JSON.stringify(newChat),
           });
 
           if (response.data) {
@@ -753,7 +755,9 @@ export function useChat({
             newChat.is_private = response.data.is_private;
 
             chats.value.unshift(newChat);
-            currentChatId.value = newChat.id;
+            if (!chatId) {
+              currentChatId.value = newChat.id;
+            }
             updateExpandedArray();
             saveChats();
           } else {
@@ -766,14 +770,15 @@ export function useChat({
         }
       } else {
         chats.value.unshift(newChat);
-        currentChatId.value = newChat.id;
+        if (!chatId) {
+          currentChatId.value = newChat.id;
+        }
         updateExpandedArray();
         saveChats();
       }
 
-      if (currentChatId.value) {
+      if (currentChatId.value && chatId) {
         pastePreviews.value.delete(currentChatId.value);
-
         const textarea = document.getElementById(
           "prompt",
         ) as HTMLTextAreaElement;
@@ -798,7 +803,6 @@ export function useChat({
         }
       });
 
-      console.log(`✅ Created new chat: ${newChat.id}`);
       return newChat.id;
     } catch (error: any) {
       reportError({

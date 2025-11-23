@@ -580,7 +580,6 @@ async function handleSubmit(
         response: responseMode ? `${responseMode}...` : "...",
         references: effectiveContextReferences?.map((ref) => ref.preview) || [],
         model: "gemini-pro",
-        is_in_arcade: false,
     };
 
     // Store original selectedContexts for rollback on error
@@ -723,7 +722,6 @@ async function handleSubmit(
                 references:
                     effectiveContextReferences?.map((ref) => ref.preview) || [],
                 model: "gemini-pro",
-                is_in_arcade: false,
             };
 
             updatedTargetChat.messages[tempMessageIndex] = updatedMessage;
@@ -878,7 +876,6 @@ async function handleLinkOnlyRequest(
         response: "...",
         references: contextReferenceIds,
         model: "gemini-pro",
-        is_in_arcade: false,
     };
     const targetChat = chats.value.find((chat) => chat.id === chatId);
 

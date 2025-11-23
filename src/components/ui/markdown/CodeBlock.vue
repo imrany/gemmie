@@ -2,6 +2,7 @@
 import { ref } from "vue";
 import { Eye, Copy, Check } from "lucide-vue-next";
 import { Button } from "../button";
+import { useRoute } from "vue-router";
 
 interface Props {
     data: {
@@ -17,6 +18,7 @@ const props = defineProps<Props>();
 const emit = defineEmits<{
     preview: [];
 }>();
+const route = useRoute();
 
 const copied = ref(false);
 
@@ -48,7 +50,10 @@ const handlePreview = () => {
             >
                 {{ data.language }}
             </span>
-            <div class="flex items-center gap-2">
+            <div
+                class="flex items-center gap-2"
+                v-if="route.path.startsWith('/chat')"
+            >
                 <!-- Preview Button (only for HTML) -->
                 <Button
                     v-if="isPreviewable"
@@ -78,7 +83,7 @@ const handlePreview = () => {
             class="!m-0 !rounded-none bg-gray-800 dark:bg-gray-800 overflow-x-auto custom-scrollbar"
         >
             <code
-                :class="`hljs language-${data.language} text-sm leading-relaxed`"
+                :class="`hljs language-${data.language} text-sm leading-relaxed break-words whitespace-pre-wrap`"
                 v-html="data.highlighted"
             ></code>
         </pre>

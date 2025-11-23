@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import type { ApiResponse, RawArcade, UserDetails } from "@/types";
-import { ref, computed } from "vue";
+import { ref, computed, nextTick } from "vue";
 import { inject } from "vue";
-import { onMounted } from "vue";
+import { watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { toast } from "vue-sonner";
 import {
@@ -34,15 +34,25 @@ import OverallLayout from "@/layout/OverallLayout.vue";
 
 const route = useRoute();
 const router = useRouter();
-const arcadeId = route.params.id as string;
+const arcadeId = ref(route.params.id as string);
 
-const { unsecureApiCall, apiCall, parsedUserDetails, openPreview } = inject(
-    "globalState",
-) as {
+const {
+    unsecureApiCall,
+    apiCall,
+    parsedUserDetails,
+    openPreview,
+    loadChat,
+    updateExpandedArray,
+    loadChatDrafts,
+    arcade,
+} = inject("globalState") as {
+    arcade: Ref<RawArcade>;
+    updateExpandedArray: () => void;
+    loadChatDrafts: () => void;
+    loadChat: (id: string) => Promise<[boolean, string]>;
     openPreview: (
         code: string,
         language: string,
-        content: string,
         data?: {
             fileSize: string;
             wordCount: number;
@@ -60,10 +70,10 @@ const { unsecureApiCall, apiCall, parsedUserDetails, openPreview } = inject(
     parsedUserDetails: Ref<UserDetails>;
 };
 
-const arcade = ref<RawArcade>();
 const isLoading = ref(true);
 const error = ref<string | null>(null);
 const iframeLoaded = ref(false);
+const showErrorSection = ref(false);
 
 // Dialog states
 const showDeleteDialog = ref(false);
@@ -94,7 +104,7 @@ async function fetchArcade() {
 
     try {
         const res = await unsecureApiCall<RawArcade>(
-            `/arcades/${arcadeId.trim()}`,
+            `/arcades/${arcadeId.value.trim()}`,
             {
                 method: "GET",
             },
@@ -181,7 +191,7 @@ async function handleRename() {
     isRenaming.value = true;
 
     try {
-        const res = await apiCall<RawArcade>(`/arcades/${arcadeId}`, {
+        const res = await apiCall<RawArcade>(`/arcades/${arcadeId.value}`, {
             method: "PUT",
             body: JSON.stringify({
                 label: renameForm.value.label.trim(),
@@ -222,7 +232,7 @@ async function handleDelete() {
     isDeleting.value = true;
 
     try {
-        const res = await apiCall<void>(`/arcades/${arcadeId}`, {
+        const res = await apiCall<void>(`/arcades/${arcadeId.value}`, {
             method: "DELETE",
         });
 
@@ -295,9 +305,31 @@ async function copyLink() {
     }
 }
 
-onMounted(async () => {
-    await fetchArcade();
-});
+watch(
+    arcadeId,
+    async (newId) => {
+        if (!newId) return; // Guard clause
+
+        arcadeId.value = newId; // Ensure arcadeId is updated first
+        await fetchArcade();
+
+        const [success, message] = await loadChat(newId);
+        if (success) {
+            showErrorSection.value = false;
+            updateExpandedArray();
+            nextTick(() => {
+                loadChatDrafts();
+            });
+            console.log(message);
+        } else {
+            console.warn(message);
+            showErrorSection.value = true;
+        }
+    },
+    {
+        immediate: true,
+    },
+);
 </script>
 
 <template>
@@ -366,8 +398,6 @@ onMounted(async () => {
                                                 openPreview(
                                                     arcade?.code,
                                                     arcade?.code_type || 'html',
-                                                    arcade?.message?.response ||
-                                                        '',
                                                     undefined,
                                                 );
                                         }

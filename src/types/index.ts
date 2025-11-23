@@ -23,7 +23,6 @@ export interface Message {
   model: string;
   requestId?: string;
   references: string[];
-  is_in_arcade: boolean;
 }
 
 export interface Chat {
@@ -134,11 +133,6 @@ export interface ApiResponse<T = any> {
   data?: T;
 }
 
-// Utility types for API operations
-export interface CreateChatRequest {
-  title: string;
-}
-
 export interface Arcade {
   ID?: string;
   UserId: string;
@@ -148,8 +142,6 @@ export interface Arcade {
   CodeType: string;
   CreatedAt: string;
   UpdatedAt?: Date;
-  MessageId: string;
-  Message?: Message;
 }
 
 export interface RawArcade {
@@ -161,6 +153,4 @@ export interface RawArcade {
   code_type: string;
   created_at: string;
   updated_at?: Date;
-  message_id: string;
-  message?: Message;
 }

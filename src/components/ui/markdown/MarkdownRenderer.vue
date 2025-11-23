@@ -22,7 +22,6 @@ const { openPreview, showPreviewSidebar, closePreview } = inject(
     openPreview: (
         code: string,
         language: string,
-        content: string,
         data?: {
             fileSize: string;
             wordCount: number;
@@ -468,7 +467,6 @@ if (typeof window !== "undefined") {
                     openPreview(
                         (getComponentData(part) as CodeBlockData)?.code,
                         (getComponentData(part) as CodeBlockData)?.language,
-                        content,
                         undefined,
                     )
                 "

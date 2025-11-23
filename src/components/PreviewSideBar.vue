@@ -9,7 +9,6 @@ import {
     Earth,
     ArrowLeft,
     LoaderCircle,
-    ExternalLink,
     MessageSquare,
     ArrowUp,
 } from "lucide-vue-next";
@@ -21,17 +20,23 @@ import type { Ref } from "vue";
 import { inject } from "vue";
 import hljs from "highlight.js/lib/common";
 import { toast } from "vue-sonner";
-import type { ApiResponse, Message } from "@/types";
+import type {
+    ApiResponse,
+    RawArcade,
+    Chat,
+    Message,
+    UserDetails,
+} from "@/types";
 import {
     TooltipProvider,
     Tooltip,
     TooltipContent,
     TooltipTrigger,
 } from "./ui/tooltip";
-import { WRAPPER_URL } from "@/lib/globals";
-import type { RawArcade } from "@/types";
+import { WRAPPER_URL, generateChatTitle } from "@/lib/globals";
 import type { FunctionalComponent } from "vue";
 import { useRoute } from "vue-router";
+import MarkdownRenderer from "./ui/markdown/MarkdownRenderer.vue";
 
 const {
     isOnline,
@@ -39,17 +44,21 @@ const {
     showPreviewSidebar,
     previewCode,
     previewLanguage,
-    previewContent,
-    currentMessages,
     closePreview,
     metadata,
     isCollapsed,
     parsedUserDetails,
     apiCall,
     isDarkMode,
+    createNewChat,
+    arcade,
+    chats,
+    onMessageAdded,
 } = inject("globalState") as {
+    chats: Ref<Chat[]>;
+    arcade: Ref<RawArcade>;
+    createNewChat: (firstMessage?: string, chatId?: string) => Promise<string>;
     isDarkMode: Ref<boolean>;
-    currentMessages: Ref<Message[]>;
     isOnline: Ref<boolean>;
     isCollapsed: Ref<boolean>;
     metadata: Ref<
@@ -64,15 +73,16 @@ const {
     showPreviewSidebar: Ref<boolean>;
     previewCode: Ref<string>;
     previewLanguage: Ref<string>;
-    previewContent: Ref<string>;
     closePreview: () => void;
-    parsedUserDetails: Ref<any>;
+    parsedUserDetails: Ref<UserDetails>;
+    onMessageAdded: (message: Message, id?: string) => void;
     apiCall: <T>(
         endpoint: string,
         options: RequestInit,
     ) => Promise<ApiResponse<T>>;
 };
 
+const route = useRoute();
 const activeTab = ref<"preview" | "code" | "publish" | "chat">(
     metadata?.value ? "code" : "preview",
 );
@@ -85,9 +95,17 @@ const isResizing = ref(false);
 const isPublishing = ref(false);
 
 // Chat state
-const chatMessages = ref<
-    Array<{ role: "user" | "assistant"; content: string }>
->([]);
+const currentChat = computed(() => {
+    if (!arcade.value?.id || !route.params.id || !chats.value.length) {
+        return undefined;
+    }
+    return chats.value.find((chat) => chat.id === route.params.id);
+});
+
+const currentMessages = computed(() => {
+    return currentChat.value?.messages || [];
+});
+
 const chatInput = ref("");
 const isSendingMessage = ref(false);
 const chatContainer = ref<HTMLDivElement | null>(null);
@@ -106,7 +124,6 @@ const formErrors = ref<{
     description?: string;
 }>({});
 
-const route = useRoute();
 const tabs: {
     label: "preview" | "code" | "chat";
     icon: FunctionalComponent;
@@ -129,20 +146,10 @@ const isFormValid = computed(() => {
     );
 });
 
-const currentMessage = computed(() => {
-    return (
-        currentMessages.value &&
-        currentMessages.value.find(
-            (message) => message.response === previewContent.value,
-        )
-    );
-});
-
 // Compute transition direction
 const transitionName = computed(() => {
     if (activeTab.value === "publish") return "fade";
 
-    // If switching between preview, code, and chat
     const tabOrder = ["preview", "code", "chat"];
     const currentIndex = tabOrder.indexOf(activeTab.value);
     const previousIndex = tabOrder.indexOf(previousTab.value);
@@ -156,9 +163,16 @@ const transitionName = computed(() => {
 });
 
 // Watch tab changes to track previous tab
-watch(activeTab, (newVal, oldVal) => {
+watch(activeTab, async (newVal, oldVal) => {
     if (oldVal === "preview" || oldVal === "code" || oldVal === "chat") {
         previousTab.value = oldVal;
+    }
+    if (newVal === "chat" && route.params.id) {
+        const arcadeChat = await createNewChat(
+            arcade.value?.label || "Arcade Chat",
+            route.params.id.toString(),
+        );
+        console.log("Arcade Chat created:", arcadeChat);
     }
 });
 
@@ -204,7 +218,6 @@ const openPublishTab = async () => {
         return;
     }
 
-    // Generate a smart label and description from code if empty
     if (!publishForm.value.label) {
         publishForm.value.label = generateSmartLabel(previewCode.value);
     }
@@ -213,7 +226,6 @@ const openPublishTab = async () => {
 
 const backToPreview = () => {
     activeTab.value = "preview";
-    // Clear form errors when going back
     formErrors.value = {};
 };
 
@@ -274,7 +286,6 @@ const publishToArcade = async () => {
                 day: "numeric",
                 year: "numeric",
             }),
-            message_id: currentMessage.value?.id || "",
         };
 
         const response = await apiCall<string>("/arcades", {
@@ -288,7 +299,6 @@ const publishToArcade = async () => {
                 description: "Your code is now visible in the Arcade",
             });
 
-            // Reset form and close
             publishForm.value = {
                 label: "",
                 description: "",
@@ -307,9 +317,6 @@ const publishToArcade = async () => {
 
             setTimeout(() => {
                 window.open(`/arcade/${response.data}`, "_blank");
-                if (currentMessage.value) {
-                    currentMessage.value.is_in_arcade = true;
-                }
                 toast.dismiss(alert);
             }, 4 * 1000);
         } else {
@@ -326,7 +333,45 @@ const publishToArcade = async () => {
     }
 };
 
-// Chat functionality
+// ✅ FIXED: Update arcade code in database
+const updateArcadeCode = async (newCode: string): Promise<boolean> => {
+    if (!arcade.value?.id) {
+        console.warn("No arcade ID available to update");
+        return false;
+    }
+
+    try {
+        const response = await apiCall<RawArcade>(
+            `/arcades/${arcade.value.id}`,
+            {
+                method: "PUT",
+                body: JSON.stringify({
+                    code: newCode,
+                    label: arcade.value.label,
+                    description: arcade.value.description,
+                }),
+            },
+        );
+
+        if (response.success) {
+            // Update local arcade data
+            if (arcade.value) {
+                arcade.value.code = newCode;
+            }
+            return true;
+        } else {
+            throw new Error(response.message || "Failed to update arcade");
+        }
+    } catch (error: any) {
+        console.error("Update arcade error:", error);
+        toast.error("Failed to save code changes", {
+            duration: 3000,
+            description: error.message,
+        });
+        return false;
+    }
+};
+
 const sendChatMessage = async () => {
     if (!chatInput.value.trim() || isSendingMessage.value) return;
 
@@ -339,67 +384,140 @@ const sendChatMessage = async () => {
     }
 
     const userMessage = chatInput.value.trim();
+    const fabricatedPrompt = `You are a code editing assistant. The user has the following code:\n\n\`\`\`${previewLanguage.value}\n${previewCode.value}\n\`\`\`\n\nUser request: ${userMessage}\n\nProvide ONLY the full updated code in a code block, with a brief explanation if needed. Do not include the original code unless modified.`;
     chatInput.value = "";
-
-    // Add user message
-    chatMessages.value.push({
-        role: "user",
-        content: userMessage,
-    });
-
-    // Scroll to bottom
-    setTimeout(() => scrollToBottom(), 100);
-
     isSendingMessage.value = true;
 
+    // Find the chat to submit to
+    const submissionChatId = arcade.value?.id || route.params.id?.toString();
+    const submissionChat = chats.value.find(
+        (chat) => chat.id === submissionChatId,
+    );
+
+    if (!submissionChat) {
+        toast.error("Chat not found", {
+            duration: 3000,
+            description: "Please refresh and try again",
+        });
+        isSendingMessage.value = false;
+        return;
+    }
+
+    // Initialize messages array if needed
+    if (!Array.isArray(submissionChat.messages)) {
+        submissionChat.messages = [];
+    }
+
+    // Create temporary message
+    const tempMessage: Message = {
+        id: `temp_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+        chat_id: submissionChatId!,
+        created_at: new Date().toISOString(),
+        prompt: userMessage,
+        response: "Thinking...",
+        references: [],
+        model: "gemini-pro",
+    };
+
+    submissionChat.messages.push(tempMessage);
+    const tempMessageIndex = submissionChat.messages.length - 1;
+    submissionChat.last_message_at = new Date().toISOString();
+
+    // Update chat title if first message
+    if (
+        submissionChat.messages.length === 1 ||
+        submissionChat.title === "New Chat"
+    ) {
+        submissionChat.title = generateChatTitle(userMessage);
+    }
+
     try {
-        const response = await fetch(`${WRAPPER_URL}`, {
+        const response = await fetch(WRAPPER_URL, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
             },
-            body: JSON.stringify({
-                prompt: `You are a code editing assistant. The user has the following code:\n\n\`\`\`${previewLanguage.value}\n${previewCode.value}\n\`\`\`\n\nUser request: ${userMessage}\n\nProvide ONLY the updated code in a code block, with a brief explanation if needed. Do not include the original code unless modified.`,
-            }),
+            body: JSON.stringify(fabricatedPrompt),
         });
 
         if (!response.ok) {
-            throw new Error(response.statusText);
+            const errorText = await response.text();
+            throw new Error(
+                `HTTP ${response.status}: ${errorText || response.statusText}`,
+            );
         }
 
         const data = await response.json();
+        const finalResponse = data.error || data.response;
 
-        // Add assistant message
-        chatMessages.value.push({
-            role: "assistant",
-            content: data.response,
-        });
+        // Update the temporary message with real response
+        const updatedMessage: Message = {
+            id: `msg_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+            chat_id: submissionChatId!,
+            created_at: new Date().toISOString(),
+            prompt: userMessage,
+            response: finalResponse,
+            references: [],
+            model: "gemini-pro",
+        };
 
-        // Extract code from response and update preview if code blocks are found
+        submissionChat.messages[tempMessageIndex] = updatedMessage;
+        submissionChat.last_message_at = new Date().toISOString();
+
+        // Extract code from response and update preview
         const codeBlockRegex = /```[\w]*\n([\s\S]*?)```/g;
-        const matches = [...data.response.matchAll(codeBlockRegex)];
+        const matches = [...finalResponse.matchAll(codeBlockRegex)];
 
         if (matches.length > 0) {
             const newCode = matches[0][1].trim();
             if (newCode) {
                 previewCode.value = newCode;
-                toast.success("Code updated!", {
-                    duration: 3000,
-                });
+
+                // ✅ UPDATE: Save the updated code to the arcade
+                const updateSuccess = await updateArcadeCode(newCode);
+
+                if (updateSuccess) {
+                    toast.success("Code updated!", {
+                        duration: 3000,
+                        description: "Changes saved to arcade",
+                    });
+                } else {
+                    toast.warning("Code updated locally", {
+                        duration: 3000,
+                        description: "Failed to sync with arcade",
+                    });
+                }
             }
         }
+
+        // Trigger onMessageAdded callback
+        onMessageAdded(updatedMessage, arcade.value.id);
 
         // Scroll to bottom
         setTimeout(() => scrollToBottom(), 100);
     } catch (error: any) {
         console.error("Chat error:", error);
-        toast.error("Failed to send message", {
-            duration: 3000,
-            description: error.message,
-        });
 
-        // Remove user message on error
-        chatMessages.value.pop();
+        // Remove temporary message on error
+        if (submissionChat.messages[tempMessageIndex]?.id === tempMessage.id) {
+            submissionChat.messages.splice(tempMessageIndex, 1);
+        }
+
+        let errorMessage = error.message;
+        let description = "Please try again or check your connection";
+
+        if (error.message.includes("Failed to fetch")) {
+            errorMessage = "Network Error";
+            description = "Please check your internet connection";
+        } else if (error.message.includes("timeout")) {
+            errorMessage = "Request Timeout";
+            description = "The request took too long. Please try again";
+        }
+
+        toast.error(`Failed to send message: ${errorMessage}`, {
+            duration: 5000,
+            description,
+        });
     } finally {
         isSendingMessage.value = false;
     }
@@ -411,27 +529,17 @@ const scrollToBottom = () => {
     }
 };
 
-const viewLiveArcade = () => {
-    if (currentMessage.value) {
-        window.open(`/arcade/${currentMessage?.value.id}`, "_blank");
-    }
-};
-
-// Helper function to generate a smart label from code
 const generateSmartLabel = (code: string): string => {
-    // Try to extract title from HTML
     const titleMatch = code.match(/<title>(.*?)<\/title>/i);
     if (titleMatch && titleMatch[1]) {
         return titleMatch[1].slice(0, 100);
     }
 
-    // Try to extract h1
     const h1Match = code.match(/<h1[^>]*>(.*?)<\/h1>/i);
     if (h1Match && h1Match[1]) {
         return h1Match[1].replace(/<[^>]*>/g, "").slice(0, 100);
     }
 
-    // Fallback to generic name with timestamp
     return `Code Preview - ${new Date().toLocaleDateString()}`;
 };
 
@@ -495,7 +603,6 @@ watch(
     },
 );
 
-// Reset to preview tab when sidebar opens (unless metadata exists)
 watch(showPreviewSidebar, (newVal) => {
     if (newVal) {
         if (route.path.startsWith("/arcade/")) {
@@ -506,14 +613,11 @@ watch(showPreviewSidebar, (newVal) => {
             previousTab.value = "preview";
         }
 
-        // Reset publish form
         publishForm.value = {
             label: "",
             description: "",
         };
         formErrors.value = {};
-        // Reset chat
-        chatMessages.value = [];
         chatInput.value = "";
     }
 });
@@ -605,7 +709,7 @@ watch(
                             <span class="text-xs">Back</span>
                         </Button>
 
-                        <!-- Tabs (Only show if no metadata and not in publish mode) -->
+                        <!-- Tabs -->
                         <div
                             v-else-if="!metadata"
                             class="flex items-center gap-1.5 bg-gray-200 dark:bg-gray-800 p-1 rounded-lg"
@@ -646,8 +750,7 @@ watch(
                                         <Button
                                             v-if="
                                                 !metadata &&
-                                                activeTab === 'preview' &&
-                                                !currentMessage?.is_in_arcade
+                                                activeTab === 'preview'
                                             "
                                             size="sm"
                                             @click="openPublishTab"
@@ -655,10 +758,7 @@ watch(
                                                 'px-3 py-1.5 h-8 text-xs font-medium rounded-md transition-all ease-in-out duration-200 inline-flex items-center gap-1.5',
                                                 'bg-gray-700 dark:bg-gray-200 hover:bg-gray-600 dark:hover:bg-gray-300 text-gray-200 dark:text-gray-700 shadow-sm',
                                             ]"
-                                            :disabled="
-                                                !isOnline ||
-                                                currentMessage?.is_in_arcade
-                                            "
+                                            :disabled="!isOnline"
                                         >
                                             <Earth class="w-4 h-4" />
                                             Publish
@@ -672,38 +772,6 @@ watch(
                                             This will make it visible to others
                                             in Arcade.
                                         </p>
-                                    </TooltipContent>
-                                </Tooltip>
-                            </TooltipProvider>
-                            <TooltipProvider>
-                                <Tooltip>
-                                    <TooltipTrigger as-child>
-                                        <Button
-                                            v-if="
-                                                !metadata &&
-                                                activeTab === 'preview' &&
-                                                currentMessage?.is_in_arcade
-                                            "
-                                            size="sm"
-                                            @click="viewLiveArcade"
-                                            :class="[
-                                                'px-3 py-1.5 h-8 text-xs font-medium rounded-md transition-all ease-in-out duration-200 inline-flex items-center gap-1.5',
-                                                'bg-gray-700 dark:bg-gray-200 hover:bg-gray-600 dark:hover:bg-gray-300 text-gray-200 dark:text-gray-700 shadow-sm',
-                                            ]"
-                                            :disabled="
-                                                !isOnline ||
-                                                !currentMessage?.is_in_arcade
-                                            "
-                                        >
-                                            <ExternalLink class="w-4 h-4" />
-                                            View live
-                                        </Button>
-                                    </TooltipTrigger>
-                                    <TooltipContent
-                                        side="left"
-                                        :avoid-collisions="true"
-                                    >
-                                        <p>Opens in a new tab</p>
                                     </TooltipContent>
                                 </Tooltip>
                             </TooltipProvider>
@@ -911,7 +979,10 @@ watch(
                             <Transition :name="transitionName">
                                 <!-- Preview Tab -->
                                 <div
-                                    v-if="activeTab === 'preview'"
+                                    v-if="
+                                        activeTab === 'preview' &&
+                                        !route.path.startsWith('/arcade/')
+                                    "
                                     class="absolute inset-0"
                                     key="preview"
                                 >
@@ -920,7 +991,7 @@ watch(
                                         :srcdoc="previewCode"
                                         class="w-full h-full border-0 bg-gray-100"
                                         title="HTML Preview"
-                                        sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox allow-modals allow-forms allow-pointer-lock allow-same-origin allow-top-navigation allow-top-navigation-by-user-activation"
+                                        sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation allow-modals allow-forms allow-pointer-lock allow-downloads"
                                         referrerpolicy="no-referrer"
                                     />
                                     <div
@@ -977,7 +1048,10 @@ watch(
 
                                 <!-- Chat Tab -->
                                 <div
-                                    v-else-if="activeTab === 'chat'"
+                                    v-else-if="
+                                        activeTab === 'chat' &&
+                                        route.path.startsWith('/arcade')
+                                    "
                                     class="absolute inset-0 flex flex-col bg-white dark:bg-gray-900"
                                     key="chat"
                                 >
@@ -988,7 +1062,7 @@ watch(
                                     >
                                         <!-- Welcome Message -->
                                         <div
-                                            v-if="chatMessages.length === 0"
+                                            v-if="currentMessages.length === 0"
                                             class="flex items-center justify-center h-full text-center"
                                         >
                                             <div class="max-w-md space-y-3">
@@ -1052,28 +1126,51 @@ watch(
 
                                         <!-- Chat Messages List -->
                                         <div
-                                            v-for="(msg, index) in chatMessages"
-                                            :key="index"
+                                            v-for="msg in currentMessages"
+                                            :key="msg.id"
                                             :class="[
-                                                'flex',
-                                                msg.role === 'user'
-                                                    ? 'justify-end'
-                                                    : 'justify-start',
+                                                'flex flex-col gap-2',
+                                                'justify-start',
                                             ]"
                                         >
-                                            <div
-                                                :class="[
-                                                    'max-w-[85%] rounded-lg px-4 py-2',
-                                                    msg.role === 'user'
-                                                        ? 'bg-blue-600 text-white'
-                                                        : 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white',
-                                                ]"
-                                            >
-                                                <p
-                                                    class="text-sm whitespace-pre-wrap break-words"
+                                            <div :class="['max-w-[85%]']">
+                                                <div
+                                                    class="flex mt-[2px] items-start gap-2 font-medium bg-gray-100 dark:bg-gray-800 text-black dark:text-gray-100 px-4 rounded-2xl prose prose-sm dark:prose-invert chat-bubble w-fit max-w-full"
                                                 >
-                                                    {{ msg.content }}
-                                                </p>
+                                                    <!-- Avatar container -->
+                                                    <div
+                                                        class="flex-shrink-0 py-3"
+                                                    >
+                                                        <div
+                                                            class="flex items-center justify-center w-7 h-7 text-gray-100 dark:text-gray-800 bg-gray-700 dark:bg-gray-200 rounded-full text-sm font-semibold"
+                                                        >
+                                                            {{
+                                                                parsedUserDetails.username
+                                                                    .toUpperCase()
+                                                                    .slice(0, 2)
+                                                            }}
+                                                        </div>
+                                                    </div>
+                                                    <div class="flex-1 min-w-0">
+                                                        <MarkdownRenderer
+                                                            class="break-words text-sm whitespace-pre-wrap overflow-x-hidden"
+                                                            :content="
+                                                                msg.prompt || ''
+                                                            "
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div
+                                                v-if="!isSendingMessage"
+                                                :class="['max-w-[85%]']"
+                                            >
+                                                <MarkdownRenderer
+                                                    class="break-words text-xs whitespace-pre-wrap overflow-x-hidden"
+                                                    :content="
+                                                        msg.response || ''
+                                                    "
+                                                />
                                             </div>
                                         </div>
 
@@ -1118,6 +1215,7 @@ watch(
                                             class="flex gap-2"
                                         >
                                             <Input
+                                                id="prompt"
                                                 v-model="chatInput"
                                                 placeholder="Ask me to edit your code..."
                                                 :disabled="isSendingMessage"
@@ -1185,7 +1283,7 @@ watch(
                             class="flex items-center gap-2 text-gray-600 dark:text-gray-400"
                         >
                             <MessageSquare class="w-3.5 h-3.5" />
-                            <span>{{ chatMessages.length }} messages</span>
+                            <span>{{ currentMessages.length }} messages</span>
                         </div>
 
                         <!-- For code preview -->
