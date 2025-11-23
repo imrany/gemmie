@@ -10,6 +10,8 @@ import {
     ArrowLeft,
     LoaderCircle,
     ExternalLink,
+    MessageSquare,
+    ArrowUp,
 } from "lucide-vue-next";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -42,7 +44,9 @@ const {
     isCollapsed,
     parsedUserDetails,
     apiCall,
+    isDarkMode,
 } = inject("globalState") as {
+    isDarkMode: Ref<boolean>;
     currentMessages: Ref<Message[]>;
     isOnline: Ref<boolean>;
     isCollapsed: Ref<boolean>;
@@ -67,16 +71,24 @@ const {
     ) => Promise<ApiResponse<T>>;
 };
 
-const activeTab = ref<"preview" | "code" | "publish">(
+const activeTab = ref<"preview" | "code" | "publish" | "chat">(
     metadata?.value ? "code" : "preview",
 );
-const previousTab = ref<"preview" | "code">("preview");
+const previousTab = ref<"preview" | "code" | "chat">("preview");
 const copied = ref(false);
 const sidebarWidth = ref<number>(window.innerWidth * 0.5);
 const minWidth = 300;
 const maxWidth = window.innerWidth * 0.8;
 const isResizing = ref(false);
 const isPublishing = ref(false);
+
+// Chat state
+const chatMessages = ref<
+    Array<{ role: "user" | "assistant"; content: string }>
+>([]);
+const chatInput = ref("");
+const isSendingMessage = ref(false);
+const chatContainer = ref<HTMLDivElement | null>(null);
 
 // Publish form data
 const publishForm = ref<{
@@ -114,10 +126,14 @@ const currentMessage = computed(() => {
 const transitionName = computed(() => {
     if (activeTab.value === "publish") return "fade";
 
-    // If switching between preview and code
-    if (previousTab.value === "preview" && activeTab.value === "code") {
+    // If switching between preview, code, and chat
+    const tabOrder = ["preview", "code", "chat"];
+    const currentIndex = tabOrder.indexOf(activeTab.value);
+    const previousIndex = tabOrder.indexOf(previousTab.value);
+
+    if (currentIndex > previousIndex) {
         return "slide-left";
-    } else if (previousTab.value === "code" && activeTab.value === "preview") {
+    } else if (currentIndex < previousIndex) {
         return "slide-right";
     }
     return "slide-left";
@@ -125,7 +141,7 @@ const transitionName = computed(() => {
 
 // Watch tab changes to track previous tab
 watch(activeTab, (newVal, oldVal) => {
-    if (oldVal === "preview" || oldVal === "code") {
+    if (oldVal === "preview" || oldVal === "code" || oldVal === "chat") {
         previousTab.value = oldVal;
     }
 });
@@ -294,6 +310,97 @@ const publishToArcade = async () => {
     }
 };
 
+// Chat functionality
+const sendChatMessage = async () => {
+    if (!chatInput.value.trim() || isSendingMessage.value) return;
+
+    if (!isOnline.value) {
+        toast.error("You are offline", {
+            duration: 3000,
+            description: "Please check your internet connection",
+        });
+        return;
+    }
+
+    const userMessage = chatInput.value.trim();
+    chatInput.value = "";
+
+    // Add user message
+    chatMessages.value.push({
+        role: "user",
+        content: userMessage,
+    });
+
+    // Scroll to bottom
+    setTimeout(() => scrollToBottom(), 100);
+
+    isSendingMessage.value = true;
+
+    try {
+        const response = await fetch(`${WRAPPER_URL}`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                prompt: `You are a code editing assistant. The user has the following code:\n\n\`\`\`${previewLanguage.value}\n${previewCode.value}\n\`\`\`\n\nUser request: ${userMessage}\n\nProvide ONLY the updated code in a code block, with a brief explanation if needed. Do not include the original code unless modified.`,
+            }),
+        });
+
+        if (!response.ok) {
+            throw new Error(response.statusText);
+        }
+
+        const data = await response.json();
+
+        // Add assistant message
+        chatMessages.value.push({
+            role: "assistant",
+            content: data.response,
+        });
+
+        // Extract code from response and update preview if code blocks are found
+        const codeBlockRegex = /```[\w]*\n([\s\S]*?)```/g;
+        const matches = [...data.response.matchAll(codeBlockRegex)];
+
+        if (matches.length > 0) {
+            const newCode = matches[0][1].trim();
+            if (newCode) {
+                previewCode.value = newCode;
+                toast.success("Code updated!", {
+                    duration: 3000,
+                });
+            }
+        }
+
+        // Scroll to bottom
+        setTimeout(() => scrollToBottom(), 100);
+    } catch (error: any) {
+        console.error("Chat error:", error);
+        toast.error("Failed to send message", {
+            duration: 3000,
+            description: error.message,
+        });
+
+        // Remove user message on error
+        chatMessages.value.pop();
+    } finally {
+        isSendingMessage.value = false;
+    }
+};
+
+const scrollToBottom = () => {
+    if (chatContainer.value) {
+        chatContainer.value.scrollTop = chatContainer.value.scrollHeight;
+    }
+};
+
+const viewLiveArcade = () => {
+    if (currentMessage.value) {
+        window.open(`/arcade/${currentMessage?.value.id}`, "_blank");
+    }
+};
+
 // Helper function to generate a smart label from code
 const generateSmartLabel = (code: string): string => {
     // Try to extract title from HTML
@@ -358,12 +465,6 @@ const generateSmartDescription = async (label: string): Promise<string> => {
     }
 };
 
-const viewLiveArcade = () => {
-    if (currentMessage.value) {
-        window.open(`/arcade/${currentMessage?.value.id}`, "_blank");
-    }
-};
-
 watch(
     isCollapsed,
     (newValue) => {
@@ -389,6 +490,9 @@ watch(showPreviewSidebar, (newVal) => {
             description: "",
         };
         formErrors.value = {};
+        // Reset chat
+        chatMessages.value = [];
+        chatInput.value = "";
     }
 });
 
@@ -508,6 +612,18 @@ watch(
                                 <Code :size="14" />
                                 <span>Code</span>
                             </button>
+                            <button
+                                @click="activeTab = 'chat'"
+                                :class="[
+                                    'px-3 py-1.5 text-xs rounded-md transition-all duration-200 inline-flex items-center gap-1.5 font-medium',
+                                    activeTab === 'chat'
+                                        ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
+                                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200',
+                                ]"
+                            >
+                                <MessageSquare :size="14" />
+                                <span>Chat</span>
+                            </button>
                         </div>
 
                         <!-- Title for pasted content -->
@@ -587,7 +703,7 @@ watch(
                                         side="left"
                                         :avoid-collisions="true"
                                     >
-                                        <p>Opens on an external link .</p>
+                                        <p>Opens in a new tab</p>
                                     </TooltipContent>
                                 </Tooltip>
                             </TooltipProvider>
@@ -615,7 +731,7 @@ watch(
                         <div class="max-w-2xl mx-auto space-y-6">
                             <div>
                                 <h2
-                                    class="text-2xl font-semibold text-gray-900 dark:text-white mb-2"
+                                    class="text-2xl font-semibold text-gray-800 dark:text-white mb-2"
                                 >
                                     Publish to Arcade
                                 </h2>
@@ -757,7 +873,7 @@ watch(
                                     @click="backToPreview"
                                     variant="outline"
                                     :disabled="isPublishing"
-                                    class="h-[35px] px-6 dark:bg-gray-200 bg-gray-700 dark:hover:bg-gray-300 hover:bg-gray-600 dark:text-gray-700 dark:hover:text-gray-600 text-gray-200 hover:text-gray-100"
+                                    class="h-[35px] px-6 dark:bg-gray-700 bg-gray-200 dark:hover:bg-gray-600 hover:bg-gray-300 dark:text-gray-200 dark:hover:text-gray-300 text-gray-700 hover:text-gray-600"
                                 >
                                     Cancel
                                 </Button>
@@ -789,7 +905,7 @@ watch(
                         </div>
                     </div>
 
-                    <!-- Preview/Code Tabs (when no metadata) -->
+                    <!-- Preview/Code/Chat Tabs (when no metadata) -->
                     <template v-else>
                         <div class="relative h-full w-full overflow-hidden">
                             <Transition :name="transitionName">
@@ -804,7 +920,7 @@ watch(
                                         :srcdoc="previewCode"
                                         class="w-full h-full border-0 bg-gray-100"
                                         title="HTML Preview"
-                                        sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"
+                                        sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox allow-modals allow-forms allow-pointer-lock allow-same-origin allow-top-navigation allow-top-navigation-by-user-activation"
                                         referrerpolicy="no-referrer"
                                     />
                                     <div
@@ -824,7 +940,7 @@ watch(
 
                                 <!-- Code Tab -->
                                 <div
-                                    v-else
+                                    v-else-if="activeTab === 'code'"
                                     class="absolute inset-0 overflow-auto w-full bg-gray-800 custom-scrollbar"
                                     key="code"
                                 >
@@ -858,6 +974,183 @@ watch(
                                         ></code></pre>
                                     </div>
                                 </div>
+
+                                <!-- Chat Tab -->
+                                <div
+                                    v-else-if="activeTab === 'chat'"
+                                    class="absolute inset-0 flex flex-col bg-white dark:bg-gray-900"
+                                    key="chat"
+                                >
+                                    <!-- Chat Messages -->
+                                    <div
+                                        ref="chatContainer"
+                                        class="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-4"
+                                    >
+                                        <!-- Welcome Message -->
+                                        <div
+                                            v-if="chatMessages.length === 0"
+                                            class="flex items-center justify-center h-full text-center"
+                                        >
+                                            <div class="max-w-md space-y-3">
+                                                <div
+                                                    class="mx-auto flex items-center justify-center"
+                                                >
+                                                    <img
+                                                        :src="
+                                                            parsedUserDetails?.theme ===
+                                                                'dark' ||
+                                                            (parsedUserDetails?.theme ===
+                                                                'system' &&
+                                                                isDarkMode)
+                                                                ? '/logo-light.svg'
+                                                                : '/logo.svg'
+                                                        "
+                                                        alt="Gemmie Logo"
+                                                        class="w-[60px] h-[60px] rounded-md"
+                                                    />
+                                                </div>
+                                                <h3
+                                                    class="text-lg font-semibold text-gray-900 dark:text-white"
+                                                >
+                                                    Code Editing Assistant
+                                                </h3>
+                                                <p
+                                                    class="text-sm text-gray-600 dark:text-gray-400"
+                                                >
+                                                    Ask me to modify, improve,
+                                                    or explain your code. I'll
+                                                    help you make changes and
+                                                    update the preview
+                                                    automatically.
+                                                </p>
+                                                <div
+                                                    class="text-xs text-gray-500 dark:text-gray-500 space-y-1"
+                                                >
+                                                    <p>Try asking:</p>
+                                                    <ul
+                                                        class="text-left space-y-1 ml-4"
+                                                    >
+                                                        <li>
+                                                            "Add a dark mode
+                                                            toggle"
+                                                        </li>
+                                                        <li>
+                                                            "Change the color
+                                                            scheme to blue"
+                                                        </li>
+                                                        <li>
+                                                            "Add hover effects
+                                                            to buttons"
+                                                        </li>
+                                                        <li>
+                                                            "Make it responsive"
+                                                        </li>
+                                                    </ul>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Chat Messages List -->
+                                        <div
+                                            v-for="(msg, index) in chatMessages"
+                                            :key="index"
+                                            :class="[
+                                                'flex',
+                                                msg.role === 'user'
+                                                    ? 'justify-end'
+                                                    : 'justify-start',
+                                            ]"
+                                        >
+                                            <div
+                                                :class="[
+                                                    'max-w-[85%] rounded-lg px-4 py-2',
+                                                    msg.role === 'user'
+                                                        ? 'bg-blue-600 text-white'
+                                                        : 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white',
+                                                ]"
+                                            >
+                                                <p
+                                                    class="text-sm whitespace-pre-wrap break-words"
+                                                >
+                                                    {{ msg.content }}
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <!-- Typing Indicator -->
+                                        <div
+                                            v-if="isSendingMessage"
+                                            class="flex justify-start"
+                                        >
+                                            <div
+                                                class="bg-gray-100 dark:bg-gray-800 rounded-lg px-4 py-3"
+                                            >
+                                                <div class="flex gap-1">
+                                                    <div
+                                                        class="w-2 h-2 rounded-full bg-gray-400 dark:bg-gray-600 animate-bounce"
+                                                        style="
+                                                            animation-delay: 0ms;
+                                                        "
+                                                    ></div>
+                                                    <div
+                                                        class="w-2 h-2 rounded-full bg-gray-400 dark:bg-gray-600 animate-bounce"
+                                                        style="
+                                                            animation-delay: 150ms;
+                                                        "
+                                                    ></div>
+                                                    <div
+                                                        class="w-2 h-2 rounded-full bg-gray-400 dark:bg-gray-600 animate-bounce"
+                                                        style="
+                                                            animation-delay: 300ms;
+                                                        "
+                                                    ></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Chat Input -->
+                                    <div
+                                        class="flex-shrink-0 border-t border-gray-200 dark:border-gray-800 p-4"
+                                    >
+                                        <form
+                                            @submit.prevent="sendChatMessage"
+                                            class="flex gap-2"
+                                        >
+                                            <Input
+                                                v-model="chatInput"
+                                                placeholder="Ask me to edit your code..."
+                                                :disabled="isSendingMessage"
+                                                :class="[
+                                                    'flex-1',
+                                                    'w-full resize-none border-none ring-[1px] ring-gray-200 dark:ring-gray-800 outline-none focus:border-none focus-visible:ring-gray-300 dark:focus-visible:ring-gray-700',
+                                                ]"
+                                                @keydown.enter.prevent="
+                                                    sendChatMessage
+                                                "
+                                            />
+                                            <Button
+                                                type="submit"
+                                                :disabled="
+                                                    !chatInput.trim() ||
+                                                    isSendingMessage ||
+                                                    !isOnline
+                                                "
+                                                size="icon"
+                                                class="rounded-lg w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center transition-colors text-white bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50 disabled:bg-gray-400 flex-shrink-0 shadow-sm"
+                                            >
+                                                <LoaderCircle
+                                                    v-if="isSendingMessage"
+                                                    class="w-4 h-4 sm:w-5 sm:h-5 animate-spin"
+                                                />
+                                                <ArrowUp
+                                                    v-else
+                                                    class="w-4 h-4 sm:w-5 sm:h-5"
+                                                />
+                                            </Button>
+                                        </form>
+                                    </div>
+                                </div>
                             </Transition>
                         </div>
                     </template>
@@ -884,6 +1177,15 @@ watch(
                         >
                             <Earth class="w-3.5 h-3.5" />
                             <span>Publishing to Arcade</span>
+                        </div>
+
+                        <!-- For chat tab -->
+                        <div
+                            v-else-if="activeTab === 'chat'"
+                            class="flex items-center gap-2 text-gray-600 dark:text-gray-400"
+                        >
+                            <MessageSquare class="w-3.5 h-3.5" />
+                            <span>{{ chatMessages.length }} messages</span>
                         </div>
 
                         <!-- For code preview -->
@@ -963,7 +1265,39 @@ watch(
     opacity: 0;
 }
 
-/* Fade transition for tab content */
+/* Slide transitions for tab content */
+.slide-left-enter-active,
+.slide-left-leave-active,
+.slide-right-enter-active,
+.slide-right-leave-active {
+    transition:
+        transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+        opacity 0.3s ease;
+}
+
+/* Sliding from left (moving forward) */
+.slide-left-enter-from {
+    transform: translateX(100%);
+    opacity: 0;
+}
+
+.slide-left-leave-to {
+    transform: translateX(-100%);
+    opacity: 0;
+}
+
+/* Sliding from right (moving backward) */
+.slide-right-enter-from {
+    transform: translateX(-100%);
+    opacity: 0;
+}
+
+.slide-right-leave-to {
+    transform: translateX(100%);
+    opacity: 0;
+}
+
+/* Fade transition */
 .fade-enter-active,
 .fade-leave-active {
     transition: opacity 0.15s ease;

@@ -17,7 +17,7 @@ import {
     RotateCw,
     Sun,
 } from "lucide-vue-next";
-import ProtectedPage from "@/layout/ProtectedPage.vue";
+import OverallLayout from "@/layout/OverallLayout.vue";
 
 const {
     screenWidth,
@@ -192,7 +192,7 @@ watch(
 </script>
 
 <template>
-    <ProtectedPage>
+    <OverallLayout>
         <!-- Main Content -->
         <div
             :class="
@@ -1324,5 +1324,5 @@ watch(
                 </div>
             </div>
         </div>
-    </ProtectedPage>
+    </OverallLayout>
 </template>

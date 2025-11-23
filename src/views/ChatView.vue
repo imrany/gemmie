@@ -73,7 +73,7 @@ import PastePreview from "@/components/PastePreview.vue";
 import { useVoiceRecord } from "@/composables/useVoiceRecord";
 import { usePagination } from "@/composables/usePagination";
 import { useMessage } from "@/composables/useMessage";
-import ProtectedPage from "@/layout/ProtectedPage.vue";
+import OverallLayout from "@/layout/OverallLayout.vue";
 import InputArea from "@/components/InputArea.vue";
 import ReferenceBadge from "@/components/ReferenceBadge.vue";
 import ChatErrorSection from "@/components/ChatErrorSection.vue";
@@ -1819,7 +1819,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-    <ProtectedPage>
+    <OverallLayout>
         <!-- Main Chat Window -->
         <div
             :class="[
@@ -2331,5 +2331,5 @@ onUnmounted(() => {
             </div>
         </div>
         <TextHightlightPopover />
-    </ProtectedPage>
+    </OverallLayout>
 </template>

@@ -13,7 +13,7 @@ import {
     Search,
     X,
 } from "lucide-vue-next";
-import ProtectedPage from "@/layout/ProtectedPage.vue";
+import OverallLayout from "@/layout/OverallLayout.vue";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -74,7 +74,7 @@ const handleGoToChat = (id: string) => {
 </script>
 
 <template>
-    <ProtectedPage>
+    <OverallLayout>
         <!-- Main Content - Centered -->
         <div
             :class="[
@@ -110,7 +110,7 @@ const handleGoToChat = (id: string) => {
                         </button>
 
                         <h1
-                            class="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white"
+                            class="text-2xl md:text-3xl font-bold text-gray-800 dark:text-white"
                         >
                             Chats
                         </h1>
@@ -119,7 +119,7 @@ const handleGoToChat = (id: string) => {
                             @click="handleNewChat"
                             :disabled="!isOnline"
                             :class="[
-                                'px-3 py-2 dark:bg-gray-200 text-gray-200 bg-gray-700 text-sm dark:text-gray-700 hover:bg-gray-600 dark:hover:bg-gray-600 rounded-lg transition-colors flex items-center gap-1.5 shadow-lg hover:shadow-xl flex-shrink-0 whitespace-nowrap',
+                                'px-3 py-2 scale-90 dark:bg-gray-200 text-gray-200 bg-gray-700 text-sm dark:text-gray-700 hover:bg-gray-600 dark:hover:bg-gray-600 rounded-lg transition-colors flex items-center gap-1.5 shadow-lg hover:shadow-xl flex-shrink-0 whitespace-nowrap',
                                 !isOnline ? 'cursor-not-allowed' : '',
                             ]"
                         >
@@ -290,5 +290,5 @@ const handleGoToChat = (id: string) => {
                 </div>
             </div>
         </div>
-    </ProtectedPage>
+    </OverallLayout>
 </template>

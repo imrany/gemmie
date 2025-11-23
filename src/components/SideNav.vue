@@ -370,7 +370,9 @@ watch(showPreviewSidebar, (newVal) => {
                                             : '',
                                     ]"
                                     :disabled="
-                                        navlink.path === '/new' && !isOnline
+                                        navlink.path === '/new' &&
+                                        !isOnline &&
+                                        !isLoading
                                     "
                                 >
                                     <div

@@ -1,27 +1,28 @@
 <script lang="ts" setup>
 import ErrorState from "@/components/ErrorState.vue";
 import LoadingState from "@/components/LoadingState.vue";
-import ProtectedPage from "@/layout/ProtectedPage.vue";
+import OverallLayout from "@/layout/OverallLayout.vue";
 import type { ApiResponse, RawArcade, UserDetails } from "@/types";
 import type { Ref } from "vue";
 import { ref, computed } from "vue";
 import { onMounted } from "vue";
 import { inject } from "vue";
 import { useRouter } from "vue-router";
-import { ChevronLeft, Code, Search, X } from "lucide-vue-next";
+import { ChevronLeft, Code, Plus, Search, X } from "lucide-vue-next";
 import { Input } from "@/components/ui/input";
+import { toast } from "vue-sonner";
 
-const { screenWidth, parsedUserDetails, isCollapsed, apiCall } = inject(
-    "globalState",
-) as {
-    screenWidth: Ref<number>;
-    parsedUserDetails: Ref<UserDetails>;
-    isCollapsed: Ref<boolean>;
-    apiCall: <T>(
-        endpoint: string,
-        options: RequestInit,
-    ) => Promise<ApiResponse<T>>;
-};
+const { screenWidth, parsedUserDetails, isCollapsed, apiCall, isOnline } =
+    inject("globalState") as {
+        isOnline: Ref<boolean>;
+        screenWidth: Ref<number>;
+        parsedUserDetails: Ref<UserDetails>;
+        isCollapsed: Ref<boolean>;
+        apiCall: <T>(
+            endpoint: string,
+            options: RequestInit,
+        ) => Promise<ApiResponse<T>>;
+    };
 
 const router = useRouter();
 const arcades = ref<RawArcade[]>([]);
@@ -119,7 +120,7 @@ onMounted(async () => {
 </script>
 
 <template>
-    <ProtectedPage>
+    <OverallLayout>
         <!-- Main Content - Centered -->
         <div
             :class="[
@@ -170,12 +171,33 @@ onMounted(async () => {
                             </button>
 
                             <h1
-                                class="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white"
+                                class="text-2xl md:text-3xl font-bold text-gray-800 dark:text-white"
                             >
                                 Arcade
                             </h1>
 
-                            <div class="flex-1"></div>
+                            <div class="flex-1">
+                                <Button
+                                    :disabled="!isOnline"
+                                    @click="
+                                        () => {
+                                            toast.info(
+                                                'Feature still on undeveloped, would be available in future version.',
+                                            );
+                                        }
+                                    "
+                                    :class="[
+                                        'px-3 py-2 scale-90 ml-auto dark:bg-gray-200 text-gray-200 bg-gray-700 text-sm dark:text-gray-700 hover:bg-gray-600 dark:hover:bg-gray-600 rounded-lg transition-colors flex items-center gap-1.5 shadow-lg hover:shadow-xl flex-shrink-0 whitespace-nowrap',
+                                        !isOnline ? 'cursor-not-allowed' : '',
+                                    ]"
+                                >
+                                    <Plus class="w-5 h-5" />
+                                    <span class="hidden sm:inline">
+                                        New Arcade
+                                    </span>
+                                    <span class="sm:hidden">New</span>
+                                </Button>
+                            </div>
                         </div>
 
                         <!-- Horizontal Tabs -->
@@ -320,5 +342,5 @@ onMounted(async () => {
                 </div>
             </div>
         </div>
-    </ProtectedPage>
+    </OverallLayout>
 </template>

@@ -54,11 +54,11 @@ watch(
 </script>
 <template>
     <div
-        v-if="isAuthenticated"
         class="flex h-[100vh] bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
     >
         <!-- Sidebar -->
         <SideNav
+            v-if="isAuthenticated && $route.path.indexOf('/arcade/') !== 0"
             :data="{
                 chats,
                 parsedUserDetails,
@@ -78,6 +78,6 @@ watch(
         <slot></slot>
 
         <!-- preview  -->
-        <PreviewSideBar />
+        <PreviewSideBar v-if="isAuthenticated" />
     </div>
 </template>

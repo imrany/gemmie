@@ -13,6 +13,7 @@ import {
     Download,
     Share2,
     Copy,
+    Code2,
 } from "lucide-vue-next";
 import { Button } from "@/components/ui/button";
 import LoadingState from "@/components/LoadingState.vue";
@@ -29,14 +30,16 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import type { Ref } from "vue";
 import DialogBox from "@/components/Dialog/DialogBox.vue";
+import OverallLayout from "@/layout/OverallLayout.vue";
 
 const route = useRoute();
 const router = useRouter();
 const arcadeId = route.params.id as string;
 
-const { unsecureApiCall, apiCall, parsedUserDetails } = inject(
+const { unsecureApiCall, apiCall, parsedUserDetails, screenWidth } = inject(
     "globalState",
 ) as {
+    screenWidth: Ref<number>;
     unsecureApiCall: <T>(
         endpoint: string,
         options: RequestInit,
@@ -290,292 +293,330 @@ onMounted(async () => {
 
 <template>
     <div class="w-screen h-screen overflow-hidden bg-gray-50 dark:bg-gray-900">
-        <!-- Loading State -->
-        <LoadingState
-            description="Please wait while we fetch your content"
-            label="Loading Arcade Content"
-            v-if="isLoading"
-        />
+        <OverallLayout>
+            <div class="h-full w-full">
+                <!-- Loading State -->
+                <LoadingState
+                    description="Please wait while we fetch your content"
+                    label="Loading Arcade Content"
+                    v-if="isLoading"
+                />
 
-        <!-- Error State -->
-        <ErrorState
-            v-else-if="error"
-            @retry="fetchArcade"
-            back-button-text="Back to Arcade"
-            :error="error"
-        />
+                <!-- Error State -->
+                <ErrorState
+                    v-else-if="error"
+                    @retry="fetchArcade"
+                    back-button-text="Back to Arcade"
+                    :error="error"
+                />
 
-        <!-- Content State -->
-        <div v-else-if="arcade?.code" class="relative w-full h-full">
-            <!-- Loading overlay for iframe -->
-            <Transition name="fade">
-                <div
-                    v-if="!iframeLoaded"
-                    class="absolute inset-0 flex items-center justify-center bg-white dark:bg-gray-900 z-10"
-                >
-                    <div class="text-center">
-                        <Loader2
-                            class="w-10 h-10 text-blue-500 animate-spin mx-auto mb-3"
-                        />
-                        <p class="text-sm text-gray-500 dark:text-gray-400">
-                            Rendering preview...
-                        </p>
+                <!-- Content State -->
+                <div v-else-if="arcade?.code" class="relative w-full h-full">
+                    <!-- Loading overlay for iframe -->
+                    <Transition name="fade">
+                        <div
+                            v-if="!iframeLoaded"
+                            class="absolute inset-0 flex items-center justify-center bg-white dark:bg-gray-900 z-10"
+                        >
+                            <div class="text-center">
+                                <Loader2
+                                    class="w-10 h-10 text-blue-500 animate-spin mx-auto mb-3"
+                                />
+                                <p
+                                    class="text-sm text-gray-500 dark:text-gray-400"
+                                >
+                                    Rendering preview...
+                                </p>
+                            </div>
+                        </div>
+                    </Transition>
+
+                    <!-- Floating Action Button (only for owner) -->
+                    <div v-if="isOwner" class="fixed bottom-6 right-6 z-20">
+                        <DropdownMenu>
+                            <DropdownMenuTrigger as-child>
+                                <Button
+                                    size="sm"
+                                    class="h-12 w-12 dark:bg-gray-200 bg-gray-800 hover:bg-gray-700 dark:hover:bg-gray-100 rounded-full shadow-lg hover:shadow-xl transition-shadow"
+                                >
+                                    <MoreVertical class="w-5 h-5" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" class="w-48">
+                                <DropdownMenuItem
+                                    @click="openRenameDialog"
+                                    class="cursor-pointer"
+                                >
+                                    <Edit class="w-4 h-4 mr-2" />
+                                    <span>Edit Details</span>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                    v-if="screenWidth > 720"
+                                    @click="openRenameDialog"
+                                    class="cursor-pointer"
+                                >
+                                    <Code2 class="w-4 h-4 mr-2" />
+                                    <span>Update Code</span>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                    @click="handleDownload"
+                                    class="cursor-pointer"
+                                >
+                                    <Download class="w-4 h-4 mr-2" />
+                                    <span>Download</span>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                    @click="handleShare"
+                                    class="cursor-pointer"
+                                >
+                                    <Share2 class="w-4 h-4 mr-2" />
+                                    <span>Share</span>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                    @click="copyLink"
+                                    class="cursor-pointer"
+                                >
+                                    <Copy class="w-4 h-4 mr-2" />
+                                    <span>Copy Link</span>
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                    @click="openDeleteDialog"
+                                    class="cursor-pointer text-red-600 dark:text-red-400 focus:text-red-600 dark:focus:text-red-400"
+                                >
+                                    <Trash2 class="w-4 h-4 mr-2" />
+                                    <span>Delete</span>
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
                     </div>
-                </div>
-            </Transition>
 
-            <!-- Floating Action Button (only for owner) -->
-            <div v-if="isOwner" class="fixed bottom-6 right-6 z-20">
-                <DropdownMenu>
-                    <DropdownMenuTrigger as-child>
+                    <!-- Share Button (for non-owners) -->
+                    <div v-else class="fixed bottom-6 right-6 z-20">
                         <Button
+                            @click="handleShare"
                             size="sm"
                             class="h-12 w-12 dark:bg-gray-200 bg-gray-800 hover:bg-gray-700 dark:hover:bg-gray-100 rounded-full shadow-lg hover:shadow-xl transition-shadow"
                         >
-                            <MoreVertical class="w-5 h-5" />
+                            <Share2 class="w-5 h-5" />
                         </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" class="w-48">
-                        <DropdownMenuItem
-                            @click="openRenameDialog"
-                            class="cursor-pointer"
-                        >
-                            <Edit class="w-4 h-4 mr-2" />
-                            <span>Edit Details</span>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                            @click="handleDownload"
-                            class="cursor-pointer"
-                        >
-                            <Download class="w-4 h-4 mr-2" />
-                            <span>Download</span>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                            @click="handleShare"
-                            class="cursor-pointer"
-                        >
-                            <Share2 class="w-4 h-4 mr-2" />
-                            <span>Share</span>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                            @click="copyLink"
-                            class="cursor-pointer"
-                        >
-                            <Copy class="w-4 h-4 mr-2" />
-                            <span>Copy Link</span>
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                            @click="openDeleteDialog"
-                            class="cursor-pointer text-red-600 dark:text-red-400 focus:text-red-600 dark:focus:text-red-400"
-                        >
-                            <Trash2 class="w-4 h-4 mr-2" />
-                            <span>Delete</span>
-                        </DropdownMenuItem>
-                    </DropdownMenuContent>
-                </DropdownMenu>
-            </div>
+                    </div>
 
-            <!-- Share Button (for non-owners) -->
-            <div v-else class="fixed bottom-6 right-6 z-20">
-                <Button
-                    @click="handleShare"
-                    size="sm"
-                    class="h-12 w-12 dark:bg-gray-200 bg-gray-800 hover:bg-gray-700 dark:hover:bg-gray-100 rounded-full shadow-lg hover:shadow-xl transition-shadow"
+                    <!-- Iframe -->
+                    <iframe
+                        :srcdoc="arcade.code"
+                        @load="handleIframeLoad"
+                        @error="handleIframeError"
+                        class="w-full h-full border-0 bg-white dark:bg-gray-900"
+                        sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox allow-modals allow-forms allow-pointer-lock allow-same-origin allow-top-navigation allow-top-navigation-by-user-activation"
+                        title="Arcade Content Preview"
+                        referrerpolicy="no-referrer"
+                    />
+                </div>
+
+                <!-- No Content State -->
+                <ErrorState
+                    v-else
+                    @retry="fetchArcade"
+                    back-button-text="Back to Arcade"
+                    error="This arcade entry doesn't have any content to display."
+                />
+
+                <!-- Rename Dialog -->
+                <DialogBox
+                    :close-modal="() => (showRenameDialog = false)"
+                    name="rename-dialog"
+                    :show="showRenameDialog"
                 >
-                    <Share2 class="w-5 h-5" />
-                </Button>
-            </div>
-
-            <!-- Iframe -->
-            <iframe
-                :srcdoc="arcade.code"
-                @load="handleIframeLoad"
-                @error="handleIframeError"
-                class="w-full h-full border-0 bg-white dark:bg-gray-900"
-                sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"
-                title="Arcade Content Preview"
-                referrerpolicy="no-referrer"
-            />
-        </div>
-
-        <!-- No Content State -->
-        <ErrorState
-            v-else
-            @retry="fetchArcade"
-            back-button-text="Back to Arcade"
-            error="This arcade entry doesn't have any content to display."
-        />
-
-        <!-- Rename Dialog -->
-        <DialogBox
-            :close-modal="() => (showRenameDialog = false)"
-            name="rename-dialog"
-            :show="showRenameDialog"
-        >
-            <div class="sm:max-w-[500px]">
-                <div>
-                    <p
-                        class="text-xl font-bold dark:text-gray-100 text-gray-900"
-                    >
-                        Edit Arcade Details
-                    </p>
-                    <p class="text-sm text-gray-500 dark:text-gray-400">
-                        Update the label and description for your arcade.
-                    </p>
-                </div>
-                <form @submit.prevent="handleRename">
-                    <div
-                        class="space-y-4 py-4 dark:text-gray-100 text-gray-900"
-                    >
-                        <!-- Label Field -->
-                        <div class="space-y-2">
-                            <Label for="edit-label" class="text-sm font-medium">
-                                Label <span class="text-red-500">*</span>
-                            </Label>
-                            <Input
-                                id="edit-label"
-                                v-model="renameForm.label"
-                                placeholder="Enter arcade label..."
-                                maxlength="100"
-                                :class="[
-                                    'w-full resize-none border-none ring-[1px] ring-gray-800 dark:ring-gray-200 outline-none focus:border-none focus-visible:ring-gray-700 dark:focus-visible:ring-gray-300',
-                                    renameErrors.label ? 'border-red-500' : '',
-                                ]"
-                            />
-                            <div class="flex justify-between items-center">
-                                <p
-                                    v-if="renameErrors.label"
-                                    class="text-xs text-red-500"
-                                >
-                                    {{ renameErrors.label }}
-                                </p>
-                                <p
-                                    class="text-xs text-gray-500 dark:text-gray-200 ml-auto"
-                                >
-                                    {{ renameForm.label.length }}/100
-                                </p>
-                            </div>
-                        </div>
-
-                        <!-- Description Field -->
-                        <div class="space-y-2">
-                            <Label
-                                for="edit-description"
-                                class="text-sm font-medium"
+                    <div class="sm:max-w-[500px]">
+                        <div>
+                            <p
+                                class="text-xl font-bold dark:text-gray-100 text-gray-900"
                             >
-                                Description <span class="text-red-500">*</span>
-                            </Label>
-                            <Textarea
-                                id="edit-description"
-                                v-model="renameForm.description"
-                                placeholder="Enter arcade description..."
-                                rows="4"
-                                maxlength="500"
-                                :class="[
-                                    'w-full resize-none border-none ring-[1px] ring-gray-800 dark:ring-gray-200 outline-none focus:border-none focus-visible:ring-gray-700 dark:focus-visible:ring-gray-300',
-                                    renameErrors.description
-                                        ? 'border-red-500'
-                                        : '',
-                                ]"
-                            />
-                            <div class="flex justify-between items-center">
-                                <p
-                                    v-if="renameErrors.description"
-                                    class="text-xs text-red-500"
+                                Edit Arcade Details
+                            </p>
+                            <p class="text-sm text-gray-500 dark:text-gray-400">
+                                Update the label and description for your
+                                arcade.
+                            </p>
+                        </div>
+                        <form @submit.prevent="handleRename">
+                            <div
+                                class="space-y-4 py-4 dark:text-gray-100 text-gray-900"
+                            >
+                                <!-- Label Field -->
+                                <div class="space-y-2">
+                                    <Label
+                                        for="edit-label"
+                                        class="text-sm font-medium"
+                                    >
+                                        Label
+                                        <span class="text-red-500">*</span>
+                                    </Label>
+                                    <Input
+                                        id="edit-label"
+                                        v-model="renameForm.label"
+                                        placeholder="Enter arcade label..."
+                                        maxlength="100"
+                                        :class="[
+                                            'w-full resize-none border-none ring-[1px] ring-gray-800 dark:ring-gray-200 outline-none focus:border-none focus-visible:ring-gray-700 dark:focus-visible:ring-gray-300',
+                                            renameErrors.label
+                                                ? 'border-red-500'
+                                                : '',
+                                        ]"
+                                    />
+                                    <div
+                                        class="flex justify-between items-center"
+                                    >
+                                        <p
+                                            v-if="renameErrors.label"
+                                            class="text-xs text-red-500"
+                                        >
+                                            {{ renameErrors.label }}
+                                        </p>
+                                        <p
+                                            class="text-xs text-gray-500 dark:text-gray-200 ml-auto"
+                                        >
+                                            {{ renameForm.label.length }}/100
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <!-- Description Field -->
+                                <div class="space-y-2">
+                                    <Label
+                                        for="edit-description"
+                                        class="text-sm font-medium"
+                                    >
+                                        Description
+                                        <span class="text-red-500">*</span>
+                                    </Label>
+                                    <Textarea
+                                        id="edit-description"
+                                        v-model="renameForm.description"
+                                        placeholder="Enter arcade description..."
+                                        rows="4"
+                                        maxlength="500"
+                                        :class="[
+                                            'w-full resize-none border-none ring-[1px] ring-gray-800 dark:ring-gray-200 outline-none focus:border-none focus-visible:ring-gray-700 dark:focus-visible:ring-gray-300',
+                                            renameErrors.description
+                                                ? 'border-red-500'
+                                                : '',
+                                        ]"
+                                    />
+                                    <div
+                                        class="flex justify-between items-center"
+                                    >
+                                        <p
+                                            v-if="renameErrors.description"
+                                            class="text-xs text-red-500"
+                                        >
+                                            {{ renameErrors.description }}
+                                        </p>
+                                        <p
+                                            class="text-xs text-gray-500 dark:text-gray-400 ml-auto"
+                                        >
+                                            {{
+                                                renameForm.description.length
+                                            }}/500
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="flex items-center justify-end gap-2">
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 hover:bg-gray-200 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-200 h-[40px]"
+                                    @click="showRenameDialog = false"
+                                    :disabled="isRenaming"
                                 >
-                                    {{ renameErrors.description }}
+                                    Cancel
+                                </Button>
+                                <Button
+                                    class="bg-gray-900 dark:bg-gray-100 text-gray-100 dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-200 hover:text-gray-100 dark:hover:text-gray-900 h-[40px]"
+                                    type="submit"
+                                    :disabled="isRenaming"
+                                >
+                                    <Loader2
+                                        v-if="isRenaming"
+                                        class="w-4 h-4 mr-2 animate-spin"
+                                    />
+                                    {{
+                                        isRenaming
+                                            ? "Saving..."
+                                            : "Save Changes"
+                                    }}
+                                </Button>
+                            </div>
+                        </form>
+                    </div>
+                </DialogBox>
+
+                <!-- Delete Confirmation Dialog -->
+                <DialogBox
+                    name="delete-confirmation"
+                    :close-modal="() => (showDeleteDialog = false)"
+                    :show="showDeleteDialog"
+                >
+                    <div class="sm:max-w-[425px]">
+                        <div class="space-y-2">
+                            <div
+                                class="text-xl font-bold dark:text-gray-100 text-gray-900"
+                            >
+                                Delete Arcade
+                            </div>
+                            <div
+                                class="text-sm text-gray-500 dark:text-gray-400"
+                            >
+                                Are you sure you want to delete this arcade?
+                                This action cannot be undone.
+                            </div>
+                        </div>
+                        <div class="py-4">
+                            <div
+                                class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4"
+                            >
+                                <p
+                                    class="text-sm text-red-800 dark:text-red-200 font-medium"
+                                >
+                                    {{ arcade?.label }}
                                 </p>
                                 <p
-                                    class="text-xs text-gray-500 dark:text-gray-400 ml-auto"
+                                    class="text-xs text-red-600 dark:text-red-400 mt-1"
                                 >
-                                    {{ renameForm.description.length }}/500
+                                    This will permanently delete your arcade and
+                                    all its content.
                                 </p>
                             </div>
                         </div>
+                        <div class="flex items-center justify-end space-x-2">
+                            <Button
+                                variant="outline"
+                                @click="showDeleteDialog = false"
+                                class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 hover:bg-gray-200 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-200 h-[40px]"
+                                :disabled="isDeleting"
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                variant="destructive"
+                                @click="handleDelete"
+                                :disabled="isDeleting"
+                            >
+                                <Loader2
+                                    v-if="isDeleting"
+                                    class="w-4 h-4 mr-2 animate-spin"
+                                />
+                                {{
+                                    isDeleting ? "Deleting..." : "Delete Arcade"
+                                }}
+                            </Button>
+                        </div>
                     </div>
-                    <div class="flex items-center justify-end gap-2">
-                        <Button
-                            type="button"
-                            variant="outline"
-                            class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 hover:bg-gray-200 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-200 h-[40px]"
-                            @click="showRenameDialog = false"
-                            :disabled="isRenaming"
-                        >
-                            Cancel
-                        </Button>
-                        <Button
-                            class="bg-gray-900 dark:bg-gray-100 text-gray-100 dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-200 hover:text-gray-100 dark:hover:text-gray-900 h-[40px]"
-                            type="submit"
-                            :disabled="isRenaming"
-                        >
-                            <Loader2
-                                v-if="isRenaming"
-                                class="w-4 h-4 mr-2 animate-spin"
-                            />
-                            {{ isRenaming ? "Saving..." : "Save Changes" }}
-                        </Button>
-                    </div>
-                </form>
+                </DialogBox>
             </div>
-        </DialogBox>
-
-        <!-- Delete Confirmation Dialog -->
-        <DialogBox
-            name="delete-confirmation"
-            :close-modal="() => (showDeleteDialog = false)"
-            :show="showDeleteDialog"
-        >
-            <div class="sm:max-w-[425px]">
-                <div class="space-y-2">
-                    <div
-                        class="text-xl font-bold dark:text-gray-100 text-gray-900"
-                    >
-                        Delete Arcade
-                    </div>
-                    <div class="text-sm text-gray-500 dark:text-gray-400">
-                        Are you sure you want to delete this arcade? This action
-                        cannot be undone.
-                    </div>
-                </div>
-                <div class="py-4">
-                    <div
-                        class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4"
-                    >
-                        <p
-                            class="text-sm text-red-800 dark:text-red-200 font-medium"
-                        >
-                            {{ arcade?.label }}
-                        </p>
-                        <p class="text-xs text-red-600 dark:text-red-400 mt-1">
-                            This will permanently delete your arcade and all its
-                            content.
-                        </p>
-                    </div>
-                </div>
-                <div class="flex items-center justify-end space-x-2">
-                    <Button
-                        variant="outline"
-                        @click="showDeleteDialog = false"
-                        class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 hover:bg-gray-200 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-200 h-[40px]"
-                        :disabled="isDeleting"
-                    >
-                        Cancel
-                    </Button>
-                    <Button
-                        variant="destructive"
-                        @click="handleDelete"
-                        :disabled="isDeleting"
-                    >
-                        <Loader2
-                            v-if="isDeleting"
-                            class="w-4 h-4 mr-2 animate-spin"
-                        />
-                        {{ isDeleting ? "Deleting..." : "Delete Arcade" }}
-                    </Button>
-                </div>
-            </div>
-        </DialogBox>
+        </OverallLayout>
     </div>
 </template>
 
