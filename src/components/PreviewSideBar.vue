@@ -384,7 +384,7 @@ const sendChatMessage = async () => {
     }
 
     const userMessage = chatInput.value.trim();
-    const fabricatedPrompt = `You are a code editing assistant. The user has the following code:\n\n\`\`\`${previewLanguage.value}\n${previewCode.value}\n\`\`\`\n\nUser request: ${userMessage}\n\nProvide ONLY the full updated code in a code block, with a brief explanation if needed. Do not include the original code unless modified.`;
+    const fabricatedPrompt = `You are a code editing assistant. The user has the following code:\n\n\`\`\`${previewLanguage.value}\n${previewCode.value}\n\`\`\`\n\nUser request: ${userMessage}\n\nProvide a brief explanation of the changes you're making, then provide ONLY the full updated code in a single code block. Keep your explanation concise and focused on what changed.`;
     chatInput.value = "";
     isSendingMessage.value = true;
 
@@ -423,6 +423,9 @@ const sendChatMessage = async () => {
     const tempMessageIndex = submissionChat.messages.length - 1;
     submissionChat.last_message_at = new Date().toISOString();
 
+    // Scroll to bottom after adding temp message
+    setTimeout(() => scrollToBottom(), 50);
+
     // Update chat title if first message
     if (
         submissionChat.messages.length === 1 ||
@@ -450,13 +453,31 @@ const sendChatMessage = async () => {
         const data = await response.json();
         const finalResponse = data.error || data.response;
 
-        // Update the temporary message with real response
+        // Extract code from response first
+        const codeBlockRegex = /```[\w]*\n([\s\S]*?)```/g;
+        const matches = [...finalResponse.matchAll(codeBlockRegex)];
+
+        // Remove code blocks from the response to show only instructions
+        let cleanedResponse = finalResponse;
+        if (matches.length > 0) {
+            // Remove all code blocks from the response
+            cleanedResponse = finalResponse
+                .replace(/```[\w]*\n[\s\S]*?```/g, "")
+                .trim();
+            // If response is now empty or too short, add a default message
+            if (cleanedResponse.length < 10) {
+                cleanedResponse =
+                    "Code updated successfully! Check the preview to see the changes.";
+            }
+        }
+
+        // Update the temporary message with cleaned response (no code)
         const updatedMessage: Message = {
             id: `msg_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
             chat_id: submissionChatId!,
             created_at: new Date().toISOString(),
             prompt: userMessage,
-            response: finalResponse,
+            response: cleanedResponse,
             references: [],
             model: "gemini-pro",
         };
@@ -464,10 +485,7 @@ const sendChatMessage = async () => {
         submissionChat.messages[tempMessageIndex] = updatedMessage;
         submissionChat.last_message_at = new Date().toISOString();
 
-        // Extract code from response and update preview
-        const codeBlockRegex = /```[\w]*\n([\s\S]*?)```/g;
-        const matches = [...finalResponse.matchAll(codeBlockRegex)];
-
+        // Update preview with extracted code
         if (matches.length > 0) {
             const newCode = matches[0][1].trim();
             if (newCode) {
@@ -493,7 +511,7 @@ const sendChatMessage = async () => {
         // Trigger onMessageAdded callback
         onMessageAdded(updatedMessage, arcade.value.id);
 
-        // Scroll to bottom
+        // Scroll to bottom after response
         setTimeout(() => scrollToBottom(), 100);
     } catch (error: any) {
         console.error("Chat error:", error);
@@ -1161,10 +1179,7 @@ watch(
                                                     </div>
                                                 </div>
                                             </div>
-                                            <div
-                                                v-if="!isSendingMessage"
-                                                :class="['max-w-[85%]']"
-                                            >
+                                            <div :class="['max-w-[85%]']">
                                                 <MarkdownRenderer
                                                     class="break-words text-xs whitespace-pre-wrap overflow-x-hidden"
                                                     :content="
