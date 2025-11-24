@@ -1168,7 +1168,7 @@ watch(
                                                 <MarkdownRenderer
                                                     class="break-words text-xs whitespace-pre-wrap overflow-x-hidden"
                                                     :content="
-                                                        msg.response || ''
+                                                        msg.response.replace(/```[\w]*\n[\s\S]*?```/g, '')|| ''
                                                     "
                                                 />
                                             </div>
