@@ -414,7 +414,7 @@ const sendChatMessage = async () => {
         chat_id: submissionChatId!,
         created_at: new Date().toISOString(),
         prompt: userMessage,
-        response: "Thinking...",
+        response: "",
         references: [],
         model: "gemini-pro",
     };
@@ -453,31 +453,13 @@ const sendChatMessage = async () => {
         const data = await response.json();
         const finalResponse = data.error || data.response;
 
-        // Extract code from response first
-        const codeBlockRegex = /```[\w]*\n([\s\S]*?)```/g;
-        const matches = [...finalResponse.matchAll(codeBlockRegex)];
-
-        // Remove code blocks from the response to show only instructions
-        let cleanedResponse = finalResponse;
-        if (matches.length > 0) {
-            // Remove all code blocks from the response
-            cleanedResponse = finalResponse
-                .replace(/```[\w]*\n[\s\S]*?```/g, "")
-                .trim();
-            // If response is now empty or too short, add a default message
-            if (cleanedResponse.length < 10) {
-                cleanedResponse =
-                    "Code updated successfully! Check the preview to see the changes.";
-            }
-        }
-
-        // Update the temporary message with cleaned response (no code)
+        // Update the temporary message with full response (code included)
         const updatedMessage: Message = {
             id: `msg_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
             chat_id: submissionChatId!,
             created_at: new Date().toISOString(),
             prompt: userMessage,
-            response: cleanedResponse,
+            response: finalResponse,
             references: [],
             model: "gemini-pro",
         };
@@ -485,7 +467,10 @@ const sendChatMessage = async () => {
         submissionChat.messages[tempMessageIndex] = updatedMessage;
         submissionChat.last_message_at = new Date().toISOString();
 
-        // Update preview with extracted code
+        // Extract code from response and update preview
+        const codeBlockRegex = /```[\w]*\n([\s\S]*?)```/g;
+        const matches = [...finalResponse.matchAll(codeBlockRegex)];
+
         if (matches.length > 0) {
             const newCode = matches[0][1].trim();
             if (newCode) {
