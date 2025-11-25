@@ -211,6 +211,9 @@ func runServer() {
 	r.HandleFunc("/api/transactions/{external_reference}", v1.GetTransactionByRefHandler).Methods(http.MethodGet)
 	r.HandleFunc("/api/callback", v1.StoreTransactionHandler).Methods(http.MethodPost)
 
+	// genai routes
+	r.HandleFunc("/api/genai", v1.GenerateAIResponseHandler).Methods(http.MethodPost)
+
 	// Email management routes
 	r.HandleFunc("/unsubscribe", v1.UnsubscribeHandler).Methods(http.MethodGet, http.MethodPost)
 	r.HandleFunc("/resubscribe", v1.ResubscribeHandler).Methods(http.MethodGet, http.MethodPost)
@@ -248,8 +251,8 @@ func runServer() {
 	srv := &http.Server{
 		Addr:         "0.0.0.0:" + port,
 		Handler:      handler,
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 15 * time.Second,
+		ReadTimeout:  30 * time.Second,
+		WriteTimeout: 120 * time.Second,
 		IdleTimeout:  60 * time.Second,
 	}
 

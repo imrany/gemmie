@@ -439,7 +439,6 @@ func CreateMessageHandler(w http.ResponseWriter, r *http.Request) {
 
 	vars := mux.Vars(r)
 	chatID := vars["id"]
-
 	if chatID == "" {
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(store.Response{
@@ -449,7 +448,7 @@ func CreateMessageHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// send request to ai wrapper
+	// Parse request body
 	var req store.Message
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		slog.Error("Invalid request body", "error", err)
@@ -471,27 +470,7 @@ func CreateMessageHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// generate response using ai wrapper
-	genaiResp := genai.GENAISERVICE{
-		APIKey: viper.GetString("API_KEY"),
-		Model:  viper.GetString("MODEL"),
-	}
-	if req.Response == "" {
-		genAIResponse, err := genaiResp.GenerateAIResponse(context.Background(), req.Prompt)
-		req.Response = genAIResponse.Prompt
-		req.Prompt = genAIResponse.Prompt
-		if err != nil {
-			slog.Error("Failed to generate AI response", "error", err)
-			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(store.Response{
-				Success: false,
-				Message: fmt.Sprintf("Failed to generate AI response: %s", err.Error()),
-			})
-			return
-		}
-	}
-
-	// Get chat to verify ownership
+	// Get chat to verify ownership first (before generating AI response)
 	chat, err := store.GetChatById(chatID)
 	if err != nil {
 		slog.Error("Failed to get chat", "chat_id", chatID, "error", err)
@@ -522,12 +501,35 @@ func CreateMessageHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Generate response using AI wrapper (only if response not provided)
+	genaiResp := genai.GENAISERVICE{
+		APIKey: viper.GetString("API_KEY"),
+		Model:  viper.GetString("MODEL"),
+	}
+
+	var aiResponse string
+	if req.Response == "" {
+		genAIResponse, err := genaiResp.GenerateAIResponse(context.Background(), req.Prompt)
+		if err != nil {
+			slog.Error("Failed to generate AI response", "error", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(store.Response{
+				Success: false,
+				Message: fmt.Sprintf("Failed to generate AI response: %s", err.Error()),
+			})
+			return
+		}
+		aiResponse = genAIResponse.Response
+	} else {
+		aiResponse = req.Response
+	}
+
 	// Create new message
 	message := store.Message{
 		ID:         encrypt.GenerateID(nil),
 		ChatId:     chatID,
 		Prompt:     req.Prompt,
-		Response:   req.Response,
+		Response:   aiResponse,
 		CreatedAt:  time.Now(),
 		Model:      genaiResp.Model,
 		References: req.References,

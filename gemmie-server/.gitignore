@@ -7,3 +7,4 @@ gemmie_data.backup.json
 
 prod-docker-compose.yaml
 *.db
+*.db-journal
