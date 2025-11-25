@@ -70,7 +70,7 @@ export function useAI() {
     try {
       const response = await fetch(`${API_BASE_URL}/genai`, {
         method: "POST",
-        body: JSON.stringify({ prompt }),
+        body: JSON.stringify(prompt),
         headers: {
           "Content-Type": "application/json",
           ...(parsedUserDetails.userId
