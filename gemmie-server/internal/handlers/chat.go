@@ -476,15 +476,19 @@ func CreateMessageHandler(w http.ResponseWriter, r *http.Request) {
 		APIKey: viper.GetString("API_KEY"),
 		Model:  viper.GetString("MODEL"),
 	}
-	genAIResponse, err := genaiResp.GenerateAIResponse(context.Background(), req.Prompt)
-	if err != nil {
-		slog.Error("Failed to generate AI response", "error", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(store.Response{
-			Success: false,
-			Message: fmt.Sprintf("Failed to generate AI response: %s", err.Error()),
-		})
-		return
+	if req.Response == "" {
+		genAIResponse, err := genaiResp.GenerateAIResponse(context.Background(), req.Prompt)
+		req.Response = genAIResponse.Prompt
+		req.Prompt = genAIResponse.Prompt
+		if err != nil {
+			slog.Error("Failed to generate AI response", "error", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(store.Response{
+				Success: false,
+				Message: fmt.Sprintf("Failed to generate AI response: %s", err.Error()),
+			})
+			return
+		}
 	}
 
 	// Get chat to verify ownership
@@ -522,8 +526,8 @@ func CreateMessageHandler(w http.ResponseWriter, r *http.Request) {
 	message := store.Message{
 		ID:         encrypt.GenerateID(nil),
 		ChatId:     chatID,
-		Prompt:     genAIResponse.Prompt,
-		Response:   genAIResponse.Response,
+		Prompt:     req.Prompt,
+		Response:   req.Response,
 		CreatedAt:  time.Now(),
 		Model:      genaiResp.Model,
 		References: req.References,
