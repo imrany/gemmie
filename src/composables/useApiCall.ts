@@ -50,7 +50,7 @@ export function useApiCall(globalStateRefs?: {
       }
 
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000);
+      const timeoutId = setTimeout(() => controller.abort(), 120 * 1000);
 
       const response = await fetch(`${API_BASE_URL}${endpoint}`, {
         ...options,
@@ -81,7 +81,7 @@ export function useApiCall(globalStateRefs?: {
 
       return data;
     } catch (error: any) {
-      console.error(`API Error on ${endpoint}:`, error);
+      console.error(`API Error on ${API_BASE_URL}${endpoint}:`, error);
 
       if (error.name === "AbortError") {
         throw new Error("Request timeout - please try again");
@@ -94,7 +94,7 @@ export function useApiCall(globalStateRefs?: {
         retryCount < maxRetries
       ) {
         console.log(
-          `Retrying ${endpoint} in ${retryDelay}ms (attempt ${retryCount + 1}/${maxRetries})`,
+          `Retrying ${API_BASE_URL}${endpoint} in ${retryDelay}ms (attempt ${retryCount + 1}/${maxRetries})`,
         );
 
         await new Promise((resolve) => setTimeout(resolve, retryDelay));

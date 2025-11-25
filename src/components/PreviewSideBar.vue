@@ -33,7 +33,7 @@ import {
     TooltipContent,
     TooltipTrigger,
 } from "./ui/tooltip";
-import { WRAPPER_URL, generateChatTitle } from "@/lib/globals";
+import { generateChatTitle } from "@/lib/globals";
 import type { FunctionalComponent } from "vue";
 import { useRoute } from "vue-router";
 import MarkdownRenderer from "./ui/markdown/MarkdownRenderer.vue";
@@ -55,6 +55,7 @@ const {
     chats,
     onMessageAdded,
 } = inject("globalState") as {
+    onMessageAdded: (message: Message, id?: string) => void;
     chats: Ref<Chat[]>;
     arcade: Ref<RawArcade>;
     createNewChat: (firstMessage?: string, chatId?: string) => Promise<string>;
@@ -75,7 +76,6 @@ const {
     previewLanguage: Ref<string>;
     closePreview: () => void;
     parsedUserDetails: Ref<UserDetails>;
-    onMessageAdded: (message: Message, id?: string) => void;
     apiCall: <T>(
         endpoint: string,
         options: RequestInit,
@@ -333,7 +333,7 @@ const publishToArcade = async () => {
     }
 };
 
-// ✅ FIXED: Update arcade code in database
+//  Update arcade code in database
 const updateArcadeCode = async (newCode: string): Promise<boolean> => {
     if (!arcade.value?.id) {
         console.warn("No arcade ID available to update");
@@ -385,8 +385,10 @@ const sendChatMessage = async () => {
 
     const userMessage = chatInput.value.trim();
     const fabricatedPrompt = `You are a code editing assistant. The user has the following code:\n\n\`\`\`${previewLanguage.value}\n${previewCode.value}\n\`\`\`\n\nUser request: ${userMessage}\n\nProvide a brief explanation of the changes you're making, then provide ONLY the full updated code in a single code block. Keep your explanation concise and focused on what changed.`;
-    chatInput.value = "";
+
     isSendingMessage.value = true;
+    const originalInput = chatInput.value;
+    chatInput.value = "Thinking...";
 
     // Find the chat to submit to
     const submissionChatId = arcade.value?.id || route.params.id?.toString();
@@ -400,6 +402,7 @@ const sendChatMessage = async () => {
             description: "Please refresh and try again",
         });
         isSendingMessage.value = false;
+        chatInput.value = originalInput;
         return;
     }
 
@@ -435,31 +438,34 @@ const sendChatMessage = async () => {
     }
 
     try {
-        const response = await fetch(WRAPPER_URL, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
+        const response = await apiCall<{ Response: string; Prompt: string }>(
+            `/genai`,
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify(fabricatedPrompt),
             },
-            body: JSON.stringify(fabricatedPrompt),
-        });
-
-        if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(
-                `HTTP ${response.status}: ${errorText || response.statusText}`,
-            );
+        );
+        chatInput.value = "";
+        if (!response.success) {
+            throw new Error(response.message);
         }
 
-        const data = await response.json();
-        const finalResponse = data.error || data.response;
+        const data = response.data;
 
-        // Update the temporary message with full response (code included)
+        if (!data) {
+            throw new Error("No response data received");
+        }
+
+        // Update the temporary message with full response
         const updatedMessage: Message = {
             id: `msg_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
             chat_id: submissionChatId!,
             created_at: new Date().toISOString(),
             prompt: userMessage,
-            response: finalResponse,
+            response: data.Response,
             references: [],
             model: "gemini-pro",
         };
@@ -469,14 +475,14 @@ const sendChatMessage = async () => {
 
         // Extract code from response and update preview
         const codeBlockRegex = /```[\w]*\n([\s\S]*?)```/g;
-        const matches = [...finalResponse.matchAll(codeBlockRegex)];
+        const matches = [...updatedMessage.response.matchAll(codeBlockRegex)];
 
         if (matches.length > 0) {
             const newCode = matches[0][1].trim();
             if (newCode) {
                 previewCode.value = newCode;
 
-                // ✅ UPDATE: Save the updated code to the arcade
+                // Save the updated code to the arcade
                 const updateSuccess = await updateArcadeCode(newCode);
 
                 if (updateSuccess) {
@@ -494,7 +500,7 @@ const sendChatMessage = async () => {
         }
 
         // Trigger onMessageAdded callback
-        onMessageAdded(updatedMessage, arcade.value.id);
+        onMessageAdded(updatedMessage, arcade.value?.id);
 
         // Scroll to bottom after response
         setTimeout(() => scrollToBottom(), 100);
@@ -506,10 +512,17 @@ const sendChatMessage = async () => {
             submissionChat.messages.splice(tempMessageIndex, 1);
         }
 
-        let errorMessage = error.message;
+        // Restore input on error
+        chatInput.value = originalInput;
+
+        let errorMessage = error.message || "Unknown error";
         let description = "Please try again or check your connection";
 
-        if (error.message.includes("Failed to fetch")) {
+        if (error.name === "AbortError" || error.message.includes("abort")) {
+            errorMessage = "Request Timeout";
+            description =
+                "The code generation took too long. Try a simpler request";
+        } else if (error.message.includes("Failed to fetch")) {
             errorMessage = "Network Error";
             description = "Please check your internet connection";
         } else if (error.message.includes("timeout")) {
@@ -561,24 +574,30 @@ const generateSmartDescription = async (label: string): Promise<string> => {
             });
         }, 20 * 1000);
 
-        const response = await fetch(`${WRAPPER_URL}`, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
+        const response = await apiCall<{ Response: string; Prompt: string }>(
+            `/genai`,
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify(
+                    `Provide a description for ${label} in text, less than 200 characters`,
+                ),
+                signal: controller.signal,
             },
-            body: JSON.stringify(
-                `Provide a description for ${label} in text, less than 200 characters`,
-            ),
-            signal: controller.signal,
-        });
+        );
 
-        if (!response.ok) {
-            throw new Error(response.statusText);
+        if (!response.success) {
+            throw new Error(response.message);
         }
 
-        const data = await response.json();
+        const data = response.data;
+        if (!data) {
+            throw new Error("No data received");
+        }
         isGeneratingDescription.value = false;
-        return data.response;
+        return data?.Response;
     } catch (error: any) {
         isGeneratingDescription.value = false;
         if (error.name === "AbortError") {
@@ -1168,7 +1187,10 @@ watch(
                                                 <MarkdownRenderer
                                                     class="break-words text-xs whitespace-pre-wrap overflow-x-hidden"
                                                     :content="
-                                                        msg.response.replace(/```[\w]*\n[\s\S]*?```/g, '')|| ''
+                                                        msg.response.replace(
+                                                            /```[\w]*\n[\s\S]*?```/g,
+                                                            '',
+                                                        ) || ''
                                                     "
                                                 />
                                             </div>
@@ -1235,7 +1257,7 @@ watch(
                                                     !isOnline
                                                 "
                                                 size="icon"
-                                                class="rounded-lg w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center transition-colors text-white bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50 disabled:bg-gray-400 flex-shrink-0 shadow-sm"
+                                                class="rounded-lg w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center transition-colors text-white dark:text-white bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50 disabled:bg-gray-400 flex-shrink-0 shadow-sm"
                                             >
                                                 <LoaderCircle
                                                     v-if="isSendingMessage"

@@ -12,6 +12,7 @@ import {
 } from "vue";
 import TopNav from "../components/TopNav.vue";
 import type {
+    ApiResponse,
     Chat,
     ConfirmDialogOptions,
     ContextReference,
@@ -40,7 +41,6 @@ import {
     generateChatTitle,
     copyCode,
     isPromptTooShort,
-    WRAPPER_URL,
     SPINDLE_URL,
 } from "@/lib/globals";
 import router from "@/router";
@@ -131,7 +131,7 @@ const {
     shouldShowUpgradePrompt,
     isRequestLimitExceeded,
     parsedUserDetails,
-    onMessageAdded,
+    apiCall,
 
     copyResponse,
     fallbackChatId,
@@ -148,7 +148,6 @@ const {
     copyResponse: (text: string, index?: number) => void;
     processLinksInUserPrompt: (index: number) => Promise<void>;
     processLinksInResponse: (index: number) => Promise<void>;
-    onMessageAdded: (message: Message) => void;
     copiedIndex: Ref<number | null>;
     shouldHaveLimit: boolean;
     chatDrafts: Ref<Map<string, string>>;
@@ -219,7 +218,6 @@ const {
     currentMessages: Ref<Message[]>;
     linkPreview: LinkPreview;
     updateExpandedArray: () => void;
-    apiCall: (endpoint: string, options: RequestInit) => any;
     manualSync: () => Promise<any>;
     toggleSidebar: () => void;
     isFreeUser: Ref<boolean>;
@@ -243,6 +241,10 @@ const {
     requestsRemaining: Ref<boolean>;
     shouldShowUpgradePrompt: Ref<boolean>;
     isRequestLimitExceeded: Ref<boolean>;
+    apiCall: <T>(
+        endpoint: string,
+        options: RequestInit,
+    ) => Promise<ApiResponse<T>>;
 };
 
 const route = useRoute();
@@ -633,9 +635,7 @@ async function handleSubmit(
         updateExpandedArray();
         await processLinksInUserPrompt(tempMessageIndex);
 
-        let response: Response;
-        let parseRes: any;
-
+        let searchResults = "";
         // Make API request based on mode
         if (isSearchMode) {
             const searchParams = new URLSearchParams({
@@ -650,25 +650,57 @@ async function handleSubmit(
 
             console.log(`Making ${responseMode} request`);
 
-            response = await fetch(`${SPINDLE_URL}/search?${searchParams}`, {
-                method: "GET",
-                signal: abortController.signal,
-                headers: {
-                    "Content-Type": "application/json",
+            const response = await fetch(
+                `${SPINDLE_URL}/search?${searchParams}`,
+                {
+                    method: "GET",
+                    signal: abortController.signal,
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
                 },
-            });
-        } else {
-            console.log("Making light-response request");
+            );
 
-            response = await fetch(WRAPPER_URL, {
-                method: "POST",
-                body: JSON.stringify(fabricatedPrompt),
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                signal: abortController.signal,
-            });
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+
+            if (data && data.error) {
+                throw new Error(`API error: ${data.error}`);
+            }
+
+            const hasResults = data.results || data.json;
+
+            if (!hasResults) {
+                throw new Error("No search results found for your query.");
+            }
+
+            const searchResultsSummary = formatSearchResults(
+                data,
+                responseMode,
+                tempMessageIndex,
+            );
+            searchResults = searchResultsSummary;
+            // Append search results to the fabricated prompt for the main API call
+            // fabricatedPrompt = `${promptValue}\n\n--- Search Results ---\n${searchResultsSummary}\n\nProvide detailed information based on the search results above. Maintain the same format.`;
         }
+
+        const response = await apiCall<Message>(
+            `/chats/${submissionChatId}/messages`,
+            {
+                method: "POST",
+                signal: abortController.signal,
+                body: JSON.stringify({
+                    prompt: fabricatedPrompt,
+                    response: searchResults,
+                    references:
+                        effectiveContextReferences?.map((ref) => ref.preview) ||
+                        [],
+                }),
+            },
+        );
 
         // Check if request was aborted
         if (abortController.signal.aborted) {
@@ -679,53 +711,34 @@ async function handleSubmit(
         }
 
         // Handle API errors
-        if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(
-                `HTTP ${response.status}: ${errorText || response.statusText}`,
-            );
+        if (!response.success) {
+            const errorText = response.message;
+            throw new Error(errorText);
         }
 
-        parseRes = await response.json();
+        const parseRes = response.data;
 
         // Clear draft for current chat
         clearCurrentDraft();
-
-        // Process response based on mode
-        let finalResponse = parseRes.error ? parseRes.error : parseRes.response;
-
-        if (isSearchMode) {
-            const hasResults = parseRes.results || parseRes.json;
-            if (hasResults) {
-                finalResponse = formatSearchResults(
-                    parseRes,
-                    responseMode,
-                    tempMessageIndex,
-                );
-            } else {
-                finalResponse = "No search results found for your query.";
-            }
-        }
 
         // Update the response in chat (replace temporary message)
         const updatedTargetChat = chats.value.find(
             (chat) => chat.id === submissionChatId,
         );
 
-        if (updatedTargetChat && tempMessageIndex >= 0) {
+        if (updatedTargetChat && tempMessageIndex >= 0 && parseRes) {
             const updatedMessage: Message = {
-                id: `msg_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+                id: parseRes.id,
                 chat_id: submissionChatId,
-                created_at: new Date().toISOString(),
-                prompt: promptValue,
-                response: finalResponse,
-                references:
-                    effectiveContextReferences?.map((ref) => ref.preview) || [],
-                model: "gemini-pro",
+                created_at: parseRes.created_at,
+                prompt: parseRes.prompt,
+                response: parseRes.response,
+                references: parseRes.references,
+                model: parseRes.model,
             };
 
             updatedTargetChat.messages[tempMessageIndex] = updatedMessage;
-            updatedTargetChat.last_message_at = new Date().toISOString();
+            updatedTargetChat.last_message_at = parseRes.created_at;
 
             await processLinksInResponse(tempMessageIndex);
 
@@ -770,9 +783,6 @@ async function handleSubmit(
                     description: `Switch to "${targetChat?.title || "chat"}" to view the response`,
                 });
             }
-
-            // Trigger onMessageAdded callback
-            onMessageAdded(updatedMessage);
         }
     } catch (err: any) {
         // Handle abort
@@ -927,39 +937,69 @@ async function handleLinkOnlyRequest(
             combinedResponse += `> ✨ *Analyzed ${urls.length} links* \n`;
         }
 
-        // Update the response in chat
-        const updatedTargetChat = chats.value.find(
-            (chat) => chat.id === chatId,
-        );
-        if (updatedTargetChat && tempMessageIndex >= 0) {
-            const updatedMessage = {
-                id: `msg_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
-                chat_id: chatId,
-                created_at: new Date().toISOString(),
+        // Save to backend
+        const response = await apiCall<Message>(`/chats/${chatId}/messages`, {
+            method: "POST",
+            signal: abortController.signal,
+            body: JSON.stringify({
                 prompt: promptValue,
                 response: combinedResponse.trim(),
                 references: contextReferenceIds,
-                model: "gemini-pro",
-                is_in_arcade: false,
-            };
-            updatedTargetChat.messages[tempMessageIndex] = updatedMessage;
-            updatedTargetChat.last_message_at = new Date().toISOString();
+            }),
+        });
 
-            // If success and chat stored locally, trigger onMessageAdded
-            onMessageAdded(updatedMessage);
+        // Check if request was aborted
+        if (abortController.signal.aborted) {
+            console.log(`Link request ${requestId} was aborted`);
+            removeTemporaryMessage(chatId, tempMessageIndex);
+            return;
         }
 
-        // ONLY INCREMENT ON SUCCESS for link-only prompts
-        incrementRequestCount();
+        // Handle API errors
+        if (!response.success) {
+            throw new Error(response.message);
+        }
 
-        // Show notification if user switched away
-        if (currentChatId.value !== chatId) {
-            toast.success("Links analyzed", {
-                duration: 3000,
-                description: `Switch to "${targetChat?.title || "chat"}" to view the analysis`,
-            });
+        const parseRes = response.data;
+
+        // Update the response in chat (replace temporary message)
+        const updatedTargetChat = chats.value.find(
+            (chat) => chat.id === parseRes?.chat_id,
+        );
+
+        if (updatedTargetChat && tempMessageIndex >= 0 && parseRes) {
+            const updatedMessage: Message = {
+                id: parseRes.id,
+                chat_id: parseRes.chat_id,
+                created_at: parseRes.created_at,
+                prompt: parseRes.prompt,
+                response: parseRes.response,
+                references: parseRes.references || [],
+                model: parseRes.model || "gemini-pro",
+            };
+
+            updatedTargetChat.messages[tempMessageIndex] = updatedMessage;
+            updatedTargetChat.last_message_at = parseRes.created_at;
+
+            // ONLY INCREMENT ON SUCCESS for link-only prompts
+            incrementRequestCount();
+
+            // Show notification if user switched away
+            if (currentChatId.value !== chatId) {
+                toast.success("Links analyzed", {
+                    duration: 3000,
+                    description: `Switch to "${targetChat?.title || "chat"}" to view the analysis`,
+                });
+            }
         }
     } catch (err: any) {
+        // Handle abort
+        if (err.name === "AbortError") {
+            console.log(`Link request ${requestId} was aborted`);
+            removeTemporaryMessage(chatId, tempMessageIndex);
+            return;
+        }
+
         console.error("Link analysis error:", err);
 
         // Remove temporary message on error
@@ -1149,19 +1189,51 @@ async function refreshResponse(
                 }
             }
 
-            // Replace the same message with the refreshed response
-            const updatedMessage: Message = {
-                ...oldMessage,
-                response: combinedResponse.trim(),
-                references: originalReferences || [], // PRESERVE REFERENCES
-            };
-            chat.messages[msgIndex] = updatedMessage;
+            // Save to backend
+            const response = await apiCall<Message>(
+                `/chats/${currentChatId.value}/messages`,
+                {
+                    method: "POST",
+                    body: JSON.stringify({
+                        prompt: oldPrompt,
+                        response: combinedResponse.trim(),
+                        references: originalReferences || [],
+                    }),
+                },
+            );
 
-            chat.updated_at = new Date().toISOString();
+            // Handle API errors
+            if (!response.success) {
+                throw new Error(response.message);
+            }
 
-            await processLinksInResponse(msgIndex);
-            incrementRequestCount();
-            onMessageAdded(updatedMessage);
+            const parseRes = response.data;
+
+            if (parseRes) {
+                // Replace the same message with the refreshed response
+                const updatedMessage: Message = {
+                    id: parseRes.id,
+                    chat_id: parseRes.chat_id,
+                    created_at: parseRes.created_at,
+                    prompt: parseRes.prompt,
+                    response: parseRes.response,
+                    references: parseRes.references || [],
+                    model: parseRes.model || "gemini-pro",
+                };
+
+                chat.messages[msgIndex] = updatedMessage;
+                chat.updated_at = new Date().toISOString();
+                chat.last_message_at = parseRes.created_at;
+
+                await processLinksInResponse(msgIndex);
+                incrementRequestCount();
+            }
+        } catch (err: any) {
+            console.error("Link refresh error:", err);
+            toast.error(`Failed to refresh link analysis: ${err.message}`);
+
+            // Restore original message on error
+            chat.messages[msgIndex] = oldMessage;
         } finally {
             isLoading.value = false;
             observeNewVideoContainers();
@@ -1171,8 +1243,7 @@ async function refreshResponse(
     }
 
     try {
-        let response: Response;
-        let parseRes: any;
+        let finalResponse = "";
 
         if (isSearchMode) {
             // Refresh search request with same parameters
@@ -1188,58 +1259,85 @@ async function refreshResponse(
 
             console.log(`Refreshing ${originalMode} request`);
 
-            response = await fetch(`${SPINDLE_URL}/search?${searchParams}`, {
-                method: "GET",
-                headers: {
-                    "Content-Type": "application/json",
+            const searchResponse = await fetch(
+                `${SPINDLE_URL}/search?${searchParams}`,
+                {
+                    method: "GET",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
                 },
-            });
-        } else {
-            // Standard light-response mode refresh
-            response = await fetch(WRAPPER_URL, {
-                method: "POST",
-                body: JSON.stringify(fabricatedPrompt),
-                headers: {
-                    "Content-Type": "application/json",
-                },
-            });
-        }
+            );
 
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-
-        parseRes = await response.json();
-
-        let finalResponse = parseRes.error ? parseRes.error : parseRes.response;
-
-        if (isSearchMode) {
-            const hasResults = parseRes.results || parseRes.json;
-            if (hasResults) {
-                finalResponse = formatSearchResults(
-                    parseRes,
-                    originalMode,
-                    msgIndex,
+            if (!searchResponse.ok) {
+                throw new Error(
+                    `HTTP ${searchResponse.status}: ${searchResponse.statusText}`,
                 );
-            } else {
-                finalResponse = "No search results found for your query.";
             }
+
+            const searchData = await searchResponse.json();
+
+            if (searchData && searchData.error) {
+                throw new Error(`API error: ${searchData.error}`);
+            }
+
+            const hasResults = searchData.results || searchData.json;
+
+            if (!hasResults) {
+                throw new Error("No search results found for your query.");
+            }
+
+            const searchResultsSummary = formatSearchResults(
+                searchData,
+                originalMode,
+                msgIndex,
+            );
+
+            finalResponse = searchResultsSummary;
+            // Append search results to the fabricated prompt
+            // fabricatedPrompt = `${oldPrompt}\n\n--- Search Results ---\n${searchResultsSummary}\n\nProvide detailed information based on the search results above. Maintain the same format.`;
         }
 
-        const updatedMessage: Message = {
-            ...oldMessage,
-            response: finalResponse,
-            references: originalReferences || [], // PRESERVE REFERENCES
-        };
+        // Make the main API call to save the message
+        const response = await apiCall<Message>(
+            `/chats/${currentChatId.value}/messages`,
+            {
+                method: "POST",
+                body: JSON.stringify({
+                    prompt: oldPrompt,
+                    response: finalResponse,
+                    references: originalReferences || [],
+                }),
+            },
+        );
 
-        // Replace the same message with the refreshed response
-        chat.messages[msgIndex] = updatedMessage;
+        // Handle API errors
+        if (!response.success) {
+            throw new Error(response.message);
+        }
 
-        chat.updated_at = new Date().toISOString();
+        const parseRes = response.data;
 
-        await processLinksInResponse(msgIndex);
-        incrementRequestCount();
-        onMessageAdded(updatedMessage);
+        // Process response based on mode
+        if (parseRes) {
+            const updatedMessage: Message = {
+                id: parseRes.id,
+                chat_id: parseRes.chat_id,
+                created_at: parseRes.created_at,
+                prompt: parseRes.prompt,
+                response: parseRes.response,
+                references: parseRes.references || [],
+                model: parseRes.model || "gemini-pro",
+            };
+
+            // Replace the same message with the refreshed response
+            chat.messages[msgIndex] = updatedMessage;
+            chat.updated_at = new Date().toISOString();
+            chat.last_message_at = parseRes.created_at;
+
+            await processLinksInResponse(msgIndex);
+            incrementRequestCount();
+        }
     } catch (err: any) {
         console.error("Refresh error:", err);
         toast.error(`Failed to refresh response: ${err.message}`);
@@ -1251,7 +1349,6 @@ async function refreshResponse(
         observeNewVideoContainers();
     }
 }
-
 // Helper to check if response is deep search result
 function isDeepSearchResult(response: string): boolean {
     if (!response || typeof response !== "string") return false;
