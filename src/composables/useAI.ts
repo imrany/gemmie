@@ -62,7 +62,7 @@ export function useAI() {
   ];
 
   const parsedUserDetails = JSON.parse(
-    localStorage.getItem("userDetails") || "{}",
+    localStorage.getItem("userdetails") || "{}",
   );
   async function handlePrompt(
     prompt: string,
