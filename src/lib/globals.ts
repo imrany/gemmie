@@ -171,7 +171,6 @@ export const plans = ref([
 
 export const API_BASE_URL = getBaseURL() + "/api";
 export const SOCKET_URL = getBaseURL().replace(/^http/, "ws") + "/ws";
-export const WRAPPER_URL = "https://wrapper.villebiz.com/v1/genai";
 export const SPINDLE_URL = "https://spindle.villebiz.com";
 
 // connection status checking

@@ -277,7 +277,6 @@ const {
   aiPopoverContent,
   isLoadingAIPopover,
   aiSuggestions,
-  performAIAction,
   hideAISuggestions
 } = ai
 
@@ -481,7 +480,7 @@ function handleTextareaKeydown(event: KeyboardEvent) {
 function handleTextareaContextMenu(event: MouseEvent) {
   event.preventDefault()
 
-  const textarea = event.target as HTMLTextAreaElement
+  // const textarea = event.target as HTMLTextAreaElement
   const selection = window.getSelection()
   const selectedTextValue = selection?.toString().trim()
 
@@ -1430,7 +1429,7 @@ onUnmounted(() => {
                 </button>
 
                 <!-- Dropdown Menu -->
-                <div v-if="imageMenuOpen" @click.away="imageMenuOpen = false"
+                <div v-if="imageMenuOpen" @click.stop="imageMenuOpen = false"
                   class="fixed w-72 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 z-[1000] overflow-hidden backdrop-blur-sm"
                   :style="{
                     left: getImageDropdownPosition().left + 'px',

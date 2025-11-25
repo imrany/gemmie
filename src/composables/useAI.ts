@@ -1,6 +1,7 @@
 import { ref } from "vue";
 import type { AIAction } from "@/types/document";
-import { WRAPPER_URL } from "@/lib/globals";
+import { API_BASE_URL } from "@/lib/globals";
+import type { ApiResponse } from "@/types";
 
 export function useAI() {
   const showAIModal = ref(false);
@@ -60,23 +61,38 @@ export function useAI() {
     },
   ];
 
-  async function handlePrompt(prompt: string) {
+  const parsedUserDetails = JSON.parse(
+    localStorage.getItem("userDetails") || "{}",
+  );
+  async function handlePrompt(
+    prompt: string,
+  ): Promise<{ Response: string; Prompt: string }> {
     try {
-      const response = await fetch(WRAPPER_URL, {
+      const response = await fetch(`${API_BASE_URL}/genai`, {
         method: "POST",
-        body: JSON.stringify(prompt),
-        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ prompt }),
+        headers: {
+          "Content-Type": "application/json",
+          ...(parsedUserDetails.userId
+            ? { "X-User-ID": parsedUserDetails.userId }
+            : {}),
+        },
       });
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
-      const parseRes = await response.json();
-      return parseRes;
+      const parseRes: ApiResponse<{ Response: string; Prompt: string }> =
+        await response.json();
+      if (parseRes.data) {
+        return parseRes.data;
+      } else {
+        throw new Error(parseRes.message);
+      }
     } catch (err: any) {
       console.error("AI request failed:", err);
-      throw err;
+      return err.message;
     }
   }
 
@@ -138,8 +154,7 @@ export function useAI() {
     try {
       const prompt = getAIPrompt(action, text);
       const result = await handlePrompt(prompt);
-      aiPopoverContent.value =
-        result.response || result.answer || "No response generated";
+      aiPopoverContent.value = result.Response || "No response generated";
     } catch (error) {
       console.error("Error performing AI action:", error);
       aiPopoverContent.value = "Error generating content. Please try again.";
