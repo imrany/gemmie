@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"time"
@@ -481,7 +482,7 @@ func CreateMessageHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
-			Message: "Failed to generate AI response",
+			Message: fmt.Sprintf("Failed to generate AI response: %s", err.Error()),
 		})
 		return
 	}
