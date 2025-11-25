@@ -317,6 +317,8 @@ func main() {
 	rootCmd.PersistentFlags().String("smtp-password", "", "SMTP Password (env: SMTP_PASSWORD)")
 	rootCmd.PersistentFlags().String("smtp-email", "", "SMTP Email (env: SMTP_EMAIL)")
 	rootCmd.PersistentFlags().String("whatsapp-db-path", "", "WhatsApp Database Path (env: WHATSAPP_DB_PATH)")
+	rootCmd.PersistentFlags().String("api-key", "", "API Key (env: API_KEY)")
+	rootCmd.PersistentFlags().String("model", "", "Model (env: MODEL)")
 	rootCmd.PersistentFlags().String("log-level", "info", "Log level (debug, info, warn, error) (env: LOG_LEVEL)")
 
 	// Bind flags to viper - UPDATED: Database flags instead of data file
@@ -337,6 +339,8 @@ func main() {
 	viper.BindPFlag("SMTP_PASSWORD", rootCmd.PersistentFlags().Lookup("SMTP_PASSWORD"))
 	viper.BindPFlag("SMTP_EMAIL", rootCmd.PersistentFlags().Lookup("SMTP_EMAIL"))
 	viper.BindPFlag("WHATSAPP_DB_PATH", rootCmd.PersistentFlags().Lookup("WHATSAPP_DB_PATH"))
+	viper.BindPFlag("MODEL", rootCmd.PersistentFlags().Lookup("model"))
+	viper.BindPFlag("API_KEY", rootCmd.PersistentFlags().Lookup("api-key"))
 	viper.BindPFlag("LOG_LEVEL", rootCmd.PersistentFlags().Lookup("log-level"))
 
 	// Bind env variables

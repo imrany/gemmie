@@ -183,5 +183,5 @@ func Close() error {
 }
 
 func GetVersion() string {
-	return "v0.18.1"
+	return "v0.19.0"
 }

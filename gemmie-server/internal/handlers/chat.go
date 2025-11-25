@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -8,7 +9,9 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/imrany/gemmie/gemmie-server/internal/encrypt"
+	"github.com/imrany/gemmie/gemmie-server/internal/genai"
 	"github.com/imrany/gemmie/gemmie-server/store"
+	"github.com/spf13/viper"
 )
 
 // CreateChatHandler handles POST /api/chats
@@ -467,6 +470,22 @@ func CreateMessageHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// generate response using ai wrapper
+	genaiResp := genai.GENAISERVICE{
+		APIKey: viper.GetString("API_KEY"),
+		Model:  viper.GetString("MODEL"),
+	}
+	genAIResponse, err := genaiResp.GenerateAIResponse(context.Background(), req.Prompt)
+	if err != nil {
+		slog.Error("Failed to generate AI response", "error", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(store.Response{
+			Success: false,
+			Message: "Failed to generate AI response",
+		})
+		return
+	}
+
 	// Get chat to verify ownership
 	chat, err := store.GetChatById(chatID)
 	if err != nil {
@@ -502,10 +521,10 @@ func CreateMessageHandler(w http.ResponseWriter, r *http.Request) {
 	message := store.Message{
 		ID:         encrypt.GenerateID(nil),
 		ChatId:     chatID,
-		Prompt:     req.Prompt,
-		Response:   req.Response,
+		Prompt:     genAIResponse.Prompt,
+		Response:   genAIResponse.Response,
 		CreatedAt:  time.Now(),
-		Model:      req.Model,
+		Model:      genaiResp.Model,
 		References: req.References,
 	}
 
