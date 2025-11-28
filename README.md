@@ -1,5 +1,5 @@
-# 🤖 Gemmie
-A simple personal AI assistant built on [`wrapper api`](https://github.com/imrany/wrapper).
+# Gemmie
+A simple personal AI assistant.
 
 
 ## ✨ Features
