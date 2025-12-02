@@ -13,9 +13,17 @@ import type { Ref } from "vue";
 
 interface Props {
     content: string;
+    collapsible?: boolean;
+    maxHeight?: number;
+    minLength?: number;
 }
 
-const props = defineProps<Props>();
+const props = withDefaults(defineProps<Props>(), {
+    collapsible: true,
+    maxHeight: 300,
+    minLength: 500,
+});
+
 const { openPreview, showPreviewSidebar, closePreview, screenWidth } = inject(
     "globalState",
 ) as {
@@ -29,7 +37,7 @@ const { openPreview, showPreviewSidebar, closePreview, screenWidth } = inject(
             charCount: number;
         },
     ) => void;
-    showPreviewSidebar: Ref<boolean>;
+    showPreviewSidebar: Ref<string | null>;
     closePreview: () => void;
 };
 
@@ -76,6 +84,7 @@ const images = ref<ImageData[]>([]);
 const tables = ref<TableData[]>([]);
 const callouts = ref<CalloutData[]>([]);
 const links = ref<LinkData[]>([]);
+const expandedParts = ref<Set<number>>(new Set());
 
 const escapeHtml = (unsafe: string): string => {
     return unsafe
@@ -439,6 +448,19 @@ const contentParts = computed(() => {
     return parts.filter((part) => part.trim());
 });
 
+// Check if HTML part is too large (based on props)
+const isLargeHtmlPart = (part: string): boolean => {
+    return props.collapsible && part.length > props.minLength;
+};
+
+const toggleExpanded = (index: number) => {
+    if (expandedParts.value.has(index)) {
+        expandedParts.value.delete(index);
+    } else {
+        expandedParts.value.add(index);
+    }
+};
+
 // Handle escape key to close modal
 const handleKeydown = (e: KeyboardEvent) => {
     if (e.key === "Escape" && showPreviewSidebar.value) {
@@ -489,7 +511,45 @@ if (typeof window !== "undefined") {
                 v-else-if="renderPart(part) === 'link'"
                 :data="getComponentData(part) as LinkData"
             />
-            <div v-else v-html="part"></div>
+            <div v-else class="relative">
+                <div
+                    :class="[
+                        'relative transition-all duration-300',
+                        {
+                            'overflow-hidden':
+                                isLargeHtmlPart(part) &&
+                                !expandedParts.has(index),
+                        },
+                    ]"
+                    :style="
+                        isLargeHtmlPart(part) && !expandedParts.has(index)
+                            ? `max-height: ${props.maxHeight}px`
+                            : ''
+                    "
+                >
+                    <div v-html="part"></div>
+
+                    <!-- Fade Overlay -->
+                    <div
+                        v-if="
+                            isLargeHtmlPart(part) && !expandedParts.has(index)
+                        "
+                        class="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-gray-100 to-transparent dark:bg-gradient-to-t dark:from-gray-800 dark:to-transparent pointer-events-none"
+                    ></div>
+                </div>
+
+                <!-- Show More/Less Button -->
+                <div v-if="isLargeHtmlPart(part)" class="flex justify-start">
+                    <button
+                        @click="toggleExpanded(index)"
+                        class="py-3 bg-transparent hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-500 hover:text-gray-900 dark:hover:text-gray-100 text-xs font-medium transition-colors"
+                    >
+                        <span>{{
+                            expandedParts.has(index) ? "Show Less" : "Show More"
+                        }}</span>
+                    </button>
+                </div>
+            </div>
         </template>
     </div>
 </template>

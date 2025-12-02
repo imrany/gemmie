@@ -2076,6 +2076,8 @@ onUnmounted(() => {
                                                                 : item.prompt ||
                                                                   ''
                                                         "
+                                                        :maxHeight="150"
+                                                        :minLength="400"
                                                     />
                                                 </div>
                                             </div>
@@ -2120,6 +2122,7 @@ onUnmounted(() => {
                                                 >
                                                     <MarkdownRenderer
                                                         class="break-words overflow-x-hidden"
+                                                        :collapsible="false"
                                                         :content="
                                                             renderDeepSearchResult(
                                                                 JSON.parse(
@@ -2135,6 +2138,7 @@ onUnmounted(() => {
                                                 <!-- Regular response -->
                                                 <template v-else>
                                                     <MarkdownRenderer
+                                                        :collapsible="false"
                                                         class="break-words overflow-x-hidden"
                                                         :content="
                                                             item.response || ''

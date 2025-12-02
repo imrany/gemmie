@@ -33,6 +33,7 @@ import { useChat } from "./composables/useChat";
 import { useCache } from "./composables/useCache";
 import { useSync } from "./composables/useSync";
 import { useHandlePaste } from "./composables/useHandlePaste";
+import { i } from "node_modules/vite/dist/node/types.d-aGj9QkWt";
 
 const { reportError } = usePlatformError();
 const router = useRouter();
@@ -918,6 +919,7 @@ async function syncFromServer() {
                 isLoading.value =
                     data.chats && data.chats !== "[]" ? true : false;
             } catch (error: any) {
+                isLoading.value = false;
                 console.warn(
                     "⚠️ No data received from server: " + error.message,
                 );
@@ -928,6 +930,7 @@ async function syncFromServer() {
             //load local chats
             await loadChats();
             isLoading.value = false;
+            isChatLoading.value = false;
             return;
         }
 
@@ -1948,7 +1951,8 @@ function hasUserDetailsChangedMeaningfully(
     });
 }
 
-watch(()=> currentChatId.value,
+watch(
+    () => currentChatId.value,
     async (newChatId, oldChatId) => {
         if (!isAuthenticated.value) {
             return;
