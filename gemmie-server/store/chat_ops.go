@@ -62,7 +62,7 @@ func GetChatById(ID string) (*Chat, error) {
 func GetChatsByUserId(userId string) ([]Chat, error) {
 	ctx := context.Background()
 
-	// Check if the specific chat_id exists in arcades, not just the user_id
+	// Check if the specific id exists in arcades, not just the user_id
 	// Also include message count in a single query to avoid N+1 problem
 	query := `
 		SELECT
@@ -79,7 +79,7 @@ func GetChatsByUserId(userId string) ([]Chat, error) {
 		LEFT JOIN messages m ON m.chat_id = c.id
 		WHERE c.user_id = $1
 		AND NOT EXISTS (
-			SELECT 1 FROM arcades a WHERE a.chat_id = c.id
+			SELECT 1 FROM arcades a WHERE a.id = c.id
 		)
 		GROUP BY c.id, c.user_id, c.title, c.created_at, c.updated_at,
 		         c.is_archived, c.last_message_at, c.is_private
