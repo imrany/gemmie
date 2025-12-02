@@ -56,6 +56,30 @@ func CreateArcadeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Create new chat
+	chat := store.Chat{
+		ID:            encrypt.GenerateID(nil),
+		UserId:        userID,
+		Title:         req.Label,
+		CreatedAt:     time.Now(),
+		UpdatedAt:     time.Now(),
+		IsArchived:    false,
+		MessageCount:  0,
+		Messages:      []store.Message{},
+		LastMessageAt: time.Now(),
+		IsPrivate:     true,
+	}
+
+	if err := store.CreateChat(chat); err != nil {
+		slog.Error("Failed to create chat", "error", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(store.Response{
+			Success: false,
+			Message: "Failed to create chat",
+		})
+		return
+	}
+
 	// Create new arcade
 	arcade := store.Arcade{
 		ID:          encrypt.GenerateID(nil),
@@ -66,6 +90,7 @@ func CreateArcadeHandler(w http.ResponseWriter, r *http.Request) {
 		Code:        req.Code,
 		Description: req.Description,
 		CodeType:    req.CodeType,
+		ChatId:      chat.ID,
 	}
 
 	id, err := store.CreateArcade(&arcade)
@@ -275,6 +300,9 @@ func UpdateArcadeHandler(w http.ResponseWriter, r *http.Request) {
 	arcade.Label = req.Label
 	if req.Code != "" {
 		arcade.Code = req.Code
+	}
+	if req.ChatId != "" {
+		arcade.ChatId = req.ChatId
 	}
 	arcade.Description = req.Description
 	if req.CodeType != "" {

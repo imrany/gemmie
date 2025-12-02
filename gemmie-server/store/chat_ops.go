@@ -62,15 +62,29 @@ func GetChatById(ID string) (*Chat, error) {
 func GetChatsByUserId(userId string) ([]Chat, error) {
 	ctx := context.Background()
 
-	// selects all chats belonging to a specific user, excluding chats where the user_id also exists in the arcades table.
+	// Check if the specific chat_id exists in arcades, not just the user_id
+	// Also include message count in a single query to avoid N+1 problem
 	query := `
-		SELECT id, user_id, title, created_at, updated_at,
-		is_archived, last_message_at, is_private
+		SELECT
+			c.id,
+			c.user_id,
+			c.title,
+			c.created_at,
+			c.updated_at,
+			c.is_archived,
+			c.last_message_at,
+			c.is_private,
+			COALESCE(COUNT(m.id), 0) as message_count
 		FROM chats c
+		LEFT JOIN messages m ON m.chat_id = c.id
 		WHERE c.user_id = $1
-		AND NOT EXISTS (SELECT 1 FROM arcades a WHERE a.user_id = c.user_id)
-		ORDER BY updated_at DESC
-		`
+		AND NOT EXISTS (
+			SELECT 1 FROM arcades a WHERE a.chat_id = c.id
+		)
+		GROUP BY c.id, c.user_id, c.title, c.created_at, c.updated_at,
+		         c.is_archived, c.last_message_at, c.is_private
+		ORDER BY c.updated_at DESC
+	`
 
 	rows, err := DB.QueryContext(ctx, query, userId)
 	if err != nil {
@@ -79,25 +93,22 @@ func GetChatsByUserId(userId string) ([]Chat, error) {
 	defer rows.Close()
 
 	var chats []Chat
-
 	for rows.Next() {
 		var chat Chat
 		err := rows.Scan(
-			&chat.ID, &chat.UserId, &chat.Title, &chat.CreatedAt,
-			&chat.UpdatedAt, &chat.IsArchived,
-			&chat.LastMessageAt, &chat.IsPrivate,
+			&chat.ID,
+			&chat.UserId,
+			&chat.Title,
+			&chat.CreatedAt,
+			&chat.UpdatedAt,
+			&chat.IsArchived,
+			&chat.LastMessageAt,
+			&chat.IsPrivate,
+			&chat.MessageCount, // Now fetched in single query
 		)
 		if err != nil {
 			return nil, err
 		}
-
-		// Fetch messages for the chat
-		messages, err := GetMessagesByChatId(chat.ID)
-		if err != nil {
-			return nil, err
-		}
-		chat.MessageCount = len(messages)
-
 		chats = append(chats, chat)
 	}
 
@@ -105,6 +116,7 @@ func GetChatsByUserId(userId string) ([]Chat, error) {
 	if err = rows.Err(); err != nil {
 		return nil, err
 	}
+
 	return chats, nil
 }
 
