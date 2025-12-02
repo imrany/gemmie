@@ -416,10 +416,6 @@ func DeleteUser(userID string) error {
 		return err
 	}
 
-	err = DeleteAllTransactionsByUserID(userID)
-	if err != nil {
-		return err
-	}
 	_, err = DB.ExecContext(ctx, "DELETE FROM users WHERE id = $1", userID)
 	return err
 }
