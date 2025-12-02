@@ -24,7 +24,6 @@ const {
     parsedUserDetails,
     screenWidth,
     isCollapsed,
-    createNewChat,
 } = inject("globalState") as {
     isOnline: Ref<boolean>;
     chats: Ref<Chat[]>;
@@ -32,7 +31,6 @@ const {
     parsedUserDetails: Ref<UserDetails>;
     screenWidth: Ref<number>;
     isCollapsed: Ref<boolean>;
-    createNewChat: (initialMessage?: string) => string;
 };
 
 const router = useRouter();
@@ -57,7 +55,7 @@ const filteredChats = computed(() => {
 });
 
 const handleNewChat = () => {
-    createNewChat();
+    currentChatId.value = "";
 };
 
 const handleBack = () => {

@@ -102,30 +102,8 @@ export function useChat({
       type: options.type || "info",
       confirmText: options.confirmText || "Confirm",
       cancelText: options.cancelText || "Cancel",
-      onConfirm: () => {
-        try {
-          options.onConfirm();
-        } catch (error: any) {
-          reportError({
-            action: "showConfirmDialog",
-            message: "Error in confirm callback: " + error.message,
-            description: "An error occurred while processing your request",
-            status: getErrorStatus(error),
-            context: createErrorContext({
-              errorName: error.name,
-              errorStack: error.stack,
-            }),
-            userId: parsedUserDetails.value?.userId || "unknown",
-            severity: "high",
-            id: generateErrorId(),
-            createdAt: new Date().toISOString(),
-          } as PlatformError);
-        } finally {
-          nextTick(() => {
-            confirmDialog.value.visible = false;
-          });
-        }
-      },
+      isLoading: options.isLoading || false,
+      onConfirm: () => options.onConfirm(),
       onCancel: () => {
         try {
           options.onCancel?.();
@@ -145,7 +123,9 @@ export function useChat({
           } as PlatformError);
         } finally {
           nextTick(() => {
-            confirmDialog.value.visible = false;
+            if (confirmDialog.value.visible) {
+              confirmDialog.value.visible = false;
+            }
           });
         }
       },
@@ -272,15 +252,21 @@ export function useChat({
         title: "Delete Chat",
         message: `Are you sure you want to delete "${chatTitle}"?\n\nThis will permanently remove ${messageCount} message(s). This action cannot be undone.`,
         type: "danger",
+        isLoading: false,
+        cancelText: "Cancel",
         confirmText: "Delete",
         onConfirm: async () => {
           try {
             let serverDeleteSuccess = true;
+            confirmDialog.value.isLoading = true;
+            confirmDialog.value.confirmText = "Deleting...";
 
             if (isAuthenticated.value) {
               try {
                 await apiCall(`/chats/${chatId}`, { method: "DELETE" });
               } catch (apiError: any) {
+                confirmDialog.value.isLoading = false;
+                confirmDialog.value.confirmText = "Delete";
                 console.error("Failed to delete chat from server:", apiError);
                 toast.warning("Chat not fully deleted", {
                   description:
@@ -338,12 +324,16 @@ export function useChat({
               clearCurrentDraft();
               saveChats();
 
+              confirmDialog.value.isLoading = false;
+              confirmDialog.value.visible = false;
               toast.success("Chat deleted", {
                 duration: 3000,
                 description: `"${chatTitle}" has been removed`,
               });
             }
           } catch (error: any) {
+            confirmDialog.value.isLoading = false;
+            confirmDialog.value.confirmText = "Delete";
             reportError({
               action: "onconfirm delete chat",
               message: "Failed to delete chat: " + error.message,
@@ -946,8 +936,12 @@ export function useChat({
         message: `⚠️ DELETE ALL CHATS?\n\nThis will permanently delete:\n• ${totalChats} chat(s)\n• ${totalMessages} total message(s)\n\nThis action cannot be undone!`,
         type: "danger",
         confirmText: "Delete All",
+        cancelText: "Cancel",
+        isLoading: false,
         onConfirm: async () => {
           try {
+            confirmDialog.value.isLoading = true;
+            confirmDialog.value.confirmText = "Deleting...";
             if (isAuthenticated.value) {
               const response = await apiCall(`/chats`, {
                 method: "DELETE",
@@ -955,6 +949,8 @@ export function useChat({
 
               if (!response.success) {
                 console.error("Failed to delete chats:", response.message);
+                confirmDialog.value.isLoading = false;
+                confirmDialog.value.confirmText = "Delete All";
                 return;
               }
             }
@@ -991,7 +987,11 @@ export function useChat({
               duration: 5000,
               description: `Deleted ${totalChats} chats with ${totalMessages} messages`,
             });
+            confirmDialog.value.isLoading = false;
+            confirmDialog.value.visible = false;
           } catch (error: any) {
+            confirmDialog.value.isLoading = false;
+            confirmDialog.value.confirmText = "Delete All";
             reportError({
               action: "clearAllChats",
               message: "Error clearing all chats: " + error.message,

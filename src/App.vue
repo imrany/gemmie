@@ -62,7 +62,8 @@ const confirmDialog = ref<ConfirmDialogOptions>({
     visible: false,
     title: "",
     message: "",
-    type: undefined,
+    type: "info",
+    isLoading: false,
     confirmText: "",
     cancelText: "",
     onConfirm: () => {},
@@ -131,7 +132,7 @@ const showProfileMenu = ref(false);
 const now = ref(Date.now());
 
 // State for preview sidebar
-const showPreviewSidebar = ref(false);
+const showPreviewSidebar = ref<string | null>(null);
 const previewCode = ref("");
 const previewLanguage = ref("html");
 const metadata = ref<
@@ -156,13 +157,13 @@ const openPreview = (
 ) => {
     previewCode.value = code;
     previewLanguage.value = language;
-    showPreviewSidebar.value = true;
+    showPreviewSidebar.value = `pre_${code}`;
     metadata.value = data;
 };
 
 // Function to close preview
 const closePreview = () => {
-    showPreviewSidebar.value = false;
+    showPreviewSidebar.value = null;
 };
 
 const planStatus = computed(() => {
@@ -376,6 +377,8 @@ async function logout(options = { skipConfirm: false }) {
     const executeLogout = async () => {
         try {
             isLoading.value = true;
+            confirmDialog.value.isLoading = true;
+            confirmDialog.value.confirmText = "Logging out";
 
             const syncEnabledValue = parsedUserDetails.value?.syncEnabled;
             const hasUnsyncedChanges = syncStatus.value.hasUnsyncedChanges;
@@ -467,6 +470,8 @@ async function logout(options = { skipConfirm: false }) {
             } as PlatformError);
         } finally {
             isLoading.value = false;
+            confirmDialog.value.confirmText = "Logout";
+            confirmDialog.value.isLoading = false;
             if (confirmDialog.value.visible) {
                 confirmDialog.value.visible = false;
             }
@@ -483,6 +488,7 @@ async function logout(options = { skipConfirm: false }) {
     confirmDialog.value = {
         visible: true,
         title: "Logout Confirmation",
+        isLoading: false,
         message:
             "Are you sure you want to logout?" +
             (parsedUserDetails.value?.syncEnabled
@@ -636,13 +642,19 @@ async function deleteMessage(messageIndex: number) {
             type: "danger",
             confirmText: "Delete",
             cancelText: "Cancel",
+            isLoading: false,
             onConfirm: async () => {
                 try {
+                    if (confirmDialog.value.isLoading) return;
+                    confirmDialog.value.isLoading = true;
+                    confirmDialog.value.confirmText = "Deleting...";
                     if (
                         !currentChat.value ||
                         messageIndex >= currentChat.value.messages.length
                     ) {
                         toast.error("Message no longer exists");
+                        confirmDialog.value.isLoading = false;
+                        confirmDialog.value.confirmText = "Delete";
                         return;
                     }
 
@@ -667,6 +679,9 @@ async function deleteMessage(messageIndex: number) {
                                 "Failed to delete message, try again later",
                             );
                             deleteSuccess = false;
+                            confirmDialog.value.isLoading = false;
+                            confirmDialog.value.confirmText = "Delete";
+                            return;
                         }
                     }
 
@@ -717,6 +732,7 @@ async function deleteMessage(messageIndex: number) {
                         }
 
                         toast.success("Message deleted");
+                        confirmDialog.value.isLoading = false;
                     }
                 } catch (error: any) {
                     reportError({
@@ -728,6 +744,7 @@ async function deleteMessage(messageIndex: number) {
                         severity: "critical",
                     } as PlatformError);
                 } finally {
+                    confirmDialog.value.isLoading = false;
                     confirmDialog.value.visible = false;
                 }
             },
@@ -1935,6 +1952,11 @@ watch(
     () => currentChatId.value,
     async (newChatId, oldChatId) => {
         if (!isAuthenticated.value) {
+            return;
+        }
+
+        if (newChatId === "") {
+            router.push("/new");
             return;
         }
 

@@ -2,12 +2,16 @@
 import type { Chat } from "@/types";
 import { Pencil, Trash } from "lucide-vue-next";
 import { Button } from "../ui/button";
+import type { Ref } from "vue";
+import { inject } from "vue";
 
+const { screenWidth } = inject("globalState") as {
+    screenWidth: Ref<number>;
+};
 const props = defineProps<{
     data: {
         activeChatMenu: string | null;
         chat: Chat | undefined;
-        screenWidth: number;
     };
     functions: {
         deleteChat: (chatId: string) => void;
@@ -46,8 +50,7 @@ const props = defineProps<{
                         props.functions.deleteChat(props.data.chat?.id || '');
                         // eslint-disable-next-line vue/no-mutating-props
                         props.data.activeChatMenu = null;
-                        if (props.data.screenWidth < 720)
-                            props.functions.hideSidebar();
+                        if (screenWidth < 720) props.functions.hideSidebar();
                     }
                 "
                 variant="ghost"

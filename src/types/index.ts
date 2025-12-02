@@ -73,9 +73,10 @@ export type ConfirmDialogOptions = {
   visible?: boolean;
   title: string;
   message: string;
-  type?: "danger" | "warning" | "info";
-  confirmText?: string;
-  cancelText?: string;
+  isLoading: boolean;
+  type: "danger" | "warning" | "info";
+  confirmText: string;
+  cancelText: string;
   onConfirm: () => void;
   onCancel?: () => void;
 };

@@ -71,7 +71,7 @@ const {
         | undefined
     >;
     screenWidth: Ref<number>;
-    showPreviewSidebar: Ref<boolean>;
+    showPreviewSidebar: Ref<string | null>;
     previewCode: Ref<string>;
     previewLanguage: Ref<string>;
     closePreview: () => void;
@@ -96,14 +96,20 @@ const isPublishing = ref(false);
 
 // Chat state
 const currentChat = computed(() => {
-    if (!arcade.value?.id || !route.params.id || !chats.value.length) {
-        return undefined;
-    }
+    // if (!arcade.value?.id || !route.params.id || !chats.value.length) {
+    //     return undefined;
+    // }
     return chats.value.find((chat) => chat.id === route.params.id);
 });
 
 const currentMessages = computed(() => {
     return currentChat.value?.messages || [];
+});
+
+const currentMessage = computed(() => {
+    return currentMessages.value.find((message) =>
+        message.response.includes(previewCode.value),
+    );
 });
 
 const chatInput = ref("");
@@ -681,13 +687,13 @@ watch(
         @after-leave="activeTab = metadata ? 'code' : 'preview'"
     >
         <div
-            v-if="showPreviewSidebar"
+            v-if="showPreviewSidebar && currentMessage"
             class="fixed inset-0 bg-black/50 z-40 md:hidden"
             @click="closePreview"
         />
     </Transition>
     <div
-        v-if="showPreviewSidebar"
+        v-if="showPreviewSidebar && currentMessage"
         class="max-md:hidden group w-2 relative h-full cursor-col-resize -mr-1 z-30 grid place-items-center hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
         @mousedown="startResize"
     >
@@ -701,7 +707,7 @@ watch(
     <!-- Sidebar -->
     <Transition name="slide">
         <div
-            v-if="showPreviewSidebar"
+            v-if="showPreviewSidebar && currentMessage"
             class="fixed top-0 right-0 bottom-0 md:relative md:z-20 w-full max-w-full z-50 flex-shrink-0 md:flex md:items-stretch md:justify-stretch"
             :style="{
                 width: screenWidth > 720 ? sidebarWidth + 'px' : '100vw',

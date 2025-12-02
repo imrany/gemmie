@@ -101,6 +101,7 @@ const {
     cancelAllRequests,
     checkRequestLimitBeforeSubmit,
     createNewChat,
+    loadChat,
     loadChatDrafts,
     saveChatDrafts,
     clearCurrentDraft,
@@ -140,7 +141,7 @@ const {
     processLinksInResponse,
 } = inject("globalState") as {
     isOnline: Ref<boolean>;
-    showPreviewSidebar: Ref<boolean>;
+    showPreviewSidebar: Ref<string | null>;
     isChatLoading: Ref<boolean>;
     fallbackChatId: Ref<string>;
     showErrorSection: Ref<boolean>;
@@ -194,9 +195,10 @@ const {
     showConfirmDialog: (options: ConfirmDialogOptions) => void;
     clearAllChats: () => void;
     switchToChat: (chatId: string) => boolean;
-    createNewChat: (initialMessage?: string) => string;
+    createNewChat: (initialMessage?: string) => Promise<string>;
     deleteChat: (chatId: string) => void;
     loadChatDrafts: () => void;
+    loadChat: (chatId?: string) => Promise<[boolean, string]>;
     saveChatDrafts: () => void;
     renameChat: (chatId: string, newTitle: string) => void;
     deleteMessage: (messageIndex: number) => void;
@@ -478,8 +480,8 @@ async function handleSubmit(
 
     // Create new chat if needed
     if (!submissionChatId || !submissionChat) {
-        const newChatId = createNewChat(promptValue);
-        if (!newChatId) {
+        submissionChatId = await createNewChat(promptValue);
+        if (!submissionChatId) {
             toast.error("Failed to create chat", {
                 duration: 3000,
                 description: "Please try again",
@@ -487,21 +489,15 @@ async function handleSubmit(
             return;
         }
 
-        currentChatId.value = newChatId;
-        submissionChatId = newChatId;
-
         // Wait for Vue to update the reactive array
         await nextTick();
 
-        // Find the newly created chat
-        submissionChat = chats.value.find(
-            (chat) => chat.id === submissionChatId,
-        );
+        const [success, message] = await loadChat(submissionChatId);
 
         // Verify chat exists
-        if (!submissionChat) {
-            console.error("Chat creation failed: chat not found in array");
-            toast.error("Failed to initialize chat", {
+        if (!success) {
+            console.error(message);
+            toast.error(message, {
                 duration: 3000,
                 description: "Please refresh and try again",
             });
@@ -784,6 +780,8 @@ async function handleSubmit(
                 });
             }
         }
+
+        currentChatId.value = submissionChatId;
     } catch (err: any) {
         // Handle abort
         if (err.name === "AbortError") {
@@ -1706,7 +1704,7 @@ onMounted(async () => {
 
     // Handle /new route - create new chat immediately
     if (path === "/new") {
-        createNewChat();
+        currentChatId.value = "";
         showErrorSection.value = false;
         return;
     }

@@ -58,7 +58,7 @@ const {
     isOnline,
 } = inject("globalState") as {
     isOnline: Ref<boolean>;
-    showPreviewSidebar: Ref<boolean>;
+    showPreviewSidebar: Ref<string | null>;
     isCollapsed: Ref<boolean>;
     closePreview: () => void;
     chats: Ref<Chat[]>;
@@ -93,7 +93,6 @@ const props = defineProps<{
         clearAllChats: () => void;
         toggleSidebar: () => void;
         logout: () => void;
-        createNewChat: () => void;
         deleteChat: (chatId: string) => void;
         renameChat: (chatId: string, newTitle: string) => Promise<string>;
         manualSync: () => void;
@@ -249,7 +248,7 @@ const navLinks: {
         description: "New Chat",
         icon: Plus,
         path: "/new",
-        action: () => handleNavAction(() => props.functions.createNewChat()),
+        action: () => handleNavAction(() => (currentChatId.value = "")),
     },
     {
         label: "Chats",
@@ -569,7 +568,7 @@ watch(showPreviewSidebar, (newVal) => {
                         </button>
 
                         <ChatDropdown
-                            :data="{ activeChatMenu, chat, screenWidth }"
+                            :data="{ activeChatMenu, chat }"
                             :functions="{
                                 deleteChat: props.functions.deleteChat,
                                 startRename,
