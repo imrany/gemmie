@@ -16,9 +16,10 @@ interface Props {
 }
 
 const props = defineProps<Props>();
-const { openPreview, showPreviewSidebar, closePreview } = inject(
+const { openPreview, showPreviewSidebar, closePreview, screenWidth } = inject(
     "globalState",
 ) as {
+    screenWidth: Ref<number>;
     openPreview: (
         code: string,
         language: string,
@@ -457,6 +458,7 @@ if (typeof window !== "undefined") {
             <CodeBlock
                 v-if="renderPart(part) === 'code-block'"
                 :data="getComponentData(part) as CodeBlockData"
+                :maxLines="screenWidth > 720 ? 7 : 5"
                 :is-previewable="
                     isPreviewableCode(
                         (getComponentData(part) as CodeBlockData)?.language,

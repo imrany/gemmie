@@ -96,9 +96,9 @@ const isPublishing = ref(false);
 
 // Chat state
 const currentChat = computed(() => {
-    // if (!arcade.value?.id || !route.params.id || !chats.value.length) {
-    //     return undefined;
-    // }
+    if (!route.params.id || !chats.value.length) {
+        return undefined;
+    }
     return chats.value.find((chat) => chat.id === route.params.id);
 });
 

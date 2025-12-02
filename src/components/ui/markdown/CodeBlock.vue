@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref } from "vue";
-import { Eye, Copy, Check } from "lucide-vue-next";
+import { ref, computed, onMounted } from "vue";
+import { Eye, Copy, Check, ChevronDown, ChevronUp } from "lucide-vue-next";
 import { Button } from "../button";
 import { useRoute } from "vue-router";
 
@@ -12,15 +12,37 @@ interface Props {
         highlighted: string;
     };
     isPreviewable?: boolean;
+    maxLines?: number; // Maximum lines to show before collapsing
 }
 
-const props = defineProps<Props>();
+const props = withDefaults(defineProps<Props>(), {
+    maxLines: 15,
+});
+
 const emit = defineEmits<{
     preview: [];
 }>();
-const route = useRoute();
 
+const route = useRoute();
 const copied = ref(false);
+const isExpanded = ref(false);
+const shouldShowToggle = ref(false);
+const codeLines = ref(0);
+
+// Calculate if code is long enough to need collapse
+onMounted(() => {
+    const lines = props.data.code.split("\n").length;
+    codeLines.value = lines;
+    shouldShowToggle.value = lines > props.maxLines;
+});
+
+const maxHeight = computed(() => {
+    if (!shouldShowToggle.value || isExpanded.value) {
+        return "none";
+    }
+    // Approximate: 1.5rem per line (24px)
+    return `${props.maxLines * 1.5}rem`;
+});
 
 const copyToClipboard = async () => {
     try {
@@ -37,6 +59,10 @@ const copyToClipboard = async () => {
 const handlePreview = () => {
     emit("preview");
 };
+
+const toggleExpand = () => {
+    isExpanded.value = !isExpanded.value;
+};
 </script>
 
 <template>
@@ -49,6 +75,9 @@ const handlePreview = () => {
                 class="text-xs font-mono text-gray-300 dark:text-gray-400 capitalize"
             >
                 {{ data.language }}
+                <span v-if="shouldShowToggle" class="text-gray-500 ml-2">
+                    ({{ codeLines }} lines)
+                </span>
             </span>
             <div
                 class="flex items-center gap-2"
@@ -64,7 +93,6 @@ const handlePreview = () => {
                     <Eye :size="14" />
                     <span>Preview</span>
                 </Button>
-
                 <!-- Copy Button -->
                 <Button
                     @click="copyToClipboard"
@@ -78,19 +106,62 @@ const handlePreview = () => {
             </div>
         </div>
 
-        <!-- Code Block -->
-        <pre
-            class="!m-0 !rounded-none bg-gray-800 dark:bg-gray-800 overflow-x-auto custom-scrollbar"
-        >
-            <code
-                :class="`hljs language-${data.language} text-sm leading-relaxed break-words whitespace-pre-wrap`"
-                v-html="data.highlighted"
-            ></code>
-        </pre>
+        <!-- Code Block Container with Fade Effect -->
+        <div class="relative">
+            <!-- Code Block -->
+            <div
+                :class="[
+                    'code-container transition-all duration-300 ease-in-out',
+                    !isExpanded && shouldShowToggle ? 'code-collapsed' : '',
+                ]"
+                :style="{
+                    maxHeight: maxHeight,
+                }"
+            >
+                <pre
+                    class="!m-0 !rounded-none bg-gray-800 dark:bg-gray-800 overflow-x-auto custom-scrollbar"
+                >
+                    <code
+                        :class="`hljs language-${data.language} text-sm leading-relaxed break-words whitespace-pre-wrap`"
+                        v-html="data.highlighted"
+                    ></code>
+                </pre>
+            </div>
+
+            <!-- Fade Overlay (only when collapsed) -->
+            <div
+                v-if="!isExpanded && shouldShowToggle"
+                class="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-gray-800 to-transparent pointer-events-none"
+            ></div>
+        </div>
+
+        <!-- Show More/Less Button -->
+        <div v-if="shouldShowToggle" class="bg-gray-800">
+            <Button
+                @click="toggleExpand"
+                class="w-full h-9 bg-transparent hover:bg-gray-800/50 dark:bg-transparent dark:hover:bg-gray-800/50 text-gray-300 dark:text-gray-400 hover:text-gray-100 text-xs font-medium rounded-none inline-flex items-center justify-center gap-2 transition-colors"
+            >
+                <component
+                    :is="isExpanded ? ChevronUp : ChevronDown"
+                    :size="16"
+                />
+                <span>{{ isExpanded ? "Show Less" : "Show More" }}</span>
+            </Button>
+        </div>
     </div>
 </template>
 
 <style scoped>
+/* Code container with smooth transitions */
+.code-container {
+    position: relative;
+    overflow: hidden;
+}
+
+.code-collapsed {
+    overflow: hidden;
+}
+
 /* Ensure code block styling */
 pre {
     padding: 0 1rem;
@@ -106,5 +177,24 @@ pre code {
 :deep(.hljs) {
     background: transparent !important;
     padding: 0 !important;
+}
+
+/* Custom scrollbar for code */
+.custom-scrollbar::-webkit-scrollbar {
+    height: 8px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
 }
 </style>
