@@ -17,7 +17,7 @@ func main() {
 	}
 
 	// Command line flags
-	command := pflag.String("command", "version", "Migration command: up, down, steps, goto, version, force")
+	command := pflag.String("command", "version", "Migration command: up, down, steps, goto, version, force, reset")
 	steps := pflag.Int("steps", 1, "Number of steps for migration (used with 'steps' command)")
 	target := pflag.Uint("target", 0, "Target version (used with 'goto' command)")
 	forceVersion := pflag.Int("version", 0, "Version to force (used with 'force' command)")
@@ -82,12 +82,36 @@ func main() {
 	}
 	defer store.Close()
 
+	// Check for dirty state before executing commands
+	version, dirty, err := store.GetMigrationVersion()
+	if err != nil {
+		log.Printf("Warning: Could not get migration version: %v", err)
+	} else if dirty && *command != "force" && *command != "version" {
+		fmt.Println("\n⚠ ERROR: Database is in DIRTY state!")
+		fmt.Printf("Current version: %d (dirty)\n\n", version)
+		fmt.Println("A previous migration failed and needs to be resolved.")
+		fmt.Println("\nOptions to fix:")
+		fmt.Println("1. Fix the failed migration file and run:")
+		fmt.Printf("   -command=force -version=%d\n", version-1)
+		fmt.Println("   (This will reset to the previous version)")
+		fmt.Println("\n2. Or force to the current version if migration actually succeeded:")
+		fmt.Printf("   -command=force -version=%d\n", version)
+		fmt.Println("\n3. Check migration status:")
+		fmt.Println("   -command=version")
+		log.Fatal("\nCannot proceed with dirty database state")
+	}
+
 	// Execute command
 	switch *command {
 	case "up":
 		fmt.Println("Running all pending migrations...")
 		if err := store.MigrateUp(); err != nil {
-			log.Fatalf("Migration failed: %v", err)
+			log.Printf("\n✗ Migration failed: %v\n", err)
+			showVersion()
+			fmt.Println("\n⚠ The database is now in a DIRTY state.")
+			fmt.Println("To recover, fix the migration file and run:")
+			fmt.Printf("  -command=force -version=%d\n", getCurrentVersion())
+			log.Fatal("Migration aborted")
 		}
 		fmt.Println("✓ Migrations completed successfully")
 		showVersion()
@@ -95,7 +119,11 @@ func main() {
 	case "down":
 		fmt.Println("Rolling back last migration...")
 		if err := store.MigrateDown(); err != nil {
-			log.Fatalf("Rollback failed: %v", err)
+			log.Printf("\n✗ Rollback failed: %v\n", err)
+			showVersion()
+			fmt.Println("\n⚠ The database may be in a DIRTY state.")
+			fmt.Println("Check the version and use 'force' if needed.")
+			log.Fatal("Rollback aborted")
 		}
 		fmt.Println("✓ Rollback completed successfully")
 		showVersion()
@@ -103,7 +131,12 @@ func main() {
 	case "steps":
 		fmt.Printf("Migrating by %d steps...\n", *steps)
 		if err := store.MigrateSteps(*steps); err != nil {
-			log.Fatalf("Migration failed: %v", err)
+			log.Printf("\n✗ Migration failed: %v\n", err)
+			showVersion()
+			fmt.Println("\n⚠ The database is now in a DIRTY state.")
+			fmt.Println("To recover, fix the migration file and run:")
+			fmt.Printf("  -command=force -version=%d\n", getCurrentVersion())
+			log.Fatal("Migration aborted")
 		}
 		fmt.Println("✓ Migration completed successfully")
 		showVersion()
@@ -114,7 +147,12 @@ func main() {
 		}
 		fmt.Printf("Migrating to version %d...\n", *target)
 		if err := store.MigrateTo(*target); err != nil {
-			log.Fatalf("Migration failed: %v", err)
+			log.Printf("\n✗ Migration failed: %v\n", err)
+			showVersion()
+			fmt.Println("\n⚠ The database is now in a DIRTY state.")
+			fmt.Println("To recover, fix the migration file and run:")
+			fmt.Printf("  -command=force -version=%d\n", getCurrentVersion())
+			log.Fatal("Migration aborted")
 		}
 		fmt.Println("✓ Migration completed successfully")
 		showVersion()
@@ -128,15 +166,42 @@ func main() {
 		}
 		fmt.Printf("⚠ WARNING: Forcing migration version to %d\n", *forceVersion)
 		fmt.Println("This should only be used to recover from a dirty state.")
+		fmt.Println("\nThis will:")
+		fmt.Println("- Set the version to", *forceVersion)
+		fmt.Println("- Mark the database as clean")
+		fmt.Println("- NOT run any migrations")
+		fmt.Println("\nMake sure you've manually fixed any issues before proceeding.")
+
 		if err := store.ForceMigrationVersion(*forceVersion); err != nil {
 			log.Fatalf("Force failed: %v", err)
 		}
 		fmt.Println("✓ Version forced successfully")
 		showVersion()
 
+	case "reset":
+		fmt.Println("⚠ WARNING: This will reset to version 0 (no migrations applied)")
+		fmt.Println("Use this only if you want to start fresh.")
+		if err := store.ForceMigrationVersion(0); err != nil {
+			log.Fatalf("Reset failed: %v", err)
+		}
+		fmt.Println("✓ Database reset to version 0")
+		showVersion()
+
 	default:
-		log.Fatalf("Unknown command: %s\nAvailable commands: up, down, steps, goto, version, force", *command)
+		log.Fatalf("Unknown command: %s\nAvailable commands: up, down, steps, goto, version, force, reset", *command)
 	}
+}
+
+func getCurrentVersion() int {
+	version, _, err := store.GetMigrationVersion()
+	if err != nil {
+		return 0
+	}
+	// Return previous version since current one failed
+	if version > 0 {
+		return int(version - 1)
+	}
+	return 0
 }
 
 func showVersion() {
@@ -150,7 +215,14 @@ func showVersion() {
 	fmt.Printf("Version: %d\n", version)
 	if dirty {
 		fmt.Println("State: ⚠ DIRTY (migration failed, needs attention)")
-		fmt.Println("Run with -command=force -version=X to recover")
+		fmt.Println("\nTo recover from dirty state:")
+		fmt.Println("1. Fix the failed migration file")
+		if version > 0 {
+			fmt.Printf("2. Force to previous version: -command=force -version=%d\n", version-1)
+		} else {
+			fmt.Println("2. Force to version 0: -command=force -version=0")
+		}
+		fmt.Println("3. Run migrations again: -command=up")
 	} else {
 		fmt.Println("State: ✓ Clean")
 	}
