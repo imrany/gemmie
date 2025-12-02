@@ -1172,7 +1172,8 @@ watch(
                                                     </div>
                                                     <div class="flex-1 min-w-0">
                                                         <MarkdownRenderer
-                                                            :collapsible="false"
+                                                            :maxHeight="150"
+                                                            :minLength="400"
                                                             class="break-words text-sm whitespace-pre-wrap overflow-x-hidden"
                                                             :content="
                                                                 msg.prompt || ''
@@ -1184,6 +1185,7 @@ watch(
                                             <div :class="['max-w-[85%]']">
                                                 <MarkdownRenderer
                                                     class="break-words text-xs whitespace-pre-wrap overflow-x-hidden"
+                                                    :collapsible="false"
                                                     :content="
                                                         msg.response.replace(
                                                             /```[\w]*\n[\s\S]*?```/g,
