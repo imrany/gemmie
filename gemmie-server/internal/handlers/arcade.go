@@ -275,9 +275,6 @@ func UpdateArcadeHandler(w http.ResponseWriter, r *http.Request) {
 	if req.Code != "" {
 		arcade.Code = req.Code
 	}
-	if req.ChatId != "" {
-		arcade.ChatId = req.ChatId
-	}
 	arcade.Description = req.Description
 	if req.CodeType != "" {
 		arcade.CodeType = req.CodeType
