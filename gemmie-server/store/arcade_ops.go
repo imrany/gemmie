@@ -43,13 +43,14 @@ func UpdateArcade(arcade *Arcade) (*Arcade, error) {
 // DeleteAllArcadesByUserID - Deletes all arcade by their user_id
 func DeleteAllArcadesByUserID(userID string) error {
 	ctx := context.Background()
-	query := `
-	BEGIN;
-	DELETE FROM chats WHERE chat_id IN (SELECT id FROM arcades WHERE user_id = $1);
-	DELETE FROM arcades WHERE user_id = $1;
-	COMMIT;
-	`
+	query := `DELETE FROM chats WHERE chat_id IN (SELECT id FROM arcades WHERE user_id = $1)`
 	_, err := DB.ExecContext(ctx, query, userID)
+	if err != nil {
+		return err
+	}
+
+	query = `DELETE FROM arcades WHERE user_id = $1`
+	_, err = DB.ExecContext(ctx, query, userID)
 	if err != nil {
 		return err
 	}
@@ -61,12 +62,17 @@ func DeleteAllArcadesByUserID(userID string) error {
 func DeleteArcadeByID(id int64) error {
 	ctx := context.Background()
 	query := `
-	BEGIN;
 	DELETE FROM chats WHERE chat_id = $1;
-	DELETE FROM arcades WHERE id = $1;
-	COMMIT;
 	`
 	_, err := DB.ExecContext(ctx, query, id)
+	if err != nil {
+		return err
+	}
+
+	query = `
+	DELETE FROM arcades WHERE id = $1;
+	`
+	_, err = DB.ExecContext(ctx, query, id)
 	if err != nil {
 		return err
 	}
