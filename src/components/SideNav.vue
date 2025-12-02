@@ -248,7 +248,11 @@ const navLinks: {
         description: "New Chat",
         icon: Plus,
         path: "/new",
-        action: () => handleNavAction(() => (currentChatId.value = "")),
+        action: () =>
+            handleNavAction(() => {
+               currentChatId.value = "";
+               router.push("/new");
+            }),
     },
     {
         label: "Chats",

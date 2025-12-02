@@ -1948,15 +1948,9 @@ function hasUserDetailsChangedMeaningfully(
     });
 }
 
-watch(
-    () => currentChatId.value,
+watch(()=> currentChatId.value,
     async (newChatId, oldChatId) => {
         if (!isAuthenticated.value) {
-            return;
-        }
-
-        if (newChatId === "") {
-            router.push("/new");
             return;
         }
 
