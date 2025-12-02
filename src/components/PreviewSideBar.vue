@@ -50,7 +50,6 @@ const {
     parsedUserDetails,
     apiCall,
     isDarkMode,
-    createNewChat,
     arcade,
     chats,
     onMessageAdded,
@@ -58,7 +57,6 @@ const {
     onMessageAdded: (message: Message, id?: string) => void;
     chats: Ref<Chat[]>;
     arcade: Ref<RawArcade>;
-    createNewChat: (firstMessage?: string, chatId?: string) => Promise<string>;
     isDarkMode: Ref<boolean>;
     isOnline: Ref<boolean>;
     isCollapsed: Ref<boolean>;
@@ -172,13 +170,6 @@ const transitionName = computed(() => {
 watch(activeTab, async (newVal, oldVal) => {
     if (oldVal === "preview" || oldVal === "code" || oldVal === "chat") {
         previousTab.value = oldVal;
-    }
-    if (newVal === "chat" && route.params.id) {
-        const arcadeChat = await createNewChat(
-            arcade.value?.label || "Arcade Chat",
-            route.params.id.toString(),
-        );
-        console.log("Arcade Chat created:", arcadeChat);
     }
 });
 
@@ -687,13 +678,13 @@ watch(
         @after-leave="activeTab = metadata ? 'code' : 'preview'"
     >
         <div
-            v-if="showPreviewSidebar && currentMessage"
+            v-if="showPreviewSidebar && (currentMessage || arcade)"
             class="fixed inset-0 bg-black/50 z-40 md:hidden"
             @click="closePreview"
         />
     </Transition>
     <div
-        v-if="showPreviewSidebar && currentMessage"
+        v-if="showPreviewSidebar && (currentMessage || arcade)"
         class="max-md:hidden group w-2 relative h-full cursor-col-resize -mr-1 z-30 grid place-items-center hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
         @mousedown="startResize"
     >
@@ -707,7 +698,7 @@ watch(
     <!-- Sidebar -->
     <Transition name="slide">
         <div
-            v-if="showPreviewSidebar && currentMessage"
+            v-if="showPreviewSidebar && (currentMessage || arcade)"
             class="fixed top-0 right-0 bottom-0 md:relative md:z-20 w-full max-w-full z-50 flex-shrink-0 md:flex md:items-stretch md:justify-stretch"
             :style="{
                 width: screenWidth > 720 ? sidebarWidth + 'px' : '100vw',
@@ -1181,6 +1172,7 @@ watch(
                                                     </div>
                                                     <div class="flex-1 min-w-0">
                                                         <MarkdownRenderer
+                                                            :collapsible="false"
                                                             class="break-words text-sm whitespace-pre-wrap overflow-x-hidden"
                                                             :content="
                                                                 msg.prompt || ''
