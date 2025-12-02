@@ -122,7 +122,6 @@ type Arcade struct {
 	CodeType    string    `json:"code_type"`
 	CreatedAt   string    `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
-	ChatId      string    `json:"chat_id"`
 }
 
 var (
@@ -184,5 +183,5 @@ func Close() error {
 }
 
 func GetVersion() string {
-	return "v0.22.0"
+	return "v0.23.0"
 }
