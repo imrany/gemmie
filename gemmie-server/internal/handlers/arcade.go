@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/imrany/gemmie/gemmie-server/internal/encrypt"
 	"github.com/imrany/gemmie/gemmie-server/store"
 )
 
@@ -57,7 +58,7 @@ func CreateArcadeHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Create new arcade
 	arcade := store.Arcade{
-		ID:          req.ID,
+		ID:          encrypt.GenerateID(nil),
 		UserId:      userID,
 		Label:       req.Label,
 		CreatedAt:   req.CreatedAt,
