@@ -41,6 +41,13 @@ export function generateChatId(): string {
   return Date.now() + "_" + Math.random().toString(36).substring(2, 9);
 }
 
+// Generate unique ID
+export function generateId(prefix?: string): string {
+  return prefix
+    ? prefix + "_" + Date.now() + Math.random().toString(36).substring(2, 9)
+    : Date.now() + Math.random().toString(36).substring(2, 9);
+}
+
 // Generate chat title from first message
 export function generateChatTitle(firstMessage: string): string {
   const title = firstMessage.slice(0, 50).trim();
