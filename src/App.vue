@@ -33,7 +33,6 @@ import { useChat } from "./composables/useChat";
 import { useCache } from "./composables/useCache";
 import { useSync } from "./composables/useSync";
 import { useHandlePaste } from "./composables/useHandlePaste";
-import { i } from "node_modules/vite/dist/node/types.d-aGj9QkWt";
 
 const { reportError } = usePlatformError();
 const router = useRouter();
