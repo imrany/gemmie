@@ -62,12 +62,14 @@ func GetChatById(ID string) (*Chat, error) {
 func GetChatsByUserId(userId string) ([]Chat, error) {
 	ctx := context.Background()
 
+	// selects all chats belonging to a specific user, excluding chats where the user_id also exists in the arcades table.
 	query := `
-			SELECT id, user_id, title, created_at, updated_at,
-			is_archived, last_message_at, is_private
-			FROM chats
-			WHERE user_id = $1
-			ORDER BY updated_at DESC
+		SELECT id, user_id, title, created_at, updated_at,
+		is_archived, last_message_at, is_private
+		FROM chats c
+		WHERE c.user_id = $1
+		AND NOT EXISTS (SELECT 1 FROM arcades a WHERE a.user_id = c.user_id)
+		ORDER BY updated_at DESC
 		`
 
 	rows, err := DB.QueryContext(ctx, query, userId)
