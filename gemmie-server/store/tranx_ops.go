@@ -10,7 +10,7 @@ import (
 
 func CreateTransaction(tx Transaction) error {
 	ctx := context.Background()
-	
+
 	if tx.CreatedAt.IsZero() {
 		tx.CreatedAt = time.Now()
 	}
@@ -37,7 +37,7 @@ func CreateTransaction(tx Transaction) error {
 
 func GetTransactions() ([]Transaction, error) {
 	ctx := context.Background()
-	
+
 	query := `
 		SELECT id, external_reference, mpesa_receipt_number, checkout_request_id,
 			   merchant_request_id, amount, phone_number, result_code,
@@ -77,7 +77,7 @@ func GetTransactions() ([]Transaction, error) {
 
 func GetTransactionByID(txID string) (*Transaction, error) {
 	ctx := context.Background()
-	
+
 	query := `
 		SELECT id, external_reference, mpesa_receipt_number, checkout_request_id,
 			   merchant_request_id, amount, phone_number, result_code,
@@ -101,7 +101,7 @@ func GetTransactionByID(txID string) (*Transaction, error) {
 
 func GetTransactionByExtRef(ref string) (*Transaction, error) {
 	ctx := context.Background()
-	
+
 	query := `
 		SELECT id, external_reference, mpesa_receipt_number, checkout_request_id,
 			   merchant_request_id, amount, phone_number, result_code,
@@ -143,4 +143,34 @@ func UpdateTransaction(tx Transaction) error {
 	)
 
 	return err
+}
+
+func DeleteTransaction(txID string) error {
+	ctx := context.Background()
+	_, err := DB.ExecContext(ctx, "DELETE FROM transactions WHERE id = $1", txID)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func DeleteAllTransactionsByUserID(userID string) error {
+	ctx := context.Background()
+	_, err := DB.ExecContext(ctx, "DELETE FROM transactions WHERE user_id = $1", userID)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func DeleteAllTransactions() error {
+	ctx := context.Background()
+	_, err := DB.ExecContext(ctx, "DELETE FROM transactions")
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

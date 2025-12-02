@@ -406,6 +406,20 @@ func UpdateUser(user User) error {
 
 func DeleteUser(userID string) error {
 	ctx := context.Background()
-	_, err := DB.ExecContext(ctx, "DELETE FROM users WHERE id = $1", userID)
+	err := DeleteAllChatsByUserID(userID)
+	if err != nil {
+		return err
+	}
+
+	err = DeleteAllArcadesByUserID(userID)
+	if err != nil {
+		return err
+	}
+
+	err = DeleteAllTransactionsByUserID(userID)
+	if err != nil {
+		return err
+	}
+	_, err = DB.ExecContext(ctx, "DELETE FROM users WHERE id = $1", userID)
 	return err
 }
