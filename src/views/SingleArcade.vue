@@ -388,7 +388,7 @@ watch(
                         class="fixed bottom-6 right-6 z-20"
                     >
                         <!-- Owner Menu -->
-                        <DropdownMenu v-if="!isOwner">
+                        <DropdownMenu v-if="isOwner">
                             <DropdownMenuTrigger as-child>
                                 <Button
                                     size="sm"
