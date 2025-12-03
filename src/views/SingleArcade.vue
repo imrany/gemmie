@@ -7,12 +7,12 @@ import { useRoute, useRouter } from "vue-router";
 import { toast } from "vue-sonner";
 import {
     Loader2,
-    MoreVertical,
     Trash2,
     Edit,
     Download,
     Share2,
     Copy,
+    X,
     Code2,
 } from "lucide-vue-next";
 import { Button } from "@/components/ui/button";
@@ -305,6 +305,16 @@ async function copyLink() {
     }
 }
 
+const showFloatActionBtn = ref(true);
+function handleClose() {
+    showFloatActionBtn.value = false;
+}
+
+function openLoginPage() {
+    handleClose();
+    window.open("/", "blank");
+}
+
 watch(
     arcadeId,
     async (newId) => {
@@ -372,18 +382,48 @@ watch(
                         </div>
                     </Transition>
 
-                    <!-- Floating Action Button (only for owner) -->
-                    <div v-if="isOwner" class="fixed bottom-6 right-6 z-20">
-                        <DropdownMenu>
+                    <!-- Floating Action Buttons -->
+                    <div
+                        v-if="showFloatActionBtn"
+                        class="fixed bottom-6 right-6 z-20"
+                    >
+                        <!-- Owner Menu -->
+                        <DropdownMenu v-if="!isOwner">
                             <DropdownMenuTrigger as-child>
                                 <Button
                                     size="sm"
-                                    class="h-12 w-12 dark:bg-gray-200 bg-gray-800 hover:bg-gray-700 dark:hover:bg-gray-100 rounded-full shadow-lg hover:shadow-xl transition-shadow"
+                                    class="h-8 w-40 flex flex-col justify-center gap-0.5 bg-gray-900 dark:bg-gray-800 hover:bg-gray-800 dark:hover:bg-gray-700 rounded-md shadow-lg hover:shadow-xl transition-all relative"
                                 >
-                                    <MoreVertical class="w-5 h-5" />
+                                    <div
+                                        class="absolute top-1 right-1 z-10 cursor-pointer group"
+                                        @click.stop.prevent="handleClose"
+                                    >
+                                        <X
+                                            class="w-0.5 h-0.5 text-gray-400 group-hover:text-white transition-colors"
+                                        />
+                                    </div>
+                                    <div
+                                        class="flex items-center justify-center gap-1 mt-0.5"
+                                    >
+                                        <p
+                                            class="text-xs flex gap-1 font-medium text-gray-400 leading-none"
+                                        >
+                                            Edit with
+                                            <span
+                                                class="text-white flex items-center gap-2 font-semibold"
+                                            >
+                                                <img
+                                                    src="/logo-light.svg"
+                                                    alt="Gemmie Logo"
+                                                    class="w-3 h-3"
+                                                />
+                                                <span>Gemmie</span>
+                                            </span>
+                                        </p>
+                                    </div>
                                 </Button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" class="w-48">
+                            <DropdownMenuContent align="end" class="w-52">
                                 <DropdownMenuItem
                                     @click="openRenameDialog"
                                     class="cursor-pointer"
@@ -438,16 +478,41 @@ watch(
                                 </DropdownMenuItem>
                             </DropdownMenuContent>
                         </DropdownMenu>
-                    </div>
 
-                    <!-- Share Button (for non-owners) -->
-                    <div v-else class="fixed bottom-6 right-6 z-20">
+                        <!-- Non-Owner Share Button -->
                         <Button
-                            @click="handleShare"
+                            v-else
+                            @click="openLoginPage"
                             size="sm"
-                            class="h-12 w-12 dark:bg-gray-200 bg-gray-800 hover:bg-gray-700 dark:hover:bg-gray-100 rounded-full shadow-lg hover:shadow-xl transition-shadow"
+                            class="h-8 w-40 flex flex-col justify-center gap-0.5 bg-gray-900 dark:bg-gray-800 hover:bg-gray-800 dark:hover:bg-gray-700 rounded-md shadow-lg hover:shadow-xl transition-all relative"
                         >
-                            <Share2 class="w-5 h-5" />
+                            <div
+                                class="absolute top-1 right-1 z-10 cursor-pointer group"
+                                @click.stop.prevent="handleClose"
+                            >
+                                <X
+                                    class="w-0.5 h-0.5 text-gray-400 group-hover:text-white transition-colors"
+                                />
+                            </div>
+                            <div
+                                class="flex items-center justify-center gap-1 mt-0.5"
+                            >
+                                <p
+                                    class="text-xs flex gap-1 font-medium text-gray-400 leading-none"
+                                >
+                                    Edit with
+                                    <span
+                                        class="text-white flex items-center gap-2 font-semibold"
+                                    >
+                                        <img
+                                            src="/logo-light.svg"
+                                            alt="Gemmie Logo"
+                                            class="w-3 h-3"
+                                        />
+                                        <span>Gemmie</span>
+                                    </span>
+                                </p>
+                            </div>
                         </Button>
                     </div>
 
