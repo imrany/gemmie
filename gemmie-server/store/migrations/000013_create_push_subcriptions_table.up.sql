@@ -1,4 +1,4 @@
--- create push notifications table
+-- create push_subscriptions table
 CREATE TABLE IF NOT EXISTS push_subscriptions (
     user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
     endpoint TEXT NOT NULL UNIQUE,
