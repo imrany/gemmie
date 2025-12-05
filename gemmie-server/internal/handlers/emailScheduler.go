@@ -49,6 +49,7 @@ func sendUpgradeEmails(smtpConfig mailer.SMTPConfig) {
 	users, err := store.GetUsers()
 	if err != nil {
 		slog.Error("Error getting users", "error", err)
+		return // Exit if we can't get users
 	}
 
 	sentCount := 0
@@ -70,6 +71,7 @@ func sendUpgradeEmails(smtpConfig mailer.SMTPConfig) {
 				"error", err,
 			)
 			failedCount++
+			continue // Continue to the next user even if sending failed.
 		} else {
 			slog.Info("Upgrade email sent successfully",
 				"user_id", user.ID,
@@ -83,10 +85,12 @@ func sendUpgradeEmails(smtpConfig mailer.SMTPConfig) {
 		subscriptions, err := store.GetSubscriptionsByUserIDs(ctx, []string{user.ID})
 		if err != nil {
 			slog.Error("Failed to get subscriptions", "Error", err)
+			continue // If can't get subscription, just skip to the next user.
 		}
 
 		if len(subscriptions) == 0 {
 			slog.Info("No subscriptions found for user", "user_id", user.ID)
+			continue // If no subscription skip to the next user.
 		}
 
 		sub := subscriptions[0]
@@ -101,6 +105,7 @@ func sendUpgradeEmails(smtpConfig mailer.SMTPConfig) {
 		data, err := json.Marshal(payload)
 		if err != nil {
 			slog.Error("Failed to marshal notification payload", "Error", err)
+			continue // If can't marshal the payload, skip to the next user.
 		}
 
 		resp, err := webpush.SendNotification(data, &webpush.Subscription{
@@ -125,8 +130,10 @@ func sendUpgradeEmails(smtpConfig mailer.SMTPConfig) {
 				slog.Info("Deleted invalid subscription", "Endpoint", sub.Endpoint)
 			}
 		} else {
-			resp.Body.Close()
-			if resp.StatusCode <= 200 && resp.StatusCode > 300 {
+			if resp != nil && resp.Body != nil { // Check if resp is not nil before closing body
+				resp.Body.Close()
+			}
+			if resp != nil && (resp.StatusCode < 200 || resp.StatusCode >= 300) { // Fixed logic
 				slog.Info("Push failed", "Status", resp.StatusCode, "Endpoint", sub.Endpoint)
 			}
 		}

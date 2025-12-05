@@ -1,6 +1,10 @@
 package store
 
-import "context"
+import (
+	"context"
+
+	"github.com/lib/pq"
+)
 
 // SaveSubscription saves or updates a subscription
 func SaveSubscription(ctx context.Context, userID string, sub SubscriptionRequest, userAgent string) error {
@@ -63,12 +67,12 @@ func GetSubscriptionsByUserIDs(ctx context.Context, userIDs []string) ([]PushSub
 	}
 
 	query := `
-        SELECT user_id, endpoint, p256dh_key, auth_key, user_agent, created_at, updated_at
-        FROM push_subscriptions
-        WHERE user_id = ANY($1)
-        ORDER BY created_at DESC
-    `
-	rows, err := DB.QueryContext(ctx, query, userIDs)
+								SELECT user_id, endpoint, p256dh_key, auth_key, user_agent, created_at, updated_at
+								FROM push_subscriptions
+								WHERE user_id = ANY($1)
+								ORDER BY created_at DESC
+				`
+	rows, err := DB.QueryContext(ctx, query, pq.Array(userIDs))
 	if err != nil {
 		return nil, err
 	}
