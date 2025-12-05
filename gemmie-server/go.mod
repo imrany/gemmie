@@ -3,6 +3,7 @@ module github.com/imrany/gemmie/gemmie-server
 go 1.24.3
 
 require (
+	github.com/SherClockHolmes/webpush-go v1.4.0
 	github.com/golang-migrate/migrate/v4 v4.19.0
 	github.com/gorilla/handlers v1.5.2
 	github.com/gorilla/mux v1.8.1
@@ -29,6 +30,7 @@ require (
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-viper/mapstructure/v2 v2.4.0 // indirect
+	github.com/golang-jwt/jwt/v5 v5.2.1 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/s2a-go v0.1.8 // indirect
 	github.com/google/uuid v1.6.0 // indirect

@@ -124,6 +124,44 @@ type Arcade struct {
 	UpdatedAt   time.Time `json:"updated_at"`
 }
 
+// PushSubscription represents a stored subscription
+type PushSubscription struct {
+	UserID    string    `json:"user_id"`
+	Endpoint  string    `json:"endpoint"`
+	P256dhKey string    `json:"p256dh_key"`
+	AuthKey   string    `json:"auth_key"`
+	UserAgent string    `json:"user_agent,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// SubscriptionRequest from frontend
+type SubscriptionRequest struct {
+	Endpoint string `json:"endpoint"`
+	Keys     struct {
+		P256dh string `json:"p256dh"`
+		Auth   string `json:"auth"`
+	} `json:"keys"`
+}
+
+// NotificationPayload represents the notification data
+type NotificationPayload struct {
+	Title              string         `json:"title"`
+	Body               string         `json:"body"`
+	Icon               string         `json:"icon,omitempty"`
+	Badge              string         `json:"badge,omitempty"`
+	Image              string         `json:"image,omitempty"`
+	Data               map[string]any `json:"data,omitempty"`
+	Tag                string         `json:"tag,omitempty"`
+	RequireInteraction bool           `json:"requireInteraction,omitempty"`
+}
+
+// SendNotificationRequest for sending to specific users
+type SendNotificationRequest struct {
+	UserIDs []string            `json:"user_ids,omitempty"` // If empty, sends to all
+	Payload NotificationPayload `json:"payload"`
+}
+
 var (
 	DB *sql.DB
 )
@@ -183,5 +221,5 @@ func Close() error {
 }
 
 func GetVersion() string {
-	return "v0.24.5"
+	return "v0.25.0"
 }

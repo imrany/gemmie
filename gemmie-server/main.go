@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"os"
 	"os/signal"
@@ -90,25 +91,12 @@ func loggingMiddleware(next http.Handler) http.Handler {
 }
 
 func runServer() {
-	port := viper.GetString("PORT")
+	port := viper.GetInt("PORT")
 
-	dbHost := viper.GetString("DB_HOST")
-	dbPort := viper.GetString("DB_PORT")
-	dbUser := viper.GetString("DB_USER")
-	dbPassword := viper.GetString("DB_PASSWORD")
-	dbName := viper.GetString("DB_NAME")
-	dbSSLMode := viper.GetString("DB_SSLMODE")
+	DSN := viper.GetString("DSN")
 	whatsappDBPath := viper.GetString("WHATSAPP_DB_PATH")
 
-	// Build connection string
-	connString := "host=" + dbHost +
-		" port=" + dbPort +
-		" user=" + dbUser +
-		" password=" + dbPassword +
-		" dbname=" + dbName +
-		" sslmode=" + dbSSLMode
-
-	slog.Info("Starting server", "port", port, "db_host", dbHost, "db_name", dbName)
+	slog.Info("Starting server", "port", port, "DSN", DSN)
 
 	// Configure SMTP settings
 	smtpConfig := mailer.SMTPConfig{
@@ -154,7 +142,7 @@ func runServer() {
 	v1.StartEmailScheduler(schedulerConfig)
 
 	//migrations run automatically
-	if err := store.InitStorage(connString); err != nil {
+	if err := store.InitStorage(DSN); err != nil {
 		slog.Error("Failed to initialize database", "error", err)
 		os.Exit(1)
 	}
@@ -211,6 +199,11 @@ func runServer() {
 	r.HandleFunc("/api/transactions/{external_reference}", v1.GetTransactionByRefHandler).Methods(http.MethodGet)
 	r.HandleFunc("/api/callback", v1.StoreTransactionHandler).Methods(http.MethodPost)
 
+	// Push notification endpoints
+	r.HandleFunc("/api/push/subscribe", v1.SubscribeToPushNotificationHandler).Methods("POST")
+	r.HandleFunc("/api/push/unsubscribe", v1.UnsubscribeToPushNotificationHandler).Methods("POST")
+	r.HandleFunc("/api/push/send", v1.SendPushNotificationHandler).Methods("POST")
+
 	// genai routes
 	r.HandleFunc("/api/genai", v1.GenerateAIResponseHandler).Methods(http.MethodPost)
 
@@ -249,7 +242,7 @@ func runServer() {
 
 	// HTTP server
 	srv := &http.Server{
-		Addr:         "0.0.0.0:" + port,
+		Addr:         fmt.Sprintf("0.0.0.0:%d", port),
 		Handler:      handler,
 		ReadTimeout:  30 * time.Second,
 		WriteTimeout: 120 * time.Second,
@@ -302,16 +295,41 @@ func main() {
 		},
 	}
 
-	// Flags - UPDATED: Replace data file with database connection
-	rootCmd.PersistentFlags().String("port", "8081", "Port to run the server on")
-	rootCmd.PersistentFlags().String("db-host", "localhost", "Database host (env: DB_HOST)")
-	rootCmd.PersistentFlags().String("db-port", "5432", "Database port (env: DB_PORT)")
-	rootCmd.PersistentFlags().String("db-user", "", "Database user (env: DB_USER)")
-	rootCmd.PersistentFlags().String("db-password", "", "Database password (env: DB_PASSWORD)")
-	rootCmd.PersistentFlags().String("db-name", "gemmie", "Database name (env: DB_NAME)")
-	rootCmd.PersistentFlags().String("db-sslmode", "disable", "Database SSL mode (env: DB_SSLMODE)")
-	rootCmd.PersistentFlags().String("payhero-username", "", "PayHero username (env: PAYHERO_USERNAME)")
-	rootCmd.PersistentFlags().String("payhero-password", "", "PayHero password (env: PAYHERO_PASSWORD)")
+	var generateVapidCmd = &cobra.Command{
+		Use:   "generate-vapid",
+		Short: "Generate VAPID keys",
+		Run: func(cmd *cobra.Command, args []string) {
+			v1.GenerateVAPIDKeys()
+		},
+	}
+
+	rootCmd.AddCommand(generateVapidCmd)
+
+	envBindings := map[string]string{
+		"port":               "PORT",
+		"dsn":                "DSN",
+		"payhero-username":   "PAYHERO_USERNAME",
+		"payhero-password":   "PAYHERO_PASSWORD",
+		"payhero-channel-id": "PAYHERO_CHANNEL_ID",
+		"callback-url":       "CALLBACK_URL",
+		"smtp-host":          "SMTP_HOST",
+		"smtp-port":          "SMTP_PORT",
+		"smtp-username":      "SMTP_USERNAME",
+		"smtp-password":      "SMTP_PASSWORD",
+		"smtp-email":         "SMTP_EMAIL",
+		"whatsapp-db-path":   "WHATSAPP_DB_PATH",
+		"api-key":            "API_KEY",
+		"model":              "MODEL",
+		"log-level":          "LOG_LEVEL",
+		"vapid-public-key":   "VAPID_PUBLIC_KEY",
+		"vapid-private-key":  "VAPID_PRIVATE_KEY",
+		"vapid-email":        "VAPID_EMAIL",
+	}
+
+	rootCmd.PersistentFlags().Int("port", 8080, "Port to listen on (env: PORT)")
+	rootCmd.PersistentFlags().String("dsn", "", "DSN (env: DSN)")
+	rootCmd.PersistentFlags().String("payhero-username", "", "PayHero Username (env: PAYHERO_USERNAME)")
+	rootCmd.PersistentFlags().String("payhero-password", "", "PayHero Password (env: PAYHERO_PASSWORD)")
 	rootCmd.PersistentFlags().String("payhero-channel-id", "", "PayHero channel ID (env: PAYHERO_CHANNEL_ID)")
 	rootCmd.PersistentFlags().String("callback-url", "", "Callback URL for PayHero (env: CALLBACK_URL)")
 	rootCmd.PersistentFlags().String("smtp-host", "", "SMTP HOST (env: SMTP_HOST)")
@@ -323,31 +341,15 @@ func main() {
 	rootCmd.PersistentFlags().String("api-key", "", "API Key (env: API_KEY)")
 	rootCmd.PersistentFlags().String("model", "", "Model (env: MODEL)")
 	rootCmd.PersistentFlags().String("log-level", "info", "Log level (debug, info, warn, error) (env: LOG_LEVEL)")
+	rootCmd.PersistentFlags().String("vapid-public-key", "", "VAPID Public Key (env: VAPID_PUBLIC_KEY)")
+	rootCmd.PersistentFlags().String("vapid-private-key", "", "VAPID Private Key (env: VAPID_PRIVATE_KEY)")
+	rootCmd.PersistentFlags().String("vapid-email", "", "VAPID Email (env: VAPID_EMAIL)")
 
-	// Bind flags to viper - UPDATED: Database flags instead of data file
-	viper.BindPFlag("PORT", rootCmd.PersistentFlags().Lookup("port"))
-	viper.BindPFlag("DB_HOST", rootCmd.PersistentFlags().Lookup("db-host"))
-	viper.BindPFlag("DB_PORT", rootCmd.PersistentFlags().Lookup("db-port"))
-	viper.BindPFlag("DB_USER", rootCmd.PersistentFlags().Lookup("db-user"))
-	viper.BindPFlag("DB_PASSWORD", rootCmd.PersistentFlags().Lookup("db-password"))
-	viper.BindPFlag("DB_NAME", rootCmd.PersistentFlags().Lookup("db-name"))
-	viper.BindPFlag("DB_SSLMODE", rootCmd.PersistentFlags().Lookup("db-sslmode"))
-	viper.BindPFlag("PAYHERO_USERNAME", rootCmd.PersistentFlags().Lookup("PAYHERO_USERNAME"))
-	viper.BindPFlag("PAYHERO_PASSWORD", rootCmd.PersistentFlags().Lookup("PAYHERO_PASSWORD"))
-	viper.BindPFlag("PAYHERO_CHANNEL_ID", rootCmd.PersistentFlags().Lookup("PAYHERO_CHANNEL_ID"))
-	viper.BindPFlag("CALLBACK_URL", rootCmd.PersistentFlags().Lookup("CALLBACK_URL"))
-	viper.BindPFlag("SMTP_HOST", rootCmd.PersistentFlags().Lookup("SMTP_HOST"))
-	viper.BindPFlag("SMTP_PORT", rootCmd.PersistentFlags().Lookup("SMTP_PORT"))
-	viper.BindPFlag("SMTP_USERNAME", rootCmd.PersistentFlags().Lookup("SMTP_USERNAME"))
-	viper.BindPFlag("SMTP_PASSWORD", rootCmd.PersistentFlags().Lookup("SMTP_PASSWORD"))
-	viper.BindPFlag("SMTP_EMAIL", rootCmd.PersistentFlags().Lookup("SMTP_EMAIL"))
-	viper.BindPFlag("WHATSAPP_DB_PATH", rootCmd.PersistentFlags().Lookup("WHATSAPP_DB_PATH"))
-	viper.BindPFlag("MODEL", rootCmd.PersistentFlags().Lookup("model"))
-	viper.BindPFlag("API_KEY", rootCmd.PersistentFlags().Lookup("api-key"))
-	viper.BindPFlag("LOG_LEVEL", rootCmd.PersistentFlags().Lookup("log-level"))
-
-	// Bind env variables
-	viper.AutomaticEnv()
+	for key := range envBindings {
+		if err := viper.BindPFlag(key, rootCmd.PersistentFlags().Lookup(key)); err != nil {
+			panic(fmt.Errorf("failed to bind flag '%s': %s", key, err.Error()))
+		}
+	}
 
 	if err := rootCmd.Execute(); err != nil {
 		slog.Error("Failed to execute command", "error", err)
