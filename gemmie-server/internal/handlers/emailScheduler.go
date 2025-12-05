@@ -49,7 +49,7 @@ func sendUpgradeEmails(smtpConfig mailer.SMTPConfig) {
 	users, err := store.GetUsers()
 	if err != nil {
 		slog.Error("Error getting users", "error", err)
-		return // Exit if we can't get users
+		return
 	}
 
 	sentCount := 0
@@ -71,7 +71,6 @@ func sendUpgradeEmails(smtpConfig mailer.SMTPConfig) {
 				"error", err,
 			)
 			failedCount++
-			continue // Continue to the next user even if sending failed.
 		} else {
 			slog.Info("Upgrade email sent successfully",
 				"user_id", user.ID,
@@ -81,68 +80,8 @@ func sendUpgradeEmails(smtpConfig mailer.SMTPConfig) {
 			sentCount++
 		}
 
-		// Get subscriptions
-		subscriptions, err := store.GetSubscriptionsByUserID(ctx, user.ID)
-		if err != nil {
-			slog.Error("Failed to get subscriptions", "Error", err)
-			continue // If can't get subscription, just skip to the next user.
-		}
-
-		if len(subscriptions) == 0 {
-			slog.Info("No subscriptions found for user", "user_id", user.ID)
-			continue // If no subscription skip to the next user.
-		}
-
-		for _, sub := range subscriptions {
-			payload := store.NotificationPayload{
-				Title:              "Unlock Premium Features",
-				Body:               "Upgrade your Gemmie Plan and enjoy exclusive features! 🚀,\n click to upgrade your account",
-				Data:               map[string]any{"user_id": user.ID, "email": user.Email, "plan": user.Plan, "url": "/upgrade"},
-				Tag:                "upgrade-email",
-				RequireInteraction: true,
-			}
-
-			data, err := json.Marshal(payload)
-			if err != nil {
-				slog.Error("Failed to marshal notification payload", "Error", err)
-				continue // If can't marshal the payload, skip to the next user.
-			}
-			resp, err := webpush.SendNotification(data, &webpush.Subscription{
-				Endpoint: sub.Endpoint,
-				Keys: webpush.Keys{
-					Auth:   sub.AuthKey,
-					P256dh: sub.P256dhKey,
-				},
-			}, &webpush.Options{
-				Subscriber:      VapidEmail,
-				VAPIDPublicKey:  VapidPublicKey,
-				VAPIDPrivateKey: VapidPrivateKey,
-				TTL:             30,
-			})
-
-			if err != nil {
-				slog.Error("Failed to send notification", "Endpoint", sub.Endpoint, "Error", err)
-
-				// Delete invalid subscriptions (410 Gone or 404 Not Found)
-				if resp != nil && (resp.StatusCode == 410 || resp.StatusCode == 404) {
-					if err := store.DeleteSubscription(ctx, sub.Endpoint); err != nil {
-						slog.Error("Failed to delete invalid subscription", "Endpoint", sub.Endpoint, "Error", err)
-					} else {
-						slog.Info("Deleted invalid subscription", "Endpoint", sub.Endpoint)
-					}
-				}
-			} else {
-				if resp != nil && resp.Body != nil { // Check if resp is not nil before closing body
-					err := resp.Body.Close()
-					if err != nil {
-						slog.Error("Error closing response body", "error", err)
-					}
-				}
-				if resp != nil && (resp.StatusCode < 200 || resp.StatusCode >= 300) { // Fixed logic
-					slog.Info("Push failed", "Status", resp.StatusCode, "Endpoint", sub.Endpoint)
-				}
-			}
-		}
+		// Send push notification asynchronously
+		go sendUpgradePushNotification(ctx, user)
 
 		// Add small delay between emails to avoid rate limiting
 		time.Sleep(100 * time.Millisecond)
@@ -154,6 +93,129 @@ func sendUpgradeEmails(smtpConfig mailer.SMTPConfig) {
 		"skipped", skippedCount,
 		"total", len(users),
 	)
+}
+
+// sendUpgradePushNotification sends upgrade notification to user's devices
+func sendUpgradePushNotification(ctx context.Context, user store.User) {
+	// Use a timeout context for the notification
+	notifCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	// Get user subscriptions
+	subscriptions, err := store.GetSubscriptionsByUserID(notifCtx, user.ID)
+	if err != nil {
+		slog.Error("Failed to get subscriptions", "user_id", user.ID, "error", err)
+		return
+	}
+
+	if len(subscriptions) == 0 {
+		slog.Debug("No subscriptions found for user", "user_id", user.ID)
+		return
+	}
+
+	// Prepare notification payload
+	payload := store.NotificationPayload{
+		Title: "🚀 Unlock Premium Features",
+		Body:  "Upgrade your Gemmie Plan and enjoy exclusive features! Tap to upgrade your account.",
+		Icon:  "/icon-192x192.png",
+		Badge: "/badge-72x72.png",
+		Data: map[string]any{
+			"user_id": user.ID,
+			"email":   user.Email,
+			"plan":    user.Plan,
+			"url":     "/upgrade",
+		},
+		Tag:                "upgrade-email",
+		RequireInteraction: true,
+	}
+
+	data, err := json.Marshal(payload)
+	if err != nil {
+		slog.Error("Failed to marshal notification payload", "user_id", user.ID, "error", err)
+		return
+	}
+
+	successCount := 0
+	failureCount := 0
+
+	for _, sub := range subscriptions {
+		// Validate subscription data
+		if sub.Endpoint == "" || sub.P256dhKey == "" || sub.AuthKey == "" {
+			slog.Warn("Invalid subscription data", "user_id", user.ID)
+			store.DeleteSubscription(notifCtx, sub.Endpoint)
+			failureCount++
+			continue
+		}
+
+		resp, err := webpush.SendNotification(data, &webpush.Subscription{
+			Endpoint: sub.Endpoint,
+			Keys: webpush.Keys{
+				Auth:   sub.AuthKey,
+				P256dh: sub.P256dhKey,
+			},
+		}, &webpush.Options{
+			Subscriber:      VapidEmail,
+			VAPIDPublicKey:  VapidPublicKey,
+			VAPIDPrivateKey: VapidPrivateKey,
+			TTL:             30,
+		})
+
+		if err != nil {
+			slog.Error("Failed to send push notification",
+				"user_id", user.ID,
+				"error", err.Error(),
+			)
+
+			// Delete invalid subscriptions
+			if resp != nil && (resp.StatusCode == 410 || resp.StatusCode == 404) {
+				if err := store.DeleteSubscription(notifCtx, sub.Endpoint); err != nil {
+					slog.Error("Failed to delete invalid subscription", "user_id", user.ID, "error", err)
+				} else {
+					slog.Info("Deleted invalid subscription", "user_id", user.ID, "status", resp.StatusCode)
+				}
+			} else if err.Error() == "P256 point not on curve" {
+				// Subscription created with different VAPID keys
+				slog.Warn("Deleting subscription with mismatched VAPID keys", "user_id", user.ID)
+				store.DeleteSubscription(notifCtx, sub.Endpoint)
+			}
+
+			failureCount++
+			continue
+		}
+
+		// Close response body
+		if resp != nil && resp.Body != nil {
+			if err := resp.Body.Close(); err != nil {
+				slog.Warn("Error closing response body", "error", err)
+			}
+		}
+
+		// Check response status
+		if resp != nil && resp.StatusCode >= 200 && resp.StatusCode < 300 {
+			successCount++
+			slog.Debug("Push notification sent successfully",
+				"user_id", user.ID,
+				"status", resp.StatusCode,
+			)
+		} else {
+			failureCount++
+			if resp != nil {
+				slog.Warn("Push notification failed",
+					"user_id", user.ID,
+					"status", resp.StatusCode,
+				)
+			}
+		}
+	}
+
+	if successCount > 0 || failureCount > 0 {
+		slog.Info("Upgrade push notification summary",
+			"user_id", user.ID,
+			"success", successCount,
+			"failed", failureCount,
+			"total", len(subscriptions),
+		)
+	}
 }
 
 // isEligibleForUpgradeEmail checks if a user should receive an upgrade email
