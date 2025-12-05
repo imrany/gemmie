@@ -1967,7 +1967,7 @@ onUnmounted(() => {
                                 <div
                                     v-for="(item, i) in currentMessages"
                                     :key="`chat-${i}`"
-                                    :id="`chat-${item.prompt || item.response}`"
+                                    :id="`chat-${item.response}`"
                                     class="flex flex-col gap-1"
                                 >
                                     <!-- User Bubble -->
