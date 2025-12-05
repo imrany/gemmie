@@ -128,6 +128,49 @@ Update an arcade by ID (requires X-User-ID header)
 
 Delete an arcade by ID (requires X-User-ID header)
 
+### Web push notifications
+
+#### Send notification to specific users
+
+```bash
+curl -X POST http://localhost:8080/api/push/send \
+ -H "Content-Type: application/json" \
+ -H "X-User-ID: user123" \
+ -d '{
+"user_ids": ["user123", "user456"],
+"payload": {
+"title": "New Message",
+"body": "You have a new message!",
+"icon": "/icon-192x192.png",
+"data": {
+"url": "/messages/123"
+}
+}
+}'
+```
+
+#### Send notification to all users (omit user_ids)
+
+```bash
+curl -X POST http://localhost:8080/api/push/send \
+ -H "Content-Type: application/json" \
+ -H "X-User-ID: user123" \
+ -d '{
+"payload": {
+"title": "Announcement",
+"body": "New feature available!",
+"icon": "/icon-192x192.png"
+}
+}'
+```
+
+#### Get user's subscriptions
+
+```bash
+curl -X GET http://localhost:8080/api/push/subscriptions \
+ -H "X-User-ID: user123"
+```
+
 ## Data Flow
 
 ### Registration/Login Flow

@@ -1,9 +1,12 @@
 package handlers
 
 import (
+	"context"
+	"encoding/json"
 	"log/slog"
 	"time"
 
+	"github.com/SherClockHolmes/webpush-go"
 	"github.com/imrany/gemmie/gemmie-server/store"
 	"github.com/imrany/whats-email/pkg/mailer"
 )
@@ -40,6 +43,7 @@ func StartEmailScheduler(config EmailSchedulerConfig) {
 
 // sendUpgradeEmails sends upgrade emails to eligible users
 func sendUpgradeEmails(smtpConfig mailer.SMTPConfig) {
+	ctx := context.Background()
 	slog.Info("Starting upgrade email batch send", "timestamp", time.Now())
 
 	users, err := store.GetUsers()
@@ -73,6 +77,58 @@ func sendUpgradeEmails(smtpConfig mailer.SMTPConfig) {
 				"plan", user.Plan,
 			)
 			sentCount++
+		}
+
+		// Get subscriptions
+		subscriptions, err := store.GetSubscriptionsByUserIDs(ctx, []string{user.ID})
+		if err != nil {
+			slog.Error("Failed to get subscriptions", "Error", err)
+		}
+
+		if len(subscriptions) == 0 {
+			slog.Info("No subscriptions found for user", "user_id", user.ID)
+		}
+
+		sub := subscriptions[0]
+		payload := store.NotificationPayload{
+			Title:              "Unlock Premium Features",
+			Body:               "Upgrade your Gemmie Plan and enjoy exclusive features! 🚀,\n click to upgrade your account",
+			Data:               map[string]any{"user_id": user.ID, "email": user.Email, "plan": user.Plan, "url": "/upgrade"},
+			Tag:                "upgrade-email",
+			RequireInteraction: true,
+		}
+
+		data, err := json.Marshal(payload)
+		if err != nil {
+			slog.Error("Failed to marshal notification payload", "Error", err)
+		}
+
+		resp, err := webpush.SendNotification(data, &webpush.Subscription{
+			Endpoint: sub.Endpoint,
+			Keys: webpush.Keys{
+				Auth:   sub.AuthKey,
+				P256dh: sub.P256dhKey,
+			},
+		}, &webpush.Options{
+			Subscriber:      VapidEmail,
+			VAPIDPublicKey:  VapidPublicKey,
+			VAPIDPrivateKey: VapidPrivateKey,
+			TTL:             30,
+		})
+
+		if err != nil {
+			slog.Error("Failed to send notification", "Endpoint", sub.Endpoint, "Error", err)
+
+			// Delete invalid subscriptions (410 Gone or 404 Not Found)
+			if resp != nil && (resp.StatusCode == 410 || resp.StatusCode == 404) {
+				store.DeleteSubscription(ctx, sub.Endpoint)
+				slog.Info("Deleted invalid subscription", "Endpoint", sub.Endpoint)
+			}
+		} else {
+			resp.Body.Close()
+			if resp.StatusCode <= 200 && resp.StatusCode > 300 {
+				slog.Info("Push failed", "Status", resp.StatusCode, "Endpoint", sub.Endpoint)
+			}
 		}
 
 		// Add small delay between emails to avoid rate limiting

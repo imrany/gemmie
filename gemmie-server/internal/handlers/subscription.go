@@ -1,3 +1,4 @@
+// Package handlers - subscription handlers
 package handlers
 
 import (
@@ -19,7 +20,7 @@ var (
 	VapidEmail      = viper.GetString("vapid-email")
 )
 
-// Generate VAPID keys (run once) - go run main.go generate-vapid
+// GenerateVAPIDKeys - Generate VAPID keys (run once) - go run main.go generate-vapid
 func GenerateVAPIDKeys() {
 	privateKey, publicKey, err := webpush.GenerateVAPIDKeys()
 	if err != nil {
@@ -30,7 +31,7 @@ func GenerateVAPIDKeys() {
 	slog.Info("GENERATED_VAPID_KEYS", "Private Key", privateKey)
 }
 
-// Push notification endpoints
+// SubscribeToPushNotificationHandler - Subscribes user to push notifications
 func SubscribeToPushNotificationHandler(w http.ResponseWriter, r *http.Request) {
 	userID := r.Header.Get("X-User-ID")
 	if userID == "" {
@@ -38,6 +39,16 @@ func SubscribeToPushNotificationHandler(w http.ResponseWriter, r *http.Request) 
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
 			Message: "User ID required",
+		})
+		return
+	}
+
+	_, err := store.GetUserByID(userID)
+	if err != nil {
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(store.Response{
+			Success: false,
+			Message: "User not found",
 		})
 		return
 	}
@@ -69,6 +80,26 @@ func SubscribeToPushNotificationHandler(w http.ResponseWriter, r *http.Request) 
 }
 
 func UnsubscribeToPushNotificationHandler(w http.ResponseWriter, r *http.Request) {
+	userID := r.Header.Get("X-User-ID")
+	if userID == "" {
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(store.Response{
+			Success: false,
+			Message: "User ID required",
+		})
+		return
+	}
+
+	_, err := store.GetUserByID(userID)
+	if err != nil {
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(store.Response{
+			Success: false,
+			Message: "User not found",
+		})
+		return
+	}
+
 	var sub store.SubscriptionRequest
 	if err := json.NewDecoder(r.Body).Decode(&sub); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -98,6 +129,26 @@ func UnsubscribeToPushNotificationHandler(w http.ResponseWriter, r *http.Request
 }
 
 func SendPushNotificationHandler(w http.ResponseWriter, r *http.Request) {
+	userID := r.Header.Get("X-User-ID")
+	if userID == "" {
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(store.Response{
+			Success: false,
+			Message: "User ID required",
+		})
+		return
+	}
+
+	_, err := store.GetUserByID(userID)
+	if err != nil {
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(store.Response{
+			Success: false,
+			Message: "User not found",
+		})
+		return
+	}
+
 	var req store.SendNotificationRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -118,7 +169,7 @@ func SendPushNotificationHandler(w http.ResponseWriter, r *http.Request) {
 
 	if len(subscriptions) == 0 {
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		json.NewEncoder(w).Encode(map[string]any{
 			"success": 0,
 			"failed":  0,
 			"message": "No subscriptions found",
@@ -186,5 +237,42 @@ func SendPushNotificationHandler(w http.ResponseWriter, r *http.Request) {
 			"failed":           failureCount,
 			"failed_endpoints": failedEndpoints,
 		},
+	})
+}
+
+// GetUserSubscriptionsHandler -  Get user subscriptions
+func GetUserSubscriptionsHandler(w http.ResponseWriter, r *http.Request) {
+	userID := r.Header.Get("X-User-ID")
+	if userID == "" {
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(store.Response{
+			Success: false,
+			Message: "User ID required",
+		})
+		return
+	}
+
+	_, err := store.GetUserByID(userID)
+	if err != nil {
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(store.Response{
+			Success: false,
+			Message: "User not found",
+		})
+		return
+	}
+
+	subscriptions, err := store.GetSubscriptionsByUserID(r.Context(), userID)
+	if err != nil {
+		log.Printf("Failed to get subscriptions: %v", err)
+		http.Error(w, "Failed to get subscriptions", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(store.Response{
+		Success: true,
+		Message: "Subscriptions retrieved successfully",
+		Data:    subscriptions,
 	})
 }
