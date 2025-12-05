@@ -191,7 +191,7 @@ func runServer() {
 
 	// Errors Handler - stores user errors for later support and fix
 	r.HandleFunc("/api/errors", v1.ErrorsHandler).Methods(http.MethodPost, http.MethodGet, http.MethodDelete)
-	r.HandleFunc("/api/errors/:id", v1.ErrorHandler).Methods(http.MethodDelete, http.MethodGet, http.MethodPut)
+	r.HandleFunc("/api/errors/{id}", v1.ErrorHandler).Methods(http.MethodDelete, http.MethodGet, http.MethodPut)
 
 	// Payment routes
 	r.HandleFunc("/api/payments/stk", v1.SendSTKHandler).Methods(http.MethodPost)
@@ -346,11 +346,12 @@ func main() {
 	rootCmd.PersistentFlags().String("vapid-private-key", "", "VAPID Private Key (env: VAPID_PRIVATE_KEY)")
 	rootCmd.PersistentFlags().String("vapid-email", "", "VAPID Email (env: VAPID_EMAIL)")
 
-	for key := range envBindings {
-		if err := viper.BindPFlag(key, rootCmd.PersistentFlags().Lookup(key)); err != nil {
+	for key, env := range envBindings {
+		if err := viper.BindPFlag(env, rootCmd.PersistentFlags().Lookup(key)); err != nil {
 			panic(fmt.Errorf("failed to bind flag '%s': %s", key, err.Error()))
 		}
 	}
+	viper.AutomaticEnv()
 
 	if err := rootCmd.Execute(); err != nil {
 		slog.Error("Failed to execute command", "error", err)
