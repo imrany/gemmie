@@ -10,7 +10,7 @@ import {
     watch,
     onUnmounted,
 } from "vue";
-import TopNav from "../components/TopNav.vue";
+import TopNav from "@/components/TopNav.vue";
 import type {
     ApiResponse,
     Chat,
@@ -68,7 +68,7 @@ import {
 } from "@/components/ui/pagination";
 import MarkdownRenderer from "@/components/ui/markdown/MarkdownRenderer.vue";
 import LinkPreviewComponent from "@/components/LinkPreview.vue";
-import EmptyChatView from "./EmptyChatView.vue";
+import EmptyChatView from "@/views/EmptyChatView.vue";
 import PastePreview from "@/components/PastePreview.vue";
 import { useVoiceRecord } from "@/composables/useVoiceRecord";
 import { usePagination } from "@/composables/usePagination";

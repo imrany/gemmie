@@ -5,6 +5,7 @@ import { inject, ref, reactive, type Ref, computed, watch } from "vue";
 import { toast } from "vue-sonner";
 import { useRoute } from "vue-router";
 import {
+    Bell,
     CardSim,
     CheckCircle,
     ChevronLeft,
@@ -16,8 +17,23 @@ import {
     Moon,
     RotateCw,
     Sun,
+    BellRing,
+    CheckCircle2,
+    AlertCircle,
+    Info,
+    ChevronDown,
+    Loader2,
 } from "lucide-vue-next";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+    Collapsible,
+    CollapsibleContent,
+    CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import OverallLayout from "@/layout/OverallLayout.vue";
+import { Switch } from "@/components/ui/switch";
 
 const {
     screenWidth,
@@ -26,11 +42,21 @@ const {
     isAuthenticated,
     logout,
     syncStatus,
-    manualSync,
+    syncFromServer,
     toggleTheme,
     toggleSync,
     parsedUserDetails,
+    isSupported,
+    isSubscribed,
+    error,
+    subscribe,
+    unsubscribe,
 } = inject("globalState") as {
+    isSupported: Ref<boolean>;
+    isSubscribed: Ref<boolean>;
+    error: Ref<string | null>;
+    subscribe: () => Promise<PushSubscription | undefined>;
+    unsubscribe: () => Promise<void>;
     screenWidth: Ref<number>;
     confirmDialog: Ref<ConfirmDialogOptions>;
     isCollapsed: Ref<boolean>;
@@ -70,7 +96,7 @@ const {
     deleteChat: (chatId: string) => void;
     renameChat: (chatId: string, newTitle: string) => void;
     toggleSidebar: () => void;
-    manualSync: () => Promise<any>;
+    syncFromServer: () => Promise<any>;
     apiCall: (endpoint: string, options?: RequestInit) => Promise<any>;
     isLocalDataEmpty: () => boolean;
     toggleSync: (syncEnabled?: boolean) => Promise<void>;
@@ -95,6 +121,8 @@ const profileData = reactive({
 const activeTab = ref<"general" | "account" | "privacy" | "billing">(
     tabParam ?? "general",
 );
+
+const showPermissionHelp = ref(false);
 const isSaving = ref(false);
 
 const isTogglingSync = ref(false);
@@ -155,6 +183,22 @@ const handleBack = () => {
         return;
     }
     router.push("/chats");
+};
+
+const handleToggle = async () => {
+    try {
+        if (isSubscribed.value) {
+            await unsubscribe();
+            showPermissionHelp.value = false;
+        } else {
+            showPermissionHelp.value = true;
+            await subscribe();
+            showPermissionHelp.value = false;
+        }
+    } catch (err) {
+        console.error("Failed to toggle subscription:", err);
+        showPermissionHelp.value = true;
+    }
 };
 
 /**
@@ -223,7 +267,7 @@ watch(
 
                 <!-- Horizontal Tabs -->
                 <div
-                    class="border-b border-gray-200 dark:border-gray-700 mb-2 md:hidden"
+                    class="border-b border-gray-200 dark:border-gray-700 mb-2 lg:hidden"
                 >
                     <nav class="flex space-x-8" aria-label="Tabs">
                         <button
@@ -274,16 +318,16 @@ watch(
                 >
                     <!-- Tabs Sidebar (hidden on mobile) -->
                     <div
-                        class="w-48 flex-col font-normal text-base gap-2 hidden md:flex flex-shrink-0"
+                        class="w-48 flex-col font-normal text-base gap-2 hidden lg:flex flex-shrink-0"
                     >
                         <button
                             @click="activeTab = 'general'"
                             :class="
                                 activeTab === 'general'
-                                    ? 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-200 font-medium'
+                                    ? 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-200 font-normal'
                                     : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
                             "
-                            class="text-left px-4 py-2 rounded-md transition-all duration-200"
+                            class="text-left px-4 py-2 rounded-lg transition-all duration-200"
                         >
                             General
                         </button>
@@ -291,10 +335,10 @@ watch(
                             @click="activeTab = 'account'"
                             :class="
                                 activeTab === 'account'
-                                    ? 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-200 font-medium'
+                                    ? 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-200 font-normal'
                                     : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
                             "
-                            class="text-left px-4 py-2 rounded-md transition-all duration-200"
+                            class="text-left px-4 py-2 rounded-lg transition-all duration-200"
                         >
                             Account
                         </button>
@@ -302,10 +346,10 @@ watch(
                             @click="activeTab = 'privacy'"
                             :class="
                                 activeTab === 'privacy'
-                                    ? 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-200 font-medium'
+                                    ? 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-200 font-normal'
                                     : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
                             "
-                            class="text-left px-4 py-2 rounded-md transition-all duration-200"
+                            class="text-left px-4 py-2 rounded-lg transition-all duration-200"
                         >
                             Privacy
                         </button>
@@ -313,10 +357,10 @@ watch(
                             @click="activeTab = 'billing'"
                             :class="
                                 activeTab === 'billing'
-                                    ? 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-200 font-medium'
+                                    ? 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-200 font-normal'
                                     : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
                             "
-                            class="text-left px-4 py-2 rounded-md transition-all duration-200"
+                            class="text-left px-4 py-2 rounded-lg transition-all duration-200"
                         >
                             Billing
                         </button>
@@ -327,7 +371,7 @@ watch(
                         <!-- General -->
                         <div
                             v-if="activeTab === 'general'"
-                            class="bg-white dark:bg-gray-800 p-4 md:p-6 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 w-full transition-colors duration-300"
+                            class="w-full"
                             :class="[
                                 screenWidth >= 1536
                                     ? 'max-w-4xl'
@@ -340,56 +384,367 @@ watch(
                         >
                             <form
                                 @submit.prevent="saveProfile"
-                                class="flex flex-col gap-4 md:gap-6"
+                                class="flex flex-col gap-6 md:gap-8"
                             >
-                                <div :class="['grid md:grid-cols-2  gap-4']">
-                                    <!-- Username -->
+                                <!-- Profile Information Section -->
+                                <div class="space-y-4">
+                                    <h3
+                                        class="text-lg font-semibold text-gray-900 dark:text-white"
+                                    >
+                                        Profile Information
+                                    </h3>
+
+                                    <div class="grid md:grid-cols-2 gap-4">
+                                        <!-- Username -->
+                                        <div>
+                                            <label
+                                                class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5"
+                                            >
+                                                Username
+                                            </label>
+                                            <input
+                                                v-model="profileData.username"
+                                                type="text"
+                                                disabled
+                                                class="border border-gray-300 dark:border-gray-600 rounded-lg px-3 md:px-4 py-2.5 w-full text-sm bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-400 cursor-not-allowed transition-colors"
+                                            />
+                                            <p
+                                                class="text-xs text-gray-500 dark:text-gray-400 mt-1.5"
+                                            >
+                                                Username cannot be changed
+                                            </p>
+                                        </div>
+
+                                        <!-- Email -->
+                                        <div>
+                                            <label
+                                                class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5"
+                                            >
+                                                Email
+                                            </label>
+                                            <input
+                                                v-model="profileData.email"
+                                                type="email"
+                                                disabled
+                                                class="border border-gray-300 dark:border-gray-600 rounded-lg px-3 md:px-4 py-2.5 w-full text-sm bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-400 cursor-not-allowed transition-colors"
+                                            />
+                                            <p
+                                                class="text-xs text-gray-500 dark:text-gray-400 mt-1.5"
+                                            >
+                                                Email cannot be changed
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <!-- Work Function -->
                                     <div>
                                         <label
-                                            class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                                            class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5"
                                         >
-                                            Username
+                                            What best describes your work?
                                         </label>
-                                        <input
-                                            v-model="profileData.username"
-                                            type="text"
-                                            disabled
-                                            class="border border-gray-300 dark:border-gray-600 rounded-lg px-3 md:px-4 py-2 w-full text-sm bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-200 cursor-not-allowed transition-colors"
+                                        <select
+                                            v-model="profileData.workFunction"
+                                            class="border border-gray-300 dark:border-gray-600 rounded-lg px-3 md:px-4 py-2.5 w-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                        >
+                                            <option value="">
+                                                Select your work function
+                                            </option>
+                                            <option value="software-developer">
+                                                Software Developer
+                                            </option>
+                                            <option value="designer">
+                                                Designer
+                                            </option>
+                                            <option value="researcher">
+                                                Researcher
+                                            </option>
+                                            <option value="student">
+                                                Student
+                                            </option>
+                                            <option value="writer">
+                                                Writer
+                                            </option>
+                                            <option value="teacher">
+                                                Teacher/Educator
+                                            </option>
+                                            <option value="business">
+                                                Business Professional
+                                            </option>
+                                            <option value="healthcare">
+                                                Healthcare
+                                            </option>
+                                            <option value="other">Other</option>
+                                        </select>
+                                    </div>
+
+                                    <!-- Preferences -->
+                                    <div>
+                                        <label
+                                            class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5"
+                                        >
+                                            What personal preferences should
+                                            Gemmie consider in responses?
+                                            <span
+                                                class="ml-1 text-xs text-orange-600 dark:text-orange-400 bg-orange-100 dark:bg-orange-900/30 px-2 py-0.5 rounded"
+                                            >
+                                                Beta
+                                            </span>
+                                        </label>
+                                        <textarea
+                                            v-model="profileData.preferences"
+                                            rows="3"
+                                            class="border border-gray-300 dark:border-gray-600 rounded-lg px-3 md:px-4 py-2.5 w-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 resize-none"
+                                            placeholder="e.g., Be concise, use technical explanations, avoid jargon"
                                         />
                                         <p
-                                            class="text-xs text-gray-500 dark:text-gray-200 mt-1"
+                                            class="text-xs text-gray-500 dark:text-gray-400 mt-1.5"
                                         >
-                                            Username cannot be changed
+                                            Your preferences will apply to all
+                                            conversations, within guidelines.
                                         </p>
                                     </div>
 
-                                    <!-- Email -->
-                                    <div>
-                                        <label
-                                            class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
-                                            >Email</label
+                                    <!-- Save Button -->
+                                    <div class="flex justify-end pt-2">
+                                        <button
+                                            type="submit"
+                                            :disabled="
+                                                isSaving || !hasUnsavedChanges
+                                            "
+                                            class="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 dark:disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-lg shadow-sm transition-all duration-200 flex items-center gap-2 text-sm font-medium"
                                         >
-                                        <input
-                                            v-model="profileData.email"
-                                            type="email"
-                                            disabled
-                                            class="border border-gray-300 dark:border-gray-600 rounded-lg px-3 md:px-4 py-2 w-full text-sm bg-gray-50 dark:bg-gray-700 text-gray-600 dark:text-gray-200 cursor-not-allowed transition-colors"
-                                        />
-                                        <p
-                                            class="text-xs text-gray-500 dark:text-gray-200 mt-1"
-                                        >
-                                            Email cannot be changed
-                                        </p>
+                                            <RotateCw
+                                                v-if="isSaving"
+                                                class="w-4 h-4 animate-spin"
+                                            />
+                                            <span>{{
+                                                isSaving
+                                                    ? "Saving..."
+                                                    : "Save changes"
+                                            }}</span>
+                                        </button>
                                     </div>
                                 </div>
 
-                                <!-- Theme Selection -->
-                                <div class="max-md:hidden">
-                                    <label
-                                        class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3"
+                                <!-- Divider -->
+                                <div
+                                    class="border-t border-gray-200 dark:border-gray-700"
+                                ></div>
+
+                                <!-- Notifications Section -->
+                                <div class="space-y-4">
+                                    <div
+                                        class="flex items-center justify-between"
                                     >
-                                        Theme Preference
-                                    </label>
+                                        <h3
+                                            class="text-lg font-semibold text-gray-900 dark:text-white"
+                                        >
+                                            Notifications
+                                        </h3>
+                                        <Badge
+                                            v-if="!isSupported"
+                                            variant="secondary"
+                                            class="text-xs"
+                                        >
+                                            Not Supported
+                                        </Badge>
+                                    </div>
+
+                                    <div
+                                        class="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4 border border-gray-200 dark:border-gray-700"
+                                    >
+                                        <div
+                                            class="flex items-start justify-between gap-4"
+                                        >
+                                            <div class="flex-1">
+                                                <div
+                                                    class="flex items-center gap-2 mb-1"
+                                                >
+                                                    <div
+                                                        :class="[
+                                                            'p-1.5 rounded-md transition-colors',
+                                                            isSubscribed
+                                                                ? 'bg-blue-100 dark:bg-blue-900/30'
+                                                                : 'bg-gray-100 dark:bg-gray-800',
+                                                        ]"
+                                                    >
+                                                        <component
+                                                            :is="
+                                                                isSubscribed
+                                                                    ? BellRing
+                                                                    : Bell
+                                                            "
+                                                            :class="[
+                                                                'w-4 h-4 transition-colors',
+                                                                isSubscribed
+                                                                    ? 'text-blue-600 dark:text-blue-400'
+                                                                    : 'text-gray-600 dark:text-gray-400',
+                                                            ]"
+                                                        />
+                                                    </div>
+                                                    <h4
+                                                        class="text-sm font-semibold text-gray-900 dark:text-white"
+                                                    >
+                                                        Response completions
+                                                    </h4>
+                                                </div>
+                                                <p
+                                                    class="text-xs md:text-sm text-gray-600 dark:text-gray-400 leading-relaxed"
+                                                >
+                                                    Get notified when Gemmie has
+                                                    finished a response. Most
+                                                    useful for long-running
+                                                    tasks like Deep search and
+                                                    tool calls.
+                                                </p>
+
+                                                <!-- Success Message -->
+                                                <div
+                                                    v-if="
+                                                        isSubscribed && !error
+                                                    "
+                                                    class="flex items-center gap-2 mt-3 text-xs text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-900/20 px-3 py-2 rounded-md"
+                                                >
+                                                    <CheckCircle2
+                                                        class="w-3.5 h-3.5 flex-shrink-0"
+                                                    />
+                                                    <span
+                                                        >You'll receive
+                                                        notifications for
+                                                        response
+                                                        completions</span
+                                                    >
+                                                </div>
+
+                                                <!-- Error Message -->
+                                                <Alert
+                                                    v-if="error"
+                                                    variant="destructive"
+                                                    class="mt-3 w-full"
+                                                >
+                                                    <AlertCircle
+                                                        class="h-4 w-4"
+                                                    />
+                                                    <AlertTitle
+                                                        >Failed to enable
+                                                        notifications</AlertTitle
+                                                    >
+                                                    <AlertDescription
+                                                        class="text-xs"
+                                                    >
+                                                        {{ error }}
+                                                    </AlertDescription>
+                                                </Alert>
+
+                                                <!-- Browser Not Supported -->
+                                                <div
+                                                    v-if="!isSupported"
+                                                    class="flex items-start gap-2 mt-3 text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 px-3 py-2 rounded-md"
+                                                >
+                                                    <AlertCircle
+                                                        class="w-3.5 h-3.5 flex-shrink-0 mt-0.5"
+                                                    />
+                                                    <span
+                                                        >Push notifications are
+                                                        not supported in your
+                                                        browser. Try Chrome,
+                                                        Firefox, or Edge.</span
+                                                    >
+                                                </div>
+                                            </div>
+
+                                            <!-- Toggle Switch -->
+                                            <Switch
+                                                :disabled="
+                                                    !isSupported ||
+                                                    error !== null
+                                                "
+                                                @update:modelValue="
+                                                    isSupported
+                                                        ? handleToggle()
+                                                        : null
+                                                "
+                                                v-model="isSubscribed"
+                                                :class="[
+                                                    'transition-colors duration-200',
+                                                    isSupported
+                                                        ? 'cursor-pointer'
+                                                        : 'cursor-not-allowed opacity-50',
+                                                    isSubscribed
+                                                        ? 'bg-blue-600'
+                                                        : 'bg-gray-300 dark:bg-gray-600',
+                                                ]"
+                                            />
+                                        </div>
+
+                                        <!-- Permission Instructions (only show when attempting to enable) -->
+                                        <Collapsible v-if="showPermissionHelp">
+                                            <CollapsibleTrigger as-child>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    class="w-full mt-3 text-xs"
+                                                >
+                                                    <Info
+                                                        class="w-3.5 h-3.5 mr-1"
+                                                    />
+                                                    Need help enabling
+                                                    notifications?
+                                                    <ChevronDown
+                                                        class="w-3.5 h-3.5 ml-auto"
+                                                    />
+                                                </Button>
+                                            </CollapsibleTrigger>
+                                            <CollapsibleContent class="mt-2">
+                                                <div
+                                                    class="text-xs text-gray-600 dark:text-gray-400 bg-white dark:bg-gray-800 p-3 rounded-md border border-gray-200 dark:border-gray-700 space-y-2"
+                                                >
+                                                    <p class="font-medium">
+                                                        To enable notifications:
+                                                    </p>
+                                                    <ol
+                                                        class="list-decimal list-inside space-y-1 ml-2"
+                                                    >
+                                                        <li>
+                                                            Click the toggle
+                                                            switch above
+                                                        </li>
+                                                        <li>
+                                                            Allow notifications
+                                                            when prompted by
+                                                            your browser
+                                                        </li>
+                                                        <li>
+                                                            If blocked, click
+                                                            the lock icon in
+                                                            your address bar
+                                                        </li>
+                                                        <li>
+                                                            Change notification
+                                                            permissions to
+                                                            "Allow"
+                                                        </li>
+                                                    </ol>
+                                                </div>
+                                            </CollapsibleContent>
+                                        </Collapsible>
+                                    </div>
+                                </div>
+
+                                <!-- Divider -->
+                                <div
+                                    class="border-t border-gray-200 dark:border-gray-700"
+                                ></div>
+
+                                <!-- Appearance Section - Desktop -->
+                                <div class="space-y-4 max-md:hidden">
+                                    <h3
+                                        class="text-lg font-semibold text-gray-900 dark:text-white"
+                                    >
+                                        Appearance
+                                    </h3>
+
                                     <div
                                         class="grid grid-cols-1 md:grid-cols-3 gap-3"
                                     >
@@ -397,74 +752,78 @@ watch(
                                         <button
                                             type="button"
                                             @click="toggleTheme('light')"
-                                            :class="
+                                            :class="[
+                                                'flex flex-col items-center p-4 border-2 rounded-xl transition-all duration-200 group',
                                                 parsedUserDetails?.theme ===
                                                 'light'
-                                                    ? 'border-blue-500 bg-gray-100 dark:bg-gray-800 ring-2 ring-blue-500 ring-opacity-50'
-                                                    : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600'
-                                            "
-                                            class="flex flex-col items-center p-4 border rounded-lg transition-all duration-200 group"
+                                                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 ring-2 ring-blue-500 ring-opacity-30'
+                                                    : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-600',
+                                            ]"
                                         >
                                             <div
-                                                class="w-12 h-12 mb-2 rounded-lg bg-gradient-to-br from-gray-100 to-gray-200 border border-gray-300 flex items-center justify-center"
+                                                class="w-12 h-12 mb-3 rounded-lg bg-gradient-to-br from-gray-100 to-gray-200 border border-gray-300 flex items-center justify-center"
                                             >
                                                 <Sun
                                                     class="w-5 h-5 text-yellow-500"
                                                 />
                                             </div>
                                             <span
-                                                class="text-sm font-medium text-gray-900 dark:text-white"
-                                                >Light</span
+                                                class="text-sm font-semibold text-gray-900 dark:text-white"
                                             >
+                                                Light
+                                            </span>
                                             <span
-                                                class="text-xs text-gray-500 dark:text-gray-200 mt-1"
-                                                >Always light</span
+                                                class="text-xs text-gray-500 dark:text-gray-400 mt-1"
                                             >
+                                                Always light
+                                            </span>
                                         </button>
 
                                         <!-- Dark Theme -->
                                         <button
                                             type="button"
                                             @click="toggleTheme('dark')"
-                                            :class="
+                                            :class="[
+                                                'flex flex-col items-center p-4 border-2 rounded-xl transition-all duration-200 group',
                                                 parsedUserDetails?.theme ===
                                                 'dark'
-                                                    ? 'border-blue-500 bg-gray-100 dark:bg-gray-800 ring-2 ring-blue-500 ring-opacity-50'
-                                                    : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600'
-                                            "
-                                            class="flex flex-col items-center p-4 border rounded-lg transition-all duration-200 group"
+                                                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 ring-2 ring-blue-500 ring-opacity-30'
+                                                    : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-600',
+                                            ]"
                                         >
                                             <div
-                                                class="w-12 h-12 mb-2 rounded-lg bg-gradient-to-br from-gray-800 to-gray-900 border border-gray-700 flex items-center justify-center"
+                                                class="w-12 h-12 mb-3 rounded-lg bg-gradient-to-br from-gray-800 to-gray-900 border border-gray-700 flex items-center justify-center"
                                             >
                                                 <Moon
                                                     class="w-5 h-5 text-blue-300"
                                                 />
                                             </div>
                                             <span
-                                                class="text-sm font-medium text-gray-900 dark:text-white"
-                                                >Dark</span
+                                                class="text-sm font-semibold text-gray-900 dark:text-white"
                                             >
+                                                Dark
+                                            </span>
                                             <span
-                                                class="text-xs text-gray-500 dark:text-gray-200 mt-1"
-                                                >Always dark</span
+                                                class="text-xs text-gray-500 dark:text-gray-400 mt-1"
                                             >
+                                                Always dark
+                                            </span>
                                         </button>
 
                                         <!-- System Theme -->
                                         <button
                                             type="button"
                                             @click="toggleTheme('system')"
-                                            :class="
+                                            :class="[
+                                                'flex flex-col items-center p-4 border-2 rounded-xl transition-all duration-200 group',
                                                 parsedUserDetails?.theme ===
                                                 'system'
-                                                    ? 'border-blue-500 bg-gray-100 dark:bg-gray-800 ring-2 ring-blue-500 ring-opacity-50'
-                                                    : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600'
-                                            "
-                                            class="flex flex-col items-center p-4 border rounded-lg transition-all duration-200 group"
+                                                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 ring-2 ring-blue-500 ring-opacity-30'
+                                                    : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-600',
+                                            ]"
                                         >
                                             <div
-                                                class="w-12 h-12 mb-2 rounded-lg bg-gradient-to-br from-gray-100 to-gray-800 border border-gray-300 dark:border-gray-600 flex items-center justify-center relative overflow-hidden"
+                                                class="w-12 h-12 mb-3 rounded-lg bg-gradient-to-br from-gray-100 to-gray-800 border border-gray-300 dark:border-gray-600 flex items-center justify-center relative overflow-hidden"
                                             >
                                                 <div
                                                     class="absolute top-0 left-0 w-1/2 h-full bg-gray-100"
@@ -477,43 +836,47 @@ watch(
                                                 />
                                             </div>
                                             <span
-                                                class="text-sm font-medium text-gray-900 dark:text-white"
-                                                >System</span
+                                                class="text-sm font-semibold text-gray-900 dark:text-white"
                                             >
+                                                System
+                                            </span>
                                             <span
-                                                class="text-xs text-gray-500 dark:text-gray-200 mt-1"
-                                                >Follow device</span
+                                                class="text-xs text-gray-500 dark:text-gray-400 mt-1"
                                             >
+                                                Follow device
+                                            </span>
                                         </button>
                                     </div>
+
                                     <p
-                                        class="text-xs text-gray-500 dark:text-gray-200 mt-2"
+                                        class="text-xs text-gray-500 dark:text-gray-400"
                                     >
                                         Choose how Gemmie appears. System theme
                                         follows your device's dark/light mode.
                                     </p>
                                 </div>
 
-                                <!-- Compact Theme Selection -->
-                                <div class="md:hidden">
-                                    <label
-                                        class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3"
+                                <!-- Appearance Section - Mobile -->
+                                <div class="space-y-4 md:hidden">
+                                    <h3
+                                        class="text-lg font-semibold text-gray-900 dark:text-white"
                                     >
-                                        Theme Preference
-                                    </label>
+                                        Appearance
+                                    </h3>
+
                                     <div
-                                        class="flex gap-2 p-1 bg-gray-100 dark:bg-gray-700 rounded-lg w-fit"
+                                        class="inline-flex gap-1 p-1 bg-gray-100 dark:bg-gray-800 rounded-lg w-full"
                                     >
                                         <button
                                             type="button"
                                             @click="toggleTheme('light')"
-                                            :class="
+                                            :class="[
+                                                'flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-md transition-all duration-200 text-sm font-medium',
                                                 parsedUserDetails?.theme ===
                                                 'light'
-                                                    ? 'bg-white dark:bg-gray-600 text-blue-600 shadow-sm'
-                                                    : 'text-gray-600 dark:text-gray-200 hover:text-gray-900 dark:hover:text-white'
-                                            "
-                                            class="flex items-center gap-2 px-4 py-2 rounded-md transition-all duration-200 text-sm font-medium"
+                                                    ? 'bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm'
+                                                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200',
+                                            ]"
                                         >
                                             <Sun class="w-4 h-4" />
                                             <span>Light</span>
@@ -522,13 +885,13 @@ watch(
                                         <button
                                             type="button"
                                             @click="toggleTheme('dark')"
-                                            :class="
+                                            :class="[
+                                                'flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-md transition-all duration-200 text-sm font-medium',
                                                 parsedUserDetails?.theme ===
                                                 'dark'
-                                                    ? 'bg-white dark:bg-gray-600 text-blue-600 shadow-sm'
-                                                    : 'text-gray-600 dark:text-gray-200 hover:text-gray-900 dark:hover:text-white'
-                                            "
-                                            class="flex items-center gap-2 px-4 py-2 rounded-md transition-all duration-200 text-sm font-medium"
+                                                    ? 'bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm'
+                                                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200',
+                                            ]"
                                         >
                                             <Moon class="w-4 h-4" />
                                             <span>Dark</span>
@@ -537,13 +900,13 @@ watch(
                                         <button
                                             type="button"
                                             @click="toggleTheme('system')"
-                                            :class="
+                                            :class="[
+                                                'flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-md transition-all duration-200 text-sm font-medium',
                                                 parsedUserDetails?.theme ===
                                                 'system'
-                                                    ? 'bg-white dark:bg-gray-600 text-blue-600 shadow-sm'
-                                                    : 'text-gray-600 dark:text-gray-200 hover:text-gray-900 dark:hover:text-white'
-                                            "
-                                            class="flex items-center gap-2 px-4 py-2 rounded-md transition-all duration-200 text-sm font-medium"
+                                                    ? 'bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm'
+                                                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200',
+                                            ]"
                                         >
                                             <MonitorSmartphone
                                                 class="w-4 h-4"
@@ -551,97 +914,13 @@ watch(
                                             <span>System</span>
                                         </button>
                                     </div>
+
                                     <p
-                                        class="text-xs text-gray-500 dark:text-gray-200 mt-2"
+                                        class="text-xs text-gray-500 dark:text-gray-400"
                                     >
                                         Choose how Gemmie appears. System theme
                                         follows your device's settings.
                                     </p>
-                                </div>
-
-                                <!-- Work Function -->
-                                <div>
-                                    <label
-                                        class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
-                                    >
-                                        What best describes your work?
-                                    </label>
-                                    <select
-                                        v-model="profileData.workFunction"
-                                        class="border border-gray-300 dark:border-gray-600 rounded-lg px-3 md:px-4 py-2 w-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                                    >
-                                        <option value="">
-                                            Select your work function
-                                        </option>
-                                        <option value="software-developer">
-                                            Software Developer
-                                        </option>
-                                        <option value="designer">
-                                            Designer
-                                        </option>
-                                        <option value="researcher">
-                                            Researcher
-                                        </option>
-                                        <option value="student">Student</option>
-                                        <option value="writer">Writer</option>
-                                        <option value="teacher">
-                                            Teacher/Educator
-                                        </option>
-                                        <option value="business">
-                                            Business Professional
-                                        </option>
-                                        <option value="healthcare">
-                                            Healthcare
-                                        </option>
-                                        <option value="other">Other</option>
-                                    </select>
-                                </div>
-
-                                <!-- Preferences -->
-                                <div>
-                                    <label
-                                        class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
-                                    >
-                                        What personal preferences should Gemmie
-                                        consider in responses?
-                                        <span
-                                            class="ml-1 text-xs text-orange-600 dark:text-orange-400 bg-orange-100 dark:bg-orange-900/30 px-2 py-0.5 rounded"
-                                            >Beta</span
-                                        >
-                                    </label>
-                                    <textarea
-                                        v-model="profileData.preferences"
-                                        rows="3"
-                                        class="border border-gray-300 dark:border-gray-600 rounded-lg px-3 md:px-4 py-2 w-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400"
-                                        placeholder="e.g., Be concise, use technical explanations, avoid jargon"
-                                    />
-                                    <p
-                                        class="text-xs text-gray-500 dark:text-gray-200 mt-1"
-                                    >
-                                        Your preferences will apply to all
-                                        conversations, within guidelines.
-                                    </p>
-                                </div>
-
-                                <!-- Save Button -->
-                                <div class="flex justify-end">
-                                    <button
-                                        type="submit"
-                                        :disabled="
-                                            isSaving || !hasUnsavedChanges
-                                        "
-                                        class="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 dark:disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-lg shadow-sm transition-all duration-200 flex items-center gap-2"
-                                    >
-                                        <RotateCw
-                                            v-if="isSaving"
-                                            class="w-4 h-4 animate-spin"
-                                        />
-                                        <span>{{
-                                            isSaving
-                                                ? "Saving..."
-                                                : "Save changes"
-                                        }}</span>
-                                    </button>
                                 </div>
                             </form>
                         </div>
@@ -649,7 +928,7 @@ watch(
                         <!-- Account -->
                         <div
                             v-if="activeTab === 'account'"
-                            class="bg-white dark:bg-gray-800 p-4 md:p-6 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 w-full transition-colors duration-300"
+                            class="w-full"
                             :class="[
                                 screenWidth >= 1536
                                     ? 'max-w-4xl'
@@ -737,7 +1016,7 @@ watch(
                         <!-- Privacy -->
                         <div
                             v-if="activeTab === 'privacy'"
-                            class="bg-white dark:bg-gray-800 p-4 md:p-6 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 w-full transition-colors duration-300"
+                            class="w-full"
                             :class="[
                                 screenWidth >= 1536
                                     ? 'max-w-4xl'
@@ -773,25 +1052,27 @@ watch(
                                             }}
                                         </p>
                                     </div>
-                                    <button
-                                        @click="handleToggleSync"
-                                        :disabled="isTogglingSync"
-                                        class="disabled:opacity-50 disabled:cursor-not-allowed relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200"
-                                        :class="
+
+                                    <!-- :disabled="isTogglingSync" -->
+                                    <Switch
+                                        @click.prevent="handleToggleSync"
+                                        :disabled="true"
+                                        @update:modelValue="
+                                            isTogglingSync
+                                                ? null
+                                                : handleToggleSync()
+                                        "
+                                        v-model="parsedUserDetails.syncEnabled"
+                                        :class="[
+                                            'transition-colors duration-200',
+                                            isTogglingSync
+                                                ? 'cursor-not-allowed opacity-50'
+                                                : 'cursor-pointer',
                                             parsedUserDetails?.syncEnabled
                                                 ? 'bg-blue-600'
-                                                : 'bg-gray-300 dark:bg-gray-600'
-                                        "
-                                    >
-                                        <span
-                                            class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200"
-                                            :class="
-                                                parsedUserDetails?.syncEnabled
-                                                    ? 'translate-x-6'
-                                                    : 'translate-x-1'
-                                            "
-                                        />
-                                    </button>
+                                                : 'bg-gray-300 dark:bg-gray-600',
+                                        ]"
+                                    />
                                 </div>
 
                                 <!-- Manual Sync Button (only show if sync is enabled) -->
@@ -811,12 +1092,15 @@ watch(
                                             Force sync your data now
                                         </p>
                                     </div>
+
                                     <button
-                                        @click="manualSync"
                                         :disabled="syncStatus.syncing"
-                                        class="px-4 py-2 border font-medium border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:bg-gray-100 dark:disabled:bg-gray-800 disabled:cursor-not-allowed rounded-lg transition-all duration-200 flex items-center gap-2 text-gray-700 dark:text-gray-300"
+                                        @click="
+                                            async () => await syncFromServer()
+                                        "
+                                        class="px-4 py-2 disabled:opacity-50 border font-medium border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:bg-gray-100 dark:disabled:bg-gray-800 disabled:cursor-not-allowed rounded-lg transition-all duration-200 flex items-center gap-2 text-gray-700 dark:text-gray-300"
                                     >
-                                        <RotateCw
+                                        <Loader2
                                             v-if="syncStatus.syncing"
                                             class="w-4 h-4 animate-spin"
                                         />
@@ -880,7 +1164,7 @@ watch(
                         <!-- Billing -->
                         <div
                             v-if="activeTab === 'billing'"
-                            class="bg-white dark:bg-gray-800 p-4 md:p-6 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 w-full transition-colors duration-300"
+                            class="w-full"
                             :class="[
                                 screenWidth >= 1536
                                     ? 'max-w-4xl'

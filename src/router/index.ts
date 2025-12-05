@@ -1,15 +1,15 @@
 import { createRouter, createWebHistory } from "vue-router";
-import DeleteAccView from "../views/DeleteAccView.vue";
-import UpgradeView from "@/views/UpgradeView.vue";
-import SettingsView from "@/views/SettingsView.vue";
-import WorkplaceView from "@/views/WorkplaceView.vue";
-import ChatsView from "@/views/ChatsView.vue";
+import { Workplace } from "@/views/workplace";
 import type { UserDetails } from "@/types";
-import LegalPage from "@/views/LegalPage.vue";
-import CreateSessView from "@/views/CreateSessView.vue";
-import ChatView from "@/views/ChatView.vue";
-import ArcadeView from "@/views/ArcadeView.vue";
-import SingleArcade from "@/views/SingleArcade.vue";
+import { Settings } from "@/views/settings";
+import { Upgrade } from "@/views/upgrade";
+import { Chat } from "@/views/chats/chat";
+import { Chats } from "@/views/chats";
+import LegalPage from "@/views/legal/LegalPage.vue";
+import { Arcades } from "@/views/arcades";
+import { Arcade } from "@/views/arcades/arcade";
+import { CreateSession } from "@/views/auth";
+import { DeleteAccount } from "@/views/DeleteAccount";
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -17,63 +17,63 @@ const router = createRouter({
     {
       path: "/chat/:id?",
       name: "chat",
-      component: ChatView,
+      component: Chat,
       props: true,
       meta: { requiresAuth: true },
     },
     {
       path: "/",
       name: "authentication",
-      component: CreateSessView,
+      component: CreateSession,
       meta: { requiresAuth: false },
     },
     {
       path: "/new",
       name: "new_chat",
-      component: ChatView,
+      component: Chat,
       meta: { requiresAuth: true },
     },
     {
       path: "/chats",
       name: "chats",
-      component: ChatsView,
+      component: Chats,
       meta: { requiresAuth: true },
     },
     {
       path: "/workplace",
       name: "workplace",
-      component: WorkplaceView,
+      component: Workplace,
       meta: { requiresAuth: true },
     },
     {
       path: "/arcade",
       name: "arcade",
-      component: ArcadeView,
+      component: Arcades,
       meta: { requiresAuth: true },
     },
     {
       path: "/arcade/:id",
       name: "single-arcade",
       props: true,
-      component: SingleArcade,
+      component: Arcade,
     },
     {
       path: "/auth/delete_account",
       name: "delete_account",
-      component: DeleteAccView,
+      component: DeleteAccount,
       meta: { requiresAuth: true },
     },
     {
       path: "/upgrade/:plan?",
       name: "upgrade",
-      component: UpgradeView,
+      component: Upgrade,
       props: true,
       meta: { requiresAuth: false },
     },
     {
       path: "/settings/:tab?",
       name: "settings",
-      component: SettingsView,
+      component: Settings,
       props: true,
       meta: { requiresAuth: true },
     },

@@ -1,4 +1,4 @@
-const CACHE_VERSION = "v0.25.0";
+const CACHE_VERSION = "v0.26.1";
 const staticCacheName = `site-static-${CACHE_VERSION}`;
 const dynamicCache = `site-dynamic-${CACHE_VERSION}`;
 
@@ -170,12 +170,16 @@ self.addEventListener("push", (event) => {
   const data = event.data.json();
 
   const notificationOptions = {
-    body: data.body,
+    body: data.body || "You have a new notification",
     icon: data.icon || "/favicon.svg",
     badge: data.badge || "/logo.svg",
+    image: data.image,
+    actions: data.actions || [],
     vibrate: [200, 100, 200],
     silent: false,
-    data: { link: data.url },
+    tag: data.tag || "default-tag",
+    requireInteraction: data.requireInteraction || false,
+    data: data.data || {},
   };
 
   // Only add sound if browser supports it
@@ -183,14 +187,22 @@ self.addEventListener("push", (event) => {
     notificationOptions.sound = "/sounds/bell-notification.wav";
   }
 
-  self.registration.showNotification(data.title, notificationOptions);
+  self.registration.showNotification(
+    data.title || "Notification",
+    notificationOptions,
+  );
 });
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const link = event.notification.data.link;
-  if (link) {
+  const link = event.notification.data.url || "/";
+  const action = event.action;
+  if (action) {
+    // Handle action button clicks
+    console.log("Action clicked:", action);
+  } else {
     event.waitUntil(
+      // eslint-disable-next-line no-undef
       clients
         .matchAll({ type: "window", includeUncontrolled: true })
         .then((windowClients) => {
@@ -200,6 +212,7 @@ self.addEventListener("notificationclick", (event) => {
           if (matchingClient) {
             return matchingClient.focus();
           } else {
+            // eslint-disable-next-line no-undef
             return clients.openWindow(link);
           }
         }),

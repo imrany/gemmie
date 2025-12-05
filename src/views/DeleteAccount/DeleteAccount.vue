@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import { inject, onMounted, ref, type Ref } from "vue";
-import { API_BASE_URL, getErrorStatus } from "../lib/globals";
+import { API_BASE_URL, getErrorStatus } from "@/lib/globals";
 import { useRouter } from "vue-router";
 import type { PlatformError, UserDetails } from "@/types";
 import { generateErrorId } from "@/composables/usePlatformError";

@@ -33,6 +33,7 @@ import { useChat } from "./composables/useChat";
 import { useCache } from "./composables/useCache";
 import { useSync } from "./composables/useSync";
 import { useHandlePaste } from "./composables/useHandlePaste";
+import { usePushNotifications } from "./composables/usePushNotifications";
 
 const { reportError } = usePlatformError();
 const router = useRouter();
@@ -323,6 +324,8 @@ const { apiCall, checkInternetConnection, unsecureApiCall } = useApiCall({
 
 const isOnline = ref(true);
 const connectionStatus = ref<"online" | "offline" | "checking">("online");
+const { isSupported, isSubscribed, error, subscribe, unsubscribe } =
+    usePushNotifications();
 
 const {
     isChatLoading,
@@ -603,6 +606,18 @@ function handleScroll() {
         const hasSubstantialContent = scrollHeight > currentScrollPosition;
 
         showScrollDownButton.value = !isAtBottom && hasSubstantialContent;
+        // console.log(
+        //     "Scroll position:",
+        //     currentScrollPosition,
+        //     "scroll height:",
+        //     scrollHeight,
+        //     "Total height:",
+        //     totalScrollableHeight,
+        //     "Threshold:",
+        //     threshold,
+        //     "Is at bottom:",
+        //     isAtBottom,
+        // );
     } catch (error) {
         console.error("Error handling scroll:", error);
     }
@@ -2410,7 +2425,11 @@ const globalState = {
     performSmartSync,
     scrollToLastMessage,
     handleSrollIntoView,
-
+    isSupported,
+    isSubscribed,
+    error,
+    subscribe,
+    unsubscribe,
     // Sync UI functions
     showSyncIndicator,
     hideSyncIndicator,
@@ -2440,8 +2459,12 @@ provide("globalState", globalState);
         <Toaster
             position="top-right"
             :closeButton="true"
-            closeButtonPosition="top-left"
+            closeButtonPosition="top-right"
             :theme="parsedUserDetails ? parsedUserDetails.theme : 'system'"
+            :toastOptions="{
+                class: 'bg-gray-200 dark:bg-gray-800 text-gray-800 dark:text-gray-200',
+                descriptionClass: 'text-gray-800 dark:text-gray-200',
+            }"
         />
         <ConfirmDialog
             v-if="confirmDialog.visible"
