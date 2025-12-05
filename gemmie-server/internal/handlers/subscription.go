@@ -15,9 +15,9 @@ import (
 
 var (
 	// Generate VAPID keys using: go run main.go generate-vapid
-	VapidPublicKey  = viper.GetString("vapid-public_key")
-	VapidPrivateKey = viper.GetString("vapid-private_key")
-	VapidEmail      = viper.GetString("vapid-email")
+	VapidPublicKey  = viper.GetString("VAPID_PUBLIC_KEY")
+	VapidPrivateKey = viper.GetString("VAPID_PRIVATE_KEY")
+	VapidEmail      = viper.GetString("VAPID_EMAIL")
 )
 
 // GenerateVAPIDKeys - Generate VAPID keys (run once) - go run main.go generate-vapid
