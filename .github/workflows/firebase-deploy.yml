@@ -2,24 +2,24 @@ name: Deploy to Firebase
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [release]
   pull_request:
-    branches: [ main, master ]
+    branches: [release]
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-    
+
     steps:
-    - uses: actions/checkout@v4
-    - run: npm install -g pnpm
-    - run: pnpm install --frozen-lockfile && pnpm run build
-    - uses: FirebaseExtended/action-hosting-deploy@v0
-      with:
-        repoToken: '${{ secrets.GITHUB_TOKEN }}'
-        firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}'
-        channelId: live
-        projectId: ${{ secrets.FIREBASE_PROJECT_ID }}
-        entryPoint: './'  # Adjust if your firebase.json is in a subdirectory
-      env:
-        FIREBASE_CLI_EXPERIMENTS: webframeworks
+      - uses: actions/checkout@v4
+      - run: npm install -g pnpm
+      - run: pnpm install --frozen-lockfile && pnpm run build
+      - uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: "${{ secrets.GITHUB_TOKEN }}"
+          firebaseServiceAccount: "${{ secrets.FIREBASE_SERVICE_ACCOUNT }}"
+          channelId: live
+          projectId: ${{ secrets.FIREBASE_PROJECT_ID }}
+          entryPoint: "./" # Adjust if your firebase.json is in a subdirectory
+        env:
+          FIREBASE_CLI_EXPERIMENTS: webframeworks
