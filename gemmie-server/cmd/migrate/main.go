@@ -23,10 +23,10 @@ func main() {
 	forceVersion := pflag.Int("version", 0, "Version to force (used with 'force' command)")
 
 	pflag.String("db-host", "localhost", "Database host")
-	pflag.String("db-port", "5432", "Database port")
+	pflag.Int("db-port", 5432, "Database port")
 	pflag.String("db-user", "", "Database user")
 	pflag.String("db-password", "", "Database password")
-	pflag.String("db-name", "gemmie", "Database name")
+	pflag.String("db-name", "", "Database name")
 	pflag.String("db-sslmode", "disable", "Database SSL mode")
 
 	pflag.Parse()
@@ -44,6 +44,9 @@ func main() {
 
 	// Get final values
 	dbDSN := viper.GetString("DB_DSN")
+	if dbDSN == "" {
+		dbDSN = viper.GetString("DSN")
+	}
 	finalDBHost := viper.GetString("DB_HOST")
 	finalDBPort := viper.GetString("DB_PORT")
 	finalDBUser := viper.GetString("DB_USER")
@@ -92,12 +95,12 @@ func main() {
 		fmt.Println("A previous migration failed and needs to be resolved.")
 		fmt.Println("\nOptions to fix:")
 		fmt.Println("1. Fix the failed migration file and run:")
-		fmt.Printf("   -command=force -version=%d\n", version-1)
+		fmt.Printf("   --command=force --version=%d\n", version-1)
 		fmt.Println("   (This will reset to the previous version)")
 		fmt.Println("\n2. Or force to the current version if migration actually succeeded:")
-		fmt.Printf("   -command=force -version=%d\n", version)
+		fmt.Printf("   --command=force --version=%d\n", version)
 		fmt.Println("\n3. Check migration status:")
-		fmt.Println("   -command=version")
+		fmt.Println("   --command=version")
 		log.Fatal("\nCannot proceed with dirty database state")
 	}
 
@@ -110,7 +113,7 @@ func main() {
 			showVersion()
 			fmt.Println("\n⚠ The database is now in a DIRTY state.")
 			fmt.Println("To recover, fix the migration file and run:")
-			fmt.Printf("  -command=force -version=%d\n", getCurrentVersion())
+			fmt.Printf("  --command=force --version=%d\n", getCurrentVersion())
 			log.Fatal("Migration aborted")
 		}
 		fmt.Println("✓ Migrations completed successfully")
@@ -135,7 +138,7 @@ func main() {
 			showVersion()
 			fmt.Println("\n⚠ The database is now in a DIRTY state.")
 			fmt.Println("To recover, fix the migration file and run:")
-			fmt.Printf("  -command=force -version=%d\n", getCurrentVersion())
+			fmt.Printf("  --command=force --version=%d\n", getCurrentVersion())
 			log.Fatal("Migration aborted")
 		}
 		fmt.Println("✓ Migration completed successfully")
@@ -151,7 +154,7 @@ func main() {
 			showVersion()
 			fmt.Println("\n⚠ The database is now in a DIRTY state.")
 			fmt.Println("To recover, fix the migration file and run:")
-			fmt.Printf("  -command=force -version=%d\n", getCurrentVersion())
+			fmt.Printf("  --command=force --version=%d\n", getCurrentVersion())
 			log.Fatal("Migration aborted")
 		}
 		fmt.Println("✓ Migration completed successfully")
@@ -218,11 +221,11 @@ func showVersion() {
 		fmt.Println("\nTo recover from dirty state:")
 		fmt.Println("1. Fix the failed migration file")
 		if version > 0 {
-			fmt.Printf("2. Force to previous version: -command=force -version=%d\n", version-1)
+			fmt.Printf("2. Force to previous version: --command=force --version=%d\n", version-1)
 		} else {
-			fmt.Println("2. Force to version 0: -command=force -version=0")
+			fmt.Println("2. Force to version 0: --command=force --version=0")
 		}
-		fmt.Println("3. Run migrations again: -command=up")
+		fmt.Println("3. Run migrations again: --command=up")
 	} else {
 		fmt.Println("State: ✓ Clean")
 	}
