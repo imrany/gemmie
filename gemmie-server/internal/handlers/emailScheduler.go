@@ -82,7 +82,7 @@ func sendUpgradeEmails(smtpConfig mailer.SMTPConfig) {
 		}
 
 		// Get subscriptions
-		subscriptions, err := store.GetSubscriptionsByUserIDs(ctx, []string{user.ID})
+		subscriptions, err := store.GetSubscriptionsByUserID(ctx, user.ID)
 		if err != nil {
 			slog.Error("Failed to get subscriptions", "Error", err)
 			continue // If can't get subscription, just skip to the next user.
@@ -93,48 +93,54 @@ func sendUpgradeEmails(smtpConfig mailer.SMTPConfig) {
 			continue // If no subscription skip to the next user.
 		}
 
-		sub := subscriptions[0]
-		payload := store.NotificationPayload{
-			Title:              "Unlock Premium Features",
-			Body:               "Upgrade your Gemmie Plan and enjoy exclusive features! 🚀,\n click to upgrade your account",
-			Data:               map[string]any{"user_id": user.ID, "email": user.Email, "plan": user.Plan, "url": "/upgrade"},
-			Tag:                "upgrade-email",
-			RequireInteraction: true,
-		}
-
-		data, err := json.Marshal(payload)
-		if err != nil {
-			slog.Error("Failed to marshal notification payload", "Error", err)
-			continue // If can't marshal the payload, skip to the next user.
-		}
-
-		resp, err := webpush.SendNotification(data, &webpush.Subscription{
-			Endpoint: sub.Endpoint,
-			Keys: webpush.Keys{
-				Auth:   sub.AuthKey,
-				P256dh: sub.P256dhKey,
-			},
-		}, &webpush.Options{
-			Subscriber:      VapidEmail,
-			VAPIDPublicKey:  VapidPublicKey,
-			VAPIDPrivateKey: VapidPrivateKey,
-			TTL:             30,
-		})
-
-		if err != nil {
-			slog.Error("Failed to send notification", "Endpoint", sub.Endpoint, "Error", err)
-
-			// Delete invalid subscriptions (410 Gone or 404 Not Found)
-			if resp != nil && (resp.StatusCode == 410 || resp.StatusCode == 404) {
-				store.DeleteSubscription(ctx, sub.Endpoint)
-				slog.Info("Deleted invalid subscription", "Endpoint", sub.Endpoint)
+		for _, sub := range subscriptions {
+			payload := store.NotificationPayload{
+				Title:              "Unlock Premium Features",
+				Body:               "Upgrade your Gemmie Plan and enjoy exclusive features! 🚀,\n click to upgrade your account",
+				Data:               map[string]any{"user_id": user.ID, "email": user.Email, "plan": user.Plan, "url": "/upgrade"},
+				Tag:                "upgrade-email",
+				RequireInteraction: true,
 			}
-		} else {
-			if resp != nil && resp.Body != nil { // Check if resp is not nil before closing body
-				resp.Body.Close()
+
+			data, err := json.Marshal(payload)
+			if err != nil {
+				slog.Error("Failed to marshal notification payload", "Error", err)
+				continue // If can't marshal the payload, skip to the next user.
 			}
-			if resp != nil && (resp.StatusCode < 200 || resp.StatusCode >= 300) { // Fixed logic
-				slog.Info("Push failed", "Status", resp.StatusCode, "Endpoint", sub.Endpoint)
+			resp, err := webpush.SendNotification(data, &webpush.Subscription{
+				Endpoint: sub.Endpoint,
+				Keys: webpush.Keys{
+					Auth:   sub.AuthKey,
+					P256dh: sub.P256dhKey,
+				},
+			}, &webpush.Options{
+				Subscriber:      VapidEmail,
+				VAPIDPublicKey:  VapidPublicKey,
+				VAPIDPrivateKey: VapidPrivateKey,
+				TTL:             30,
+			})
+
+			if err != nil {
+				slog.Error("Failed to send notification", "Endpoint", sub.Endpoint, "Error", err)
+
+				// Delete invalid subscriptions (410 Gone or 404 Not Found)
+				if resp != nil && (resp.StatusCode == 410 || resp.StatusCode == 404) {
+					if err := store.DeleteSubscription(ctx, sub.Endpoint); err != nil {
+						slog.Error("Failed to delete invalid subscription", "Endpoint", sub.Endpoint, "Error", err)
+					} else {
+						slog.Info("Deleted invalid subscription", "Endpoint", sub.Endpoint)
+					}
+				}
+			} else {
+				if resp != nil && resp.Body != nil { // Check if resp is not nil before closing body
+					err := resp.Body.Close()
+					if err != nil {
+						slog.Error("Error closing response body", "error", err)
+					}
+				}
+				if resp != nil && (resp.StatusCode < 200 || resp.StatusCode >= 300) { // Fixed logic
+					slog.Info("Push failed", "Status", resp.StatusCode, "Endpoint", sub.Endpoint)
+				}
 			}
 		}
 

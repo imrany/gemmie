@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/SherClockHolmes/webpush-go"
 	"github.com/gorilla/mux"
 	"github.com/imrany/gemmie/gemmie-server/internal/encrypt"
 	"github.com/imrany/gemmie/gemmie-server/internal/genai"
@@ -425,6 +426,7 @@ func DeleteAllChatsHandler(w http.ResponseWriter, r *http.Request) {
 
 // CreateMessageHandler handles POST /api/chats/{id}/messages
 func CreateMessageHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	w.Header().Set("Content-Type", "application/json")
 
 	userID := r.Header.Get("X-User-ID")
@@ -552,10 +554,69 @@ func CreateMessageHandler(w http.ResponseWriter, r *http.Request) {
 
 	if err := store.UpdateChat(*chat); err != nil {
 		slog.Error("Failed to update chat", "chat_id", chatID, "error", err)
-		// Don't fail the request, message was created successfully
 	}
 
 	slog.Info("Message created successfully", "message_id", message.ID, "chat_id", chatID, "user_id", userID)
+
+	// Get subscriptions
+	subscriptions, err := store.GetSubscriptionsByUserID(ctx, userID)
+	if err != nil {
+		slog.Error("Failed to get subscriptions", "Error", err)
+	}
+
+	if len(subscriptions) == 0 {
+		slog.Info("No subscriptions found for user", "user_id", userID)
+	}
+
+	for _, sub := range subscriptions {
+		payload := store.NotificationPayload{
+			Title: "✅ Gemmie Finished Your Task!",
+			Body:  fmt.Sprintf("The response for your '%s...' prompt is ready — tap to review it now.", message.Prompt[:25]),
+			Data: map[string]any{
+				"chat_id":    message.ChatId,
+				"message_id": message.ID,
+				"url":        "/chat/" + message.ChatId,
+			},
+			Tag:                "response-complete",
+			RequireInteraction: true,
+		}
+
+		data, err := json.Marshal(payload)
+		if err != nil {
+			slog.Error("Failed to marshal notification payload", "Error", err)
+			continue // If can't marshal the payload, skip to the next user.
+		}
+
+		resp, err := webpush.SendNotification(data, &webpush.Subscription{
+			Endpoint: sub.Endpoint,
+			Keys: webpush.Keys{
+				Auth:   sub.AuthKey,
+				P256dh: sub.P256dhKey,
+			},
+		}, &webpush.Options{
+			Subscriber:      VapidEmail,
+			VAPIDPublicKey:  VapidPublicKey,
+			VAPIDPrivateKey: VapidPrivateKey,
+			TTL:             30,
+		})
+
+		if err != nil {
+			slog.Error("Failed to send notification", "Endpoint", sub.Endpoint, "Error", err)
+
+			// Delete invalid subscriptions (410 Gone or 404 Not Found)
+			if resp != nil && (resp.StatusCode == 410 || resp.StatusCode == 404) {
+				store.DeleteSubscription(ctx, sub.Endpoint)
+				slog.Info("Deleted invalid subscription", "Endpoint", sub.Endpoint)
+			}
+		} else {
+			if resp != nil && resp.Body != nil { // Check if resp is not nil before closing body
+				resp.Body.Close()
+			}
+			if resp != nil && (resp.StatusCode < 200 || resp.StatusCode >= 300) { // Fixed logic
+				slog.Info("Push failed", "Status", resp.StatusCode, "Endpoint", sub.Endpoint)
+			}
+		}
+	}
 
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(store.Response{
