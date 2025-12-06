@@ -10,6 +10,7 @@ import { Arcades } from "@/views/arcades";
 import { Arcade } from "@/views/arcades/arcade";
 import { CreateSession } from "@/views/auth";
 import { DeleteAccount } from "@/views/DeleteAccount";
+import OCRPage from "@/views/ocr/OCRPage.vue";
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -75,6 +76,12 @@ const router = createRouter({
       name: "settings",
       component: Settings,
       props: true,
+      meta: { requiresAuth: true },
+    },
+    {
+      path: "/ocr",
+      name: "ocr",
+      component: OCRPage,
       meta: { requiresAuth: true },
     },
     {

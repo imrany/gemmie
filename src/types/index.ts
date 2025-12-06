@@ -169,3 +169,9 @@ export interface CustomPayload {
     | string;
   requireInteraction?: boolean;
 }
+
+export interface OCRData {
+  processing_ms: number;
+  text: string;
+  text_length: number;
+}
