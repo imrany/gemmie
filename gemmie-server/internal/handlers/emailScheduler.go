@@ -118,8 +118,6 @@ func sendUpgradePushNotification(ctx context.Context, user store.User) {
 	payload := store.NotificationPayload{
 		Title: "🚀 Unlock Premium Features",
 		Body:  "Upgrade your Gemmie Plan and enjoy exclusive features! Tap to upgrade your account.",
-		Icon:  "/icon-192x192.png",
-		Badge: "/badge-72x72.png",
 		Data: map[string]any{
 			"user_id": user.ID,
 			"email":   user.Email,
