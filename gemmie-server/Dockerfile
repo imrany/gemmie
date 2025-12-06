@@ -30,7 +30,7 @@ FROM alpine:3.19
 
 # Install runtime deps
 RUN set -eux && \
-    apk add --no-cache ca-certificates tzdata && \
+    apk add --no-cache ca-certificates tzdata tesseract-ocr && \
     addgroup -S gemmie && \
     adduser -S gemmie -G gemmie && \
     rm -rf /var/cache/apk/*
