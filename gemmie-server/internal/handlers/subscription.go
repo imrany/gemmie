@@ -13,13 +13,6 @@ import (
 	"github.com/spf13/viper"
 )
 
-var (
-	// Generate VAPID keys using: go run main.go generate-vapid
-	VapidPublicKey  = viper.GetString("VAPID_PUBLIC_KEY")
-	VapidPrivateKey = viper.GetString("VAPID_PRIVATE_KEY")
-	VapidEmail      = viper.GetString("VAPID_EMAIL")
-)
-
 // GenerateVAPIDKeys - Generate VAPID keys (run once) - go run main.go generate-vapid
 func GenerateVAPIDKeys() {
 	privateKey, publicKey, err := webpush.GenerateVAPIDKeys()
@@ -33,6 +26,8 @@ func GenerateVAPIDKeys() {
 
 // SubscribeToPushNotificationHandler - Subscribes user to push notifications
 func SubscribeToPushNotificationHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
 	userID := r.Header.Get("X-User-ID")
 	if userID == "" {
 		w.WriteHeader(http.StatusUnauthorized)
@@ -43,8 +38,8 @@ func SubscribeToPushNotificationHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	_, err := store.GetUserByID(userID)
-	if err != nil {
+	user, err := store.GetUserByID(userID)
+	if err != nil || user == nil {
 		w.WriteHeader(http.StatusNotFound)
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
@@ -55,6 +50,7 @@ func SubscribeToPushNotificationHandler(w http.ResponseWriter, r *http.Request) 
 
 	var sub store.SubscriptionRequest
 	if err := json.NewDecoder(r.Body).Decode(&sub); err != nil {
+		slog.Error("Invalid subscription request", "error", err)
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
@@ -63,15 +59,30 @@ func SubscribeToPushNotificationHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	userAgent := r.Header.Get("User-Agent")
-
-	if err := store.SaveSubscription(r.Context(), userID, sub, userAgent); err != nil {
-		log.Printf("Failed to save subscription: %v", err)
-		http.Error(w, "Failed to save subscription", http.StatusInternalServerError)
+	// Validate subscription data
+	if sub.Endpoint == "" || sub.Keys.P256dh == "" || sub.Keys.Auth == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(store.Response{
+			Success: false,
+			Message: "Invalid subscription data: missing required fields",
+		})
 		return
 	}
 
-	slog.Info("Subscription saved for user %s: %s", userID, sub.Endpoint)
+	userAgent := r.Header.Get("User-Agent")
+
+	if err := store.SaveSubscription(r.Context(), userID, sub, userAgent); err != nil {
+		slog.Error("Failed to save subscription", "user_id", userID, "error", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(store.Response{
+			Success: false,
+			Message: "Failed to save subscription",
+		})
+		return
+	}
+
+	slog.Info("Subscription saved successfully", "user_id", userID, "endpoint", sub.Endpoint)
+
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(store.Response{
 		Success: true,
@@ -151,7 +162,11 @@ func SendPushNotificationHandler(w http.ResponseWriter, r *http.Request) {
 
 	var req store.SendNotificationRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(store.Response{
+			Success: false,
+			Message: "Invalid request body",
+		})
 		return
 	}
 
@@ -200,19 +215,19 @@ func SendPushNotificationHandler(w http.ResponseWriter, r *http.Request) {
 				P256dh: sub.P256dhKey,
 			},
 		}, &webpush.Options{
-			Subscriber:      VapidEmail,
-			VAPIDPublicKey:  VapidPublicKey,
-			VAPIDPrivateKey: VapidPrivateKey,
+			Subscriber:      viper.GetString("VAPID_EMAIL"),
+			VAPIDPublicKey:  viper.GetString("VAPID_PUBLIC_KEY"),
+			VAPIDPrivateKey: viper.GetString("VAPID_PRIVATE_KEY"),
 			TTL:             30,
 		})
 
 		if err != nil {
-			log.Printf("Failed to send to %s: %v", sub.Endpoint, err)
+			slog.Info("Failed to send to notification", "Endpoint", sub.Endpoint, "Error", err, "Vapid Private Key", viper.GetString("VAPID_PRIVATE_KEY"), "request", req)
 			failureCount++
 			failedEndpoints = append(failedEndpoints, sub.Endpoint)
 
 			// Delete invalid subscriptions (410 Gone or 404 Not Found)
-			if resp != nil && (resp.StatusCode == 410 || resp.StatusCode == 404) {
+			if resp != nil && (resp.StatusCode == http.StatusGone || resp.StatusCode == http.StatusNotFound) {
 				store.DeleteSubscription(r.Context(), sub.Endpoint)
 				slog.Info("Deleted invalid subscription", "Endpoint", sub.Endpoint)
 			}
@@ -228,10 +243,14 @@ func SendPushNotificationHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	message := "Failed to send push notification"
+	if successCount > 0 {
+		message = "Push notifications sent"
+	}
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(store.Response{
-		Success: true,
-		Message: "Push notifications sent",
+		Success: successCount > 0,
+		Message: message,
 		Data: map[string]any{
 			"sent":             successCount,
 			"failed":           failureCount,

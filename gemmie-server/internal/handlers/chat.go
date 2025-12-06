@@ -624,9 +624,9 @@ func CreateMessageHandler(w http.ResponseWriter, r *http.Request) {
 					P256dh: sub.P256dhKey,
 				},
 			}, &webpush.Options{
-				Subscriber:      VapidEmail,
-				VAPIDPublicKey:  VapidPublicKey,
-				VAPIDPrivateKey: VapidPrivateKey,
+				Subscriber:      viper.GetString("VAPID_EMAIL"),
+				VAPIDPublicKey:  viper.GetString("VAPID_PUBLIC_KEY"),
+				VAPIDPrivateKey: viper.GetString("VAPID_PRIVATE_KEY"),
 				TTL:             30,
 			})
 
