@@ -161,6 +161,11 @@ export interface CustomPayload {
   body: string;
   url?: string;
   icon?: string;
-  tag?: "default-tag" | "notification-tag" | "response-complete" | string;
+  tag?:
+    | "default-tag"
+    | "notification-tag"
+    | "response-complete"
+    | "upgrade-email"
+    | string;
   requireInteraction?: boolean;
 }
