@@ -577,8 +577,8 @@ func CreateMessageHandler(w http.ResponseWriter, r *http.Request) {
 
 		// Prepare notification payload
 		promptPreview := message.Prompt
-		if len(promptPreview) > 25 {
-			promptPreview = promptPreview[:25] + "..."
+		if len(promptPreview) > 20 {
+			promptPreview = promptPreview[:20] + "..."
 		} else if len(promptPreview) == 0 {
 			promptPreview = "your request"
 		}
@@ -586,8 +586,6 @@ func CreateMessageHandler(w http.ResponseWriter, r *http.Request) {
 		payload := store.NotificationPayload{
 			Title: "✅ Gemmie Finished Your Task!",
 			Body:  fmt.Sprintf("The response for '%s' is ready — tap to review it now.", promptPreview),
-			Icon:  "/icon-192x192.png",
-			Badge: "/badge-72x72.png",
 			Data: map[string]any{
 				"chat_id":    message.ChatId,
 				"message_id": message.ID,
