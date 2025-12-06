@@ -324,8 +324,17 @@ const { apiCall, checkInternetConnection, unsecureApiCall } = useApiCall({
 
 const isOnline = ref(true);
 const connectionStatus = ref<"online" | "offline" | "checking">("online");
-const { isSupported, isSubscribed, error, subscribe, unsubscribe } =
-    usePushNotifications();
+const {
+    isSupported,
+    isSubscribed,
+    error: webPushError,
+    subscribe,
+    unsubscribe,
+    sendPushNotification,
+    loading: webPushLoading,
+    checkSubscription,
+    permission: notificationPermission,
+} = usePushNotifications();
 
 const {
     isChatLoading,
@@ -2427,7 +2436,11 @@ const globalState = {
     handleSrollIntoView,
     isSupported,
     isSubscribed,
-    error,
+    sendPushNotification,
+    webPushError,
+    webPushLoading,
+    notificationPermission,
+    checkSubscription,
     subscribe,
     unsubscribe,
     // Sync UI functions

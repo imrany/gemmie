@@ -155,3 +155,12 @@ export interface RawArcade {
   created_at: string;
   updated_at?: Date;
 }
+
+export interface CustomPayload {
+  title: string;
+  body: string;
+  url?: string;
+  icon?: string;
+  tag?: "default-tag" | "notification-tag" | string;
+  requireInteraction?: boolean;
+}

@@ -55,7 +55,7 @@ const filteredChats = computed(() => {
 });
 
 const handleNewChat = () => {
-    currentChatId.value=""
+    currentChatId.value = "";
     router.push("/new");
 };
 

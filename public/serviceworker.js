@@ -1,4 +1,4 @@
-const CACHE_VERSION = "v0.26.1";
+const CACHE_VERSION = "v0.26.7";
 const staticCacheName = `site-static-${CACHE_VERSION}`;
 const dynamicCache = `site-dynamic-${CACHE_VERSION}`;
 
@@ -7,7 +7,6 @@ const assets = [
   "/manifest.json",
   "/logo.svg",
   "/sounds/bell-notification.wav",
-  // Add other critical assets here
 ];
 
 // Installing service worker
@@ -23,9 +22,6 @@ self.addEventListener("install", (evt) => {
       })
       .then(() => {
         console.log("Assets cached successfully");
-        // DON'T call self.skipWaiting() here
-        // This keeps the new service worker in "waiting" state
-        // until the user approves the update
       })
       .catch((error) => {
         console.error("Failed to cache assets:", error);
@@ -40,7 +36,6 @@ self.addEventListener("activate", (evt) => {
     caches
       .keys()
       .then((keys) => {
-        // Only delete caches that don't match current version
         const deletePromises = keys
           .filter((key) => !key.includes(CACHE_VERSION))
           .map((key) => {
@@ -52,12 +47,12 @@ self.addEventListener("activate", (evt) => {
       })
       .then(() => {
         console.log("Service Worker activated");
-        return self.clients.claim(); // Take control of all clients
+        return self.clients.claim();
       }),
   );
 });
 
-// cache limit function with async/await
+// cache limit function
 const limitCacheSize = async (name, size) => {
   try {
     const cache = await caches.open(name);
@@ -65,7 +60,6 @@ const limitCacheSize = async (name, size) => {
 
     if (keys.length > size) {
       await cache.delete(keys[0]);
-      // Recursively limit cache size
       await limitCacheSize(name, size);
     }
   } catch (error) {
@@ -75,32 +69,15 @@ const limitCacheSize = async (name, size) => {
 
 // Helper function to check if request should be cached
 const shouldCacheRequest = (url) => {
-  // Skip external requests
-  if (url.origin !== location.origin) {
-    return false;
-  }
-
-  // Skip API endpoints
-  if (url.pathname.startsWith("/api")) {
-    return false;
-  }
-
-  // Skip share endpoints (these are SEO routes, don't cache them)
-  if (url.pathname.startsWith("/share")) {
-    return false;
-  }
-
-  // Skip WebSocket connections
-  if (url.protocol === "ws:" || url.protocol === "wss:") {
-    return false;
-  }
-
+  if (url.origin !== location.origin) return false;
+  if (url.pathname.startsWith("/api")) return false;
+  if (url.pathname.startsWith("/share")) return false;
+  if (url.protocol === "ws:" || url.protocol === "wss:") return false;
   return true;
 };
 
-// fetch event with better caching strategies
+// fetch event
 self.addEventListener("fetch", (evt) => {
-  // Skip non-HTTP requests and extension requests
   if (
     !evt.request.url.startsWith("http") ||
     evt.request.url.includes("extension://")
@@ -111,7 +88,6 @@ self.addEventListener("fetch", (evt) => {
   const url = new URL(evt.request.url);
   const shouldCache = shouldCacheRequest(url);
 
-  // For requests that shouldn't be cached, just pass through
   if (!shouldCache) {
     evt.respondWith(fetch(evt.request));
     return;
@@ -121,14 +97,11 @@ self.addEventListener("fetch", (evt) => {
     caches
       .match(evt.request)
       .then((cacheRes) => {
-        // If found in cache, return cached version
         if (cacheRes) {
           return cacheRes;
         }
 
-        // Fetch from network
         return fetch(evt.request).then((fetchRes) => {
-          // Only cache successful responses
           if (fetchRes.status === 200) {
             const responseClone = fetchRes.clone();
 
@@ -144,18 +117,14 @@ self.addEventListener("fetch", (evt) => {
       .catch((error) => {
         console.error("Fetch failed:", error);
 
-        // Fallback strategies
         if (evt.request.destination === "document") {
-          // For HTML pages, serve the main page
           return caches.match("/index.html");
         }
 
-        // For images, return a placeholder
         if (evt.request.destination === "image") {
           return caches.match("/logo.svg");
         }
 
-        // For other resources, you could return a default image, etc.
         return new Response("Network error occurred", {
           status: 503,
           statusText: "Service Unavailable",
@@ -164,10 +133,28 @@ self.addEventListener("fetch", (evt) => {
   );
 });
 
-// push notification handler
+// Push notification handler
 self.addEventListener("push", (event) => {
   console.log("Push event received:", event);
-  const data = event.data.json();
+
+  // Check if event has data
+  if (!event.data) {
+    console.error("Push event has no data");
+    return;
+  }
+
+  let data;
+  try {
+    data = event.data.json();
+    console.log("Push data parsed:", data);
+  } catch (error) {
+    console.error("Failed to parse push data:", error);
+    // Try as text
+    data = {
+      title: "Notification",
+      body: event.data.text() || "You have a new notification",
+    };
+  }
 
   const notificationOptions = {
     body: data.body || "You have a new notification",
@@ -182,48 +169,48 @@ self.addEventListener("push", (event) => {
     data: data.data || {},
   };
 
-  // Only add sound if browser supports it
-  if ("sound" in Notification.prototype) {
-    notificationOptions.sound = "/sounds/bell-notification.wav";
-  }
+  console.log("Showing notification:", data.title, notificationOptions);
 
-  self.registration.showNotification(
-    data.title || "Notification",
-    notificationOptions,
+  event.waitUntil(
+    self.registration.showNotification(
+      data.title || "Notification",
+      notificationOptions,
+    ),
   );
 });
 
 self.addEventListener("notificationclick", (event) => {
+  console.log("Notification clicked:", event.notification);
   event.notification.close();
+
   const link = event.notification.data.url || "/";
   const action = event.action;
+
   if (action) {
-    // Handle action button clicks
     console.log("Action clicked:", action);
-  } else {
-    event.waitUntil(
-      // eslint-disable-next-line no-undef
-      clients
-        .matchAll({ type: "window", includeUncontrolled: true })
-        .then((windowClients) => {
-          const matchingClient = windowClients.find(
-            (client) => client.url === link,
-          );
-          if (matchingClient) {
-            return matchingClient.focus();
-          } else {
-            // eslint-disable-next-line no-undef
-            return clients.openWindow(link);
-          }
-        }),
-    );
   }
+
+  event.waitUntil(
+    // eslint-disable-next-line no-undef
+    clients
+      .matchAll({ type: "window", includeUncontrolled: true })
+      .then((windowClients) => {
+        const matchingClient = windowClients.find(
+          (client) => client.url === link,
+        );
+        if (matchingClient) {
+          return matchingClient.focus();
+        } else {
+          // eslint-disable-next-line no-undef
+          return clients.openWindow(link);
+        }
+      }),
+  );
 });
 
 // Handle notification close events
 self.addEventListener("notificationclose", (event) => {
   console.log("Notification closed:", event);
-  // You can track analytics or perform cleanup here
 });
 
 // Background sync (if needed)
@@ -232,7 +219,6 @@ self.addEventListener("sync", (event) => {
     event.waitUntil(
       Promise.resolve().then(() => {
         console.log("Background sync triggered");
-        // Actual sync operations here
       }),
     );
   }
@@ -242,10 +228,7 @@ self.addEventListener("sync", (event) => {
 // This is called when user clicks "Update Now"
 self.addEventListener("message", (event) => {
   if (event.data && event.data.type === "SKIP_WAITING") {
-    console.log(
-      "Received SKIP_WAITING message - user approved update, activating now",
-    );
-    // This makes the waiting service worker become the active one
+    console.log("Received SKIP_WAITING message - activating now");
     self.skipWaiting();
   }
 });
