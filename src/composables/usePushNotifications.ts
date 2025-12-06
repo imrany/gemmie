@@ -22,7 +22,9 @@ export function usePushNotifications() {
   const subscription = ref<PushSubscription | null>(null);
   const error = ref<string | null>(null);
   const loading = ref(false);
-  const permission = ref<NotificationPermission>(Notification.permission);
+  const permission = ref<NotificationPermission>(
+    typeof Notification !== "undefined" ? Notification.permission : "default",
+  );
 
   // Your VAPID public key (generate using the Go code)
   const VAPID_PUBLIC_KEY =
@@ -49,14 +51,21 @@ export function usePushNotifications() {
     }
   };
 
-  const requestPermission = async () => {
-    const perm = await Notification.requestPermission();
-    permission.value = perm;
-    if (perm !== "granted") {
-      error.value = "Notification permission denied";
-      throw new Error("Permission not granted");
+  // Compatibility wrapper for Notification.requestPermission
+  const requestPermission = async (): Promise<NotificationPermission> => {
+    try {
+      const result = Notification.requestPermission((permission) => {
+        // callback style (old browsers)
+        return permission;
+      });
+      if (result && typeof (result as any).then === "function") {
+        // modern promise style
+        return await result;
+      }
+      return result as any as NotificationPermission;
+    } catch {
+      throw new Error("Notification permission request failed");
     }
-    return perm;
   };
 
   const subscribe = async () => {
@@ -65,12 +74,18 @@ export function usePushNotifications() {
       error.value = null;
 
       // Request permission
-      await requestPermission();
+      const permission = await requestPermission();
+      if (permission !== "granted") {
+        error.value = "Notification permission denied";
+        toast.error("Notifications are blocked in your browser");
+        return;
+      }
 
-      // Register service worker
-      const registration = await navigator.serviceWorker.getRegistration();
+      // Ensure service worker registration
+      const registration =
+        (await navigator.serviceWorker.getRegistration()) ||
+        (await navigator.serviceWorker.register("/service-worker.js"));
 
-      // Wait for service worker to be ready
       await navigator.serviceWorker.ready;
 
       let sub = await registration?.pushManager.getSubscription();
@@ -110,9 +125,8 @@ export function usePushNotifications() {
         );
       }
 
-      toast.success(data.message);
       await sendPushNotification({
-        title: "Thanks for subscribing to Gemmie",
+        title: "🔔 Thanks for subscribing to Gemmie",
         body: data.message,
         url: "/",
         requireInteraction: false,
@@ -130,18 +144,15 @@ export function usePushNotifications() {
   const unsubscribe = async () => {
     try {
       loading.value = true;
-      // Ensure subscription.value is a native PushSubscription type if you intend to call .unsubscribe() on it.
-      if (
-        !subscription.value ||
-        typeof subscription.value.unsubscribe !== "function"
-      ) {
-        throw new Error(
-          "No valid native PushSubscription found to unsubscribe from.",
-        );
+      if (!subscription.value) throw new Error("No subscription found");
+
+      // Some old browsers may not support unsubscribe()
+      if (typeof subscription.value.unsubscribe === "function") {
+        await subscription.value.unsubscribe();
       }
 
       //Notify backend using the endpoint associated with the now-inactive subscription
-      const subDetails = subscription.value.toJSON(); // Get the standard endpoint, auth, p256dh keys
+      const subDetails = subscription.value.toJSON();
 
       // Notify backend
       const response = await fetch(`${API_BASE_URL}/push/unsubscribe`, {
@@ -233,10 +244,9 @@ export function usePushNotifications() {
       };
       subscription.value = mappedSub;
       isSubscribed.value = true;
-      console.log("Found existing subscription");
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to check subscription:", err);
-      toast.error("Failed to check subscription");
+      throw new Error(err.message || "Failed to check subscription");
     } finally {
       loading.value = false;
     }
@@ -323,11 +333,23 @@ export function usePushNotifications() {
   };
 
   onMounted(() => {
-    isSupported.value = "serviceWorker" in navigator && "PushManager" in window;
-    permission.value = Notification.permission;
+    isSupported.value =
+      "serviceWorker" in navigator &&
+      "PushManager" in window &&
+      typeof Notification !== "undefined";
 
-    if (isSupported.value) {
-      checkSubscription();
+    if (!isSupported.value) {
+      error.value = "Push notifications are not supported in this browser";
+    } else {
+      permission.value =
+        typeof Notification !== "undefined"
+          ? Notification.permission
+          : "default";
+
+      // Ensure service worker is ready before checking subscription
+      navigator.serviceWorker.ready.then(() => {
+        checkSubscription();
+      });
     }
   });
 
