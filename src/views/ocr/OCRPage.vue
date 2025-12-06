@@ -38,10 +38,9 @@ const {
     validateImage,
 } = useImageOCR();
 
-const { parsedUserDetails, isDarkMode, isOnline } = inject("globalState") as {
+const { parsedUserDetails, isDarkMode } = inject("globalState") as {
     parsedUserDetails: Ref<UserDetails>;
     isDarkMode: Ref<boolean>;
-    isOnline: Ref<boolean>;
 };
 const previewUrl = ref<string | null>(null);
 const showCropper = ref(false);
@@ -214,7 +213,7 @@ const handleReset = () => {
 
                             <Button
                                 @click="handleExtract"
-                                :disabled="loading || isOnline"
+                                :disabled="loading"
                                 class="flex-1 min-w-[140px] disabled:cursor-not-allowed disabled:opacity-50 text-gray-100 dark:text-white bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
                             >
                                 <Loader2
