@@ -30,7 +30,7 @@ FROM alpine:3.19
 
 # Install runtime deps
 RUN set -eux && \
-    apk add --no-cache ca-certificates tzdata tesseract-ocr && \
+    apk add --no-cache ca-certificates tzdata tesseract-ocr tesseract-ocr-data-eng && \
     addgroup -S gemmie && \
     adduser -S gemmie -G gemmie && \
     rm -rf /var/cache/apk/*
@@ -52,6 +52,7 @@ EXPOSE 8081
 # Default envs (override in docker-compose or runtime)
 ENV WHATSAPP_DB_PATH=/var/opt/gemmie-server/whatsapp.db
 ENV PORT=8081
+ENV TESSDATA_PREFIX=/usr/share/tessdata
 
 LABEL org.opencontainers.image.title="gemmie-server" \
     org.opencontainers.image.description="gemmie's server side program." \
