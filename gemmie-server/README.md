@@ -23,6 +23,33 @@ go version
 go mod tidy
 ```
 
+#### Install tesseract-ocr for optical character recognition, required for image OCR (Ubuntu/Debian)
+
+```bash
+sudo apt install tesseract-ocr
+```
+
+#### Install tesseract-ocr for optical character recognition, required for image OCR (Fedora/CentOS)
+
+```bash
+sudo dnf install tesseract
+```
+
+#### Install tesseract-ocr for optical character recognition, required for image OCR (macOS)
+
+```bash
+brew install tesseract
+```
+
+#### Install tesseract-ocr for optical character recognition, required for image OCR (Windows)
+
+```bash
+choco install tesseract-ocr
+```
+
+or
+Windows: Install [Tesseract OCR](https://github.com/tesseract-ocr/tesseract) and ensure `tesseract.exe` is in your PATH.
+
 ### 3. Run Server
 
 ```bash

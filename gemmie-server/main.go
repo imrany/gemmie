@@ -98,9 +98,6 @@ func runServer() {
 
 	slog.Info("Starting server", "port", port, "DSN", DSN)
 
-	// Start the cleanup scheduler in background
-	v1.StartCleanupScheduler()
-
 	// Configure SMTP settings
 	smtpConfig := mailer.SMTPConfig{
 		Host:     viper.GetString("SMTP_HOST"),
@@ -330,7 +327,6 @@ func main() {
 		"vapid-public-key":   "VAPID_PUBLIC_KEY",
 		"vapid-private-key":  "VAPID_PRIVATE_KEY",
 		"vapid-email":        "VAPID_EMAIL",
-		"ocr-upload-dir":     "OCR_UPLOAD_DIR",
 	}
 
 	rootCmd.PersistentFlags().Int("port", 8080, "Port to listen on (env: PORT)")
@@ -351,7 +347,6 @@ func main() {
 	rootCmd.PersistentFlags().String("vapid-public-key", "", "VAPID Public Key (env: VAPID_PUBLIC_KEY)")
 	rootCmd.PersistentFlags().String("vapid-private-key", "", "VAPID Private Key (env: VAPID_PRIVATE_KEY)")
 	rootCmd.PersistentFlags().String("vapid-email", "", "VAPID Email (env: VAPID_EMAIL)")
-	rootCmd.PersistentFlags().String("ocr-upload-dir", "./gemmie-ocr", "OCR Upload Directory (env: OCR_UPLOAD_DIR)")
 
 	for key, env := range envBindings {
 		if err := viper.BindPFlag(env, rootCmd.PersistentFlags().Lookup(key)); err != nil {
