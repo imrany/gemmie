@@ -555,7 +555,7 @@ onMounted(async () => {
                                         <Badge
                                             v-if="!isSupported"
                                             variant="secondary"
-                                            class="text-xs"
+                                            class="text-xs text-gray-800 dark:text-gray-200 bg-gray-200 dark:bg-gray-800"
                                         >
                                             Not Supported
                                         </Badge>
@@ -615,7 +615,8 @@ onMounted(async () => {
                                                         isSubscribed &&
                                                         !webPushError &&
                                                         !webPushLoading &&
-                                                        notificationPermission ==='granted'
+                                                        notificationPermission ===
+                                                            'granted'
                                                     "
                                                     class="flex items-center gap-2 mt-3 text-xs text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-900/20 px-3 py-2 rounded-md"
                                                 >
@@ -632,11 +633,14 @@ onMounted(async () => {
 
                                                 <!-- Error Message -->
                                                 <Alert
-                                                    v-else-if="webPushError"
+                                                    v-else-if="
+                                                        webPushError &&
+                                                        isSupported
+                                                    "
                                                     variant="destructive"
-                                                    class="mt-3 w-full"
+                                                    class="mt-3 w-full text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border-none"
                                                 >
-                                                    <AlertCircle
+                                                    <AlertTriangle
                                                         class="h-4 w-4"
                                                     />
                                                     <AlertTitle
@@ -670,7 +674,9 @@ onMounted(async () => {
                                                 <div
                                                     v-if="
                                                         notificationPermission ===
-                                                        'denied' && !webPushLoading
+                                                            'denied' &&
+                                                        !webPushLoading &&
+                                                        isSupported
                                                     "
                                                     class="flex items-start gap-2 mt-3 text-xs text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-900/20 px-3 py-2 rounded-md"
                                                 >

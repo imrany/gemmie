@@ -1,4 +1,4 @@
-const CACHE_VERSION = "v0.26.9";
+const CACHE_VERSION = "v0.26.10";
 const staticCacheName = `site-static-${CACHE_VERSION}`;
 const dynamicCache = `site-dynamic-${CACHE_VERSION}`;
 
