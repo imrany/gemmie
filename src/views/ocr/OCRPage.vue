@@ -194,7 +194,7 @@ const handleReset = () => {
 
                             <Badge
                                 v-if="croppedBlob"
-                                class="absolute top-3 left-3 text-white dark:text-white bg-purple-600 hover:bg-purple-700 dark:bg-purple-600 dark:hover:bg-purple-700"
+                                class="absolute border-none top-3 left-3 text-white dark:text-white bg-purple-600 hover:bg-purple-700 dark:bg-purple-600 dark:hover:bg-purple-700"
                             >
                                 <Scissors class="w-3 h-3 mr-1" />
                                 Cropped
