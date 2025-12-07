@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { inject, ref, type Ref } from "vue";
+import { inject, ref, computed, type Ref } from "vue";
 import { useImageOCR } from "@/composables/useImageOCR";
 import { toast } from "vue-sonner";
 import {
@@ -10,8 +10,15 @@ import {
     Copy,
     Check,
     X,
-    Image as ImageIcon,
     Sparkles,
+    BookOpen,
+    FileText,
+    Download,
+    Share2,
+    ImageIcon,
+    Search,
+    MessageSquare,
+    AlertCircle,
 } from "lucide-vue-next";
 import { Button } from "@/components/ui/button";
 import {
@@ -42,10 +49,28 @@ const { parsedUserDetails, isDarkMode } = inject("globalState") as {
     parsedUserDetails: Ref<UserDetails>;
     isDarkMode: Ref<boolean>;
 };
+
 const previewUrl = ref<string | null>(null);
 const showCropper = ref(false);
 const copied = ref(false);
 const cropArea = ref({ x: 50, y: 50, width: 200, height: 200 });
+const resultsOpen = ref(false);
+
+// Computed
+const wordCount = computed(() => {
+    if (!extractedData.value.text) return 0;
+    return extractedData.value.text.trim().split(/\s+/).length;
+});
+
+const characterCount = computed(() => {
+    if (!extractedData.value.text) return 0;
+    return extractedData.value.text_length;
+});
+
+const estimatedReadTime = computed(() => {
+    const minutes = Math.ceil(wordCount.value / 200);
+    return minutes || 1;
+});
 
 const onFileChange = (event: Event) => {
     const target = event.target as HTMLInputElement;
@@ -56,6 +81,7 @@ const onFileChange = (event: Event) => {
 
         captureImage(file);
         previewUrl.value = URL.createObjectURL(file);
+        resultsOpen.value = false;
     }
 };
 
@@ -73,6 +99,9 @@ const handleCrop = async () => {
 
 const handleExtract = async () => {
     await sendToBackend(showCropper.value || croppedBlob.value !== null);
+    if (extractedData.value.text) {
+        resultsOpen.value = true;
+    }
 };
 
 const copyToClipboard = () => {
@@ -87,11 +116,54 @@ const copyToClipboard = () => {
     }, 2000);
 };
 
+const downloadAsText = () => {
+    if (!extractedData.value.text) return;
+
+    const blob = new Blob([extractedData.value.text], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `extracted-text-${Date.now()}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    toast.success("Downloaded as text file!");
+};
+
 const handleReset = () => {
     reset();
     previewUrl.value = null;
     showCropper.value = false;
     copied.value = false;
+    resultsOpen.value = false;
+};
+
+const shareText = async () => {
+    if (!extractedData.value.text) return;
+
+    if (navigator.share) {
+        try {
+            await navigator.share({
+                title: "Extracted Text",
+                text: extractedData.value.text,
+            });
+            toast.success("Shared successfully!");
+        } catch (err) {
+            console.log("Share cancelled");
+        }
+    } else {
+        copyToClipboard();
+    }
+};
+
+const analyzeWithGemmie = () => {
+    toast.info("Analyzing with Gemmie... (Coming soon)");
+};
+
+const closeResults = () => {
+    resultsOpen.value = false;
 };
 </script>
 
@@ -114,13 +186,64 @@ const handleReset = () => {
                 <h1
                     class="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-2"
                 >
-                    Image Text Extractor
+                    Gemmie Extractor
                 </h1>
                 <p
-                    class="text-gray-600 dark:text-gray-400 text-sm md:text-base"
+                    class="text-gray-600 dark:text-gray-400 text-sm md:text-base max-w-2xl mx-auto"
                 >
-                    Upload an image or take a photo to extract text using OCR
+                    Extract text from research papers, textbooks, lecture
+                    slides, and documents. Perfect for students, scholars, and
+                    researchers.
                 </p>
+            </div>
+
+            <!-- Quick Stats -->
+            <div v-if="extractedData.text" class="grid grid-cols-3 gap-3 mb-6">
+                <Card class="text-center">
+                    <CardContent class="p-4">
+                        <FileText
+                            class="w-6 h-6 mx-auto mb-2 text-purple-600 dark:text-purple-400"
+                        />
+                        <p
+                            class="text-2xl font-bold text-gray-900 dark:text-white"
+                        >
+                            {{ wordCount }}
+                        </p>
+                        <p class="text-xs text-gray-600 dark:text-gray-400">
+                            Words
+                        </p>
+                    </CardContent>
+                </Card>
+                <Card class="text-center">
+                    <CardContent class="p-4">
+                        <BookOpen
+                            class="w-6 h-6 mx-auto mb-2 text-blue-600 dark:text-blue-400"
+                        />
+                        <p
+                            class="text-2xl font-bold text-gray-900 dark:text-white"
+                        >
+                            {{ estimatedReadTime }}
+                        </p>
+                        <p class="text-xs text-gray-600 dark:text-gray-400">
+                            Min Read
+                        </p>
+                    </CardContent>
+                </Card>
+                <Card class="text-center">
+                    <CardContent class="p-4">
+                        <Sparkles
+                            class="w-6 h-6 mx-auto mb-2 text-green-600 dark:text-green-400"
+                        />
+                        <p
+                            class="text-2xl font-bold text-gray-900 dark:text-white"
+                        >
+                            {{ characterCount }}
+                        </p>
+                        <p class="text-xs text-gray-600 dark:text-gray-400">
+                            Characters
+                        </p>
+                    </CardContent>
+                </Card>
             </div>
 
             <!-- Main Card -->
@@ -131,10 +254,11 @@ const handleReset = () => {
                 >
                     <CardTitle class="flex items-center gap-2">
                         <Camera class="w-5 h-5" />
-                        Upload Image
+                        Upload Research Material
                     </CardTitle>
                     <CardDescription>
-                        Select an image file or capture from your camera
+                        Upload images of textbooks, papers, slides, or
+                        handwritten notes
                     </CardDescription>
                 </CardHeader>
 
@@ -158,10 +282,33 @@ const handleReset = () => {
                                 Click to upload or capture
                             </span>
                             <span
-                                class="text-sm text-gray-500 dark:text-gray-400"
+                                class="text-sm text-gray-500 dark:text-gray-400 mb-3"
                             >
                                 PNG, JPG, WebP • Max 4MB
                             </span>
+                            <div class="flex gap-2 flex-wrap justify-center">
+                                <Badge
+                                    class="bg-gray-200 dark:bg-gray-700"
+                                    variant="secondary"
+                                >
+                                    Research Papers
+                                </Badge>
+                                <Badge
+                                    class="bg-gray-200 dark:bg-gray-700"
+                                    variant="secondary"
+                                    >Textbooks</Badge
+                                >
+                                <Badge
+                                    class="bg-gray-200 dark:bg-gray-700"
+                                    variant="secondary"
+                                    >Lecture Slides</Badge
+                                >
+                                <Badge
+                                    class="bg-gray-200 dark:bg-gray-700"
+                                    variant="secondary"
+                                    >Notes</Badge
+                                >
+                            </div>
                             <input
                                 id="imageInput"
                                 type="file"
@@ -294,71 +441,181 @@ const handleReset = () => {
                     </div>
 
                     <!-- Error Alert -->
-                    <Alert v-if="error" variant="destructive" class="mb-4">
-                        <AlertDescription class="text-sm">
+                    <Alert
+                        v-if="error"
+                        variant="destructive"
+                        class="bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 mb-4"
+                    >
+                        <AlertCircle class="h-4 w-4" />
+                        <AlertDescription class="text-sm ml-2">
+                            <strong class="font-semibold">Error:</strong>
                             {{ error }}
                         </AlertDescription>
                     </Alert>
-
-                    <!-- Extracted Text -->
-                    <div
-                        v-if="extractedData.text"
-                        class="mt-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700"
-                    >
-                        <div class="flex items-center justify-between mb-3">
-                            <h3
-                                class="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2"
-                            >
-                                <Sparkles
-                                    class="w-4 h-4 text-purple-600 dark:text-purple-400"
-                                />
-                                Extracted Text
-                            </h3>
-                            <Button
-                                @click="copyToClipboard"
-                                size="sm"
-                                variant="outline"
-                                class="text-xs"
-                            >
-                                <Check v-if="copied" class="w-3 h-3 mr-1" />
-                                <Copy v-else class="w-3 h-3 mr-1" />
-                                {{ copied ? "Copied!" : "Copy" }}
-                            </Button>
-                        </div>
-                        <div
-                            class="bg-white dark:bg-gray-900 rounded-lg p-4 border border-gray-200 dark:border-gray-700 max-h-64 overflow-y-auto"
-                        >
-                            <p
-                                class="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap leading-relaxed"
-                            >
-                                {{ extractedData.text }}
-                            </p>
-                        </div>
-                    </div>
                 </CardContent>
             </Card>
 
-            <!-- Tips -->
+            <!-- Use Cases -->
             <Card
                 class="mt-6 border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20"
             >
                 <CardContent class="p-4">
                     <h3
-                        class="text-sm font-semibold text-blue-900 dark:text-blue-200 mb-2 flex items-center gap-2"
+                        class="text-sm font-semibold text-blue-900 dark:text-blue-200 mb-3 flex items-center gap-2"
                     >
                         <Sparkles class="w-4 h-4" />
-                        Tips for better results
+                        Perfect for Research & Study
                     </h3>
-                    <ul
-                        class="text-sm text-blue-800 dark:text-blue-300 space-y-1"
-                    >
-                        <li>• Ensure good lighting and clear text</li>
-                        <li>• Avoid blurry or tilted images</li>
-                        <li>• Use crop to focus on specific text areas</li>
-                        <li>• Supported formats: PNG, JPG, WebP</li>
-                    </ul>
+                    <div class="grid md:grid-cols-2 gap-3 text-sm">
+                        <div
+                            class="flex items-start gap-2 text-blue-800 dark:text-blue-300"
+                        >
+                            <BookOpen class="w-4 h-4 mt-0.5 flex-shrink-0" />
+                            <span>Extract quotes from research papers</span>
+                        </div>
+                        <div
+                            class="flex items-start gap-2 text-blue-800 dark:text-blue-300"
+                        >
+                            <FileText class="w-4 h-4 mt-0.5 flex-shrink-0" />
+                            <span>Digitize handwritten notes</span>
+                        </div>
+                        <div
+                            class="flex items-start gap-2 text-blue-800 dark:text-blue-300"
+                        >
+                            <Search class="w-4 h-4 mt-0.5 flex-shrink-0" />
+                            <span>Copy text from lecture slides</span>
+                        </div>
+                        <div
+                            class="flex items-start gap-2 text-blue-800 dark:text-blue-300"
+                        >
+                            <MessageSquare
+                                class="w-4 h-4 mt-0.5 flex-shrink-0"
+                            />
+                            <span>Reference textbook passages</span>
+                        </div>
+                    </div>
                 </CardContent>
             </Card>
         </div>
+
+        <!-- Slide Panel Overlay -->
+        <Transition
+            enter-active-class="transition-opacity duration-300"
+            leave-active-class="transition-opacity duration-300"
+            enter-from-class="opacity-0"
+            leave-to-class="opacity-0"
+        >
+            <div
+                v-if="resultsOpen"
+                @click="closeResults"
+                class="fixed inset-0 bg-black/50 backdrop-blur-sm z-40"
+            />
+        </Transition>
+
+        <!-- Slide Panel - Half Width Desktop, Full Width Mobile -->
+        <Transition
+            enter-active-class="transition-transform duration-300 ease-out"
+            leave-active-class="transition-transform duration-300 ease-in"
+            enter-from-class="translate-x-full"
+            leave-to-class="translate-x-full"
+        >
+            <div
+                v-if="resultsOpen"
+                class="fixed inset-y-0 right-0 w-full md:w-1/2 bg-white dark:bg-gray-900 shadow-2xl z-50 overflow-y-auto"
+            >
+                <div
+                    class="sticky top-0 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 z-10"
+                >
+                    <div class="flex items-center justify-between p-4">
+                        <div class="flex-1 min-w-0">
+                            <h2
+                                class="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2"
+                            >
+                                <Sparkles
+                                    class="w-5 h-5 text-purple-600 flex-shrink-0"
+                                />
+                                <span class="truncate">Extracted Text</span>
+                            </h2>
+                            <p
+                                class="text-sm text-gray-600 dark:text-gray-400 mt-1"
+                            >
+                                {{ wordCount }} words •
+                                {{ characterCount }} characters • ~{{
+                                    estimatedReadTime
+                                }}
+                                min read
+                            </p>
+                        </div>
+                        <button
+                            @click="closeResults"
+                            class="ml-4 p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors flex-shrink-0"
+                        >
+                            <X
+                                class="w-5 h-5 text-gray-600 dark:text-gray-400"
+                            />
+                        </button>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="flex flex-wrap gap-2 px-4 pb-4">
+                        <Button
+                            @click="copyToClipboard"
+                            variant="outline"
+                            size="sm"
+                        >
+                            <Check v-if="copied" class="w-4 h-4 mr-2" />
+                            <Copy v-else class="w-4 h-4 mr-2" />
+                            {{ copied ? "Copied!" : "Copy" }}
+                        </Button>
+                        <Button
+                            @click="downloadAsText"
+                            variant="outline"
+                            size="sm"
+                        >
+                            <Download class="w-4 h-4 mr-2" />
+                            Download
+                        </Button>
+                        <Button @click="shareText" variant="outline" size="sm">
+                            <Share2 class="w-4 h-4 mr-2" />
+                            Share
+                        </Button>
+                        <Button
+                            @click="analyzeWithGemmie"
+                            variant="default"
+                            size="sm"
+                            class="ml-auto bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
+                        >
+                            <MessageSquare class="w-4 h-4 mr-2" />
+                            Analyze
+                        </Button>
+                    </div>
+                </div>
+
+                <!-- Extracted Text Content -->
+                <div class="p-4">
+                    <Card>
+                        <CardContent class="p-6">
+                            <div
+                                class="prose dark:prose-invert max-w-none text-sm leading-relaxed"
+                            >
+                                <p
+                                    class="whitespace-pre-wrap text-gray-800 dark:text-gray-200"
+                                >
+                                    {{ extractedData.text }}
+                                </p>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <!-- Processing Info -->
+                    <div
+                        v-if="extractedData.processing_ms"
+                        class="mt-4 text-xs text-gray-500 dark:text-gray-400 text-center"
+                    >
+                        Processed in {{ extractedData.processing_ms }}ms
+                    </div>
+                </div>
+            </div>
+        </Transition>
     </div>
 </template>

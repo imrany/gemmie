@@ -67,7 +67,7 @@ export function useImageOCR() {
           },
           "image/jpeg",
           0.95,
-        ); // Added quality parameter
+        );
       };
 
       img.onerror = () => reject(new Error("Failed to load image"));
@@ -92,7 +92,6 @@ export function useImageOCR() {
       const formData = new FormData();
       formData.append("file", blobToSend, "capture.jpg");
 
-      // Correct fetch syntax with template literal
       const response = await fetch(`${API_BASE_URL}/ocr/upload`, {
         method: "POST",
         headers: {
@@ -103,22 +102,52 @@ export function useImageOCR() {
         body: formData,
       });
 
+      // Check if response is JSON
+      const contentType = response.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        throw new Error(
+          `Server returned ${response.status}: ${response.statusText || "Invalid response format"}`,
+        );
+      }
+
       const data: ApiResponse<OCRData> = await response.json();
 
+      // Handle HTTP errors
       if (!response.ok) {
-        throw new Error(data.message || `HTTP error ${response.status}`);
+        const errorMsg =
+          data.message ||
+          data.error ||
+          `Server error: ${response.status} ${response.statusText}`;
+        throw new Error(errorMsg);
       }
 
+      // Handle API-level errors
       if (!data.success) {
-        throw new Error(data.message || "OCR failed");
+        throw new Error(data.message || data.error || "OCR processing failed");
       }
 
+      // Success
       extractedData.value = data.data as OCRData;
       console.log("Extracted Data:", extractedData.value);
       toast.success(data.message || "Text extracted successfully!");
     } catch (err: any) {
-      error.value = err.message || "Failed to extract text";
-      toast.error(`${err.message || "OCR failed"}`);
+      // Network errors
+      if (err instanceof TypeError && err.message.includes("fetch")) {
+        error.value =
+          "Network error: Unable to reach server. Check your connection.";
+        toast.error("Network error - Check your connection");
+      }
+      // Timeout errors
+      else if (err.name === "AbortError") {
+        error.value = "Request timeout: Server took too long to respond";
+        toast.error("Request timeout");
+      }
+      // Server/API errors
+      else {
+        error.value = err.message || "Unknown error occurred";
+        toast.error(err.message || "OCR failed");
+      }
+
       console.error("OCR error:", err);
     } finally {
       loading.value = false;
