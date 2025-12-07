@@ -19,8 +19,15 @@ export function useImageOCR() {
   );
 
   // Capture image from <input type="file" accept="image/*" capture="environment">
-  const captureImage = (file: File) => {
-    imageFile.value = file;
+  const captureImage = async (file: File) => {
+    if (file.type === "image/heic" || file.type === "image/heif") {
+      const jpegBlob = await convertHeicToJpeg(file);
+      imageFile.value = new File([jpegBlob], "capture.jpg", {
+        type: "image/jpeg",
+      });
+    } else {
+      imageFile.value = file;
+    }
     error.value = null;
     extractedData.value.text = "";
   };
@@ -71,6 +78,37 @@ export function useImageOCR() {
       };
 
       img.onerror = () => reject(new Error("Failed to load image"));
+      img.src = URL.createObjectURL(file);
+    });
+  };
+
+  // convert heic image type tp jpeg (in IOS)
+  const convertHeicToJpeg = async (file: File): Promise<Blob> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          reject(new Error("Canvas not supported"));
+          return;
+        }
+        ctx.drawImage(img, 0, 0);
+        canvas.toBlob(
+          (blob) => {
+            if (blob) {
+              resolve(blob);
+            } else {
+              reject(new Error("Failed to convert HEIC to JPEG"));
+            }
+          },
+          "image/jpeg",
+          0.95,
+        );
+      };
+      img.onerror = () => reject(new Error("Failed to load HEIC image"));
       img.src = URL.createObjectURL(file);
     });
   };
