@@ -116,14 +116,13 @@ export function useImageOCR() {
       if (!response.ok) {
         const errorMsg =
           data.message ||
-          data.error ||
           `Server error: ${response.status} ${response.statusText}`;
         throw new Error(errorMsg);
       }
 
       // Handle API-level errors
       if (!data.success) {
-        throw new Error(data.message || data.error || "OCR processing failed");
+        throw new Error(data.message || "OCR processing failed");
       }
 
       // Success
