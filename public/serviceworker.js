@@ -1,4 +1,4 @@
-const CACHE_VERSION = "v0.30.3";
+const CACHE_VERSION = "v0.30.4";
 const staticCacheName = `site-static-${CACHE_VERSION}`;
 const dynamicCache = `site-dynamic-${CACHE_VERSION}`;
 
@@ -125,12 +125,6 @@ self.addEventListener("fetch", (evt) => {
                   headers: { "Content-Type": "text/html" },
                 }),
             );
-          }
-
-          if (evt.request.destination === "image") {
-            return caches
-              .match("/logo.svg")
-              .then((res) => res || new Response("", { status: 404 }));
           }
 
           return new Response("Network error occurred", {
