@@ -1,4 +1,4 @@
-const CACHE_VERSION = "v0.30.1";
+const CACHE_VERSION = "v0.30.2";
 const staticCacheName = `site-static-${CACHE_VERSION}`;
 const dynamicCache = `site-dynamic-${CACHE_VERSION}`;
 
@@ -89,47 +89,56 @@ self.addEventListener("fetch", (evt) => {
   const shouldCache = shouldCacheRequest(url);
 
   if (!shouldCache) {
-    evt.respondWith(fetch(evt.request));
+    evt.respondWith(
+      fetch(evt.request).catch(
+        () => new Response("Network error", { status: 503 }),
+      ),
+    );
     return;
   }
 
   evt.respondWith(
-    caches
-      .match(evt.request)
-      .then((cacheRes) => {
-        if (cacheRes) {
-          return cacheRes;
-        }
+    caches.match(evt.request).then((cacheRes) => {
+      if (cacheRes) {
+        return cacheRes;
+      }
 
-        return fetch(evt.request).then((fetchRes) => {
-          if (fetchRes.status === 200) {
+      return fetch(evt.request)
+        .then((fetchRes) => {
+          if (fetchRes && fetchRes.status === 200) {
             const responseClone = fetchRes.clone();
-
-            caches.open(dynamicCache).then(async (cache) => {
-              await cache.put(evt.request, responseClone);
-              await limitCacheSize(dynamicCache, 15);
+            caches.open(dynamicCache).then((cache) => {
+              cache.put(evt.request, responseClone);
+              limitCacheSize(dynamicCache, 15);
             });
           }
-
           return fetchRes;
+        })
+        .catch((error) => {
+          console.error("Fetch failed:", error);
+
+          if (evt.request.destination === "document") {
+            return caches.match("/index.html").then(
+              (res) =>
+                res ||
+                new Response("<h1>Offline</h1>", {
+                  headers: { "Content-Type": "text/html" },
+                }),
+            );
+          }
+
+          if (evt.request.destination === "image") {
+            return caches
+              .match("/logo.svg")
+              .then((res) => res || new Response("", { status: 404 }));
+          }
+
+          return new Response("Network error occurred", {
+            status: 503,
+            statusText: "Service Unavailable",
+          });
         });
-      })
-      .catch((error) => {
-        console.error("Fetch failed:", error);
-
-        if (evt.request.destination === "document") {
-          return caches.match("/index.html");
-        }
-
-        if (evt.request.destination === "image") {
-          return caches.match("/logo.svg");
-        }
-
-        return new Response("Network error occurred", {
-          status: 503,
-          statusText: "Service Unavailable",
-        });
-      }),
+    }),
   );
 });
 
