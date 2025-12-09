@@ -1915,11 +1915,12 @@ onUnmounted(() => {
         <!-- Main Chat Window -->
         <div
             :class="[
+                'flex-grow flex flex-col items-center justify-center font-light text-sm transition-all duration-300 ease-in-out bg-inherit',
                 screenWidth > 720
                     ? !isCollapsed
-                        ? 'flex-grow flex flex-col items-center justify-center ml-[270px] font-light text-sm transition-all duration-300 ease-in-out bg-inherit'
-                        : 'flex-grow flex flex-col items-center justify-center ml-[60px] font-light text-sm transition-all duration-300 ease-in-out bg-inherit'
-                    : 'text-sm font-light flex-grow items-center justify-center flex flex-col transition-all duration-300 ease-in-out bg-inherit',
+                        ? 'ml-[270px]'
+                        : 'ml-[60px]'
+                    : '',
             ]"
         >
             <ChatErrorSection
@@ -1931,7 +1932,7 @@ onUnmounted(() => {
             <div class="relative w-full" v-else>
                 <div
                     :class="[
-                        'w-full h-screen flex flex-col justify-center bg-inherit',
+                        'w-full h-full flex flex-col justify-center bg-inherit',
                         screenWidth > 720 && !isCollapsed
                             ? 'left-[270px]'
                             : screenWidth > 720 && isCollapsed
@@ -1958,7 +1959,7 @@ onUnmounted(() => {
                             v-else
                             ref="scrollableElem"
                             :class="[
-                                'relative md:max-w-3xl min-h-[calc(100vh-100px)] max-w-[100vw] flex-grow no-scrollbar overflow-y-auto space-y-3 sm:space-y-4  scroll-container',
+                                'relative md:max-w-3xl max-w-[100vw] flex-grow no-scrollbar overflow-y-auto space-y-3 sm:space-y-4  scroll-container',
                                 scrollContainerPadding,
                                 chatContainerWidth,
                             ]"
