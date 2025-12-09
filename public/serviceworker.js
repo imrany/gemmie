@@ -1,4 +1,4 @@
-const CACHE_VERSION = "v0.30.5";
+const CACHE_VERSION = "v0.30.6";
 const staticCacheName = `site-static-${CACHE_VERSION}`;
 const dynamicCache = `site-dynamic-${CACHE_VERSION}`;
 
@@ -126,9 +126,12 @@ self.addEventListener("fetch", (evt) => {
             return caches.match("/logo.svg").then(
               (res) =>
                 res ||
-                new Response("<h1>Offline</h1>", {
-                  headers: { "Content-Type": "text/html" },
-                }),
+                new Response(
+                  '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"></svg>',
+                  {
+                    headers: { "Content-Type": "image/svg+xml" },
+                  },
+                ),
             );
           }
 
