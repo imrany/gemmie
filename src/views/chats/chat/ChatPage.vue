@@ -2380,58 +2380,63 @@ onUnmounted(() => {
                     </div>
 
                     <!-- Input Area -->
-                    <InputArea
-                        :class="['px-2']"
-                        :chat-container-width="chatContainerWidth"
-                        :is-loading="isLoading"
-                        :show-input="
-                            !(currentChat && currentChat?.is_read_only)
-                        "
-                        :is-recording="isRecording"
-                        :is-transcribing="isTranscribing"
-                        :transcribed-text="transcribedText"
-                        :microphone-permission="microphonePermission"
-                        :input-disabled="
-                            (currentChat &&
-                                currentChat?.is_read_only &&
-                                !isOnline) ||
-                            inputDisabled ||
-                            !isOnline
-                        "
-                        :input-placeholder-text="inputPlaceholderText"
-                        :paste-preview="
-                            pastePreview
-                                ? {
-                                      show: pastePreview.show,
-                                      content: pastePreview.content,
-                                  }
-                                : null
-                        "
-                        :show-input-mode-dropdown="showInputModeDropdown"
-                        :show-limit-exceeded-banner="showLimitExceededBanner"
-                        :show-upgrade-banner="showUpgradeBanner"
-                        :plan-status="planStatus"
-                        :FREE_REQUEST_LIMIT="FREE_REQUEST_LIMIT"
-                        :selected-contexts="ref(selectedContexts)"
-                        :show-scroll-down-button="ref(showScrollDownButton)"
-                        :scroll-button-position="ref(scrollButtonPosition)"
-                        @scroll-to-bottom="scrollToBottom"
-                        @submit="handleSubmit"
-                        @auto-grow="autoGrow"
-                        @handle-paste="handlePaste"
-                        @keydown="onEnter"
-                        @toggle-voice-recording="toggleVoiceRecording"
-                        @clear-voice-transcription="clearVoiceTranscription"
-                        @toggle-input-mode-dropdown="
-                            showInputModeDropdown = !showInputModeDropdown
-                        "
-                        @select-input-mode="selectInputMode"
-                        @navigate-to-upgrade="router.push('/upgrade')"
-                        @remove-context="
-                            (index: number) => selectedContexts.splice(index, 1)
-                        "
-                        @clear-all-contexts="clearContextReferences"
-                    />
+                    <div class="flex-shrink-0">
+                        <InputArea
+                            :class="['px-2']"
+                            :chat-container-width="chatContainerWidth"
+                            :is-loading="isLoading"
+                            :show-input="
+                                !(currentChat && currentChat?.is_read_only)
+                            "
+                            :is-recording="isRecording"
+                            :is-transcribing="isTranscribing"
+                            :transcribed-text="transcribedText"
+                            :microphone-permission="microphonePermission"
+                            :input-disabled="
+                                (currentChat &&
+                                    currentChat?.is_read_only &&
+                                    !isOnline) ||
+                                inputDisabled ||
+                                !isOnline
+                            "
+                            :input-placeholder-text="inputPlaceholderText"
+                            :paste-preview="
+                                pastePreview
+                                    ? {
+                                          show: pastePreview.show,
+                                          content: pastePreview.content,
+                                      }
+                                    : null
+                            "
+                            :show-input-mode-dropdown="showInputModeDropdown"
+                            :show-limit-exceeded-banner="
+                                showLimitExceededBanner
+                            "
+                            :show-upgrade-banner="showUpgradeBanner"
+                            :plan-status="planStatus"
+                            :FREE_REQUEST_LIMIT="FREE_REQUEST_LIMIT"
+                            :selected-contexts="ref(selectedContexts)"
+                            :show-scroll-down-button="ref(showScrollDownButton)"
+                            :scroll-button-position="ref(scrollButtonPosition)"
+                            @scroll-to-bottom="scrollToBottom"
+                            @submit="handleSubmit"
+                            @auto-grow="autoGrow"
+                            @handle-paste="handlePaste"
+                            @keydown="onEnter"
+                            @toggle-voice-recording="toggleVoiceRecording"
+                            @clear-voice-transcription="clearVoiceTranscription"
+                            @toggle-input-mode-dropdown="
+                                showInputModeDropdown = !showInputModeDropdown
+                            "
+                            @select-input-mode="selectInputMode"
+                            @navigate-to-upgrade="router.push('/upgrade')"
+                            @remove-context="
+                                (index: number) =>
+                                    selectedContexts.splice(index, 1)
+                            "
+                            @clear-all-contexts="clearContextReferences"
+                        />
+                    </div>
                 </div>
             </div>
         </div>
