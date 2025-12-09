@@ -1915,7 +1915,7 @@ onUnmounted(() => {
         <!-- Main Chat Window -->
         <div
             :class="[
-                'flex-grow flex flex-col items-center justify-center font-light text-sm transition-all duration-300 ease-in-out bg-inherit overflow-hidden',
+                'flex-grow flex overflow-hidden flex-col items-center justify-center font-light text-sm transition-all duration-300 ease-in-out bg-inherit',
                 screenWidth > 720
                     ? !isCollapsed
                         ? 'ml-[270px]'
@@ -1931,16 +1931,12 @@ onUnmounted(() => {
 
             <div
                 v-else
-                :class="[
-                    'w-full relative h-full flex-grow flex flex-col justify-center bg-inherit overflow-hidden',
-                ]"
+                class="md:relative w-full h-full flex flex-col bg-inherit"
             >
                 <TopNav />
-                <!-- Chat Messages Container -->
+                <!-- Chat Messages Container - Fixed to not overflow -->
                 <div
-                    :class="[
-                        'flex flex-col w-full items-center h-full pt-[70px] px-2 overflow-y-auto',
-                    ]"
+                    class="flex flex-col w-full items-center flex-1 pt-[52px] px-2 overflow-hidden min-h-0"
                 >
                     <!-- Empty State -->
                     <EmptyChatView
@@ -1954,7 +1950,7 @@ onUnmounted(() => {
                         v-else
                         ref="scrollableElem"
                         :class="[
-                            'relative md:max-w-3xl max-w-[100vw] flex-grow no-scrollbar overflow-y-auto space-y-3 sm:space-y-4  scroll-container',
+                            'relative md:max-w-3xl max-w-[100vw] flex-grow no-scrollbar overflow-y-auto space-y-3 sm:space-y-4 scroll-container',
                             scrollContainerPadding,
                             chatContainerWidth,
                         ]"

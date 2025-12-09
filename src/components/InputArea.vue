@@ -468,7 +468,7 @@ watch(isContextLimitReached, (limitReached) => {
 <template>
     <div
         v-show="showInput"
-        class="z-20 bottom-0 right-0 absolute w-full"
+        class="z-20 bottom-0 right-0 fixed md:absolute w-full"
         :class="pastePreview?.show ? 'pt-2' : ''"
     >
         <div class="w-full flex justify-center items-center">
