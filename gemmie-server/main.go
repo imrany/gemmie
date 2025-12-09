@@ -204,6 +204,7 @@ func runServer() {
 	r.HandleFunc("/api/push/unsubscribe", v1.UnsubscribeToPushNotificationHandler).Methods("POST")
 	r.HandleFunc("/api/push/send", v1.SendPushNotificationHandler).Methods("POST")
 	r.HandleFunc("/api/push/subscriptions", v1.GetUserSubscriptionsHandler).Methods("GET")
+	r.HandleFunc("/api/push/verify-subscription", v1.VerifySubscriptionHandler).Methods("POST")
 
 	// genai routes
 	r.HandleFunc("/api/genai", v1.GenerateAIResponseHandler).Methods(http.MethodPost)

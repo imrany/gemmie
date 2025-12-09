@@ -295,3 +295,66 @@ func GetUserSubscriptionsHandler(w http.ResponseWriter, r *http.Request) {
 		Data:    subscriptions,
 	})
 }
+
+// VerifySubscriptionHandler - Verify if a subscription exists in the backend
+func VerifySubscriptionHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	userID := r.Header.Get("X-User-ID")
+	if userID == "" {
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(store.Response{
+			Success: false,
+			Message: "User ID required",
+		})
+		return
+	}
+
+	var req struct {
+		Endpoint string `json:"endpoint"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(store.Response{
+			Success: false,
+			Message: "Invalid request body",
+		})
+		return
+	}
+
+	if req.Endpoint == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(store.Response{
+			Success: false,
+			Message: "Endpoint required",
+		})
+		return
+	}
+
+	// Check if subscription exists
+	exists, err := store.SubscriptionExists(r.Context(), req.Endpoint)
+	if err != nil {
+		slog.Error("Failed to verify subscription", "error", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(store.Response{
+			Success: false,
+			Message: "Failed to verify subscription",
+		})
+		return
+	}
+
+	if !exists {
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(store.Response{
+			Success: false,
+			Message: "Subscription not found",
+		})
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(store.Response{
+		Success: true,
+		Message: "Subscription exists",
+	})
+}
