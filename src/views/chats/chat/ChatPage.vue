@@ -2328,6 +2328,10 @@ onUnmounted(() => {
                                                     </button>
 
                                                     <button
+                                                        v-if="
+                                                            currentChat &&
+                                                            !currentChat.is_read_only
+                                                        "
                                                         @click="
                                                             refreshResponse(
                                                                 item.prompt,
@@ -2347,6 +2351,10 @@ onUnmounted(() => {
                                                     </button>
 
                                                     <button
+                                                        v-if="
+                                                            currentChat &&
+                                                            !currentChat.is_read_only
+                                                        "
                                                         @click="
                                                             deleteMessage(i)
                                                         "
