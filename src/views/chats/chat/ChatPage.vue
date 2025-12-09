@@ -1958,7 +1958,7 @@ onUnmounted(() => {
                             v-else
                             ref="scrollableElem"
                             :class="[
-                                'relative md:max-w-3xl min-h-[calc(100vh-200px)] max-w-[100vw] flex-grow no-scrollbar overflow-y-auto space-y-3 sm:space-y-4  scroll-container',
+                                'relative md:max-w-3xl min-h-[calc(100vh-100px)] max-w-[100vw] flex-grow no-scrollbar overflow-y-auto space-y-3 sm:space-y-4  scroll-container',
                                 scrollContainerPadding,
                                 chatContainerWidth,
                             ]"

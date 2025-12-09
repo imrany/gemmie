@@ -3,16 +3,6 @@ import { ref, onMounted } from "vue";
 import type { UserDetails, ApiResponse, CustomPayload } from "@/types";
 import { toast } from "vue-sonner";
 
-interface BackendSubscriptionData {
-  auth_key: string;
-  created_at: string;
-  endpoint: string;
-  p256dh_key: string;
-  updated_at: string;
-  user_agent: string;
-  user_id: string;
-}
-
 export function usePushNotifications() {
   const parsedUserDetails = ref<UserDetails>(
     JSON.parse(localStorage.getItem("userdetails") || "{}"),
@@ -102,28 +92,7 @@ export function usePushNotifications() {
       isSubscribed.value = true;
 
       // Send subscription to backend
-      const response = await fetch(`${API_BASE_URL}/push/subscribe`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(parsedUserDetails.value?.userId
-            ? { "X-User-ID": parsedUserDetails.value.userId }
-            : {}),
-          "User-Agent": navigator.userAgent,
-        },
-        body: JSON.stringify(sub?.toJSON()),
-      });
-
-      const data: ApiResponse<any> = await response.json();
-      if (!response.ok) {
-        throw new Error("Failed to subscribe to push notifications");
-      }
-
-      if (!data.success) {
-        throw new Error(
-          data.message || "Failed to subscribe to push notifications",
-        );
-      }
+      const data = await syncSubscription(sub);
 
       await sendPushNotification({
         title: "🔔 Thanks for subscribing to Gemmie",
@@ -194,61 +163,97 @@ export function usePushNotifications() {
     }
   };
 
+  // Check if THIS DEVICE has an active subscription
   const checkSubscription = async () => {
     try {
       loading.value = true;
-      const response = await fetch(`${API_BASE_URL}/push/subscriptions`, {
-        method: "GET",
+
+      // Get the actual browser subscription for THIS device
+      const registration = await navigator.serviceWorker.getRegistration();
+      if (!registration) {
+        isSubscribed.value = false;
+        subscription.value = null;
+        return;
+      }
+
+      const localSub = await registration.pushManager.getSubscription();
+
+      if (localSub) {
+        // This device has an active subscription
+        subscription.value = localSub;
+        isSubscribed.value = true;
+
+        // Verify it exists in backend (optional but recommended)
+        try {
+          const response = await fetch(
+            `${API_BASE_URL}/push/verify-subscription`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                ...(parsedUserDetails.value?.userId
+                  ? { "X-User-ID": parsedUserDetails.value.userId }
+                  : {}),
+              },
+              body: JSON.stringify({ endpoint: localSub.endpoint }),
+            },
+          );
+
+          const data: ApiResponse = await response.json();
+
+          if (!response.ok || !data.success) {
+            // Subscription not in backend, re-sync it
+            console.log(
+              data.message || "Subscription not in backend, re-syncing...",
+            );
+            await syncSubscription(localSub);
+          }
+        } catch (err) {
+          console.warn("Could not verify subscription with backend:", err);
+        }
+      } else {
+        // This device is not subscribed
+        isSubscribed.value = false;
+        subscription.value = null;
+      }
+    } catch (err: any) {
+      console.error("Failed to check subscription:", err);
+      isSubscribed.value = false;
+      subscription.value = null;
+    } finally {
+      loading.value = false;
+    }
+  };
+
+  // Helper function to sync subscription with backend
+  const syncSubscription = async (sub: PushSubscription) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/push/subscribe`, {
+        method: "POST",
         headers: {
           "Content-Type": "application/json",
           ...(parsedUserDetails.value?.userId
             ? { "X-User-ID": parsedUserDetails.value.userId }
             : {}),
+          "User-Agent": navigator.userAgent,
         },
+        body: JSON.stringify(sub.toJSON()),
       });
 
-      const data: ApiResponse<BackendSubscriptionData[]> =
-        await response.json();
-
+      const data: ApiResponse<any> = await response.json();
       if (!response.ok) {
-        throw new Error("Failed to check subscription");
+        throw new Error("Failed to subscribe to push notifications");
       }
 
       if (!data.success) {
-        throw new Error(data.message || "Failed to check subscription");
+        throw new Error(
+          data.message || "Failed to subscribe to push notifications",
+        );
       }
-
-      if (!data.data) {
-        throw new Error(data.message || "No subscription found");
-      }
-
-      const subscriptionData = data.data[0];
-      const mappedSub: PushSubscription = {
-        endpoint: subscriptionData.endpoint,
-        expirationTime: null,
-        getKey: (key: PushEncryptionKeyName) => {
-          if (key === "auth") {
-            return urlBase64ToUint8Array(subscriptionData.auth_key);
-          } else if (key === "p256dh") {
-            return urlBase64ToUint8Array(subscriptionData.p256dh_key);
-          }
-          return null;
-        },
-        options: {} as PushSubscriptionOptions,
-        toJSON: () => mappedSub,
-        unsubscribe: () => {
-          return Promise.reject(
-            "Unsubscribe not implemented client side, use the unsubscribe function",
-          );
-        },
-      };
-      subscription.value = mappedSub;
-      isSubscribed.value = true;
+      return data;
     } catch (err: any) {
-      console.error("Failed to check subscription:", err);
-      throw new Error(err.message || "Failed to check subscription");
-    } finally {
-      loading.value = false;
+      console.error("Error syncing subscription:", err);
+      throw new Error(err.message);
     }
   };
 

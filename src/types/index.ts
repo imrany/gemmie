@@ -175,3 +175,13 @@ export interface OCRData {
   text: string;
   text_length: number;
 }
+
+export interface BackendSubscriptionData {
+  auth_key: string;
+  created_at: string;
+  endpoint: string;
+  p256dh_key: string;
+  updated_at: string;
+  user_agent: string;
+  user_id: string;
+}

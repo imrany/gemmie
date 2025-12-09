@@ -1,13 +1,8 @@
-const CACHE_VERSION = "v0.30.4";
+const CACHE_VERSION = "v0.30.5";
 const staticCacheName = `site-static-${CACHE_VERSION}`;
 const dynamicCache = `site-dynamic-${CACHE_VERSION}`;
 
-const assets = [
-  "/index.html",
-  "/manifest.json",
-  "/logo.svg",
-  "/sounds/bell-notification.wav",
-];
+const assets = ["/index.html", "/manifest.json", "/logo.svg"];
 
 // Installing service worker
 self.addEventListener("install", (evt) => {
@@ -119,6 +114,16 @@ self.addEventListener("fetch", (evt) => {
 
           if (evt.request.destination === "document") {
             return caches.match("/index.html").then(
+              (res) =>
+                res ||
+                new Response("<h1>Offline</h1>", {
+                  headers: { "Content-Type": "text/html" },
+                }),
+            );
+          }
+
+          if (evt.request.destination === "image") {
+            return caches.match("/logo.svg").then(
               (res) =>
                 res ||
                 new Response("<h1>Offline</h1>", {
