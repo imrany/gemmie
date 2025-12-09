@@ -1915,7 +1915,7 @@ onUnmounted(() => {
         <!-- Main Chat Window -->
         <div
             :class="[
-                'flex-grow flex flex-col items-center justify-center font-light text-sm transition-all duration-300 ease-in-out bg-inherit',
+                'flex-grow flex flex-col items-center justify-center font-light text-sm transition-all duration-300 ease-in-out bg-inherit overflow-hidden',
                 screenWidth > 720
                     ? !isCollapsed
                         ? 'ml-[270px]'
@@ -1929,448 +1929,411 @@ onUnmounted(() => {
                 :show-error-section="ref(showErrorSection)"
             />
 
-            <div class="relative w-full" v-else>
+            <div
+                v-else
+                :class="[
+                    'w-full relative h-full flex-grow flex flex-col justify-center bg-inherit overflow-hidden',
+                ]"
+            >
+                <TopNav />
+                <!-- Chat Messages Container -->
                 <div
                     :class="[
-                        'w-full h-full flex flex-col justify-center bg-inherit',
-                        screenWidth > 720 && !isCollapsed
-                            ? 'left-[270px]'
-                            : screenWidth > 720 && isCollapsed
-                              ? 'left-[60px]'
-                              : 'left-[0]',
+                        'flex flex-col w-full items-center h-full pt-[70px] px-2 overflow-y-auto',
                     ]"
                 >
-                    <TopNav />
-                    <!-- Chat Messages Container -->
+                    <!-- Empty State -->
+                    <EmptyChatView
+                        :class="[chatContainerWidth]"
+                        v-if="currentMessages.length === 0"
+                        :suggestionPrompts="suggestionPrompts"
+                        :selectSuggestion="selectSuggestion"
+                    />
+
                     <div
+                        v-else
+                        ref="scrollableElem"
                         :class="[
-                            'flex flex-col w-full items-center h-full pt-[70px] px-2 ',
+                            'relative md:max-w-3xl max-w-[100vw] flex-grow no-scrollbar overflow-y-auto space-y-3 sm:space-y-4  scroll-container',
+                            scrollContainerPadding,
+                            chatContainerWidth,
                         ]"
                     >
-                        <!-- Empty State -->
-                        <EmptyChatView
-                            :class="[chatContainerWidth]"
-                            v-if="currentMessages.length === 0"
-                            :suggestionPrompts="suggestionPrompts"
-                            :selectSuggestion="selectSuggestion"
-                        />
+                        <div class="flex flex-col gap-1">
+                            <div
+                                v-for="(item, i) in currentMessages"
+                                :key="`chat-${i}`"
+                                :id="`chat-${item.response}`"
+                                class="flex flex-col gap-1"
+                            >
+                                <!-- User Bubble -->
+                                <div class="flex w-full chat-message">
+                                    <div class="flex flex-col w-full">
+                                        <div class="flex justify-start mb-3">
+                                            <PastePreview
+                                                :content="item?.prompt"
+                                                :is-clickable="true"
+                                            />
+                                        </div>
 
-                        <div
-                            v-else
-                            ref="scrollableElem"
-                            :class="[
-                                'relative md:max-w-3xl max-w-[100vw] flex-grow no-scrollbar overflow-y-auto space-y-3 sm:space-y-4  scroll-container',
-                                scrollContainerPadding,
-                                chatContainerWidth,
-                            ]"
-                        >
-                            <div class="flex flex-col gap-1">
-                                <div
-                                    v-for="(item, i) in currentMessages"
-                                    :key="`chat-${i}`"
-                                    :id="`chat-${item.response}`"
-                                    class="flex flex-col gap-1"
-                                >
-                                    <!-- User Bubble -->
-                                    <div class="flex w-full chat-message">
-                                        <div class="flex flex-col w-full">
-                                            <div
-                                                class="flex justify-start mb-3"
-                                            >
-                                                <PastePreview
-                                                    :content="item?.prompt"
-                                                    :is-clickable="true"
-                                                />
+                                        <!-- User message bubble -->
+                                        <div
+                                            class="flex mt-[2px] items-start gap-2 font-medium bg-gray-100 dark:bg-gray-800 text-black dark:text-gray-100 px-4 rounded-2xl prose prose-sm dark:prose-invert chat-bubble w-fit max-w-full"
+                                        >
+                                            <!-- Avatar container -->
+                                            <div class="flex-shrink-0 py-3">
+                                                <div
+                                                    class="flex items-center justify-center w-7 h-7 text-gray-100 dark:text-gray-800 bg-gray-700 dark:bg-gray-200 rounded-full text-sm font-semibold"
+                                                >
+                                                    {{
+                                                        parsedUserDetails.username
+                                                            .toUpperCase()
+                                                            .slice(0, 2)
+                                                    }}
+                                                </div>
                                             </div>
 
-                                            <!-- User message bubble -->
-                                            <div
-                                                class="flex mt-[2px] items-start gap-2 font-medium bg-gray-100 dark:bg-gray-800 text-black dark:text-gray-100 px-4 rounded-2xl prose prose-sm dark:prose-invert chat-bubble w-fit max-w-full"
-                                            >
-                                                <!-- Avatar container -->
-                                                <div class="flex-shrink-0 py-3">
-                                                    <div
-                                                        class="flex items-center justify-center w-7 h-7 text-gray-100 dark:text-gray-800 bg-gray-700 dark:bg-gray-200 rounded-full text-sm font-semibold"
-                                                    >
-                                                        {{
-                                                            parsedUserDetails.username
-                                                                .toUpperCase()
-                                                                .slice(0, 2)
-                                                        }}
-                                                    </div>
-                                                </div>
+                                            <!-- Message content container -->
+                                            <div class="flex-1 min-w-0">
+                                                <!-- Selected Context Badges  -->
+                                                <ReferenceBadge
+                                                    :is-closeable="false"
+                                                    :selected-contexts="
+                                                        ref(
+                                                            item.references &&
+                                                                item.references
+                                                                    .length > 0
+                                                                ? item.references.map(
+                                                                      (
+                                                                          previewText,
+                                                                      ) => {
+                                                                          const messageIndex =
+                                                                              currentMessages.findIndex(
+                                                                                  (
+                                                                                      m,
+                                                                                  ) =>
+                                                                                      m.prompt &&
+                                                                                      m.prompt.startsWith(
+                                                                                          previewText
+                                                                                              .replace(
+                                                                                                  '...',
+                                                                                                  '',
+                                                                                              )
+                                                                                              .trim(),
+                                                                                      ),
+                                                                              );
 
-                                                <!-- Message content container -->
-                                                <div class="flex-1 min-w-0">
-                                                    <!-- Selected Context Badges  -->
-                                                    <ReferenceBadge
-                                                        :is-closeable="false"
-                                                        :selected-contexts="
-                                                            ref(
-                                                                item.references &&
-                                                                    item
-                                                                        .references
-                                                                        .length >
-                                                                        0
-                                                                    ? item.references.map(
-                                                                          (
-                                                                              previewText,
-                                                                          ) => {
-                                                                              const messageIndex =
-                                                                                  currentMessages.findIndex(
-                                                                                      (
-                                                                                          m,
-                                                                                      ) =>
-                                                                                          m.prompt &&
-                                                                                          m.prompt.startsWith(
-                                                                                              previewText
-                                                                                                  .replace(
-                                                                                                      '...',
-                                                                                                      '',
-                                                                                                  )
-                                                                                                  .trim(),
-                                                                                          ),
-                                                                                  );
-
-                                                                              if (
-                                                                                  messageIndex >=
-                                                                                  0
-                                                                              ) {
-                                                                                  const refMessage =
-                                                                                      currentMessages[
-                                                                                          messageIndex
-                                                                                      ];
-                                                                                  return {
-                                                                                      preview:
-                                                                                          previewText,
-                                                                                      fullText:
-                                                                                          refMessage.response ||
-                                                                                          refMessage.prompt ||
-                                                                                          previewText,
-                                                                                  };
-                                                                              }
-
+                                                                          if (
+                                                                              messageIndex >=
+                                                                              0
+                                                                          ) {
+                                                                              const refMessage =
+                                                                                  currentMessages[
+                                                                                      messageIndex
+                                                                                  ];
                                                                               return {
                                                                                   preview:
                                                                                       previewText,
                                                                                   fullText:
+                                                                                      refMessage.response ||
+                                                                                      refMessage.prompt ||
                                                                                       previewText,
                                                                               };
-                                                                          },
-                                                                      )
-                                                                    : [],
+                                                                          }
+
+                                                                          return {
+                                                                              preview:
+                                                                                  previewText,
+                                                                              fullText:
+                                                                                  previewText,
+                                                                          };
+                                                                      },
+                                                                  )
+                                                                : [],
+                                                        )
+                                                    "
+                                                />
+                                                <MarkdownRenderer
+                                                    class="break-words text-base leading-relaxed"
+                                                    :content="
+                                                        item &&
+                                                        item?.prompt &&
+                                                        item?.prompt?.length >
+                                                            800
+                                                            ? item?.prompt
+                                                                  ?.trim()
+                                                                  .split(
+                                                                      '#pastedText#',
+                                                                  )[0]
+                                                            : item.prompt || ''
+                                                    "
+                                                    :maxHeight="150"
+                                                    :minLength="400"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Bot Bubble -->
+                                <div
+                                    class="flex w-full md:max-w-3xl max-w-full relative pb-[20px]"
+                                >
+                                    <div
+                                        class="bg-none max-w-full w-full chat-message leading-relaxed text-black dark:text-gray-100 p-1 rounded-2xl prose prose-sm dark:prose-invert"
+                                    >
+                                        <!-- Loading state -->
+                                        <div
+                                            v-if="isLoadingState(item.response)"
+                                            class="flex w-full rounded-lg bg-gray-50 dark:bg-gray-800 p-2 items-center animate-pulse gap-2 text-gray-500 dark:text-gray-400"
+                                        >
+                                            <LoaderCircle
+                                                class="w-4 h-4 animate-spin"
+                                            />
+                                            <span class="text-sm">{{
+                                                getLoadingMessage(item.response)
+                                            }}</span>
+                                        </div>
+
+                                        <!-- Regular response with enhanced link handling -->
+                                        <div v-else>
+                                            <!-- Check if it's a deep search result -->
+                                            <template
+                                                v-if="
+                                                    isDeepSearchResult(
+                                                        item.response,
+                                                    )
+                                                "
+                                            >
+                                                <MarkdownRenderer
+                                                    class="break-words overflow-x-hidden"
+                                                    :collapsible="false"
+                                                    :content="
+                                                        renderDeepSearchResult(
+                                                            JSON.parse(
+                                                                item.response,
+                                                            ),
+                                                            getPagination(i)
+                                                                .currentPage,
+                                                        )
+                                                    "
+                                                />
+                                            </template>
+
+                                            <!-- Regular response -->
+                                            <template v-else>
+                                                <MarkdownRenderer
+                                                    :collapsible="false"
+                                                    class="break-words overflow-x-hidden"
+                                                    :content="
+                                                        item.response || ''
+                                                    "
+                                                />
+                                            </template>
+
+                                            <!-- Link Previews Section -->
+                                            <div
+                                                v-if="
+                                                    !isDeepSearchResult(
+                                                        item.response,
+                                                    ) &&
+                                                    extractUrls(
+                                                        item.response || '',
+                                                    ).length > 0
+                                                "
+                                                class="mt-2 sm:mt-3"
+                                            >
+                                                <div
+                                                    v-for="url in extractUrls(
+                                                        item.response || '',
+                                                    ).slice(0, 3)"
+                                                    :key="url"
+                                                >
+                                                    <LinkPreviewComponent
+                                                        v-if="
+                                                            linkPreviewCache.get(
+                                                                url,
                                                             )
                                                         "
-                                                    />
-                                                    <MarkdownRenderer
-                                                        class="break-words text-base leading-relaxed"
-                                                        :content="
-                                                            item &&
-                                                            item?.prompt &&
-                                                            item?.prompt
-                                                                ?.length > 800
-                                                                ? item?.prompt
-                                                                      ?.trim()
-                                                                      .split(
-                                                                          '#pastedText#',
-                                                                      )[0]
-                                                                : item.prompt ||
-                                                                  ''
+                                                        :preview="
+                                                            linkPreviewCache.get(
+                                                                url,
+                                                            )!
                                                         "
-                                                        :maxHeight="150"
-                                                        :minLength="400"
                                                     />
                                                 </div>
                                             </div>
                                         </div>
-                                    </div>
 
-                                    <!-- Bot Bubble -->
-                                    <div
-                                        class="flex w-full md:max-w-3xl max-w-full relative pb-[20px]"
-                                    >
+                                        <!-- Actions - Responsive with fewer labels on mobile -->
                                         <div
-                                            class="bg-none max-w-full w-full chat-message leading-relaxed text-black dark:text-gray-100 p-1 rounded-2xl prose prose-sm dark:prose-invert"
+                                            v-if="
+                                                !isLoadingState(item.response)
+                                            "
+                                            class="flex flex-wrap items-center justify-between gap-2 sm:gap-3 mt-3 text-gray-500 dark:text-gray-400 text-sm"
                                         >
-                                            <!-- Loading state -->
+                                            <!-- Left side: Navigation for deep search -->
                                             <div
                                                 v-if="
-                                                    isLoadingState(
+                                                    isDeepSearchResult(
                                                         item.response,
-                                                    )
+                                                    ) &&
+                                                    getPagination(i)
+                                                        .totalPages > 1
                                                 "
-                                                class="flex w-full rounded-lg bg-gray-50 dark:bg-gray-800 p-2 items-center animate-pulse gap-2 text-gray-500 dark:text-gray-400"
+                                                class="flex mr-auto items-center gap-2"
                                             >
-                                                <LoaderCircle
-                                                    class="w-4 h-4 animate-spin"
-                                                />
-                                                <span class="text-sm">{{
-                                                    getLoadingMessage(
-                                                        item.response,
-                                                    )
-                                                }}</span>
-                                            </div>
-
-                                            <!-- Regular response with enhanced link handling -->
-                                            <div v-else>
-                                                <!-- Check if it's a deep search result -->
-                                                <template
-                                                    v-if="
-                                                        isDeepSearchResult(
-                                                            item.response,
-                                                        )
+                                                <Pagination
+                                                    :items-per-page="1"
+                                                    :total="
+                                                        getPagination(i)
+                                                            .totalPages
                                                     "
-                                                >
-                                                    <MarkdownRenderer
-                                                        class="break-words overflow-x-hidden"
-                                                        :collapsible="false"
-                                                        :content="
-                                                            renderDeepSearchResult(
-                                                                JSON.parse(
-                                                                    item.response,
-                                                                ),
-                                                                getPagination(i)
-                                                                    .currentPage,
+                                                    :default-page="
+                                                        getPagination(i)
+                                                            .currentPage + 1
+                                                    "
+                                                    @update:page="
+                                                        (newPage) =>
+                                                            goToPage(
+                                                                i,
+                                                                newPage - 1,
                                                             )
-                                                        "
-                                                    />
-                                                </template>
-
-                                                <!-- Regular response -->
-                                                <template v-else>
-                                                    <MarkdownRenderer
-                                                        :collapsible="false"
-                                                        class="break-words overflow-x-hidden"
-                                                        :content="
-                                                            item.response || ''
-                                                        "
-                                                    />
-                                                </template>
-
-                                                <!-- Link Previews Section -->
-                                                <div
-                                                    v-if="
-                                                        !isDeepSearchResult(
-                                                            item.response,
-                                                        ) &&
-                                                        extractUrls(
-                                                            item.response || '',
-                                                        ).length > 0
                                                     "
-                                                    class="mt-2 sm:mt-3"
                                                 >
-                                                    <div
-                                                        v-for="url in extractUrls(
-                                                            item.response || '',
-                                                        ).slice(0, 3)"
-                                                        :key="url"
+                                                    <PaginationContent
+                                                        v-slot="{ items }"
                                                     >
-                                                        <LinkPreviewComponent
-                                                            v-if="
-                                                                linkPreviewCache.get(
-                                                                    url,
-                                                                )
+                                                        <PaginationPrevious
+                                                            @click="
+                                                                prevResult(i)
                                                             "
-                                                            :preview="
-                                                                linkPreviewCache.get(
-                                                                    url,
-                                                                )!
+                                                            :disabled="
+                                                                getPagination(i)
+                                                                    .currentPage ===
+                                                                0
                                                             "
                                                         />
-                                                    </div>
-                                                </div>
-                                            </div>
 
-                                            <!-- Actions - Responsive with fewer labels on mobile -->
-                                            <div
-                                                v-if="
-                                                    !isLoadingState(
-                                                        item.response,
-                                                    )
-                                                "
-                                                class="flex flex-wrap items-center justify-between gap-2 sm:gap-3 mt-3 text-gray-500 dark:text-gray-400 text-sm"
-                                            >
-                                                <!-- Left side: Navigation for deep search -->
-                                                <div
-                                                    v-if="
-                                                        isDeepSearchResult(
-                                                            item.response,
-                                                        ) &&
-                                                        getPagination(i)
-                                                            .totalPages > 1
-                                                    "
-                                                    class="flex mr-auto items-center gap-2"
-                                                >
-                                                    <Pagination
-                                                        :items-per-page="1"
-                                                        :total="
-                                                            getPagination(i)
-                                                                .totalPages
-                                                        "
-                                                        :default-page="
-                                                            getPagination(i)
-                                                                .currentPage + 1
-                                                        "
-                                                        @update:page="
-                                                            (newPage) =>
-                                                                goToPage(
-                                                                    i,
-                                                                    newPage - 1,
-                                                                )
-                                                        "
-                                                    >
-                                                        <PaginationContent
-                                                            v-slot="{ items }"
+                                                        <template
+                                                            v-for="(
+                                                                paginationItem,
+                                                                index
+                                                            ) in items"
+                                                            :key="index"
                                                         >
-                                                            <PaginationPrevious
-                                                                @click="
-                                                                    prevResult(
-                                                                        i,
-                                                                    )
+                                                            <PaginationItem
+                                                                v-if="
+                                                                    paginationItem.type ===
+                                                                    'page'
                                                                 "
-                                                                :disabled="
+                                                                class="bg-white hover:dark:bg-gray-700 dark:bg-gray-900"
+                                                                :value="
+                                                                    paginationItem.value
+                                                                "
+                                                                :is-active="
+                                                                    paginationItem.value ===
                                                                     getPagination(
                                                                         i,
                                                                     )
-                                                                        .currentPage ===
-                                                                    0
-                                                                "
-                                                            />
-
-                                                            <template
-                                                                v-for="(
-                                                                    paginationItem,
-                                                                    index
-                                                                ) in items"
-                                                                :key="index"
-                                                            >
-                                                                <PaginationItem
-                                                                    v-if="
-                                                                        paginationItem.type ===
-                                                                        'page'
-                                                                    "
-                                                                    class="bg-white hover:dark:bg-gray-700 dark:bg-gray-900"
-                                                                    :value="
-                                                                        paginationItem.value
-                                                                    "
-                                                                    :is-active="
-                                                                        paginationItem.value ===
-                                                                        getPagination(
-                                                                            i,
-                                                                        )
-                                                                            .currentPage +
-                                                                            1
-                                                                    "
-                                                                    @click="
-                                                                        goToPage(
-                                                                            i,
-                                                                            paginationItem.value -
-                                                                                1,
-                                                                        )
-                                                                    "
-                                                                >
-                                                                    {{
-                                                                        paginationItem.value
-                                                                    }}
-                                                                </PaginationItem>
-                                                                <PaginationEllipsis
-                                                                    v-else-if="
-                                                                        paginationItem.type ===
-                                                                        'ellipsis'
-                                                                    "
-                                                                    :key="`ellipsis-${index}`"
-                                                                />
-                                                            </template>
-
-                                                            <PaginationNext
-                                                                class="dark:bg-gray-900 hover:dark:bg-gray-700"
-                                                                @click="
-                                                                    nextResult(
-                                                                        i,
-                                                                    )
-                                                                "
-                                                                :disabled="
-                                                                    getPagination(
-                                                                        i,
-                                                                    )
-                                                                        .currentPage >=
-                                                                    getPagination(
-                                                                        i,
-                                                                    )
-                                                                        .totalPages -
+                                                                        .currentPage +
                                                                         1
                                                                 "
+                                                                @click="
+                                                                    goToPage(
+                                                                        i,
+                                                                        paginationItem.value -
+                                                                            1,
+                                                                    )
+                                                                "
+                                                            >
+                                                                {{
+                                                                    paginationItem.value
+                                                                }}
+                                                            </PaginationItem>
+                                                            <PaginationEllipsis
+                                                                v-else-if="
+                                                                    paginationItem.type ===
+                                                                    'ellipsis'
+                                                                "
+                                                                :key="`ellipsis-${index}`"
                                                             />
-                                                        </PaginationContent>
-                                                    </Pagination>
-                                                </div>
+                                                        </template>
 
-                                                <!-- Right side: Regular actions -->
-                                                <div
-                                                    class="flex flex-wrap ml-auto gap-2 sm:gap-3"
+                                                        <PaginationNext
+                                                            class="dark:bg-gray-900 hover:dark:bg-gray-700"
+                                                            @click="
+                                                                nextResult(i)
+                                                            "
+                                                            :disabled="
+                                                                getPagination(i)
+                                                                    .currentPage >=
+                                                                getPagination(i)
+                                                                    .totalPages -
+                                                                    1
+                                                            "
+                                                        />
+                                                    </PaginationContent>
+                                                </Pagination>
+                                            </div>
+
+                                            <!-- Right side: Regular actions -->
+                                            <div
+                                                class="flex flex-wrap ml-auto gap-2 sm:gap-3"
+                                            >
+                                                <button
+                                                    @click="
+                                                        copyResponse(
+                                                            item.response,
+                                                            i,
+                                                        )
+                                                    "
+                                                    class="flex items-center gap-1 hover:text-blue-600 dark:hover:text-blue-400 transition-colors min-h-[32px]"
                                                 >
-                                                    <button
-                                                        @click="
-                                                            copyResponse(
-                                                                item.response,
-                                                                i,
-                                                            )
-                                                        "
-                                                        class="flex items-center gap-1 hover:text-blue-600 dark:hover:text-blue-400 transition-colors min-h-[32px]"
-                                                    >
-                                                        <ClipboardList
-                                                            class="w-4 h-4"
-                                                        />
-                                                        <span>{{
-                                                            copiedIndex === i
-                                                                ? "Copied!"
-                                                                : "Copy"
-                                                        }}</span>
-                                                    </button>
+                                                    <ClipboardList
+                                                        class="w-4 h-4"
+                                                    />
+                                                    <span>{{
+                                                        copiedIndex === i
+                                                            ? "Copied!"
+                                                            : "Copy"
+                                                    }}</span>
+                                                </button>
 
-                                                    <button
-                                                        v-if="
-                                                            currentChat &&
-                                                            !currentChat.is_read_only
-                                                        "
-                                                        @click="
-                                                            refreshResponse(
-                                                                item.prompt,
-                                                                item.references,
-                                                            )
-                                                        "
-                                                        :disabled="
-                                                            isLoading ||
-                                                            !isOnline
-                                                        "
-                                                        class="flex items-center gap-1 hover:text-orange-600 dark:hover:text-orange-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-h-[32px]"
-                                                    >
-                                                        <RotateCw
-                                                            class="w-4 h-4"
-                                                        />
-                                                        <span>Retry</span>
-                                                    </button>
+                                                <button
+                                                    v-if="
+                                                        currentChat &&
+                                                        !currentChat.is_read_only
+                                                    "
+                                                    @click="
+                                                        refreshResponse(
+                                                            item.prompt,
+                                                            item.references,
+                                                        )
+                                                    "
+                                                    :disabled="
+                                                        isLoading || !isOnline
+                                                    "
+                                                    class="flex items-center gap-1 hover:text-orange-600 dark:hover:text-orange-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-h-[32px]"
+                                                >
+                                                    <RotateCw class="w-4 h-4" />
+                                                    <span>Retry</span>
+                                                </button>
 
-                                                    <button
-                                                        v-if="
-                                                            currentChat &&
-                                                            !currentChat.is_read_only
-                                                        "
-                                                        @click="
-                                                            deleteMessage(i)
-                                                        "
-                                                        :disabled="
-                                                            isLoading ||
-                                                            !isOnline
-                                                        "
-                                                        class="flex items-center gap-1 hover:text-red-600 dark:hover:text-red-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-h-[32px]"
-                                                    >
-                                                        <Trash
-                                                            class="w-4 h-4"
-                                                        />
-                                                        <span>Delete</span>
-                                                    </button>
-                                                </div>
+                                                <button
+                                                    v-if="
+                                                        currentChat &&
+                                                        !currentChat.is_read_only
+                                                    "
+                                                    @click="deleteMessage(i)"
+                                                    :disabled="
+                                                        isLoading || !isOnline
+                                                    "
+                                                    class="flex items-center gap-1 hover:text-red-600 dark:hover:text-red-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-h-[32px]"
+                                                >
+                                                    <Trash class="w-4 h-4" />
+                                                    <span>Delete</span>
+                                                </button>
                                             </div>
                                         </div>
                                     </div>
@@ -2378,65 +2341,62 @@ onUnmounted(() => {
                             </div>
                         </div>
                     </div>
+                </div>
 
-                    <!-- Input Area -->
-                    <div class="flex-shrink-0">
-                        <InputArea
-                            :class="['px-2']"
-                            :chat-container-width="chatContainerWidth"
-                            :is-loading="isLoading"
-                            :show-input="
-                                !(currentChat && currentChat?.is_read_only)
-                            "
-                            :is-recording="isRecording"
-                            :is-transcribing="isTranscribing"
-                            :transcribed-text="transcribedText"
-                            :microphone-permission="microphonePermission"
-                            :input-disabled="
-                                (currentChat &&
-                                    currentChat?.is_read_only &&
-                                    !isOnline) ||
-                                inputDisabled ||
-                                !isOnline
-                            "
-                            :input-placeholder-text="inputPlaceholderText"
-                            :paste-preview="
-                                pastePreview
-                                    ? {
-                                          show: pastePreview.show,
-                                          content: pastePreview.content,
-                                      }
-                                    : null
-                            "
-                            :show-input-mode-dropdown="showInputModeDropdown"
-                            :show-limit-exceeded-banner="
-                                showLimitExceededBanner
-                            "
-                            :show-upgrade-banner="showUpgradeBanner"
-                            :plan-status="planStatus"
-                            :FREE_REQUEST_LIMIT="FREE_REQUEST_LIMIT"
-                            :selected-contexts="ref(selectedContexts)"
-                            :show-scroll-down-button="ref(showScrollDownButton)"
-                            :scroll-button-position="ref(scrollButtonPosition)"
-                            @scroll-to-bottom="scrollToBottom"
-                            @submit="handleSubmit"
-                            @auto-grow="autoGrow"
-                            @handle-paste="handlePaste"
-                            @keydown="onEnter"
-                            @toggle-voice-recording="toggleVoiceRecording"
-                            @clear-voice-transcription="clearVoiceTranscription"
-                            @toggle-input-mode-dropdown="
-                                showInputModeDropdown = !showInputModeDropdown
-                            "
-                            @select-input-mode="selectInputMode"
-                            @navigate-to-upgrade="router.push('/upgrade')"
-                            @remove-context="
-                                (index: number) =>
-                                    selectedContexts.splice(index, 1)
-                            "
-                            @clear-all-contexts="clearContextReferences"
-                        />
-                    </div>
+                <!-- Input Area -->
+                <div class="flex-shrink-0">
+                    <InputArea
+                        :class="['px-2']"
+                        :chat-container-width="chatContainerWidth"
+                        :is-loading="isLoading"
+                        :show-input="
+                            !(currentChat && currentChat?.is_read_only)
+                        "
+                        :is-recording="isRecording"
+                        :is-transcribing="isTranscribing"
+                        :transcribed-text="transcribedText"
+                        :microphone-permission="microphonePermission"
+                        :input-disabled="
+                            (currentChat &&
+                                currentChat?.is_read_only &&
+                                !isOnline) ||
+                            inputDisabled ||
+                            !isOnline
+                        "
+                        :input-placeholder-text="inputPlaceholderText"
+                        :paste-preview="
+                            pastePreview
+                                ? {
+                                      show: pastePreview.show,
+                                      content: pastePreview.content,
+                                  }
+                                : null
+                        "
+                        :show-input-mode-dropdown="showInputModeDropdown"
+                        :show-limit-exceeded-banner="showLimitExceededBanner"
+                        :show-upgrade-banner="showUpgradeBanner"
+                        :plan-status="planStatus"
+                        :FREE_REQUEST_LIMIT="FREE_REQUEST_LIMIT"
+                        :selected-contexts="ref(selectedContexts)"
+                        :show-scroll-down-button="ref(showScrollDownButton)"
+                        :scroll-button-position="ref(scrollButtonPosition)"
+                        @scroll-to-bottom="scrollToBottom"
+                        @submit="handleSubmit"
+                        @auto-grow="autoGrow"
+                        @handle-paste="handlePaste"
+                        @keydown="onEnter"
+                        @toggle-voice-recording="toggleVoiceRecording"
+                        @clear-voice-transcription="clearVoiceTranscription"
+                        @toggle-input-mode-dropdown="
+                            showInputModeDropdown = !showInputModeDropdown
+                        "
+                        @select-input-mode="selectInputMode"
+                        @navigate-to-upgrade="router.push('/upgrade')"
+                        @remove-context="
+                            (index: number) => selectedContexts.splice(index, 1)
+                        "
+                        @clear-all-contexts="clearContextReferences"
+                    />
                 </div>
             </div>
         </div>
