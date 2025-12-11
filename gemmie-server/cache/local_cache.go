@@ -1,3 +1,4 @@
+// Package cache
 package cache
 
 import (
@@ -6,7 +7,7 @@ import (
 )
 
 type Item struct {
-	Value      interface{}
+	Value      any
 	Expiration int64
 }
 

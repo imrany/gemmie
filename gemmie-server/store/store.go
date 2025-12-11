@@ -162,9 +162,7 @@ type SendNotificationRequest struct {
 	Payload NotificationPayload `json:"payload"`
 }
 
-var (
-	DB *sql.DB
-)
+var DB *sql.DB
 
 // InitStorage initializes the PostgreSQL database connection and runs migrations
 func InitStorage(connString string) error {
@@ -221,5 +219,5 @@ func Close() error {
 }
 
 func GetVersion() string {
-	return "v0.34.0"
+	return "v0.34.1"
 }

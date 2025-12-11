@@ -557,6 +557,13 @@ func CreateMessageHandler(w http.ResponseWriter, r *http.Request) {
 
 	slog.Info("Message created successfully", "message_id", message.ID, "chat_id", chatID, "user_id", userID)
 
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(store.Response{
+		Success: true,
+		Message: "Message created successfully",
+		Data:    message,
+	})
+
 	// Send push notification asynchronously to avoid blocking the response
 	go func() {
 		// Use a new context with timeout for the notification
@@ -680,13 +687,6 @@ func CreateMessageHandler(w http.ResponseWriter, r *http.Request) {
 			)
 		}
 	}()
-
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(store.Response{
-		Success: true,
-		Message: "Message created successfully",
-		Data:    message,
-	})
 }
 
 // DeleteMessageHandler handles DELETE /api/messages/{id}
