@@ -32,13 +32,17 @@ export function useApiCall(globalStateRefs?: {
       maxRetries: 3,
     });
 
+
   async function apiCall<T>(
     endpoint: string,
     options: RequestInit = {},
+    shouldRetry = true,
     retryCount = 0,
   ): Promise<ApiResponse<T>> {
     const maxRetries = 3;
     const retryDelay = Math.pow(2, retryCount) * 1000;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 120_000); // 2 mins
 
     try {
       if (
@@ -48,9 +52,6 @@ export function useApiCall(globalStateRefs?: {
       ) {
         throw new Error("User not authenticated");
       }
-
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 120 * 1000);
 
       const response = await fetch(`${API_BASE_URL}${endpoint}`, {
         ...options,
@@ -63,8 +64,6 @@ export function useApiCall(globalStateRefs?: {
         },
         signal: controller.signal,
       });
-
-      clearTimeout(timeoutId);
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -88,17 +87,15 @@ export function useApiCall(globalStateRefs?: {
       }
 
       if (
-        (error.name === "NetworkError" ||
-          error.name === "TypeError" ||
-          error.name === "TimeoutError") &&
+        shouldRetry &&
+        (error instanceof TypeError || error.message?.includes("Failed to fetch")) &&
         retryCount < maxRetries
       ) {
         console.log(
           `Retrying ${API_BASE_URL}${endpoint} in ${retryDelay}ms (attempt ${retryCount + 1}/${maxRetries})`,
         );
-
         await new Promise((resolve) => setTimeout(resolve, retryDelay));
-        return apiCall(endpoint, options, retryCount + 1);
+        return apiCall(endpoint, options, shouldRetry, retryCount + 1);
       }
 
       if (endpoint.includes("/sync")) {
@@ -107,21 +104,24 @@ export function useApiCall(globalStateRefs?: {
       }
 
       throw error;
+    } finally {
+      clearTimeout(timeoutId);
     }
   }
+
 
   async function unsecureApiCall<T>(
     endpoint: string,
     options: RequestInit = {},
+    shouldRetry = true,
     retryCount = 0,
   ): Promise<ApiResponse<T>> {
     const maxRetries = 2;
     const retryDelay = Math.pow(2, retryCount) * 1000;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15 * 1000);
 
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000);
-
       const response = await fetch(`${API_BASE_URL}${endpoint}`, {
         ...options,
         headers: {
@@ -131,39 +131,33 @@ export function useApiCall(globalStateRefs?: {
         signal: controller.signal,
       });
 
-      clearTimeout(timeoutId);
-
       const data: ApiResponse<T> = await response.json();
-      if (data && !data.success) {
+
+      if (!data.success) {
         throw new Error(data.message || "Request failed");
       }
 
       return data;
     } catch (error: any) {
-      console.error(
-        `Unsecure API Error on ${endpoint} (attempt ${retryCount + 1}):`,
-        error,
-      );
+      console.error(`Unsecure API Error on ${endpoint} (attempt ${retryCount + 1}):`, error);
 
       if (error.name === "AbortError") {
         throw new Error("Request timeout - please try again");
       }
 
       if (
-        (error.name === "NetworkError" ||
-          error.name === "TypeError" ||
-          error.message?.includes("Failed to fetch")) &&
+        shouldRetry &&
+        (error instanceof TypeError || error.message?.includes("Failed to fetch")) &&
         retryCount < maxRetries
       ) {
-        console.log(
-          `Retrying ${endpoint} in ${retryDelay}ms (attempt ${retryCount + 1}/${maxRetries})`,
-        );
-
+        console.log(`Retrying ${endpoint} in ${retryDelay}ms (attempt ${retryCount + 1}/${maxRetries})`);
         await new Promise((resolve) => setTimeout(resolve, retryDelay));
-        return unsecureApiCall(endpoint, options, retryCount + 1);
+        return unsecureApiCall(endpoint, options, shouldRetry, retryCount + 1);
       }
 
       throw error;
+    } finally {
+      clearTimeout(timeoutId);
     }
   }
 

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -14,8 +15,6 @@ import (
 	"github.com/imrany/gemmie/gemmie-server/store"
 	"github.com/imrany/whats-email/pkg/mailer"
 	"github.com/imrany/whats-email/pkg/whatsapp"
-
-	"log/slog"
 
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
@@ -141,7 +140,7 @@ func runServer() {
 	// Start the email scheduler in background
 	v1.StartEmailScheduler(schedulerConfig)
 
-	//migrations run automatically
+	// migrations run automatically
 	if err := store.InitStorage(DSN); err != nil {
 		slog.Error("Failed to initialize database", "error", err)
 		os.Exit(1)
@@ -291,7 +290,7 @@ func main() {
 	}
 
 	// Root command with Cobra
-	var rootCmd = &cobra.Command{
+	rootCmd := &cobra.Command{
 		Use:   "gemmie-server",
 		Short: "Auth Server with sync functionality",
 		Run: func(cmd *cobra.Command, args []string) {
@@ -299,7 +298,7 @@ func main() {
 		},
 	}
 
-	var generateVapidCmd = &cobra.Command{
+	generateVapidCmd := &cobra.Command{
 		Use:   "generate-vapid",
 		Short: "Generate VAPID keys",
 		Run: func(cmd *cobra.Command, args []string) {

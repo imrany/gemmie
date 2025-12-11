@@ -246,6 +246,7 @@ const {
     apiCall: <T>(
         endpoint: string,
         options: RequestInit,
+        shouldRetry: boolean,
     ) => Promise<ApiResponse<T>>;
 };
 
@@ -696,6 +697,7 @@ async function handleSubmit(
                         [],
                 }),
             },
+            false
         );
 
         // Check if request was aborted
@@ -835,7 +837,6 @@ async function handleSubmit(
         observeNewVideoContainers();
     }
 }
-
 // Function to render a single deep search result
 function renderDeepSearchResult(data: any, currentPage: number) {
     const { results } = data;
@@ -936,15 +937,19 @@ async function handleLinkOnlyRequest(
         }
 
         // Save to backend
-        const response = await apiCall<Message>(`/chats/${chatId}/messages`, {
+        const response = await apiCall<Message>(
+        `/chats/${chatId}/messages`, 
+        {
             method: "POST",
             signal: abortController.signal,
             body: JSON.stringify({
                 prompt: promptValue,
                 response: combinedResponse.trim(),
                 references: contextReferenceIds,
-            }),
-        });
+            })
+        },
+        false
+        );
 
         // Check if request was aborted
         if (abortController.signal.aborted) {
@@ -1198,6 +1203,7 @@ async function refreshResponse(
                         references: originalReferences || [],
                     }),
                 },
+                false
             );
 
             // Handle API errors
@@ -1307,6 +1313,7 @@ async function refreshResponse(
                     references: originalReferences || [],
                 }),
             },
+            false
         );
 
         // Handle API errors
