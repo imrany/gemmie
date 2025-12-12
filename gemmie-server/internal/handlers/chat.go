@@ -1,17 +1,20 @@
 package handlers
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/SherClockHolmes/webpush-go"
 	"github.com/gorilla/mux"
 	"github.com/imrany/gemmie/gemmie-server/internal/encrypt"
-	"github.com/imrany/gemmie/gemmie-server/internal/genai"
 	"github.com/imrany/gemmie/gemmie-server/store"
 	"github.com/spf13/viper"
 )
@@ -426,10 +429,21 @@ func DeleteAllChatsHandler(w http.ResponseWriter, r *http.Request) {
 
 // CreateMessageHandler handles POST /api/chats/{id}/messages
 func CreateMessageHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
+	// Check if streaming is supported, but don't fail if not
+	flusher, canStream := w.(http.Flusher)
+
+	if canStream {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.Header().Set("Transfer-Encoding", "chunked")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+	} else {
+		w.Header().Set("Content-Type", "application/json")
+		slog.Warn("Response writer doesn't support streaming, using non-streaming mode")
+	}
 
 	userID := r.Header.Get("X-User-ID")
 	if userID == "" {
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
@@ -441,6 +455,7 @@ func CreateMessageHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	chatID := vars["id"]
 	if chatID == "" {
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
@@ -449,10 +464,9 @@ func CreateMessageHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Parse request body
 	var req store.Message
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		slog.Error("Invalid request body", "error", err)
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
@@ -460,9 +474,8 @@ func CreateMessageHandler(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-
-	// Validate required fields
 	if req.Prompt == "" {
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
@@ -471,19 +484,9 @@ func CreateMessageHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get chat to verify ownership first (before generating AI response)
 	chat, err := store.GetChatById(chatID)
-	if err != nil {
-		slog.Error("Failed to get chat", "chat_id", chatID, "error", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(store.Response{
-			Success: false,
-			Message: "Failed to retrieve chat",
-		})
-		return
-	}
-
-	if chat == nil {
+	if err != nil || chat == nil {
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusNotFound)
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
@@ -491,9 +494,8 @@ func CreateMessageHandler(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-
-	// Verify chat belongs to user
 	if chat.UserId != userID {
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
 		json.NewEncoder(w).Encode(store.Response{
 			Success: false,
@@ -502,75 +504,168 @@ func CreateMessageHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Generate response using AI wrapper (only if response not provided)
-	genaiResp := genai.GENAISERVICE{
-		APIKey: viper.GetString("API_KEY"),
-		Model:  viper.GetString("MODEL"),
-	}
-
-	var aiResponse string
 	if req.Response == "" {
-		genAIResponse, err := genaiResp.GenerateAIResponse(context.Background(), req.Prompt)
+		// Create HTTP client with timeout
+		client := &http.Client{
+			Timeout: 120 * time.Second,
+		}
+
+		// Prepare Ollama request
+		ollamaReq := map[string]any{
+			"model":  "llama3.2:3b",
+			"prompt": req.Prompt,
+			"stream": canStream, // Only stream if we can flush
+		}
+		body, _ := json.Marshal(ollamaReq)
+
+		slog.Info("Calling Ollama", "stream", canStream)
+
+		ollamaResp, err := client.Post("https://wrapper.triple-ts-mediclinic.com/api/generate",
+			"application/json", bytes.NewReader(body))
 		if err != nil {
-			slog.Error("Failed to generate AI response", "error", err)
+			slog.Error("Failed to contact Ollama", "error", err)
+			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusInternalServerError)
 			json.NewEncoder(w).Encode(store.Response{
 				Success: false,
-				Message: fmt.Sprintf("Failed to generate AI response: %s", err.Error()),
+				Message: fmt.Sprintf("Failed to contact Ollama: %v", err),
 			})
 			return
 		}
-		aiResponse = genAIResponse.Response
-	} else {
-		aiResponse = req.Response
+		defer ollamaResp.Body.Close()
+
+		if ollamaResp.StatusCode != http.StatusOK {
+			slog.Error("Ollama returned error", "status", ollamaResp.StatusCode)
+			bodyBytes, _ := io.ReadAll(ollamaResp.Body)
+			slog.Error("Ollama error response", "body", string(bodyBytes))
+
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadGateway)
+			json.NewEncoder(w).Encode(store.Response{
+				Success: false,
+				Message: fmt.Sprintf("Ollama returned status: %d", ollamaResp.StatusCode),
+			})
+			return
+		}
+
+		var finalResponse strings.Builder
+
+		if canStream {
+			// STREAMING MODE - send chunks as they arrive
+			scanner := bufio.NewScanner(ollamaResp.Body)
+
+			for scanner.Scan() {
+				line := scanner.Bytes()
+
+				var chunk struct {
+					Response string `json:"response"`
+					Done     bool   `json:"done"`
+				}
+				if err := json.Unmarshal(line, &chunk); err == nil {
+					finalResponse.WriteString(chunk.Response)
+
+					// Stream to client
+					w.Write(line)
+					w.Write([]byte("\n"))
+					flusher.Flush()
+
+					if chunk.Done {
+						break
+					}
+				}
+			}
+
+			if err := scanner.Err(); err != nil {
+				slog.Error("Streaming error", "error", err)
+				errorChunk := map[string]interface{}{
+					"error": err.Error(),
+					"done":  true,
+				}
+				errorJSON, _ := json.Marshal(errorChunk)
+				w.Write(errorJSON)
+				w.Write([]byte("\n"))
+				flusher.Flush()
+				return
+			}
+		} else {
+			// NON-STREAMING MODE - wait for complete response
+			bodyBytes, err := io.ReadAll(ollamaResp.Body)
+			if err != nil {
+				slog.Error("Failed to read Ollama response", "error", err)
+				w.WriteHeader(http.StatusInternalServerError)
+				json.NewEncoder(w).Encode(store.Response{
+					Success: false,
+					Message: "Failed to read AI response",
+				})
+				return
+			}
+
+			// Parse the complete response
+			var ollamaData struct {
+				Response string `json:"response"`
+			}
+			if err := json.Unmarshal(bodyBytes, &ollamaData); err != nil {
+				slog.Error("Failed to parse Ollama response", "error", err)
+				w.WriteHeader(http.StatusInternalServerError)
+				json.NewEncoder(w).Encode(store.Response{
+					Success: false,
+					Message: "Failed to parse AI response",
+				})
+				return
+			}
+
+			finalResponse.WriteString(ollamaData.Response)
+		}
+
+		req.Response = finalResponse.String()
 	}
 
-	// Create new message
+	// Save final message to DB
 	message := store.Message{
 		ID:         encrypt.GenerateID(nil),
 		ChatId:     chatID,
 		Prompt:     req.Prompt,
-		Response:   aiResponse,
+		Response:   req.Response,
 		CreatedAt:  time.Now(),
-		Model:      genaiResp.Model,
+		Model:      "llama3.2:3b",
 		References: req.References,
 	}
 
 	if err := store.CreateMessage(message); err != nil {
 		slog.Error("Failed to create message", "error", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(store.Response{
-			Success: false,
-			Message: "Failed to create message",
-		})
+		if !canStream {
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(store.Response{
+				Success: false,
+				Message: "Failed to save message",
+			})
+		}
 		return
 	}
 
-	// Update chat's message count and last message time
 	chat.MessageCount++
 	chat.LastMessageAt = time.Now()
 	chat.UpdatedAt = time.Now()
-
 	if err := store.UpdateChat(*chat); err != nil {
 		slog.Error("Failed to update chat", "chat_id", chatID, "error", err)
 	}
 
 	slog.Info("Message created successfully", "message_id", message.ID, "chat_id", chatID, "user_id", userID)
 
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(store.Response{
-		Success: true,
-		Message: "Message created successfully",
-		Data:    message,
-	})
+	// If not streaming, send final JSON response
+	if !canStream {
+		json.NewEncoder(w).Encode(store.Response{
+			Success: true,
+			Message: "Message created",
+			Data:    message,
+		})
+	}
 
-	// Send push notification asynchronously to avoid blocking the response
+	// Send push notification asynchronously
 	go func() {
-		// Use a new context with timeout for the notification
 		notifCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
-		// Get subscriptions
 		subscriptions, err := store.GetSubscriptionsByUserID(notifCtx, userID)
 		if err != nil {
 			slog.Error("Failed to get subscriptions", "user_id", userID, "error", err)
@@ -582,7 +677,6 @@ func CreateMessageHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Prepare notification payload
 		promptPreview := message.Prompt
 		if len(promptPreview) > 20 {
 			promptPreview = promptPreview[:20] + "..."
@@ -608,15 +702,12 @@ func CreateMessageHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Send to all subscriptions
 		successCount := 0
 		failureCount := 0
 
 		for _, sub := range subscriptions {
-			// Validate subscription before sending
 			if sub.Endpoint == "" || sub.P256dhKey == "" || sub.AuthKey == "" {
 				slog.Warn("Invalid subscription data", "user_id", sub.UserID)
-				// Delete invalid subscription
 				store.DeleteSubscription(notifCtx, sub.Endpoint)
 				failureCount++
 				continue
@@ -634,19 +725,16 @@ func CreateMessageHandler(w http.ResponseWriter, r *http.Request) {
 				VAPIDPrivateKey: viper.GetString("VAPID_PRIVATE_KEY"),
 				TTL:             30,
 			})
-
 			if err != nil {
 				slog.Error("Failed to send push notification",
 					"user_id", sub.UserID,
 					"error", err.Error(),
 				)
 
-				// Delete subscription if it's a key mismatch or invalid endpoint
 				if resp != nil && (resp.StatusCode == 410 || resp.StatusCode == 404) {
 					slog.Info("Deleting invalid subscription", "user_id", sub.UserID, "status", resp.StatusCode)
 					store.DeleteSubscription(notifCtx, sub.Endpoint)
 				} else if err.Error() == "P256 point not on curve" {
-					// This means the subscription was created with different VAPID keys
 					slog.Warn("Deleting subscription with mismatched VAPID keys", "user_id", sub.UserID)
 					store.DeleteSubscription(notifCtx, sub.Endpoint)
 				}
@@ -655,12 +743,10 @@ func CreateMessageHandler(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 
-			// Close response body
 			if resp != nil && resp.Body != nil {
 				resp.Body.Close()
 			}
 
-			// Check response status
 			if resp != nil && resp.StatusCode >= 200 && resp.StatusCode < 300 {
 				successCount++
 				slog.Debug("Push notification sent successfully",
@@ -688,6 +774,269 @@ func CreateMessageHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 }
+
+// func CreateMessageHandler(w http.ResponseWriter, r *http.Request) {
+// 	w.Header().Set("Content-Type", "application/json")
+//
+// 	userID := r.Header.Get("X-User-ID")
+// 	if userID == "" {
+// 		w.WriteHeader(http.StatusUnauthorized)
+// 		json.NewEncoder(w).Encode(store.Response{
+// 			Success: false,
+// 			Message: "User ID header required",
+// 		})
+// 		return
+// 	}
+//
+// 	vars := mux.Vars(r)
+// 	chatID := vars["id"]
+// 	if chatID == "" {
+// 		w.WriteHeader(http.StatusBadRequest)
+// 		json.NewEncoder(w).Encode(store.Response{
+// 			Success: false,
+// 			Message: "Chat ID is required",
+// 		})
+// 		return
+// 	}
+//
+// 	// Parse request body
+// 	var req store.Message
+// 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+// 		slog.Error("Invalid request body", "error", err)
+// 		w.WriteHeader(http.StatusBadRequest)
+// 		json.NewEncoder(w).Encode(store.Response{
+// 			Success: false,
+// 			Message: "Invalid request body",
+// 		})
+// 		return
+// 	}
+//
+// 	// Validate required fields
+// 	if req.Prompt == "" {
+// 		w.WriteHeader(http.StatusBadRequest)
+// 		json.NewEncoder(w).Encode(store.Response{
+// 			Success: false,
+// 			Message: "Prompt is required",
+// 		})
+// 		return
+// 	}
+//
+// 	// Get chat to verify ownership first (before generating AI response)
+// 	chat, err := store.GetChatById(chatID)
+// 	if err != nil {
+// 		slog.Error("Failed to get chat", "chat_id", chatID, "error", err)
+// 		w.WriteHeader(http.StatusInternalServerError)
+// 		json.NewEncoder(w).Encode(store.Response{
+// 			Success: false,
+// 			Message: "Failed to retrieve chat",
+// 		})
+// 		return
+// 	}
+//
+// 	if chat == nil {
+// 		w.WriteHeader(http.StatusNotFound)
+// 		json.NewEncoder(w).Encode(store.Response{
+// 			Success: false,
+// 			Message: "Chat not found",
+// 		})
+// 		return
+// 	}
+//
+// 	// Verify chat belongs to user
+// 	if chat.UserId != userID {
+// 		w.WriteHeader(http.StatusForbidden)
+// 		json.NewEncoder(w).Encode(store.Response{
+// 			Success: false,
+// 			Message: "Access denied",
+// 		})
+// 		return
+// 	}
+//
+// 	// Generate response using AI wrapper (only if response not provided)
+// 	genaiResp := genai.GENAISERVICE{
+// 		APIKey: viper.GetString("API_KEY"),
+// 		Model:  viper.GetString("MODEL"),
+// 	}
+//
+// 	var aiResponse string
+// 	if req.Response == "" {
+// 		genAIResponse, err := genaiResp.GenerateAIResponse(context.Background(), req.Prompt)
+// 		if err != nil {
+// 			slog.Error("Failed to generate AI response", "error", err)
+// 			w.WriteHeader(http.StatusInternalServerError)
+// 			json.NewEncoder(w).Encode(store.Response{
+// 				Success: false,
+// 				Message: fmt.Sprintf("Failed to generate AI response: %s", err.Error()),
+// 			})
+// 			return
+// 		}
+// 		aiResponse = genAIResponse.Response
+// 	} else {
+// 		aiResponse = req.Response
+// 	}
+//
+// 	// Create new message
+// 	message := store.Message{
+// 		ID:         encrypt.GenerateID(nil),
+// 		ChatId:     chatID,
+// 		Prompt:     req.Prompt,
+// 		Response:   aiResponse,
+// 		CreatedAt:  time.Now(),
+// 		Model:      genaiResp.Model,
+// 		References: req.References,
+// 	}
+//
+// 	if err := store.CreateMessage(message); err != nil {
+// 		slog.Error("Failed to create message", "error", err)
+// 		w.WriteHeader(http.StatusInternalServerError)
+// 		json.NewEncoder(w).Encode(store.Response{
+// 			Success: false,
+// 			Message: "Failed to create message",
+// 		})
+// 		return
+// 	}
+//
+// 	// Update chat's message count and last message time
+// 	chat.MessageCount++
+// 	chat.LastMessageAt = time.Now()
+// 	chat.UpdatedAt = time.Now()
+//
+// 	if err := store.UpdateChat(*chat); err != nil {
+// 		slog.Error("Failed to update chat", "chat_id", chatID, "error", err)
+// 	}
+//
+// 	slog.Info("Message created successfully", "message_id", message.ID, "chat_id", chatID, "user_id", userID)
+//
+// 	w.WriteHeader(http.StatusCreated)
+// 	json.NewEncoder(w).Encode(store.Response{
+// 		Success: true,
+// 		Message: "Message created successfully",
+// 		Data:    message,
+// 	})
+//
+// 	// Send push notification asynchronously to avoid blocking the response
+// 	go func() {
+// 		// Use a new context with timeout for the notification
+// 		notifCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+// 		defer cancel()
+//
+// 		// Get subscriptions
+// 		subscriptions, err := store.GetSubscriptionsByUserID(notifCtx, userID)
+// 		if err != nil {
+// 			slog.Error("Failed to get subscriptions", "user_id", userID, "error", err)
+// 			return
+// 		}
+//
+// 		if len(subscriptions) == 0 {
+// 			slog.Debug("No subscriptions found for user", "user_id", userID)
+// 			return
+// 		}
+//
+// 		// Prepare notification payload
+// 		promptPreview := message.Prompt
+// 		if len(promptPreview) > 20 {
+// 			promptPreview = promptPreview[:20] + "..."
+// 		} else if len(promptPreview) == 0 {
+// 			promptPreview = "your request"
+// 		}
+//
+// 		payload := store.NotificationPayload{
+// 			Title: "✅ Gemmie Finished Your Task!",
+// 			Body:  fmt.Sprintf("The response for '%s' is ready — tap to review it now.", promptPreview),
+// 			Data: map[string]any{
+// 				"chat_id":    message.ChatId,
+// 				"message_id": message.ID,
+// 				"url":        "/chat/" + message.ChatId,
+// 			},
+// 			Tag:                "response-complete",
+// 			RequireInteraction: true,
+// 		}
+//
+// 		data, err := json.Marshal(payload)
+// 		if err != nil {
+// 			slog.Error("Failed to marshal notification payload", "error", err)
+// 			return
+// 		}
+//
+// 		// Send to all subscriptions
+// 		successCount := 0
+// 		failureCount := 0
+//
+// 		for _, sub := range subscriptions {
+// 			// Validate subscription before sending
+// 			if sub.Endpoint == "" || sub.P256dhKey == "" || sub.AuthKey == "" {
+// 				slog.Warn("Invalid subscription data", "user_id", sub.UserID)
+// 				// Delete invalid subscription
+// 				store.DeleteSubscription(notifCtx, sub.Endpoint)
+// 				failureCount++
+// 				continue
+// 			}
+//
+// 			resp, err := webpush.SendNotification(data, &webpush.Subscription{
+// 				Endpoint: sub.Endpoint,
+// 				Keys: webpush.Keys{
+// 					Auth:   sub.AuthKey,
+// 					P256dh: sub.P256dhKey,
+// 				},
+// 			}, &webpush.Options{
+// 				Subscriber:      viper.GetString("VAPID_EMAIL"),
+// 				VAPIDPublicKey:  viper.GetString("VAPID_PUBLIC_KEY"),
+// 				VAPIDPrivateKey: viper.GetString("VAPID_PRIVATE_KEY"),
+// 				TTL:             30,
+// 			})
+// 			if err != nil {
+// 				slog.Error("Failed to send push notification",
+// 					"user_id", sub.UserID,
+// 					"error", err.Error(),
+// 				)
+//
+// 				// Delete subscription if it's a key mismatch or invalid endpoint
+// 				if resp != nil && (resp.StatusCode == 410 || resp.StatusCode == 404) {
+// 					slog.Info("Deleting invalid subscription", "user_id", sub.UserID, "status", resp.StatusCode)
+// 					store.DeleteSubscription(notifCtx, sub.Endpoint)
+// 				} else if err.Error() == "P256 point not on curve" {
+// 					// This means the subscription was created with different VAPID keys
+// 					slog.Warn("Deleting subscription with mismatched VAPID keys", "user_id", sub.UserID)
+// 					store.DeleteSubscription(notifCtx, sub.Endpoint)
+// 				}
+//
+// 				failureCount++
+// 				continue
+// 			}
+//
+// 			// Close response body
+// 			if resp != nil && resp.Body != nil {
+// 				resp.Body.Close()
+// 			}
+//
+// 			// Check response status
+// 			if resp != nil && resp.StatusCode >= 200 && resp.StatusCode < 300 {
+// 				successCount++
+// 				slog.Debug("Push notification sent successfully",
+// 					"user_id", sub.UserID,
+// 					"status", resp.StatusCode,
+// 				)
+// 			} else {
+// 				failureCount++
+// 				if resp != nil {
+// 					slog.Warn("Push notification failed",
+// 						"user_id", sub.UserID,
+// 						"status", resp.StatusCode,
+// 					)
+// 				}
+// 			}
+// 		}
+//
+// 		if successCount > 0 || failureCount > 0 {
+// 			slog.Info("Push notification summary",
+// 				"user_id", userID,
+// 				"success", successCount,
+// 				"failed", failureCount,
+// 				"total", len(subscriptions),
+// 			)
+// 		}
+// 	}()
+// }
 
 // DeleteMessageHandler handles DELETE /api/messages/{id}
 func DeleteMessageHandler(w http.ResponseWriter, r *http.Request) {
