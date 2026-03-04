@@ -4,12 +4,14 @@ import { toast } from "vue-sonner";
 function getBaseURL() {
   if (import.meta.env.DEV) {
     return "http://localhost:8081";
-    // return "https://gemmie.villebiz.com";
+    // return "https://gemmie.triple-ts-mediclinic.com";
   } else {
     // return window.location.origin
     return "https://gemmie.triple-ts-mediclinic.com";
   }
 }
+
+export const SPINDLE_URL = "https://spindle.triple-ts-mediclinic.com";
 
 // Helper function to safely extract error status
 export function getErrorStatus(error: any): string {
@@ -178,7 +180,6 @@ export const plans = ref([
 
 export const API_BASE_URL = getBaseURL() + "/api";
 export const SOCKET_URL = getBaseURL().replace(/^http/, "ws") + "/ws";
-export const SPINDLE_URL = "https://spindle.villebiz.com";
 
 // connection status checking
 export function checkConnectionStatus(): Promise<boolean> {
