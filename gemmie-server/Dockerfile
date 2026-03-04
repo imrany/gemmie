@@ -11,7 +11,7 @@ RUN apk add --no-cache git ca-certificates tzdata
 # Copy go.mod and go.sum first (for dependency caching)
 COPY gemmie-server/go.mod gemmie-server/go.sum ./
 RUN --mount=type=cache,target=/go/pkg/mod \
-    go mod download
+  go mod download
 
 # Copy the rest of the source
 COPY gemmie-server/ .
@@ -19,9 +19,9 @@ COPY gemmie-server/ .
 # Build the binary
 ARG VERSION=dev
 RUN --mount=type=cache,target=/root/.cache/go-build \
-    CGO_ENABLED=0 GOOS=linux go build \
-    -ldflags="-w -s -X github.com/imrany/gemmie/gemmie-server/internal/version.version=${VERSION}" \
-    -o /gemmie-server ./main.go
+  CGO_ENABLED=0 GOOS=linux go build \
+  -ldflags="-w -s -X github.com/imrany/gemmie/gemmie-server/internal/version.version=${VERSION}" \
+  -o /gemmie-server ./main.go
 
 # -------------------------
 # Stage 2: Runtime image
@@ -30,10 +30,10 @@ FROM alpine:3.19
 
 # Install runtime deps
 RUN set -eux && \
-    apk add --no-cache ca-certificates tzdata tesseract-ocr tesseract-ocr-data-eng && \
-    addgroup -S gemmie && \
-    adduser -S gemmie -G gemmie && \
-    rm -rf /var/cache/apk/*
+  apk add --no-cache ca-certificates tzdata && \
+  addgroup -S gemmie && \
+  adduser -S gemmie -G gemmie && \
+  rm -rf /var/cache/apk/*
 
 WORKDIR /opt/gemmie
 
@@ -52,11 +52,10 @@ EXPOSE 8081
 # Default envs (override in docker-compose or runtime)
 ENV WHATSAPP_DB_PATH=/var/opt/gemmie-server/whatsapp.db
 ENV PORT=8081
-ENV TESSDATA_PREFIX=/usr/share/tessdata
 
 LABEL org.opencontainers.image.title="gemmie-server" \
-    org.opencontainers.image.description="gemmie's server side program." \
-    org.opencontainers.image.source="https://github.com/imrany/gemmie/gemmie-server"
+  org.opencontainers.image.description="gemmie's server side program." \
+  org.opencontainers.image.source="https://github.com/imrany/gemmie/gemmie-server"
 
 # Start the app
 ENTRYPOINT ["./gemmie-server"]
