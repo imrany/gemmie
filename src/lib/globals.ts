@@ -7,7 +7,7 @@ function getBaseURL() {
     // return "https://gemmie.villebiz.com";
   } else {
     // return window.location.origin
-    return "https://gemmie.villebiz.com";
+    return "https://gemmie.triple-ts-mediclinic.com";
   }
 }
 
